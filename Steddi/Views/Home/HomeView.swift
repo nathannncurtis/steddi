@@ -41,6 +41,10 @@ struct HomeView: View {
     @State private var activeDirection: CommuteDirection?
     @State private var pendingTraceForSave = false
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    private var isLandscape: Bool { verticalSizeClass == .compact }
+
     // Direction picker for ambiguous commutes
     @State private var showDirectionPicker = false
     @State private var directionPickerCommute: Commute?
@@ -66,7 +70,7 @@ struct HomeView: View {
                 onArrival: {},
                 onCancelled: {}
             )
-            .ignoresSafeArea(edges: .top) // only ignore top safe area, not bottom
+            .ignoresSafeArea(edges: [.top, .leading, .trailing]) // keep bottom for sheet, ignore the rest
 
             // Navigation overlay
             if let provider = navProvider, isNavigating {
