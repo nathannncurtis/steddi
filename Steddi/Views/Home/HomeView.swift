@@ -54,8 +54,8 @@ struct HomeView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Bottom fill — matches sheet color, covers safe area
-            SteddiTheme.surfacePrimary.ignoresSafeArea()
+            // Background behind everything — clear so map shows through safe areas
+            Color.clear.ignoresSafeArea()
 
             // Unified map — same instance for home + navigation
             SteddiMapView(
