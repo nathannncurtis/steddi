@@ -18,15 +18,39 @@ enum SteddiTheme {
     static let warmRed = Color(red: 0.91, green: 0.30, blue: 0.24)      // #E84D3D
     static let warmRedSubtle = Color(red: 0.91, green: 0.30, blue: 0.24).opacity(0.15)
 
-    /// Surface colors for dark mode floating elements
-    static let surfacePrimary = Color(red: 0.11, green: 0.10, blue: 0.09)    // #1C1917 — warm dark
-    static let surfaceSecondary = Color(red: 0.17, green: 0.16, blue: 0.15)  // #2B2826
-    static let surfaceElevated = Color(red: 0.22, green: 0.21, blue: 0.19)   // #383532
+    /// Surface colors — adaptive for light/dark mode
+    static let surfacePrimary = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.11, green: 0.10, blue: 0.09, alpha: 1) // warm dark
+            : UIColor(red: 0.98, green: 0.97, blue: 0.96, alpha: 1) // warm white
+    })
+    static let surfaceSecondary = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.17, green: 0.16, blue: 0.15, alpha: 1)
+            : UIColor(red: 0.94, green: 0.93, blue: 0.92, alpha: 1)
+    })
+    static let surfaceElevated = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.22, green: 0.21, blue: 0.19, alpha: 1)
+            : UIColor(red: 0.90, green: 0.89, blue: 0.88, alpha: 1)
+    })
 
-    /// Text
-    static let textPrimary = Color(red: 0.97, green: 0.96, blue: 0.95)  // #F8F5F2 — warm white
-    static let textSecondary = Color(red: 0.66, green: 0.63, blue: 0.60) // #A8A199
-    static let textMuted = Color(red: 0.46, green: 0.44, blue: 0.42)    // #75706B
+    /// Text — adaptive
+    static let textPrimary = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.97, green: 0.96, blue: 0.95, alpha: 1) // warm white
+            : UIColor(red: 0.11, green: 0.10, blue: 0.09, alpha: 1) // warm dark
+    })
+    static let textSecondary = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.66, green: 0.63, blue: 0.60, alpha: 1)
+            : UIColor(red: 0.45, green: 0.43, blue: 0.41, alpha: 1)
+    })
+    static let textMuted = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.46, green: 0.44, blue: 0.42, alpha: 1)
+            : UIColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1)
+    })
 
     // MARK: - Typography
 

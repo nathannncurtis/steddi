@@ -117,8 +117,8 @@ class SteddiMapContainer: UIViewController {
 
         view.addSubview(mapView)
 
-        // Apply Standard style with dusk light preset for colored but dark-toned map
-        mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
+        // Set map style based on current system appearance
+        updateMapStyle()
 
         // Follow user location on style load
         mapView.mapboxMap.onStyleLoaded.observeNext { [weak self] _ in
@@ -133,6 +133,33 @@ class SteddiMapContainer: UIViewController {
     }
 
     private var cancellables: [AnyCancelable] = []
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle {
+            updateMapStyle()
+        }
+    }
+
+    private func updateMapStyle() {
+        let isDark = traitCollection.userInterfaceStyle == .dark
+
+        if isDark {
+            mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
+        } else {
+            // Light mode — use day, but switch to dusk near sunset
+            let hour = Calendar.current.component(.hour, from: Date())
+            if hour >= 19 || hour < 6 {
+                // Evening/night — use dusk even in light mode
+                mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
+            } else if hour >= 17 {
+                // Golden hour — use dawn (warm sunset look)
+                mapView.mapboxMap.mapStyle = .standard(lightPreset: .dawn)
+            } else {
+                mapView.mapboxMap.mapStyle = .standard(lightPreset: .day)
+            }
+        }
+    }
 
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began else { return }
