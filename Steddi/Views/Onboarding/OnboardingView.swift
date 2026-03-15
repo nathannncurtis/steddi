@@ -114,7 +114,7 @@ struct OnboardingView: View {
     }
 
     private func completeOnboarding() {
-        showDonation = true
+        hasCompletedOnboarding = true
     }
 }
 
