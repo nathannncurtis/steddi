@@ -440,8 +440,15 @@ struct HomeView: View {
                 placesTab
             }
         }
-        .background(SteddiTheme.surfacePrimary.shadow(color: .black.opacity(0.3), radius: 20, y: -5))
+        .background(SteddiTheme.surfacePrimary)
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
+        .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
+        .overlay(alignment: .bottom) {
+            // Solid color strip below the clipped sheet to fill the safe area gap
+            SteddiTheme.surfacePrimary
+                .frame(height: 60)
+                .offset(y: 60)
+        }
     }
 
     // MARK: - Commutes Tab

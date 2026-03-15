@@ -98,13 +98,13 @@ class SteddiMapContainer: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Extend map into safe area insets so there are no gaps
+        // Extend map into top/left/right safe areas but NOT bottom (sheet covers bottom)
         let insets = view.safeAreaInsets
         mapView?.frame = CGRect(
             x: -insets.left,
             y: -insets.top,
             width: view.bounds.width + insets.left + insets.right,
-            height: view.bounds.height + insets.top + insets.bottom
+            height: view.bounds.height + insets.top // no bottom extension
         )
     }
 
