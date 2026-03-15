@@ -255,8 +255,9 @@ class SteddiMapContainer: UIViewController {
         lineLayer.lineJoin = .constant(.round)
 
         try? mapView.mapboxMap.addSource(source)
-        try? mapView.mapboxMap.addLayer(glowLayer)
-        try? mapView.mapboxMap.addLayer(lineLayer)
+        // Add above all existing layers so the route draws on top of roads
+        try? mapView.mapboxMap.addLayer(glowLayer, layerPosition: .above(mapView.mapboxMap.allLayerIdentifiers.last?.id ?? ""))
+        try? mapView.mapboxMap.addLayer(lineLayer, layerPosition: .above("steddi-route-glow"))
     }
 
     private func removeRouteLine() {
