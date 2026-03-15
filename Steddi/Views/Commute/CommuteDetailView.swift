@@ -52,22 +52,26 @@ struct CommuteDetailView: View {
             // MARK: - Routes
             Section {
                 if commute.orderedRoutes.isEmpty {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 6) {
-                            Image(systemName: "road.lanes")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                            Text("No routes yet")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Text("Drive this commute or add a route manually")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+                    VStack(spacing: 12) {
+                        Image(systemName: "road.lanes")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                        Text("No routes yet")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Button {
+                            showAddRoute = true
+                        } label: {
+                            Label("Plan a route", systemImage: "map")
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(SteddiTheme.accent)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 12))
                         }
-                        .padding(.vertical, 12)
-                        Spacer()
                     }
+                    .padding(.vertical, 12)
                 } else {
                     ForEach(commute.orderedRoutes) { route in
                         routeRow(route)
@@ -79,7 +83,7 @@ struct CommuteDetailView: View {
                 Button {
                     showAddRoute = true
                 } label: {
-                    Label("Add fallback route", systemImage: "plus.circle")
+                    Label("Add another route", systemImage: "plus.circle")
                 }
             } header: {
                 HStack {
