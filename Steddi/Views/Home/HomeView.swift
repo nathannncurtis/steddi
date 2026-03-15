@@ -281,7 +281,7 @@ struct HomeView: View {
                     )
                 // Extend solid color below the rounded rect to the screen bottom
                 SteddiTheme.surfacePrimary
-                    .frame(height: 50)
+                    .frame(height: 100)
             }
             .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
         }
