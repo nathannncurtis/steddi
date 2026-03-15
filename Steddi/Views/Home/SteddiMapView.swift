@@ -165,9 +165,18 @@ class SteddiMapContainer: UIViewController {
         // Start active guidance on the navigation core
         provider.tripSession().startActiveGuidance(with: routes, startLegIndex: 0)
 
-        // Show route line on map
+        // Show route line on map — delay briefly so we draw AFTER the SDK's own layers
         let coords = routes.mainRoute.route.shape?.coordinates ?? []
-        showRouteLine(coords)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            // Remove any SDK-drawn route layers first
+            let allLayers = self?.mapView.mapboxMap.allLayerIdentifiers ?? []
+            for layer in allLayers {
+                if layer.id.contains("route") || layer.id.contains("navigation") {
+                    try? self?.mapView.mapboxMap.removeLayer(withId: layer.id)
+                }
+            }
+            self?.showRouteLine(coords)
+        }
 
         let pitch: CGFloat = currentIs3D ? 60 : 0
         let zoom: CGFloat = currentIs3D ? 17.5 : 16
