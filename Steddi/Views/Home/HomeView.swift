@@ -131,6 +131,7 @@ struct HomeView: View {
                 routeLoadingOverlay
             }
         }
+        .ignoresSafeArea()
         .onAppear {
             locationService.requestPermission()
             locationService.startUpdating()
