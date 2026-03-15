@@ -20,6 +20,7 @@ struct RoutePlannerView: View {
     @State private var saveAsPreferred = true
     @State private var showDetails = false
     @State private var waypoints: [CLLocationCoordinate2D] = []
+    @State private var plannerMapView: MapView?
 
     private var originLocation: PinnedLocation? {
         direction == .originToDestination ? commute.origin : commute.destination
@@ -38,12 +39,43 @@ struct RoutePlannerView: View {
                 waypoints: waypoints,
                 polyline: calculatedPolyline,
                 onTapMap: { coord in
-                    // Add waypoint where user tapped
                     waypoints.append(coord)
                     Task { await calculateRoute() }
-                }
+                },
+                mapViewRef: $plannerMapView
             )
             .ignoresSafeArea()
+
+            // Zoom buttons — right side
+            VStack(spacing: 8) {
+                Button {
+                    guard let mv = plannerMapView else { return }
+                    let zoom = min(mv.mapboxMap.cameraState.zoom + 1, 20)
+                    mv.camera.ease(to: CameraOptions(zoom: zoom), duration: 0.3, curve: .easeOut, completion: nil)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(SteddiTheme.textPrimary)
+                        .frame(width: 44, height: 44)
+                        .background(SteddiTheme.surfacePrimary.opacity(0.88), in: RoundedRectangle(cornerRadius: 12))
+                }
+
+                Button {
+                    guard let mv = plannerMapView else { return }
+                    let zoom = max(mv.mapboxMap.cameraState.zoom - 1, 3)
+                    mv.camera.ease(to: CameraOptions(zoom: zoom), duration: 0.3, curve: .easeOut, completion: nil)
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(SteddiTheme.textPrimary)
+                        .frame(width: 44, height: 44)
+                        .background(SteddiTheme.surfacePrimary.opacity(0.88), in: RoundedRectangle(cornerRadius: 12))
+                }
+            }
+            .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .padding(.trailing, 16)
+            .padding(.top, 180)
 
             // Top bar
             VStack {
@@ -305,6 +337,7 @@ struct RoutePlannerMap: UIViewRepresentable {
     let waypoints: [CLLocationCoordinate2D]
     let polyline: String?
     let onTapMap: (CLLocationCoordinate2D) -> Void
+    @Binding var mapViewRef: MapView?
 
     func makeUIView(context: Context) -> MapView {
         let mapView = MapView(frame: .zero, mapInitOptions: MapInitOptions(styleURI: .standard))
@@ -312,10 +345,11 @@ struct RoutePlannerMap: UIViewRepresentable {
         mapView.ornaments.options.scaleBar.visibility = .hidden
         mapView.ornaments.options.compass.visibility = .hidden
 
-        // Tap gesture for adding waypoints
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         mapView.addGestureRecognizer(tap)
         context.coordinator.mapView = mapView
+
+        DispatchQueue.main.async { mapViewRef = mapView }
 
         return mapView
     }
