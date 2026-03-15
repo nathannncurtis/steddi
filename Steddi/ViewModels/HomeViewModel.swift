@@ -84,8 +84,7 @@ final class HomeViewModel {
             do {
                 let eta = try await directionsService.fetchETA(
                     from: origin.coordinate,
-                    to: destination.coordinate,
-                    encodedPolyline: route.encodedPolyline
+                    along: route.encodedPolyline
                 )
                 commuteETAs[commute.id] = eta
 

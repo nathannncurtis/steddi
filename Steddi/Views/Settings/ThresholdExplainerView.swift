@@ -1,10 +1,14 @@
 import SwiftUI
 
 struct ThresholdExplainerView: View {
+    /// Decimal percentage (e.g. 0.20 = 20%)
     let thresholdPercentage: Double
     let hardMinuteFloor: Int
 
     @Environment(\.dismiss) private var dismiss
+
+    /// Display percentage as whole number
+    private var displayPercentage: Int { Int(thresholdPercentage * 100) }
 
     var body: some View {
         NavigationStack {
@@ -61,7 +65,7 @@ struct ThresholdExplainerView: View {
                             Label("Threshold", systemImage: "percent")
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text("\(Int(thresholdPercentage))%")
+                            Text("\(displayPercentage)%")
                                 .fontWeight(.semibold)
                         }
 
@@ -73,7 +77,7 @@ struct ThresholdExplainerView: View {
                                 .fontWeight(.semibold)
                         }
 
-                        Text("A reroute must save at least \(Int(thresholdPercentage))% of your remaining time AND at least \(hardMinuteFloor) minutes before Steddi will suggest it.")
+                        Text("A reroute must save at least \(displayPercentage)% of your remaining time. For long drives, it must also save at least \(hardMinuteFloor) minutes.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .padding(.top, 4)
@@ -111,15 +115,15 @@ struct ThresholdExplainerView: View {
     }
 
     private func exampleSavings(remainingMinutes: Int) -> Int {
-        max(1, Int(Double(remainingMinutes) * thresholdPercentage / 100))
+        max(1, Int(Double(remainingMinutes) * thresholdPercentage))
     }
 
     private func wouldNotify(remainingMinutes: Int, savingsMinutes: Int) -> Bool {
-        let percentSaved = Double(savingsMinutes) / Double(remainingMinutes) * 100
+        let percentSaved = Double(savingsMinutes) / Double(remainingMinutes)
         return percentSaved >= thresholdPercentage && savingsMinutes >= hardMinuteFloor
     }
 }
 
 #Preview {
-    ThresholdExplainerView(thresholdPercentage: 20, hardMinuteFloor: 10)
+    ThresholdExplainerView(thresholdPercentage: 0.20, hardMinuteFloor: 10)
 }

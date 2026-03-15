@@ -1,0 +1,551 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4F33590D3CEB7AA217E684 /* LocationService.swift */; };
+		14146A9620680F297380CF6A /* MapboxNavigationCore in Frameworks */ = {isa = PBXBuildFile; productRef = BC2E9B263D66D768CAE7A99E /* MapboxNavigationCore */; };
+		1660BAFCB0C76446A1AAB133 /* NavigationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F24C703AFD057614CF2C1719 /* NavigationCoordinator.swift */; };
+		1D615842BD301291CE02D709 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DA236E471AC3DCE3BED3C5E /* HomeViewModel.swift */; };
+		1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */; };
+		26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */; };
+		2C6330DE7990CFA8460540EB /* MapPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7702DF1E920EA12B3826B4A /* MapPlaceholderView.swift */; };
+		571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7111C46770386A928275F35 /* SettingsView.swift */; };
+		57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */; };
+		6C0862A6626424EBC6622731 /* Commute.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */; };
+		6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62156E1FDD078D989A2441A /* OfflineCacheService.swift */; };
+		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
+		76267A8775C232A25A4DE9F6 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15C06F577938268EAACF077 /* SettingsViewModel.swift */; };
+		8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */; };
+		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
+		87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */; };
+		8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82950853F7696A66EC5389FA /* CommuteDetailView.swift */; };
+		943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */; };
+		94917EB5D159208BBD3D964B /* MapboxNavigationUIKit in Frameworks */ = {isa = PBXBuildFile; productRef = CC82367AFB74F13DBB9DE75C /* MapboxNavigationUIKit */; };
+		967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDEFFA656C308FF61D985BF /* NoGoZone.swift */; };
+		98764056E210F7A4532D5DBB /* RouteRecordingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7002F515D3B22A728DDF3D9F /* RouteRecordingViewModel.swift */; };
+		9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */; };
+		A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */; };
+		BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29048E65BF78AEB095A5D599 /* CommuteListView.swift */; };
+		C4C89A710971CA2A022090F7 /* ActiveNavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D04E323A7006F464191A685 /* ActiveNavigationView.swift */; };
+		CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */; };
+		D5D2CC709306B626B120D222 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4892145CE55DFF9FF13FC7 /* DonationView.swift */; };
+		D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */; };
+		E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2113E7A877B78A7BF8CF75C /* Route.swift */; };
+		E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */; };
+		EA73BB9CC81F233C29A24487 /* NavigationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A65698E48E91527E20620496 /* NavigationViewModel.swift */; };
+		EE11B267B397E2C0E0CF8524 /* MapboxTokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD9B3AA19F39B9592040D98 /* MapboxTokenProvider.swift */; };
+		FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598632F13EF2804C543D14D0 /* LocationCardView.swift */; };
+		FE19C75A04BBC155AF88C579 /* CommuteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A69AB47369E5D3B8FDF81F54 /* CommuteViewModel.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
+		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
+		3B4F33590D3CEB7AA217E684 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
+		4CDEFFA656C308FF61D985BF /* NoGoZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZone.swift; sourceTree = "<group>"; };
+		57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionsService.swift; sourceTree = "<group>"; };
+		598632F13EF2804C543D14D0 /* LocationCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationCardView.swift; sourceTree = "<group>"; };
+		5D04E323A7006F464191A685 /* ActiveNavigationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveNavigationView.swift; sourceTree = "<group>"; };
+		64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveRecord.swift; sourceTree = "<group>"; };
+		6DA236E471AC3DCE3BED3C5E /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
+		7002F515D3B22A728DDF3D9F /* RouteRecordingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRecordingViewModel.swift; sourceTree = "<group>"; };
+		72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		82950853F7696A66EC5389FA /* CommuteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDetailView.swift; sourceTree = "<group>"; };
+		8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedLocation.swift; sourceTree = "<group>"; };
+		8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneEditorView.swift; sourceTree = "<group>"; };
+		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		A65698E48E91527E20620496 /* NavigationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationViewModel.swift; sourceTree = "<group>"; };
+		A69AB47369E5D3B8FDF81F54 /* CommuteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteViewModel.swift; sourceTree = "<group>"; };
+		AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapMatchingService.swift; sourceTree = "<group>"; };
+		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
+		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
+		C7702DF1E920EA12B3826B4A /* MapPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapPlaceholderView.swift; sourceTree = "<group>"; };
+		CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoder.swift; sourceTree = "<group>"; };
+		CBD9B3AA19F39B9592040D98 /* MapboxTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapboxTokenProvider.swift; sourceTree = "<group>"; };
+		EAA8B2837951D77986E1E11A /* Steddi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Steddi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EF4892145CE55DFF9FF13FC7 /* DonationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DonationView.swift; sourceTree = "<group>"; };
+		F15C06F577938268EAACF077 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
+		F2113E7A877B78A7BF8CF75C /* Route.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Route.swift; sourceTree = "<group>"; };
+		F24C703AFD057614CF2C1719 /* NavigationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationCoordinator.swift; sourceTree = "<group>"; };
+		F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiApp.swift; sourceTree = "<group>"; };
+		F62156E1FDD078D989A2441A /* OfflineCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCacheService.swift; sourceTree = "<group>"; };
+		F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteCardView.swift; sourceTree = "<group>"; };
+		F7111C46770386A928275F35 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdExplainerView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		9A89A4FCD398806911D239C2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				14146A9620680F297380CF6A /* MapboxNavigationCore in Frameworks */,
+				94917EB5D159208BBD3D964B /* MapboxNavigationUIKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1B08229D7455DAC8B35B5E17 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */,
+				64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */,
+				4CDEFFA656C308FF61D985BF /* NoGoZone.swift */,
+				8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */,
+				F2113E7A877B78A7BF8CF75C /* Route.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		308F7C4E16BF500275E6733D /* Steddi */ = {
+			isa = PBXGroup;
+			children = (
+				09E03456CD2FFD70556659CE /* Info.plist */,
+				D742A2F1707D973EBE64708E /* App */,
+				1B08229D7455DAC8B35B5E17 /* Models */,
+				DBB5363525293A92F0312314 /* Services */,
+				FF31CEBB3E9CBFBF76A9DADA /* Utils */,
+				FBD90A5C8809A13CD9D78A3F /* ViewModels */,
+				DE5E9CA7570793F43392E1B5 /* Views */,
+			);
+			path = Steddi;
+			sourceTree = "<group>";
+		};
+		374BB011618D654579D2A114 /* Commute */ = {
+			isa = PBXGroup;
+			children = (
+				82950853F7696A66EC5389FA /* CommuteDetailView.swift */,
+				29048E65BF78AEB095A5D599 /* CommuteListView.swift */,
+			);
+			path = Commute;
+			sourceTree = "<group>";
+		};
+		42FAB8BA9A51A05F1BCB2276 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				C7702DF1E920EA12B3826B4A /* MapPlaceholderView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		92185840C3B254DF92B2AF8F /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */,
+				F7111C46770386A928275F35 /* SettingsView.swift */,
+				F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		9C6D36121E1F61E20EE34C4D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				EAA8B2837951D77986E1E11A /* Steddi.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA49E1B7BCC0892981A2EA21 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				EF4892145CE55DFF9FF13FC7 /* DonationView.swift */,
+				72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		B1894EE5BD1CDC02EA50F276 /* Navigation */ = {
+			isa = PBXGroup;
+			children = (
+				5D04E323A7006F464191A685 /* ActiveNavigationView.swift */,
+				BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */,
+				F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */,
+			);
+			path = Navigation;
+			sourceTree = "<group>";
+		};
+		D742A2F1707D973EBE64708E /* App */ = {
+			isa = PBXGroup;
+			children = (
+				F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D9743846EFCC6DEFFB968F58 = {
+			isa = PBXGroup;
+			children = (
+				308F7C4E16BF500275E6733D /* Steddi */,
+				9C6D36121E1F61E20EE34C4D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		DBB5363525293A92F0312314 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */,
+				3B4F33590D3CEB7AA217E684 /* LocationService.swift */,
+				CBD9B3AA19F39B9592040D98 /* MapboxTokenProvider.swift */,
+				AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */,
+				F24C703AFD057614CF2C1719 /* NavigationCoordinator.swift */,
+				F62156E1FDD078D989A2441A /* OfflineCacheService.swift */,
+				0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		DE5E9CA7570793F43392E1B5 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				374BB011618D654579D2A114 /* Commute */,
+				42FAB8BA9A51A05F1BCB2276 /* Components */,
+				FE8829E93E4A8DE87270F444 /* Home */,
+				B1894EE5BD1CDC02EA50F276 /* Navigation */,
+				AA49E1B7BCC0892981A2EA21 /* Onboarding */,
+				92185840C3B254DF92B2AF8F /* Settings */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		FBD90A5C8809A13CD9D78A3F /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				A69AB47369E5D3B8FDF81F54 /* CommuteViewModel.swift */,
+				6DA236E471AC3DCE3BED3C5E /* HomeViewModel.swift */,
+				A65698E48E91527E20620496 /* NavigationViewModel.swift */,
+				7002F515D3B22A728DDF3D9F /* RouteRecordingViewModel.swift */,
+				F15C06F577938268EAACF077 /* SettingsViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		FE8829E93E4A8DE87270F444 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */,
+				598632F13EF2804C543D14D0 /* LocationCardView.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+		FF31CEBB3E9CBFBF76A9DADA /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */,
+			);
+			path = Utils;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		49639FACA6971E9D79146305 /* Steddi */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E358B2ECEE9BA63BC6035EDC /* Build configuration list for PBXNativeTarget "Steddi" */;
+			buildPhases = (
+				0782367559867DAD36C92E7E /* Sources */,
+				9A89A4FCD398806911D239C2 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Steddi;
+			packageProductDependencies = (
+				BC2E9B263D66D768CAE7A99E /* MapboxNavigationCore */,
+				CC82367AFB74F13DBB9DE75C /* MapboxNavigationUIKit */,
+			);
+			productName = Steddi;
+			productReference = EAA8B2837951D77986E1E11A /* Steddi.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F39B8109425B1F676A7AE95D /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1630;
+				TargetAttributes = {
+					49639FACA6971E9D79146305 = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = C4E36FC7115D460BFF59D228 /* Build configuration list for PBXProject "Steddi" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = D9743846EFCC6DEFFB968F58;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				63EA41F1D59ABB71AC77B8A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9C6D36121E1F61E20EE34C4D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				49639FACA6971E9D79146305 /* Steddi */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0782367559867DAD36C92E7E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C4C89A710971CA2A022090F7 /* ActiveNavigationView.swift in Sources */,
+				6C0862A6626424EBC6622731 /* Commute.swift in Sources */,
+				8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */,
+				BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */,
+				FE19C75A04BBC155AF88C579 /* CommuteViewModel.swift in Sources */,
+				CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */,
+				D5D2CC709306B626B120D222 /* DonationView.swift in Sources */,
+				943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */,
+				84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */,
+				1D615842BD301291CE02D709 /* HomeViewModel.swift in Sources */,
+				FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */,
+				13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */,
+				26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */,
+				2C6330DE7990CFA8460540EB /* MapPlaceholderView.swift in Sources */,
+				EE11B267B397E2C0E0CF8524 /* MapboxTokenProvider.swift in Sources */,
+				1660BAFCB0C76446A1AAB133 /* NavigationCoordinator.swift in Sources */,
+				EA73BB9CC81F233C29A24487 /* NavigationViewModel.swift in Sources */,
+				967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */,
+				57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */,
+				6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */,
+				87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */,
+				1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */,
+				E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */,
+				6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */,
+				A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */,
+				9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */,
+				E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */,
+				98764056E210F7A4532D5DBB /* RouteRecordingViewModel.swift in Sources */,
+				571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */,
+				76267A8775C232A25A4DE9F6 /* SettingsViewModel.swift in Sources */,
+				D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */,
+				8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1729F5FEDC20B435634D18CC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = Steddi/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = to.nathancurtis.steddi;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		450D885DC160F64447E7A1FE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = Steddi/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = to.nathancurtis.steddi;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		55C0C2E6EDD16686424B3B21 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F4F9553CE836FEA95D9881C6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C4E36FC7115D460BFF59D228 /* Build configuration list for PBXProject "Steddi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				55C0C2E6EDD16686424B3B21 /* Debug */,
+				F4F9553CE836FEA95D9881C6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E358B2ECEE9BA63BC6035EDC /* Build configuration list for PBXNativeTarget "Steddi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				450D885DC160F64447E7A1FE /* Debug */,
+				1729F5FEDC20B435634D18CC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		63EA41F1D59ABB71AC77B8A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mapbox/mapbox-navigation-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BC2E9B263D66D768CAE7A99E /* MapboxNavigationCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 63EA41F1D59ABB71AC77B8A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */;
+			productName = MapboxNavigationCore;
+		};
+		CC82367AFB74F13DBB9DE75C /* MapboxNavigationUIKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 63EA41F1D59ABB71AC77B8A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */;
+			productName = MapboxNavigationUIKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = F39B8109425B1F676A7AE95D /* Project object */;
+}

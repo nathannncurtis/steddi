@@ -1,8 +1,10 @@
 import Foundation
+import Observation
 
 /// Manages on-disk caching of route data for offline navigation.
 /// Active-navigation cache goes to Caches/ (auto-cleaned by OS and by us).
 /// User-initiated downloads go to Documents/ (persistent until explicitly deleted).
+@Observable
 final class OfflineCacheService {
     private let fileManager = FileManager.default
     private let cacheDirectory: URL

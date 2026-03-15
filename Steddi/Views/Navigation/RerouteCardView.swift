@@ -37,17 +37,20 @@ struct RerouteCardView: View {
 
                 // Action buttons
                 HStack(spacing: 16) {
-                    Button("Stay", action: dismiss)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 12))
+                    Button("Stay") {
+                        hide()
+                        onStay()
+                    }
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 12))
 
-                    Button("Switch", action: {
+                    Button("Switch") {
+                        hide()
                         onSwitch()
-                        dismiss()
-                    })
+                    }
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -60,19 +63,20 @@ struct RerouteCardView: View {
             .padding(.horizontal, 16)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .onAppear {
-                // Auto-dismiss after 30 seconds if ignored
+                // Auto-dismiss after 30 seconds if ignored — counts as "stay"
                 DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                    dismiss()
+                    guard isVisible else { return }
+                    hide()
+                    onStay()
                 }
             }
         }
     }
 
-    private func dismiss() {
+    private func hide() {
         withAnimation(.easeOut(duration: 0.3)) {
             isVisible = false
         }
-        onStay()
     }
 }
 

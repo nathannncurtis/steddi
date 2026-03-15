@@ -1,0 +1,38 @@
+name: Steddi
+options:
+  bundleIdPrefix: to.nathancurtis
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.3"
+
+packages:
+  MapboxNavigation:
+    url: https://github.com/mapbox/mapbox-navigation-ios.git
+    from: "3.0.0"
+
+targets:
+  Steddi:
+    type: application
+    platform: iOS
+    sources:
+      - Steddi
+    info:
+      path: Steddi/Info.plist
+      properties:
+        UILaunchScreen: {}
+        CFBundleDisplayName: Steddi
+        MBXAccessToken: "pk.eyJ1IjoibmF0aGFuY3VydGlzIiwiYSI6ImNtbXF2YXRhbzEycGgycG9tNTAwaTRmY2YifQ.ch8h2pYyvMaAuoKgEIgDlw"
+        NSLocationWhenInUseUsageDescription: "Steddi needs your location to navigate and record routes."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Steddi needs background location access to continue navigation when the app is in the background."
+        UIBackgroundModes:
+          - audio
+          - location
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: to.nathancurtis.steddi
+      DEVELOPMENT_TEAM: ""
+      INFOPLIST_FILE: Steddi/Info.plist
+    dependencies:
+      - package: MapboxNavigation
+        product: MapboxNavigationCore
+      - package: MapboxNavigation
+        product: MapboxNavigationUIKit

@@ -7,21 +7,23 @@ import Observation
 struct AppSettings {
     private let defaults = UserDefaults.standard
 
+    // Keys match @AppStorage keys in SettingsView
     private enum Keys {
-        static let defaultThresholdPercentage = "steddi.defaultThresholdPercentage"
-        static let defaultHardMinuteFloor = "steddi.defaultHardMinuteFloor"
+        static let thresholdPercentage = "steddi.defaultThresholdPercentage"
+        static let hardMinuteFloor = "steddi.defaultHardMinuteFloor"
         static let voiceGuidanceEnabled = "steddi.voiceGuidanceEnabled"
         static let units = "steddi.units"
     }
 
+    /// Decimal percentage (e.g., 0.20 = 20%)
     var defaultThresholdPercentage: Double {
-        get { defaults.object(forKey: Keys.defaultThresholdPercentage) as? Double ?? 0.20 }
-        set { defaults.set(newValue, forKey: Keys.defaultThresholdPercentage) }
+        get { defaults.object(forKey: Keys.thresholdPercentage) as? Double ?? 0.20 }
+        set { defaults.set(newValue, forKey: Keys.thresholdPercentage) }
     }
 
     var defaultHardMinuteFloor: Int {
-        get { defaults.object(forKey: Keys.defaultHardMinuteFloor) as? Int ?? 10 }
-        set { defaults.set(newValue, forKey: Keys.defaultHardMinuteFloor) }
+        get { defaults.object(forKey: Keys.hardMinuteFloor) as? Int ?? 10 }
+        set { defaults.set(newValue, forKey: Keys.hardMinuteFloor) }
     }
 
     var voiceGuidanceEnabled: Bool {

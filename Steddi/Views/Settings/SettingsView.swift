@@ -6,14 +6,22 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(filter: #Predicate<NoGoZone> { $0.isGlobal }) private var globalNoGoZones: [NoGoZone]
 
-    @AppStorage("thresholdPercentage") private var thresholdPercentage: Double = 20
-    @AppStorage("hardMinuteFloor") private var hardMinuteFloor: Int = 10
-    @AppStorage("voiceGuidanceEnabled") private var voiceGuidanceEnabled: Bool = true
-    @AppStorage("useMiles") private var useMiles: Bool = true
+    // Use the same keys and decimal format as AppSettings
+    @AppStorage("steddi.defaultThresholdPercentage") private var thresholdPercentage: Double = 0.20
+    @AppStorage("steddi.defaultHardMinuteFloor") private var hardMinuteFloor: Int = 10
+    @AppStorage("steddi.voiceGuidanceEnabled") private var voiceGuidanceEnabled: Bool = true
+    @AppStorage("steddi.units") private var units: String = MeasurementUnit.miles.rawValue
 
     @State private var showNoGoEditor = false
     @State private var showThresholdExplainer = false
     @State private var showDonation = false
+
+    private var useMiles: Binding<Bool> {
+        Binding(
+            get: { units == MeasurementUnit.miles.rawValue },
+            set: { units = $0 ? MeasurementUnit.miles.rawValue : MeasurementUnit.kilometers.rawValue }
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -24,11 +32,11 @@ struct SettingsView: View {
                         HStack {
                             Text("Reroute threshold")
                             Spacer()
-                            Text("\(Int(thresholdPercentage))%")
+                            Text("\(Int(thresholdPercentage * 100))%")
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                         }
-                        Slider(value: $thresholdPercentage, in: 5...50, step: 5)
+                        Slider(value: $thresholdPercentage, in: 0.05...0.50, step: 0.05)
                             .tint(.blue)
                     }
 
@@ -75,7 +83,7 @@ struct SettingsView: View {
 
                 // MARK: - Units
                 Section {
-                    Picker("Distance units", selection: $useMiles) {
+                    Picker("Distance units", selection: useMiles) {
                         Text("Miles").tag(true)
                         Text("Kilometers").tag(false)
                     }

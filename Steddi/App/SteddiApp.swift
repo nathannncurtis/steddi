@@ -3,9 +3,18 @@ import SwiftData
 
 @main
 struct SteddiApp: App {
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
+    @State private var locationService = LocationService()
+    @State private var offlineCacheService = OfflineCacheService()
+
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            if hasCompletedOnboarding {
+                HomeView()
+            } else {
+                OnboardingView()
+            }
         }
         .modelContainer(for: [
             PinnedLocation.self,
@@ -14,5 +23,7 @@ struct SteddiApp: App {
             DriveRecord.self,
             NoGoZone.self,
         ])
+        .environment(locationService)
+        .environment(offlineCacheService)
     }
 }

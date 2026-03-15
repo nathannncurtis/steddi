@@ -1,23 +1,40 @@
 import Foundation
 import CoreLocation
-import Combine
+import Observation
 
 /// Manages location permissions and continuous location updates.
+@Observable
 @MainActor
-final class LocationService: NSObject, ObservableObject {
-    @Published var currentLocation: CLLocation?
-    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
-    @Published var isRecording: Bool = false
+final class LocationService {
+    var currentLocation: CLLocation?
+    var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    var isRecording: Bool = false
 
+    private let delegate: LocationDelegate
     private let locationManager = CLLocationManager()
     private var recordedPoints: [GPSPoint] = []
 
-    override init() {
-        super.init()
-        locationManager.delegate = self
+    init() {
+        delegate = LocationDelegate()
+        locationManager.delegate = delegate
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         locationManager.allowsBackgroundLocationUpdates = true
         locationManager.pausesLocationUpdatesAutomatically = false
+
+        delegate.onLocationUpdate = { [weak self] location in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.currentLocation = location
+                if self.isRecording, location.horizontalAccuracy <= 20 {
+                    self.recordedPoints.append(GPSPoint(from: location))
+                }
+            }
+        }
+        delegate.onAuthChange = { [weak self] status in
+            Task { @MainActor [weak self] in
+                self?.authorizationStatus = status
+            }
+        }
     }
 
     func requestPermission() {
@@ -51,24 +68,18 @@ final class LocationService: NSObject, ObservableObject {
     }
 }
 
-extension LocationService: CLLocationManagerDelegate {
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        Task { @MainActor in
-            guard let location = locations.last else { return }
-            currentLocation = location
+/// Separate delegate class since CLLocationManagerDelegate requires NSObject,
+/// which conflicts with @Observable.
+private class LocationDelegate: NSObject, CLLocationManagerDelegate {
+    var onLocationUpdate: ((CLLocation) -> Void)?
+    var onAuthChange: ((CLAuthorizationStatus) -> Void)?
 
-            if isRecording {
-                // Filter out low-accuracy points
-                if location.horizontalAccuracy <= 20 {
-                    recordedPoints.append(GPSPoint(from: location))
-                }
-            }
-        }
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        onLocationUpdate?(location)
     }
 
-    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        Task { @MainActor in
-            authorizationStatus = manager.authorizationStatus
-        }
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        onAuthChange?(manager.authorizationStatus)
     }
 }

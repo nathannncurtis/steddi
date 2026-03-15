@@ -14,9 +14,13 @@ final class NavigationViewModel {
     var isNavigating: Bool = false
     var currentETA: TimeInterval?
     var currentRoute: Route?
-    var rerouteSuggestion: RerouteSuggestion?
     var isRecording: Bool = false
     var navigationProgress: NavigationProgress = .idle
+
+    /// Proxied from NavigationCoordinator — the single source of truth for reroute suggestions.
+    var rerouteSuggestion: RerouteSuggestion? {
+        navigationCoordinator.rerouteSuggestion
+    }
 
     // MARK: - Dependencies
 
@@ -47,28 +51,23 @@ final class NavigationViewModel {
     // MARK: - Navigation Lifecycle
 
     func startNavigation(to destination: PinnedLocation, commute: Commute?) {
-        guard let route = commute?.preferredRoute else { return }
-
-        currentRoute = route
+        currentRoute = commute?.preferredRoute
         isNavigating = true
         navigationProgress = .navigating
         isRecording = true
         locationService.startRecording()
 
         navigationTask = Task { [weak self] in
-            await self?.navigationCoordinator.startSession(
-                route: route,
-                commute: commute,
-                destination: destination
-            )
-            await self?.observeNavigationUpdates()
+            guard let self else { return }
+            await self.navigationCoordinator.startNavigation(to: destination, commute: commute)
+            await self.observeNavigationUpdates()
         }
     }
 
     func stopNavigation() {
         navigationTask?.cancel()
         navigationTask = nil
-        navigationCoordinator.stopSession()
+        _ = navigationCoordinator.stopNavigation()
 
         if isRecording {
             _ = locationService.stopRecording()
@@ -78,7 +77,6 @@ final class NavigationViewModel {
         isNavigating = false
         currentETA = nil
         currentRoute = nil
-        rerouteSuggestion = nil
         navigationProgress = .idle
     }
 
@@ -87,14 +85,11 @@ final class NavigationViewModel {
     func acceptReroute() {
         guard let suggestion = rerouteSuggestion else { return }
         currentRoute = suggestion.fallbackRoute
-        currentETA = suggestion.fallbackETA
-        rerouteSuggestion = nil
-        navigationCoordinator.switchToRoute(suggestion.fallbackRoute)
+        navigationCoordinator.switchToFallback(suggestion.fallbackRoute)
     }
 
     func dismissReroute() {
-        rerouteSuggestion = nil
-        navigationCoordinator.dismissCurrentSuggestion()
+        navigationCoordinator.rerouteSuggestion = nil
     }
 
     // MARK: - Post-Arrival Recording
@@ -137,13 +132,8 @@ final class NavigationViewModel {
     // MARK: - Internal
 
     private func observeNavigationUpdates() async {
-        // Poll the coordinator for state changes while navigating.
-        // In production this would use AsyncStream from the coordinator.
         while !Task.isCancelled && isNavigating {
-            currentETA = navigationCoordinator.currentETASeconds
-            if let suggestion = navigationCoordinator.pendingSuggestion {
-                rerouteSuggestion = suggestion
-            }
+            currentETA = navigationCoordinator.currentETA
             try? await Task.sleep(for: .seconds(5))
         }
     }
@@ -156,11 +146,4 @@ enum NavigationProgress {
     case navigating
     case processing  // map matching the recorded trace
     case arrived
-}
-
-struct RerouteSuggestion {
-    let fallbackRoute: Route
-    let fallbackETA: TimeInterval
-    let savingsSeconds: TimeInterval
-    let decision: RerouteDecision
 }

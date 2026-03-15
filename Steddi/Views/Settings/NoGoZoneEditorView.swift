@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct NoGoZoneEditorView: View {
     @Environment(\.dismiss) private var dismiss
