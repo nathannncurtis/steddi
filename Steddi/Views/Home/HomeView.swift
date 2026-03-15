@@ -8,6 +8,15 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LocationService.self) private var locationService
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
+    @Query(filter: #Predicate<Commute> { $0.isActive }, sort: \Commute.createdAt) private var commutes: [Commute]
+
+    // Bottom sheet tab
+    @State private var sheetTab: SheetTab = .commutes
+
+    enum SheetTab: String, CaseIterable {
+        case commutes = "Commutes"
+        case places = "Places"
+    }
 
     // Navigation state
     @State private var isNavigating = false
@@ -227,22 +236,153 @@ struct HomeView: View {
 
     private var bottomSheet: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 8) {
-                Capsule()
-                    .fill(SteddiTheme.textMuted.opacity(0.4))
-                    .frame(width: 36, height: 4)
-                SteadyLine(color: SteddiTheme.accent, height: 1)
-                    .padding(.horizontal, 40)
-            }
-            .padding(.top, 12)
+            // Drag indicator
+            Capsule()
+                .fill(SteddiTheme.textMuted.opacity(0.4))
+                .frame(width: 36, height: 4)
+                .padding(.top, 10)
 
+            // Tab selector
+            HStack(spacing: 0) {
+                ForEach(SheetTab.allCases, id: \.self) { tab in
+                    Button {
+                        sheetTab = tab
+                    } label: {
+                        Text(tab.rawValue)
+                            .font(SteddiTheme.heading(14))
+                            .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textMuted)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+
+            SteadyLine(color: SteddiTheme.accent, height: 1)
+                .padding(.horizontal, 32)
+
+            // Content
+            switch sheetTab {
+            case .commutes:
+                commutesTab
+            case .places:
+                placesTab
+            }
+        }
+        .background {
+            UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
+                .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                .overlay(
+                    UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
+                        .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
+        }
+    }
+
+    // MARK: - Commutes Tab
+
+    private var commutesTab: some View {
+        Group {
+            if commutes.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "arrow.triangle.swap")
+                        .font(.title2)
+                        .foregroundStyle(SteddiTheme.accent)
+                    Text("No commutes yet")
+                        .font(SteddiTheme.heading(16))
+                        .foregroundStyle(SteddiTheme.textPrimary)
+                    Text("Set up a commute in Settings")
+                        .font(SteddiTheme.body(14))
+                        .foregroundStyle(SteddiTheme.textSecondary)
+                }
+                .padding(.vertical, 24)
+                .padding(.horizontal, 20)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(commutes.prefix(4)) { commute in
+                        commuteCard(commute)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private func commuteCard(_ commute: Commute) -> some View {
+        Button {
+            if let dest = commute.destination {
+                navigateTo(
+                    name: dest.name,
+                    coordinate: dest.coordinate,
+                    address: dest.address
+                )
+            }
+        } label: {
+            HStack(spacing: 12) {
+                // Route indicator
+                VStack(spacing: 2) {
+                    Circle()
+                        .fill(SteddiTheme.accent)
+                        .frame(width: 8, height: 8)
+                    Rectangle()
+                        .fill(SteddiTheme.accent.opacity(0.3))
+                        .frame(width: 2, height: 16)
+                    Circle()
+                        .fill(SteddiTheme.sage)
+                        .frame(width: 8, height: 8)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(commute.name)
+                        .font(SteddiTheme.heading(15))
+                        .foregroundStyle(SteddiTheme.textPrimary)
+
+                    HStack(spacing: 4) {
+                        Text(commute.origin?.name ?? "—")
+                            .foregroundStyle(SteddiTheme.textSecondary)
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundStyle(SteddiTheme.textMuted)
+                        Text(commute.destination?.name ?? "—")
+                            .foregroundStyle(SteddiTheme.textSecondary)
+                    }
+                    .font(SteddiTheme.body(13))
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SteddiTheme.textMuted)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                    .fill(SteddiTheme.surfaceSecondary.opacity(0.6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                            .stroke(SteddiTheme.accent.opacity(0.06), lineWidth: 1)
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Places Tab
+
+    private var placesTab: some View {
+        Group {
             if pinnedLocations.isEmpty {
                 emptyState
                     .padding(.vertical, 24)
                     .padding(.horizontal, 20)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(pinnedLocations.prefix(4)) { location in
+                    ForEach(pinnedLocations.prefix(6)) { location in
                         LocationCardView(
                             name: location.name,
                             icon: location.icon,
@@ -259,17 +399,8 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 16)
+                .padding(.vertical, 12)
             }
-        }
-        .background {
-            UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                .fill(SteddiTheme.surfacePrimary.opacity(0.95))
-                .overlay(
-                    UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                        .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
         }
     }
 
