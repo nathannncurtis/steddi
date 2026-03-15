@@ -270,21 +270,13 @@ struct HomeView: View {
                 placesTab
             }
         }
-        .padding(.bottom, 40)
-        .background {
-            VStack(spacing: 0) {
-                UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                    .fill(SteddiTheme.surfacePrimary)
-                    .overlay(
-                        UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                            .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
-                    )
-                // Extend solid color well past the screen bottom
-                SteddiTheme.surfacePrimary
-                    .frame(height: 200)
-            }
-            .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
-        }
+        .safeAreaPadding(.bottom)
+        .background(
+            SteddiTheme.surfacePrimary
+                .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
+        )
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
+        .ignoresSafeArea(.container, edges: .bottom)
     }
 
     // MARK: - Commutes Tab
