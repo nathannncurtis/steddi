@@ -98,7 +98,14 @@ class SteddiMapContainer: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        mapView?.frame = view.bounds
+        // Extend map into safe area insets so there are no gaps
+        let insets = view.safeAreaInsets
+        mapView?.frame = CGRect(
+            x: -insets.left,
+            y: -insets.top,
+            width: view.bounds.width + insets.left + insets.right,
+            height: view.bounds.height + insets.top + insets.bottom
+        )
     }
 
     override func viewDidLoad() {
