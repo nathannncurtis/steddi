@@ -91,8 +91,17 @@ struct ActiveNavigationView: View {
     }
 
     private func calculateRoute() async {
-        guard let currentLocation = locationService.currentLocation else {
-            errorMessage = "Unable to determine your location."
+        // Wait for a valid location fix (up to 10 seconds)
+        locationService.startUpdating()
+        var currentLocation = locationService.currentLocation
+        for _ in 0..<20 {
+            if currentLocation != nil { break }
+            try? await Task.sleep(for: .milliseconds(500))
+            currentLocation = locationService.currentLocation
+        }
+
+        guard let currentLocation else {
+            errorMessage = "Unable to determine your location. Make sure location services are enabled."
             isLoading = false
             return
         }
