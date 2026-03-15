@@ -13,7 +13,7 @@ struct RerouteCardView: View {
         if isVisible {
             VStack(spacing: 16) {
                 // Steady line accent
-                SteadyLine(color: SteddiTheme.amber, height: 2)
+                SteadyLine(color: SteddiTheme.accent, height: 2)
                     .padding(.horizontal, 20)
 
                 VStack(spacing: 6) {
@@ -59,7 +59,7 @@ struct RerouteCardView: View {
                     .foregroundStyle(SteddiTheme.surfacePrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(SteddiTheme.amber, in: RoundedRectangle(cornerRadius: 14))
+                    .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
                 }
             }
             .padding(20)
@@ -68,7 +68,7 @@ struct RerouteCardView: View {
                     .fill(SteddiTheme.surfacePrimary.opacity(0.95))
                     .overlay(
                         RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                            .stroke(SteddiTheme.amber.opacity(0.12), lineWidth: 1)
+                            .stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1)
                     )
                     .shadow(color: .black.opacity(0.4), radius: 16, y: 4)
             }

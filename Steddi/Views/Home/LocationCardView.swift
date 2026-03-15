@@ -20,9 +20,9 @@ struct LocationCardView: View {
                 // Icon with amber accent background
                 Image(systemName: icon)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(SteddiTheme.amber)
+                    .foregroundStyle(SteddiTheme.accent)
                     .frame(width: 36, height: 36)
-                    .background(SteddiTheme.amberSubtle, in: RoundedRectangle(cornerRadius: 10))
+                    .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
@@ -61,7 +61,7 @@ struct LocationCardView: View {
                     .fill(SteddiTheme.surfacePrimary.opacity(0.9))
                     .overlay(
                         RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                            .stroke(SteddiTheme.amber.opacity(0.08), lineWidth: 1)
+                            .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
                     )
             }
         }

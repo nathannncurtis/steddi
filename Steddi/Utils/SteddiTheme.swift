@@ -5,10 +5,10 @@ enum SteddiTheme {
 
     // MARK: - Signature Colors
 
-    /// Warm amber — Steddi's signature. Used for primary actions, accents, brand moments.
-    static let amber = Color(red: 0.79, green: 0.54, blue: 0.02)        // #CA8A04
-    static let amberLight = Color(red: 0.96, green: 0.75, blue: 0.03)   // #F5BF03
-    static let amberSubtle = Color(red: 0.79, green: 0.54, blue: 0.02).opacity(0.15)
+    /// Soft Lavender — Steddi's signature. Quiet confidence, calm, different.
+    static let accent = Color(red: 0.61, green: 0.56, blue: 0.77)       // #9B8EC4
+    static let accentLight = Color(red: 0.73, green: 0.68, blue: 0.87)  // #BAADDE
+    static let accentSubtle = Color(red: 0.61, green: 0.56, blue: 0.77).opacity(0.15)
 
     /// Sage green — "all clear" / "good to go" states.
     static let sage = Color(red: 0.13, green: 0.74, blue: 0.45)         // #22BD73
@@ -60,7 +60,7 @@ enum SteddiTheme {
         var color: Color {
             switch self {
             case .clear: return SteddiTheme.sage
-            case .moderate: return SteddiTheme.amber
+            case .moderate: return SteddiTheme.accent
             case .heavy: return SteddiTheme.warmRed
             case .unknown: return SteddiTheme.textMuted
             }
@@ -82,7 +82,7 @@ enum SteddiTheme {
 /// The signature "steady line" visual — a flat, calm line that subtly pulses.
 /// Used as a brand element on cards, headers, dividers.
 struct SteadyLine: View {
-    var color: Color = SteddiTheme.amber
+    var color: Color = SteddiTheme.accent
     var height: CGFloat = 2
     @State private var phase: CGFloat = 0
 
@@ -119,7 +119,7 @@ struct SteddiCard<Content: View>: View {
                     .fill(SteddiTheme.surfacePrimary.opacity(0.85))
                     .overlay(
                         RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                            .stroke(SteddiTheme.amber.opacity(0.12), lineWidth: 1)
+                            .stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1)
                     )
             }
     }
@@ -135,7 +135,7 @@ struct SteddiCard<Content: View>: View {
             SteddiCard {
                 HStack {
                     Image(systemName: "house.fill")
-                        .foregroundStyle(SteddiTheme.amber)
+                        .foregroundStyle(SteddiTheme.accent)
                     Text("Home")
                         .font(SteddiTheme.heading(16))
                         .foregroundStyle(SteddiTheme.textPrimary)

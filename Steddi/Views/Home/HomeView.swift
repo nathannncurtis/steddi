@@ -26,7 +26,7 @@ struct HomeView: View {
 
                 ForEvery(pinnedLocations) { location in
                     PointAnnotation(coordinate: location.coordinate)
-                        .image(.init(image: UIImage(systemName: location.icon)!.withTintColor(.systemOrange, renderingMode: .alwaysOriginal), name: location.icon))
+                        .image(.init(image: UIImage(systemName: location.icon)!.withTintColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0), renderingMode: .alwaysOriginal), name: location.icon))
                 }
             }
             .mapStyle(.standard(lightPreset: .dusk))
@@ -107,7 +107,7 @@ struct HomeView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.body.weight(.medium))
-                        .foregroundStyle(SteddiTheme.amber)
+                        .foregroundStyle(SteddiTheme.accent)
                     Text("Where to?")
                         .font(SteddiTheme.heading(17))
                         .foregroundStyle(SteddiTheme.textPrimary)
@@ -120,7 +120,7 @@ struct HomeView: View {
                         .fill(SteddiTheme.surfacePrimary.opacity(0.9))
                         .overlay(
                             Capsule()
-                                .stroke(SteddiTheme.amber.opacity(0.15), lineWidth: 1)
+                                .stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1)
                         )
                 }
             }
@@ -137,7 +137,7 @@ struct HomeView: View {
                             .fill(SteddiTheme.surfacePrimary.opacity(0.9))
                             .overlay(
                                 Circle()
-                                    .stroke(SteddiTheme.amber.opacity(0.08), lineWidth: 1)
+                                    .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
                             )
                     }
             }
@@ -154,7 +154,7 @@ struct HomeView: View {
                 Capsule()
                     .fill(SteddiTheme.textMuted.opacity(0.4))
                     .frame(width: 36, height: 4)
-                SteadyLine(color: SteddiTheme.amber, height: 1)
+                SteadyLine(color: SteddiTheme.accent, height: 1)
                     .padding(.horizontal, 40)
             }
             .padding(.top, 12)
@@ -184,7 +184,7 @@ struct HomeView: View {
                 .fill(SteddiTheme.surfacePrimary.opacity(0.95))
                 .overlay(
                     UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                        .stroke(SteddiTheme.amber.opacity(0.08), lineWidth: 1)
+                        .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
         }
@@ -194,7 +194,7 @@ struct HomeView: View {
         VStack(spacing: 10) {
             Image(systemName: "mappin.and.ellipse")
                 .font(.title2)
-                .foregroundStyle(SteddiTheme.amber)
+                .foregroundStyle(SteddiTheme.accent)
             Text("No pinned locations yet")
                 .font(SteddiTheme.heading(16))
                 .foregroundStyle(SteddiTheme.textPrimary)
@@ -238,7 +238,7 @@ private struct ExpandedSearchView: View {
                 Button(action: onDismiss) {
                     Image(systemName: "arrow.left")
                         .font(.body.weight(.medium))
-                        .foregroundStyle(SteddiTheme.amber)
+                        .foregroundStyle(SteddiTheme.accent)
                 }
 
                 TextField("Search an address", text: $query)
@@ -267,7 +267,7 @@ private struct ExpandedSearchView: View {
                     .fill(SteddiTheme.surfacePrimary)
                     .overlay(
                         Capsule()
-                            .stroke(SteddiTheme.amber.opacity(0.25), lineWidth: 1)
+                            .stroke(SteddiTheme.accent.opacity(0.25), lineWidth: 1)
                     )
             }
             .padding(.horizontal, 16)
@@ -284,7 +284,7 @@ private struct ExpandedSearchView: View {
                                 HStack(spacing: 12) {
                                     Image(systemName: "mappin")
                                         .font(.body)
-                                        .foregroundStyle(SteddiTheme.amber)
+                                        .foregroundStyle(SteddiTheme.accent)
                                         .frame(width: 32)
 
                                     VStack(alignment: .leading, spacing: 3) {
@@ -307,7 +307,7 @@ private struct ExpandedSearchView: View {
                                     } label: {
                                         Image(systemName: "mappin.circle.fill")
                                             .font(.title3)
-                                            .foregroundStyle(SteddiTheme.amber)
+                                            .foregroundStyle(SteddiTheme.accent)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -330,7 +330,7 @@ private struct ExpandedSearchView: View {
                         .fill(SteddiTheme.surfacePrimary.opacity(0.95))
                         .overlay(
                             RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                                .stroke(SteddiTheme.amber.opacity(0.08), lineWidth: 1)
+                                .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
                         )
                         .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
                 }
