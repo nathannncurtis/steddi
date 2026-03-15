@@ -10,24 +10,23 @@ struct HomeView: View {
 
     @State private var viewport: Viewport = .followPuck(zoom: 14)
     @State private var showSettings = false
-    @State private var showAddLocation = false
+    @State private var showSearch = false
     @State private var selectedLocation: PinnedLocation?
+    @State private var navigateToResult: GeocodingResult?
+
+    // Long press pin flow
+    @State private var showAddLocation = false
     @State private var longPressCoordinate: CLLocationCoordinate2D?
 
     var body: some View {
-        ZStack(alignment: .top) {
+        ZStack {
             // Mapbox map
             Map(viewport: $viewport) {
-                // User location puck
                 Puck2D(bearing: .heading)
 
-                // Pin annotations for saved locations
                 ForEvery(pinnedLocations) { location in
                     PointAnnotation(coordinate: location.coordinate)
                         .image(.init(image: UIImage(systemName: location.icon)!.withTintColor(.systemBlue, renderingMode: .alwaysOriginal), name: location.icon))
-                        .onTapGesture {
-                            selectedLocation = location
-                        }
                 }
             }
             .mapStyle(.standard(lightPreset: .dusk))
@@ -37,26 +36,42 @@ struct HomeView: View {
             }
             .ignoresSafeArea()
 
-            // Settings gear
-            HStack {
-                Spacer()
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.title3)
-                        .foregroundStyle(.white)
-                        .padding(12)
-                        .background(.ultraThinMaterial, in: Circle())
+            VStack(spacing: 0) {
+                // Top bar: search + settings
+                HStack(spacing: 12) {
+                    // Search bar
+                    Button {
+                        showSearch = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
+                            Text("Where to?")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    }
+
+                    // Settings gear
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .padding(12)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
                 }
-                .padding(.trailing, 16)
+                .padding(.horizontal, 16)
                 .padding(.top, 8)
-            }
 
-            // Bottom pinned locations strip
-            VStack {
                 Spacer()
 
+                // Bottom: pinned locations or empty state
                 if pinnedLocations.isEmpty {
                     emptyStateCard
                         .padding(.bottom, 40)
@@ -88,6 +103,29 @@ struct HomeView: View {
         .fullScreenCover(item: $selectedLocation) { location in
             ActiveNavigationView(destination: location)
         }
+        .fullScreenCover(item: $navigateToResult) { result in
+            ActiveNavigationView(
+                destination: PinnedLocation(
+                    name: result.name,
+                    latitude: result.coordinate.latitude,
+                    longitude: result.coordinate.longitude,
+                    address: result.address
+                )
+            )
+        }
+        .sheet(isPresented: $showSearch) {
+            SearchView(
+                currentLocation: locationService.currentLocation?.coordinate,
+                onSelectResult: { result in
+                    showSearch = false
+                    navigateToResult = result
+                },
+                onPinResult: { result in
+                    showSearch = false
+                    pinLocation(from: result)
+                }
+            )
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -110,9 +148,139 @@ struct HomeView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 40)
     }
+
+    private func pinLocation(from result: GeocodingResult) {
+        let location = PinnedLocation(
+            name: result.name,
+            latitude: result.coordinate.latitude,
+            longitude: result.coordinate.longitude,
+            address: result.address
+        )
+        modelContext.insert(location)
+    }
 }
 
-// MARK: - Add Location Sheet
+// MARK: - Search View
+
+struct SearchView: View {
+    let currentLocation: CLLocationCoordinate2D?
+    let onSelectResult: (GeocodingResult) -> Void
+    let onPinResult: (GeocodingResult) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var results: [GeocodingResult] = []
+    @State private var searchTask: Task<Void, Never>?
+    @FocusState private var isSearchFocused: Bool
+
+    private let geocodingService = GeocodingService(accessToken: MapboxTokenProvider.accessToken)
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search field
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search for a place", text: $query)
+                        .textFieldStyle(.plain)
+                        .focused($isSearchFocused)
+                        .autocorrectionDisabled()
+                        .onChange(of: query) { _, newValue in
+                            debounceSearch(newValue)
+                        }
+                    if !query.isEmpty {
+                        Button {
+                            query = ""
+                            results = []
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+                // Results
+                if results.isEmpty && !query.isEmpty {
+                    ContentUnavailableView("No results", systemImage: "magnifyingglass", description: Text("Try a different search"))
+                        .frame(maxHeight: .infinity)
+                } else {
+                    List(results) { result in
+                        Button {
+                            onSelectResult(result)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(result.name)
+                                        .font(.body)
+                                        .foregroundStyle(.primary)
+                                    if !result.address.isEmpty && result.address != result.name {
+                                        Text(result.address)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+
+                                Spacer()
+
+                                // Pin button
+                                Button {
+                                    onPinResult(result)
+                                } label: {
+                                    Image(systemName: "mappin.circle")
+                                        .font(.title3)
+                                        .foregroundStyle(.blue)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("Search")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .onAppear {
+                isSearchFocused = true
+            }
+        }
+    }
+
+    private func debounceSearch(_ query: String) {
+        searchTask?.cancel()
+        guard !query.isEmpty else {
+            results = []
+            return
+        }
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            do {
+                let searchResults = try await geocodingService.search(
+                    query: query,
+                    proximity: currentLocation
+                )
+                if !Task.isCancelled {
+                    results = searchResults
+                }
+            } catch {
+                // Silently fail — results just stay empty
+            }
+        }
+    }
+}
+
+// MARK: - Add Location Sheet (from long press)
 
 private struct AddLocationSheet: View {
     let coordinate: CLLocationCoordinate2D?
@@ -127,7 +295,6 @@ private struct AddLocationSheet: View {
                 Section {
                     TextField("Location name", text: $name)
                 }
-
                 if let coord = coordinate {
                     Section {
                         HStack {
