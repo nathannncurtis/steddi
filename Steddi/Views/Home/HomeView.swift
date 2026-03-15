@@ -279,9 +279,9 @@ struct HomeView: View {
                         UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
                             .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
                     )
-                // Extend solid color below the rounded rect to the screen bottom
+                // Extend solid color well past the screen bottom
                 SteddiTheme.surfacePrimary
-                    .frame(height: 100)
+                    .frame(height: 200)
             }
             .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
         }
