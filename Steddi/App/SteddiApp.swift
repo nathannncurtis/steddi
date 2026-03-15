@@ -8,6 +8,13 @@ struct SteddiApp: App {
     @State private var locationService = LocationService()
     @State private var offlineCacheService = OfflineCacheService()
 
+    init() {
+        // Set up arrival notifications
+        ArrivalNotificationService.shared.requestPermissionIfNeeded()
+        ArrivalNotificationService.shared.registerCategory()
+        ArrivalNotificationService.shared.setupDelegate()
+    }
+
     var body: some Scene {
         WindowGroup {
             if hasCompletedOnboarding {

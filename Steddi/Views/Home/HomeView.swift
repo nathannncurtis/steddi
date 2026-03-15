@@ -36,6 +36,11 @@ struct HomeView: View {
     @State private var longPressCoordinate: CLLocationCoordinate2D?
     @State private var recordedPoints: [GPSPoint] = []
 
+    // Active commute tracking (for route saving on arrival)
+    @State private var activeCommute: Commute?
+    @State private var activeDirection: CommuteDirection?
+    @State private var pendingTraceForSave = false
+
     // Direction picker for ambiguous commutes
     @State private var showDirectionPicker = false
     @State private var directionPickerCommute: Commute?
@@ -68,12 +73,39 @@ struct HomeView: View {
                 SteddiNavOverlay(
                     provider: provider,
                     onEndNavigation: {
-                        recordedPoints = locationService.stopRecording()
+                        let points = locationService.stopRecording()
                         provider.tripSession().setToIdle()
                         is3DNav = true
                         isNavigating = false
                         navigationRoutes = nil
-                        showPostArrival = true
+
+                        // Save the raw drive record
+                        if points.count >= 2 {
+                            let record = DriveRecord()
+                            record.rawGPSPoints = points
+                            record.associatedCommute = activeCommute
+                            record.endedAt = Date()
+                            modelContext.insert(record)
+                            recordedPoints = points
+                        }
+
+                        // Check if we should prompt to save this route
+                        if let commute = activeCommute,
+                           let direction = activeDirection,
+                           points.count >= 2,
+                           commute.preferredRoute(for: direction) == nil {
+                            // No preferred route for this direction — schedule notification
+                            let destName = (direction == .originToDestination ? commute.destination?.name : commute.origin?.name) ?? "destination"
+                            ArrivalNotificationService.shared.scheduleRoutePrompt(
+                                commuteName: commute.name,
+                                destinationName: destName
+                            )
+                            pendingTraceForSave = true
+                        }
+
+                        // Clear active tracking
+                        activeCommute = nil
+                        activeDirection = nil
                     },
                     onToggleView: { is3D in
                         is3DNav = is3D
@@ -120,6 +152,11 @@ struct HomeView: View {
         .onAppear {
             locationService.requestPermission()
             locationService.startUpdating()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .steddiSaveRouteFromNotification)) { _ in
+            if pendingTraceForSave && !recordedPoints.isEmpty {
+                showPostArrival = true
+            }
         }
         .task {
             if debugAutoNav && !debugDidAutoNav {
@@ -329,6 +366,10 @@ struct HomeView: View {
     private func startCommute(_ commute: Commute, direction: CommuteDirection) {
         let target: PinnedLocation? = direction == .originToDestination ? commute.destination : commute.origin
         guard let target else { return }
+
+        // Track active commute for arrival logic
+        activeCommute = commute
+        activeDirection = direction
 
         // Log the trip for future learning
         let trip = CommuteTrip(commute: commute, direction: direction)
