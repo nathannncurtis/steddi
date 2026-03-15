@@ -16,6 +16,9 @@ struct HomeView: View {
     @State private var isCalculatingRoute = false
     @State private var navigationDestination: PinnedLocation?
 
+    // Camera state
+    @State private var is3DNav = true
+
     // UI state
     @State private var showSettings = false
     @State private var showSearch = false
@@ -29,6 +32,7 @@ struct HomeView: View {
             // Unified map — same instance for home + navigation
             SteddiMapView(
                 isNavigating: $isNavigating,
+                is3DView: $is3DNav,
                 navigationRoutes: navigationRoutes,
                 provider: navProvider,
                 onLongPress: { coord in
@@ -47,11 +51,15 @@ struct HomeView: View {
                     onEndNavigation: {
                         recordedPoints = locationService.stopRecording()
                         provider.tripSession().setToIdle()
+                        is3DNav = true
                         withAnimation(.easeInOut(duration: 0.4)) {
                             isNavigating = false
                             navigationRoutes = nil
                         }
                         showPostArrival = true
+                    },
+                    onToggleView: { is3D in
+                        is3DNav = is3D
                     }
                 )
                 .transition(.opacity.combined(with: .move(edge: .bottom)))

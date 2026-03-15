@@ -9,6 +9,7 @@ import Combine
 /// Navigation uses the same map — Steddi's custom SwiftUI overlay replaces Mapbox's stock UI.
 struct SteddiMapView: UIViewControllerRepresentable {
     @Binding var isNavigating: Bool
+    @Binding var is3DView: Bool
     let navigationRoutes: NavigationRoutes?
     let provider: MapboxNavigationProvider?
     let onLongPress: (CLLocationCoordinate2D) -> Void
@@ -26,6 +27,7 @@ struct SteddiMapView: UIViewControllerRepresentable {
             if !vc.isInNavigation {
                 vc.startNavigation(routes: routes, provider: provider)
             }
+            vc.set3DView(is3DView)
         } else if !isNavigating && vc.isInNavigation {
             vc.stopNavigation()
         }
@@ -35,7 +37,8 @@ struct SteddiMapView: UIViewControllerRepresentable {
 class SteddiMapContainer: UIViewController {
     private var mapView: MapView!
     var isInNavigation = false
-    private var routeLine: [CLLocationCoordinate2D] = []
+    private var currentIs3D = true
+    private var navProvider: MapboxNavigationProvider?
 
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
 
@@ -136,9 +139,28 @@ class SteddiMapContainer: UIViewController {
         onLongPress?(coordinate)
     }
 
+    func set3DView(_ is3D: Bool) {
+        guard currentIs3D != is3D else { return }
+        currentIs3D = is3D
+
+        let pitch: CGFloat = is3D ? 60 : 0
+        let zoom: CGFloat = is3D ? 17.5 : 16
+        mapView.camera.ease(
+            to: CameraOptions(
+                center: mapView.location.latestLocation?.coordinate,
+                zoom: zoom,
+                pitch: pitch
+            ),
+            duration: 0.5,
+            curve: .easeInOut,
+            completion: nil
+        )
+    }
+
     func startNavigation(routes: NavigationRoutes, provider: MapboxNavigationProvider) {
         guard !isInNavigation else { return }
         isInNavigation = true
+        self.navProvider = provider
 
         // Start active guidance on the navigation core
         provider.tripSession().startActiveGuidance(with: routes, startLegIndex: 0)
@@ -147,12 +169,15 @@ class SteddiMapContainer: UIViewController {
         let coords = routes.mainRoute.route.shape?.coordinates ?? []
         showRouteLine(coords)
 
-        // Camera follows route — tight zoom, tilted, heading-locked
+        let pitch: CGFloat = currentIs3D ? 60 : 0
+        let zoom: CGFloat = currentIs3D ? 17.5 : 16
+
+        // Camera follows route
         mapView.mapboxMap.setCamera(to: CameraOptions(
             center: mapView.location.latestLocation?.coordinate,
-            zoom: 17.5,
+            zoom: zoom,
             bearing: 0,
-            pitch: 60
+            pitch: pitch
         ))
 
         // Follow location during nav — smooth camera tracking
@@ -162,12 +187,14 @@ class SteddiMapContainer: UIViewController {
                 guard let self else { return }
                 let coord = state.enhancedLocation.coordinate
                 let bearing = state.enhancedLocation.course >= 0 ? state.enhancedLocation.course : 0
+                let navPitch: CGFloat = self.currentIs3D ? 60 : 0
+                let navZoom: CGFloat = self.currentIs3D ? 17.5 : 16
                 self.mapView.camera.ease(
                     to: CameraOptions(
                         center: coord,
-                        zoom: 17.5,
-                        bearing: bearing,
-                        pitch: 60
+                        zoom: navZoom,
+                        bearing: self.currentIs3D ? bearing : 0,
+                        pitch: navPitch
                     ),
                     duration: 1.0,
                     curve: .linear,
@@ -211,20 +238,20 @@ class SteddiMapContainer: UIViewController {
         var source = GeoJSONSource(id: "steddi-route-source")
         source.data = .geometry(.lineString(LineString(coordinates)))
 
-        // Bottom layer: wider glow/casing — subtle blurred lavender
+        // Bottom layer: bright glow/casing
         var glowLayer = LineLayer(id: "steddi-route-glow", source: "steddi-route-source")
-        glowLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
-        glowLayer.lineWidth = .constant(10)
-        glowLayer.lineOpacity = .constant(0.3)
-        glowLayer.lineBlur = .constant(4)
+        glowLayer.lineColor = .constant(StyleColor(UIColor(red: 0.73, green: 0.68, blue: 0.87, alpha: 1.0))) // Lighter lavender
+        glowLayer.lineWidth = .constant(12)
+        glowLayer.lineOpacity = .constant(0.4)
+        glowLayer.lineBlur = .constant(6)
         glowLayer.lineCap = .constant(.round)
         glowLayer.lineJoin = .constant(.round)
 
-        // Top layer: sharp main line
+        // Top layer: bright, high-contrast route line — cyan-tinted for visibility on dark map
         var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
-        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
-        lineLayer.lineWidth = .constant(5)
-        lineLayer.lineOpacity = .constant(0.8)
+        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.65, green: 0.78, blue: 0.95, alpha: 1.0))) // Light periwinkle blue — high contrast
+        lineLayer.lineWidth = .constant(7)
+        lineLayer.lineOpacity = .constant(1.0)
         lineLayer.lineCap = .constant(.round)
         lineLayer.lineJoin = .constant(.round)
 
