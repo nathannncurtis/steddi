@@ -54,8 +54,14 @@ class SteddiMapContainer: UIViewController {
         let initOptions = MapInitOptions(styleURI: .dark)
         mapView = MapView(frame: view.bounds, mapInitOptions: initOptions)
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        mapView.location.options.puckType = .puck2D(.init())
+        // Lavender puck
+        var puckConfig = Puck2DConfiguration()
+        puckConfig.pulsing = .init(color: UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 0.3))
+        mapView.location.options.puckType = .puck2D(puckConfig)
         mapView.mapboxMap.setCamera(to: CameraOptions(zoom: 14))
+
+        // Hide scale bar — it overlaps our UI
+        mapView.ornaments.options.scaleBar.visibility = .hidden
 
         view.addSubview(mapView)
 

@@ -117,6 +117,7 @@ struct OnboardingView: View {
         }) {
             DonationView()
         }
+        .preferredColorScheme(.dark)
     }
 
     private func completeOnboarding() {
