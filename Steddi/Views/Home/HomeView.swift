@@ -36,15 +36,41 @@ struct HomeView: View {
             }
             .ignoresSafeArea()
 
-            // Top bar: search + settings
-            VStack {
-                topBar
-                Spacer()
+            // Bottom sheet: pinned locations
+            if !showSearch {
+                VStack {
+                    Spacer()
+                    bottomSheet
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Bottom sheet: pinned locations
-            bottomSheet
+            // Top bar OR expanded search
+            VStack {
+                if showSearch {
+                    ExpandedSearchView(
+                        currentLocation: locationService.currentLocation?.coordinate,
+                        onSelectResult: { result in
+                            withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
+                            navigateToResult = result
+                        },
+                        onPinResult: { result in
+                            withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
+                            pinLocation(from: result)
+                        },
+                        onDismiss: {
+                            withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+                } else {
+                    topBar
+                        .transition(.opacity)
+                }
+                Spacer()
+            }
         }
+        .animation(.easeInOut(duration: 0.3), value: showSearch)
         .onAppear {
             locationService.requestPermission()
             locationService.startUpdating()
@@ -62,19 +88,6 @@ struct HomeView: View {
                 )
             )
         }
-        .sheet(isPresented: $showSearch) {
-            SearchView(
-                currentLocation: locationService.currentLocation?.coordinate,
-                onSelectResult: { result in
-                    showSearch = false
-                    navigateToResult = result
-                },
-                onPinResult: { result in
-                    showSearch = false
-                    pinLocation(from: result)
-                }
-            )
-        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -88,9 +101,8 @@ struct HomeView: View {
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            // Search bar
             Button {
-                showSearch = true
+                withAnimation(.easeInOut(duration: 0.3)) { showSearch = true }
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
@@ -113,7 +125,6 @@ struct HomeView: View {
                 }
             }
 
-            // Settings
             Button {
                 showSettings = true
             } label: {
@@ -139,12 +150,10 @@ struct HomeView: View {
 
     private var bottomSheet: some View {
         VStack(spacing: 0) {
-            // Drag indicator + steady line
             VStack(spacing: 8) {
                 Capsule()
                     .fill(SteddiTheme.textMuted.opacity(0.4))
                     .frame(width: 36, height: 4)
-
                 SteadyLine(color: SteddiTheme.amber, height: 1)
                     .padding(.horizontal, 40)
             }
@@ -162,9 +171,7 @@ struct HomeView: View {
                             icon: location.icon,
                             etaMinutes: nil,
                             delayMinutes: nil,
-                            onTap: {
-                                selectedLocation = location
-                            }
+                            onTap: { selectedLocation = location }
                         )
                     }
                 }
@@ -183,18 +190,14 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Empty State
-
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "mappin.and.ellipse")
                 .font(.title2)
                 .foregroundStyle(SteddiTheme.amber)
-
             Text("No pinned locations yet")
                 .font(SteddiTheme.heading(16))
                 .foregroundStyle(SteddiTheme.textPrimary)
-
             Text("Long press the map or search to save a place")
                 .font(SteddiTheme.body(14))
                 .foregroundStyle(SteddiTheme.textSecondary)
@@ -213,14 +216,14 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Search View
+// MARK: - Expanded Search (grows from search bar)
 
-struct SearchView: View {
+private struct ExpandedSearchView: View {
     let currentLocation: CLLocationCoordinate2D?
     let onSelectResult: (GeocodingResult) -> Void
     let onPinResult: (GeocodingResult) -> Void
+    let onDismiss: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var results: [GeocodingResult] = []
     @State private var searchTask: Task<Void, Never>?
@@ -229,81 +232,121 @@ struct SearchView: View {
     private let geocodingService = GeocodingService(accessToken: MapboxTokenProvider.accessToken)
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Search field with amber accent
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
+        VStack(spacing: 0) {
+            // Search field — same position as the "Where to?" bar
+            HStack(spacing: 10) {
+                Button(action: onDismiss) {
+                    Image(systemName: "arrow.left")
+                        .font(.body.weight(.medium))
                         .foregroundStyle(SteddiTheme.amber)
-                    TextField("Search an address", text: $query)
-                        .textFieldStyle(.plain)
-                        .focused($isSearchFocused)
-                        .autocorrectionDisabled()
-                        .onChange(of: query) { _, newValue in
-                            debounceSearch(newValue)
-                        }
-                    if !query.isEmpty {
-                        Button {
-                            query = ""
-                            results = []
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(SteddiTheme.textMuted)
-                        }
+                }
+
+                TextField("Search an address", text: $query)
+                    .font(SteddiTheme.body(17))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .focused($isSearchFocused)
+                    .autocorrectionDisabled()
+                    .onChange(of: query) { _, newValue in
+                        debounceSearch(newValue)
+                    }
+
+                if !query.isEmpty {
+                    Button {
+                        query = ""
+                        results = []
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(SteddiTheme.textMuted)
                     }
                 }
-                .padding(14)
-                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusSmall))
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background {
+                Capsule()
+                    .fill(SteddiTheme.surfacePrimary)
+                    .overlay(
+                        Capsule()
+                            .stroke(SteddiTheme.amber.opacity(0.25), lineWidth: 1)
+                    )
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
 
-                if results.isEmpty && !query.isEmpty {
-                    ContentUnavailableView("No results", systemImage: "magnifyingglass", description: Text("Try a different address"))
-                        .frame(maxHeight: .infinity)
-                } else {
-                    List(results) { result in
-                        Button {
-                            onSelectResult(result)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(result.name)
-                                        .font(.body.weight(.medium))
-                                        .foregroundStyle(.primary)
-                                    if !result.address.isEmpty && result.address != result.name {
-                                        Text(result.address)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                }
-
-                                Spacer()
-
-                                Button {
-                                    onPinResult(result)
-                                } label: {
-                                    Image(systemName: "mappin.circle.fill")
-                                        .font(.title3)
+            // Results — grow downward from the search bar
+            if !results.isEmpty {
+                ScrollView {
+                    VStack(spacing: 2) {
+                        ForEach(results) { result in
+                            Button {
+                                onSelectResult(result)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "mappin")
+                                        .font(.body)
                                         .foregroundStyle(SteddiTheme.amber)
+                                        .frame(width: 32)
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(result.name)
+                                            .font(.body.weight(.medium))
+                                            .foregroundStyle(SteddiTheme.textPrimary)
+                                        if !result.address.isEmpty && result.address != result.name {
+                                            Text(result.address)
+                                                .font(.caption)
+                                                .foregroundStyle(SteddiTheme.textSecondary)
+                                                .lineLimit(1)
+                                        }
+                                    }
+
+                                    Spacer()
+
+                                    // Pin button
+                                    Button {
+                                        onPinResult(result)
+                                    } label: {
+                                        Image(systemName: "mappin.circle.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(SteddiTheme.amber)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .buttonStyle(.plain)
+
+                            if result.id != results.last?.id {
+                                Divider()
+                                    .background(SteddiTheme.surfaceElevated)
+                                    .padding(.leading, 60)
                             }
                         }
                     }
-                    .listStyle(.plain)
+                    .padding(.top, 8)
                 }
-            }
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
+                .background {
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                        .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                                .stroke(SteddiTheme.amber.opacity(0.08), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+                .frame(maxHeight: 360)
+                .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
+            } else if !query.isEmpty {
+                Text("No results")
+                    .font(SteddiTheme.body(14))
+                    .foregroundStyle(SteddiTheme.textMuted)
+                    .padding(.top, 24)
             }
-            .onAppear {
-                isSearchFocused = true
-            }
+        }
+        .onAppear {
+            isSearchFocused = true
         }
     }
 
@@ -322,7 +365,9 @@ struct SearchView: View {
                     proximity: currentLocation
                 )
                 if !Task.isCancelled {
-                    results = searchResults
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        results = searchResults
+                    }
                 }
             } catch {}
         }
