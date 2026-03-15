@@ -35,6 +35,10 @@ struct HomeView: View {
     @State private var showPostArrival = false
     @State private var longPressCoordinate: CLLocationCoordinate2D?
     @State private var recordedPoints: [GPSPoint] = []
+
+    // Direction picker for ambiguous commutes
+    @State private var showDirectionPicker = false
+    @State private var directionPickerCommute: Commute?
     // Set to true to auto-start nav for testing, false for normal use
     private let debugAutoNav = false
     @State private var debugDidAutoNav = false
@@ -130,6 +134,21 @@ struct HomeView: View {
         .sheet(isPresented: $showAddLocation) {
             AddLocationSheet(coordinate: longPressCoordinate)
                 .presentationDetents([.medium])
+        }
+        .confirmationDialog(
+            "Where are you headed?",
+            isPresented: $showDirectionPicker,
+            titleVisibility: .visible
+        ) {
+            if let commute = directionPickerCommute {
+                Button(commute.origin?.name ?? "Origin") {
+                    startCommute(commute, direction: .destinationToOrigin)
+                }
+                Button(commute.destination?.name ?? "Destination") {
+                    startCommute(commute, direction: .originToDestination)
+                }
+                Button("Cancel", role: .cancel) {}
+            }
         }
         .sheet(isPresented: $showPostArrival) {
             PostArrivalSheet(
@@ -307,14 +326,36 @@ struct HomeView: View {
         }
     }
 
+    private func startCommute(_ commute: Commute, direction: CommuteDirection) {
+        let target: PinnedLocation? = direction == .originToDestination ? commute.destination : commute.origin
+        guard let target else { return }
+
+        // Log the trip for future learning
+        let trip = CommuteTrip(commute: commute, direction: direction)
+        modelContext.insert(trip)
+
+        navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
+    }
+
     private func commuteCard(_ commute: Commute) -> some View {
         Button {
-            if let dest = commute.destination {
-                navigateTo(
-                    name: dest.name,
-                    coordinate: dest.coordinate,
-                    address: dest.address
-                )
+            guard let currentLoc = locationService.currentLocation else {
+                // No location — just go to destination
+                startCommute(commute, direction: .originToDestination)
+                return
+            }
+
+            let result = CommuteDirectionResolver.resolve(
+                commute: commute,
+                currentLocation: currentLoc
+            )
+
+            switch result {
+            case .confident(let direction, _):
+                startCommute(commute, direction: direction)
+            case .ambiguous:
+                directionPickerCommute = commute
+                showDirectionPicker = true
             }
         } label: {
             HStack(spacing: 12) {

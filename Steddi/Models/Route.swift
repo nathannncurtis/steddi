@@ -11,6 +11,7 @@ final class Route {
     var typicalDurationSeconds: Double?
     var createdAt: Date
     var source: RouteSource          // How this route was created
+    var direction: CommuteDirection   // Which way this route goes
 
     var commute: Commute?
 
@@ -26,7 +27,8 @@ final class Route {
         name: String? = nil,
         distanceMeters: Double? = nil,
         typicalDurationSeconds: Double? = nil,
-        source: RouteSource = .recorded
+        source: RouteSource = .recorded,
+        direction: CommuteDirection = .originToDestination
     ) {
         self.id = UUID()
         self.rank = rank
@@ -36,6 +38,7 @@ final class Route {
         self.typicalDurationSeconds = typicalDurationSeconds
         self.createdAt = Date()
         self.source = source
+        self.direction = direction
         self.overridesGlobalNoGoZones = false
     }
 }
@@ -44,4 +47,9 @@ enum RouteSource: String, Codable {
     case recorded   // "Drive it" — GPS trace snapped via Map Matching
     case planned    // "Draw/plan it" — manually created on map
     case suggested  // System-suggested from repeated pattern (future)
+}
+
+enum CommuteDirection: String, Codable {
+    case originToDestination
+    case destinationToOrigin
 }

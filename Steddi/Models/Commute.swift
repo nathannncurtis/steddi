@@ -15,11 +15,22 @@ final class Commute {
     @Relationship(deleteRule: .cascade)
     var routes: [Route]?
 
-    /// Routes sorted by rank (preferred first, then fallbacks in order)
+    /// All routes sorted by rank
     var orderedRoutes: [Route] {
         (routes ?? []).sorted { $0.rank < $1.rank }
     }
 
+    /// Routes for a specific direction, sorted by rank
+    func orderedRoutes(for direction: CommuteDirection) -> [Route] {
+        (routes ?? []).filter { $0.direction == direction }.sorted { $0.rank < $1.rank }
+    }
+
+    /// Preferred route for a direction
+    func preferredRoute(for direction: CommuteDirection) -> Route? {
+        orderedRoutes(for: direction).first
+    }
+
+    /// Legacy — first route regardless of direction
     var preferredRoute: Route? {
         orderedRoutes.first
     }
