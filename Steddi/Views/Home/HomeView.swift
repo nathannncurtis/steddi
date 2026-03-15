@@ -299,7 +299,10 @@ struct HomeView: View {
                 }
                 Spacer()
             }
+            .padding(.top, isLandscape ? 0 : 54) // keep UI below status bar in portrait only
+
             bottomSheet
+                .padding(.bottom, isLandscape ? 0 : 34) // keep sheet above home indicator in portrait only
         }
     }
 
