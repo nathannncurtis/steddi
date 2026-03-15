@@ -57,7 +57,7 @@ struct HomeView: View {
                 onArrival: {},
                 onCancelled: {}
             )
-            .ignoresSafeArea()
+            .ignoresSafeArea(edges: .top) // only ignore top safe area, not bottom
 
             // Navigation overlay
             if let provider = navProvider, isNavigating {
