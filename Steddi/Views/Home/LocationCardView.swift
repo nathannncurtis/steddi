@@ -19,17 +19,17 @@ struct LocationCardView: View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.title3)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
 
                     if let eta = etaMinutes {
                         Text("\(eta) min")
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -44,8 +44,8 @@ struct LocationCardView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial, in: Capsule())
         }
+        .glassEffect(.regular, in: .capsule)
         .buttonStyle(.plain)
     }
 }

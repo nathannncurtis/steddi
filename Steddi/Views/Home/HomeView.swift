@@ -45,15 +45,16 @@ struct HomeView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "magnifyingglass")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.primary)
                             Text("Where to?")
-                                .foregroundStyle(.secondary)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.primary)
                             Spacer()
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
                     }
+                    .glassEffect(.regular, in: .capsule)
 
                     // Settings gear
                     Button {
@@ -61,10 +62,9 @@ struct HomeView: View {
                     } label: {
                         Image(systemName: "gearshape.fill")
                             .font(.title3)
-                            .foregroundStyle(.white)
                             .padding(12)
-                            .background(.ultraThinMaterial, in: Circle())
                     }
+                    .glassEffect(.regular, in: .circle)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -145,7 +145,7 @@ struct HomeView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(20)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
         .padding(.horizontal, 40)
     }
 

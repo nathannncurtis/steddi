@@ -2,7 +2,7 @@ name: Steddi
 options:
   bundleIdPrefix: to.nathancurtis
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "26.0"
   xcodeVersion: "16.3"
 
 packages:

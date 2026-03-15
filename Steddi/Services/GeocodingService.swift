@@ -28,7 +28,7 @@ final class GeocodingService {
             URLQueryItem(name: "access_token", value: accessToken),
             URLQueryItem(name: "limit", value: String(limit)),
             URLQueryItem(name: "language", value: "en"),
-            URLQueryItem(name: "types", value: "address,place,poi,neighborhood"),
+            URLQueryItem(name: "types", value: "address,street,place"),
         ]
 
         if let prox = proximity {
