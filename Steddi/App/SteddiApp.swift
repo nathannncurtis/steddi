@@ -13,6 +13,18 @@ struct SteddiApp: App {
         ArrivalNotificationService.shared.requestPermissionIfNeeded()
         ArrivalNotificationService.shared.registerCategory()
         ArrivalNotificationService.shared.setupDelegate()
+
+        // Eliminate white safe area gaps — especially visible in landscape
+        DispatchQueue.main.async {
+            for scene in UIApplication.shared.connectedScenes {
+                if let windowScene = scene as? UIWindowScene {
+                    for window in windowScene.windows {
+                        window.backgroundColor = .black
+                        window.rootViewController?.view.backgroundColor = .clear
+                    }
+                }
+            }
+        }
     }
 
     var body: some Scene {
