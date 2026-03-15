@@ -25,6 +25,12 @@ struct OnboardingView: View {
             "Steddi records your routes so it knows YOUR preferred way, not what an algorithm guesses."
         ),
         (
+            "lock.shield.fill",
+            "Your data stays yours",
+            "Private by design",
+            "All your routes, locations, and driving data are stored on your device. Nothing is sold, shared, or sent to any server. Ever."
+        ),
+        (
             "slider.horizontal.3",
             "Set your threshold",
             "No nagging, ever",
