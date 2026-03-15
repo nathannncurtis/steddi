@@ -43,6 +43,7 @@
 		DF4795F5B980639AD296D8AB /* ColorSwatchPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B20A5C03C61B4E42CEF0C7 /* ColorSwatchPreview.swift */; };
 		E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2113E7A877B78A7BF8CF75C /* Route.swift */; };
 		E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */; };
+		E8518F81F0D9BA02AAEA282D /* SteddiNavOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */; };
 		EA73BB9CC81F233C29A24487 /* NavigationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A65698E48E91527E20620496 /* NavigationViewModel.swift */; };
 		EE11B267B397E2C0E0CF8524 /* MapboxTokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD9B3AA19F39B9592040D98 /* MapboxTokenProvider.swift */; };
 		FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598632F13EF2804C543D14D0 /* LocationCardView.swift */; };
@@ -50,6 +51,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiNavOverlay.swift; sourceTree = "<group>"; };
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
@@ -184,6 +186,7 @@
 				BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */,
 				F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */,
 				F00ED007608E49E792B16AE4 /* SteddiNavigationStyle.swift */,
+				03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */,
 			);
 			path = Navigation;
 			sourceTree = "<group>";
@@ -362,6 +365,7 @@
 				76267A8775C232A25A4DE9F6 /* SettingsViewModel.swift in Sources */,
 				D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */,
 				BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */,
+				E8518F81F0D9BA02AAEA282D /* SteddiNavOverlay.swift in Sources */,
 				9FBC963D79AC65DF5D96B164 /* SteddiNavigationStyle.swift in Sources */,
 				C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */,
 				8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */,

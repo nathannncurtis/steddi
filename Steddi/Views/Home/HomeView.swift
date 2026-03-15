@@ -35,23 +35,27 @@ struct HomeView: View {
                     longPressCoordinate = coord
                     showAddLocation = true
                 },
-                onArrival: {
-                    recordedPoints = locationService.stopRecording()
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        isNavigating = false
-                        navigationRoutes = nil
-                    }
-                    showPostArrival = true
-                },
-                onCancelled: {
-                    _ = locationService.stopRecording()
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        isNavigating = false
-                        navigationRoutes = nil
-                    }
-                }
+                onArrival: {},
+                onCancelled: {}
             )
             .ignoresSafeArea()
+
+            // Navigation overlay — shows during navigation
+            if isNavigating, let provider = navProvider {
+                SteddiNavOverlay(
+                    provider: provider,
+                    onEndNavigation: {
+                        recordedPoints = locationService.stopRecording()
+                        provider.tripSession().setToIdle()
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            isNavigating = false
+                            navigationRoutes = nil
+                        }
+                        showPostArrival = true
+                    }
+                )
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
 
             // Home UI — hides during navigation
             if !isNavigating && !isCalculatingRoute {

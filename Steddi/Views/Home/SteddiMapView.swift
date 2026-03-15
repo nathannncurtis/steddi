@@ -1,13 +1,12 @@
 import SwiftUI
 import MapboxMaps
-import MapboxNavigationUIKit
 import MapboxNavigationCore
 import MapboxDirections
 import CoreLocation
+import Combine
 
-/// Manages the map and navigation in a single UIKit view controller.
-/// The home map and turn-by-turn share the same container — navigation
-/// crossfades in/out rather than presenting as a separate screen.
+/// Manages the map in a single UIKit view controller.
+/// Navigation uses the same map — Steddi's custom SwiftUI overlay replaces Mapbox's stock UI.
 struct SteddiMapView: UIViewControllerRepresentable {
     @Binding var isNavigating: Bool
     let navigationRoutes: NavigationRoutes?
@@ -19,15 +18,10 @@ struct SteddiMapView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> SteddiMapContainer {
         let vc = SteddiMapContainer()
         vc.onLongPress = onLongPress
-        vc.onArrival = onArrival
-        vc.onCancelled = onCancelled
         return vc
     }
 
     func updateUIViewController(_ vc: SteddiMapContainer, context: Context) {
-        vc.onArrival = onArrival
-        vc.onCancelled = onCancelled
-
         if isNavigating, let routes = navigationRoutes, let provider = provider {
             if !vc.isInNavigation {
                 vc.startNavigation(routes: routes, provider: provider)
@@ -40,43 +34,41 @@ struct SteddiMapView: UIViewControllerRepresentable {
 
 class SteddiMapContainer: UIViewController {
     private var mapView: MapView!
-    private var navigationVC: NavigationViewController?
     var isInNavigation = false
+    private var routeLine: [CLLocationCoordinate2D] = []
 
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
-    var onArrival: (() -> Void)?
-    var onCancelled: (() -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Home map — standard Mapbox Maps SDK
         let initOptions = MapInitOptions(styleURI: .dark)
         mapView = MapView(frame: view.bounds, mapInitOptions: initOptions)
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
         // Lavender puck
         var puckConfig = Puck2DConfiguration()
         puckConfig.pulsing = .init(color: UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 0.3))
         mapView.location.options.puckType = .puck2D(puckConfig)
-        mapView.mapboxMap.setCamera(to: CameraOptions(zoom: 14))
+        mapView.location.options.puckBearing = .heading
 
-        // Hide scale bar — it overlaps our UI
+        // Hide ornaments that clash with Steddi UI
         mapView.ornaments.options.scaleBar.visibility = .hidden
+        mapView.ornaments.options.compass.visibility = .hidden
+
+        // Initial camera
+        mapView.mapboxMap.setCamera(to: CameraOptions(zoom: 14))
 
         view.addSubview(mapView)
 
-        // Follow user location
-        mapView.location.options.puckBearing = .heading
+        // Follow user location on style load
         mapView.mapboxMap.onStyleLoaded.observeNext { [weak self] _ in
-            guard let self else { return }
-            let cameraState = CameraOptions(
-                center: self.mapView.location.latestLocation?.coordinate,
-                zoom: 14
-            )
-            self.mapView.mapboxMap.setCamera(to: cameraState)
+            guard let self,
+                  let coord = self.mapView.location.latestLocation?.coordinate else { return }
+            self.mapView.mapboxMap.setCamera(to: CameraOptions(center: coord, zoom: 14))
         }.store(in: &cancellables)
 
-        // Long press
+        // Long press gesture
         let lp = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
         mapView.addGestureRecognizer(lp)
     }
@@ -94,67 +86,83 @@ class SteddiMapContainer: UIViewController {
         guard !isInNavigation else { return }
         isInNavigation = true
 
-        let options = NavigationOptions(
-            mapboxNavigation: provider.mapboxNavigation,
-            voiceController: provider.routeVoiceController,
-            eventsManager: provider.eventsManager(),
-            styles: [SteddiDayStyle(), SteddiNightStyle()]
-        )
+        // Start active guidance on the navigation core
+        provider.tripSession().startActiveGuidance(with: routes, startLegIndex: 0)
 
-        let navVC = NavigationViewController(
-            navigationRoutes: routes,
-            navigationOptions: options
-        )
-        navVC.usesNightStyleInDarkMode = true
-        navVC.delegate = self
+        // Show route line on map
+        let coords = routes.mainRoute.route.shape?.coordinates ?? []
+        showRouteLine(coords)
 
-        // Embed as child — crossfade in
-        addChild(navVC)
-        navVC.view.frame = view.bounds
-        navVC.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        navVC.view.alpha = 0
-        view.addSubview(navVC.view)
-        navVC.didMove(toParent: self)
+        // Camera follows route
+        mapView.mapboxMap.setCamera(to: CameraOptions(
+            center: mapView.location.latestLocation?.coordinate,
+            zoom: 16,
+            bearing: 0,
+            pitch: 45
+        ))
 
-        UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut) {
-            navVC.view.alpha = 1
-        }
-
-        self.navigationVC = navVC
+        // Follow location during nav
+        provider.navigation().locationMatching
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self else { return }
+                let coord = state.enhancedLocation.coordinate
+                self.mapView.mapboxMap.setCamera(to: CameraOptions(
+                    center: coord,
+                    zoom: 16,
+                    bearing: state.enhancedLocation.course,
+                    pitch: 50
+                ))
+            }
+            .store(in: &cancellables)
     }
 
     func stopNavigation() {
-        guard isInNavigation, let navVC = navigationVC else { return }
+        guard isInNavigation else { return }
         isInNavigation = false
 
-        UIView.animate(withDuration: 0.4, delay: 0, options: .curveEaseInOut, animations: {
-            navVC.view.alpha = 0
-        }) { _ in
-            navVC.willMove(toParent: nil)
-            navVC.view.removeFromSuperview()
-            navVC.removeFromParent()
-            self.navigationVC = nil
-        }
-    }
-}
+        // Cancel location following subscriptions
+        cancellables.removeAll()
 
-extension SteddiMapContainer: NavigationViewControllerDelegate {
-    func navigationViewControllerDidDismiss(
-        _ navigationViewController: NavigationViewController,
-        byCanceling canceled: Bool
-    ) {
-        if canceled {
-            onCancelled?()
-        } else {
-            onArrival?()
-        }
+        // Remove route line
+        removeRouteLine()
+
+        // Reset camera
+        mapView.mapboxMap.setCamera(to: CameraOptions(
+            center: mapView.location.latestLocation?.coordinate,
+            zoom: 14,
+            bearing: 0,
+            pitch: 0
+        ))
+
+        // Re-subscribe to style loaded for home mode
+        mapView.mapboxMap.onStyleLoaded.observeNext { [weak self] _ in
+            guard let self,
+                  let coord = self.mapView.location.latestLocation?.coordinate else { return }
+            self.mapView.mapboxMap.setCamera(to: CameraOptions(center: coord, zoom: 14))
+        }.store(in: &cancellables)
     }
 
-    func navigationViewController(
-        _ navigationViewController: NavigationViewController,
-        didArriveAt waypoint: Waypoint
-    ) -> Bool {
-        onArrival?()
-        return true
+    // MARK: - Route Line
+
+    private func showRouteLine(_ coordinates: [CLLocationCoordinate2D]) {
+        guard !coordinates.isEmpty else { return }
+
+        var source = GeoJSONSource(id: "steddi-route-source")
+        source.data = .geometry(.lineString(LineString(coordinates)))
+
+        var layer = LineLayer(id: "steddi-route-layer", source: "steddi-route-source")
+        layer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 0.8)))
+        layer.lineWidth = .constant(6)
+        layer.lineCap = .constant(.round)
+        layer.lineJoin = .constant(.round)
+
+        try? mapView.mapboxMap.addSource(source)
+        try? mapView.mapboxMap.addLayer(layer)
+    }
+
+    private func removeRouteLine() {
+        try? mapView.mapboxMap.removeLayer(withId: "steddi-route-layer")
+        try? mapView.mapboxMap.removeSource(withId: "steddi-route-source")
     }
 }
