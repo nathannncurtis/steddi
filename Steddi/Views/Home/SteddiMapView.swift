@@ -143,17 +143,32 @@ class SteddiMapContainer: UIViewController {
         guard currentIs3D != is3D else { return }
         currentIs3D = is3D
 
-        let pitch: CGFloat = is3D ? 70 : 0
-        let zoom: CGFloat = is3D ? 18.5 : 16.5
         mapView.camera.ease(
             to: CameraOptions(
                 center: mapView.location.latestLocation?.coordinate,
-                zoom: zoom,
-                pitch: pitch
+                zoom: is3D ? 17.0 : 16.5,
+                pitch: is3D ? 55 : 0
             ),
             duration: 0.5,
             curve: .easeInOut,
             completion: nil
+        )
+    }
+
+    /// Offset a coordinate by a distance along a bearing (for chase-cam look-ahead)
+    static func offsetCoordinate(_ coord: CLLocationCoordinate2D, distanceMeters: Double, bearingDegrees: Double) -> CLLocationCoordinate2D {
+        let R = 6371000.0 // earth radius in meters
+        let d = distanceMeters / R
+        let brng = bearingDegrees * .pi / 180
+        let lat1 = coord.latitude * .pi / 180
+        let lon1 = coord.longitude * .pi / 180
+
+        let lat2 = asin(sin(lat1) * cos(d) + cos(lat1) * sin(d) * cos(brng))
+        let lon2 = lon1 + atan2(sin(brng) * sin(d) * cos(lat1), cos(d) - sin(lat1) * sin(lat2))
+
+        return CLLocationCoordinate2D(
+            latitude: lat2 * 180 / .pi,
+            longitude: lon2 * 180 / .pi
         )
     }
 
@@ -169,37 +184,53 @@ class SteddiMapContainer: UIViewController {
         let coords = routes.mainRoute.route.shape?.coordinates ?? []
         showRouteLine(coords)
 
-        let pitch: CGFloat = currentIs3D ? 60 : 0
-        let zoom: CGFloat = currentIs3D ? 17.5 : 16
-
-        // Camera follows route
+        // Initial camera
         mapView.mapboxMap.setCamera(to: CameraOptions(
             center: mapView.location.latestLocation?.coordinate,
-            zoom: zoom,
+            zoom: currentIs3D ? 17.0 : 16.0,
             bearing: 0,
-            pitch: pitch
+            pitch: currentIs3D ? 55 : 0
         ))
 
-        // Follow location during nav — smooth camera tracking
+        // Follow location during nav — "chase cam" style
+        // Offset the center ahead of the user so they sit in the lower third
         provider.navigation().locationMatching
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self else { return }
                 let coord = state.enhancedLocation.coordinate
                 let bearing = state.enhancedLocation.course >= 0 ? state.enhancedLocation.course : 0
-                let navPitch: CGFloat = self.currentIs3D ? 70 : 0
-                let navZoom: CGFloat = self.currentIs3D ? 18.5 : 16.5
-                self.mapView.camera.ease(
-                    to: CameraOptions(
-                        center: coord,
-                        zoom: navZoom,
-                        bearing: self.currentIs3D ? bearing : 0,
-                        pitch: navPitch
-                    ),
-                    duration: 1.0,
-                    curve: .linear,
-                    completion: nil
-                )
+
+                if self.currentIs3D {
+                    // Push the camera center forward along the bearing
+                    // so the user's position appears in the lower third
+                    let offsetMeters: Double = 150 // look ~150m ahead
+                    let lookAhead = Self.offsetCoordinate(coord, distanceMeters: offsetMeters, bearingDegrees: bearing)
+
+                    self.mapView.camera.ease(
+                        to: CameraOptions(
+                            center: lookAhead,
+                            zoom: 17.0,
+                            bearing: bearing,
+                            pitch: 55
+                        ),
+                        duration: 1.0,
+                        curve: .linear,
+                        completion: nil
+                    )
+                } else {
+                    self.mapView.camera.ease(
+                        to: CameraOptions(
+                            center: coord,
+                            zoom: 16.5,
+                            bearing: 0,
+                            pitch: 0
+                        ),
+                        duration: 1.0,
+                        curve: .linear,
+                        completion: nil
+                    )
+                }
             }
             .store(in: &cancellables)
     }
