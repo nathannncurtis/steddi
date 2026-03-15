@@ -18,7 +18,9 @@ struct CommuteListView: View {
             } else {
                 List {
                     ForEach(commutes) { commute in
-                        NavigationLink(value: commute) {
+                        NavigationLink {
+                            CommuteDetailView(commute: commute)
+                        } label: {
                             commuteRow(commute)
                         }
                     }
@@ -27,9 +29,6 @@ struct CommuteListView: View {
             }
         }
         .navigationTitle("Commutes")
-        .navigationDestination(for: Commute.self) { commute in
-            CommuteDetailView(commute: commute)
-        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
