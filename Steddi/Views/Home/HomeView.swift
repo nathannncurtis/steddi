@@ -8,7 +8,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LocationService.self) private var locationService
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
-    @Query(filter: #Predicate<Commute> { $0.isActive }, sort: \Commute.createdAt) private var commutes: [Commute]
+    @Query(sort: \Commute.createdAt) private var commutes: [Commute]
 
     // Bottom sheet tab
     @State private var sheetTab: SheetTab = .commutes
@@ -269,10 +269,13 @@ struct HomeView: View {
             case .places:
                 placesTab
             }
+
+            Spacer(minLength: 0)
         }
+        .frame(maxHeight: UIScreen.main.bounds.height * 0.45)
         .background {
             UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                .fill(SteddiTheme.surfacePrimary)
                 .overlay(
                     UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
                         .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
