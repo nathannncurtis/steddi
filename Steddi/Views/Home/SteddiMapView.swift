@@ -131,9 +131,13 @@ class SteddiMapContainer: UIViewController {
         // Initial camera
         mapView.mapboxMap.setCamera(to: CameraOptions(zoom: 14))
 
-        // Match the bottom sheet color so there's no visible gap
-        view.backgroundColor = UIColor(red: 0.11, green: 0.10, blue: 0.09, alpha: 1)
-        mapView.backgroundColor = UIColor(red: 0.11, green: 0.10, blue: 0.09, alpha: 1)
+        // Match the bottom sheet color so there's no visible gap below the sheet
+        let sheetColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.11, green: 0.10, blue: 0.09, alpha: 1)
+                : UIColor(red: 0.98, green: 0.97, blue: 0.96, alpha: 1)
+        }
+        view.backgroundColor = sheetColor
 
         view.addSubview(mapView)
 
