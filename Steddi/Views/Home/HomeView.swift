@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
-import MapboxMaps
+import MapboxNavigationCore
+import MapboxDirections
 import CoreLocation
 
 struct HomeView: View {
@@ -8,85 +9,96 @@ struct HomeView: View {
     @Environment(LocationService.self) private var locationService
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
 
-    @State private var viewport: Viewport = .followPuck(zoom: 14)
+    // Navigation state
+    @State private var isNavigating = false
+    @State private var navigationRoutes: NavigationRoutes?
+    @State private var navProvider: MapboxNavigationProvider?
+    @State private var isCalculatingRoute = false
+    @State private var navigationDestination: PinnedLocation?
+
+    // UI state
     @State private var showSettings = false
     @State private var showSearch = false
-    @State private var selectedLocation: PinnedLocation?
-    @State private var navigateToResult: GeocodingResult?
-
-    // Long press pin flow
     @State private var showAddLocation = false
+    @State private var showPostArrival = false
     @State private var longPressCoordinate: CLLocationCoordinate2D?
+    @State private var recordedPoints: [GPSPoint] = []
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Full-screen Mapbox map
-            Map(viewport: $viewport) {
-                Puck2D(bearing: .heading)
-
-                ForEvery(pinnedLocations) { location in
-                    PointAnnotation(coordinate: location.coordinate)
-                        .image(.init(image: UIImage(systemName: location.icon)!.withTintColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0), renderingMode: .alwaysOriginal), name: location.icon))
+            // Unified map — same instance for home + navigation
+            SteddiMapView(
+                isNavigating: $isNavigating,
+                navigationRoutes: navigationRoutes,
+                provider: navProvider,
+                onLongPress: { coord in
+                    longPressCoordinate = coord
+                    showAddLocation = true
+                },
+                onArrival: {
+                    recordedPoints = locationService.stopRecording()
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        isNavigating = false
+                        navigationRoutes = nil
+                    }
+                    showPostArrival = true
+                },
+                onCancelled: {
+                    _ = locationService.stopRecording()
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        isNavigating = false
+                        navigationRoutes = nil
+                    }
                 }
-            }
-            .mapStyle(.standard(lightPreset: .dusk))
-            .onMapLongPressGesture { context in
-                longPressCoordinate = context.coordinate
-                showAddLocation = true
-            }
+            )
             .ignoresSafeArea()
 
-            // Bottom sheet: pinned locations
-            if !showSearch {
+            // Home UI — hides during navigation
+            if !isNavigating && !isCalculatingRoute {
                 VStack {
+                    if showSearch {
+                        ExpandedSearchView(
+                            currentLocation: locationService.currentLocation?.coordinate,
+                            onSelectResult: { result in
+                                withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
+                                navigateTo(
+                                    name: result.name,
+                                    coordinate: result.coordinate,
+                                    address: result.address
+                                )
+                            },
+                            onPinResult: { result in
+                                withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
+                                pinLocation(from: result)
+                            },
+                            onDismiss: {
+                                withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
+                            }
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+                    } else {
+                        topBar
+                            .transition(.opacity)
+                    }
                     Spacer()
-                    bottomSheet
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.3), value: showSearch)
+
+                bottomSheet
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Top bar OR expanded search
-            VStack {
-                if showSearch {
-                    ExpandedSearchView(
-                        currentLocation: locationService.currentLocation?.coordinate,
-                        onSelectResult: { result in
-                            withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
-                            navigateToResult = result
-                        },
-                        onPinResult: { result in
-                            withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
-                            pinLocation(from: result)
-                        },
-                        onDismiss: {
-                            withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
-                        }
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
-                } else {
-                    topBar
-                        .transition(.opacity)
-                }
-                Spacer()
+            // Loading overlay
+            if isCalculatingRoute {
+                routeLoadingOverlay
+                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: showSearch)
+        .animation(.easeInOut(duration: 0.4), value: isNavigating)
+        .animation(.easeInOut(duration: 0.3), value: isCalculatingRoute)
         .onAppear {
             locationService.requestPermission()
             locationService.startUpdating()
-        }
-        .fullScreenCover(item: $selectedLocation) { location in
-            ActiveNavigationView(destination: location)
-        }
-        .fullScreenCover(item: $navigateToResult) { result in
-            ActiveNavigationView(
-                destination: PinnedLocation(
-                    name: result.name,
-                    latitude: result.coordinate.latitude,
-                    longitude: result.coordinate.longitude,
-                    address: result.address
-                )
-            )
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -94,6 +106,65 @@ struct HomeView: View {
         .sheet(isPresented: $showAddLocation) {
             AddLocationSheet(coordinate: longPressCoordinate)
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showPostArrival) {
+            PostArrivalSheet(
+                destinationName: navigationDestination?.name ?? "Destination",
+                recordedPoints: recordedPoints
+            )
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    // MARK: - Navigation
+
+    private func navigateTo(name: String, coordinate: CLLocationCoordinate2D, address: String? = nil) {
+        let dest = PinnedLocation(
+            name: name,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            address: address
+        )
+        navigationDestination = dest
+
+        isCalculatingRoute = true
+
+        Task {
+            // Wait for location
+            locationService.startUpdating()
+            var currentLocation = locationService.currentLocation
+            for _ in 0..<20 {
+                if currentLocation != nil { break }
+                try? await Task.sleep(for: .milliseconds(500))
+                currentLocation = locationService.currentLocation
+            }
+
+            guard let currentLocation else {
+                isCalculatingRoute = false
+                return
+            }
+
+            let provider = MapboxNavigationProvider(coreConfig: .init())
+
+            let origin = Waypoint(coordinate: currentLocation.coordinate, name: "Current Location")
+            let destination = Waypoint(coordinate: coordinate, name: name)
+            let routeOptions = NavigationRouteOptions(waypoints: [origin, destination])
+
+            do {
+                let routes = try await provider.routingProvider().calculateRoutes(options: routeOptions).value
+
+                locationService.startRecording()
+
+                self.navProvider = provider
+                self.navigationRoutes = routes
+
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    isCalculatingRoute = false
+                    isNavigating = true
+                }
+            } catch {
+                isCalculatingRoute = false
+            }
         }
     }
 
@@ -118,10 +189,7 @@ struct HomeView: View {
                 .background {
                     Capsule()
                         .fill(SteddiTheme.surfacePrimary.opacity(0.9))
-                        .overlay(
-                            Capsule()
-                                .stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1)
-                        )
+                        .overlay(Capsule().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
                 }
             }
 
@@ -135,10 +203,7 @@ struct HomeView: View {
                     .background {
                         Circle()
                             .fill(SteddiTheme.surfacePrimary.opacity(0.9))
-                            .overlay(
-                                Circle()
-                                    .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
-                            )
+                            .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1))
                     }
             }
         }
@@ -171,7 +236,13 @@ struct HomeView: View {
                             icon: location.icon,
                             etaMinutes: nil,
                             delayMinutes: nil,
-                            onTap: { selectedLocation = location }
+                            onTap: {
+                                navigateTo(
+                                    name: location.name,
+                                    coordinate: location.coordinate,
+                                    address: location.address
+                                )
+                            }
                         )
                     }
                 }
@@ -189,6 +260,26 @@ struct HomeView: View {
                 .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
         }
     }
+
+    // MARK: - Loading Overlay
+
+    private var routeLoadingOverlay: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .tint(SteddiTheme.accent)
+            Text("Finding your route...")
+                .font(SteddiTheme.heading(16))
+                .foregroundStyle(SteddiTheme.textPrimary)
+        }
+        .padding(32)
+        .background {
+            RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
+                .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                .shadow(color: .black.opacity(0.3), radius: 16)
+        }
+    }
+
+    // MARK: - Empty State
 
     private var emptyState: some View {
         VStack(spacing: 10) {
@@ -216,7 +307,7 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Expanded Search (grows from search bar)
+// MARK: - Expanded Search
 
 private struct ExpandedSearchView: View {
     let currentLocation: CLLocationCoordinate2D?
@@ -233,7 +324,6 @@ private struct ExpandedSearchView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search field — same position as the "Where to?" bar
             HStack(spacing: 10) {
                 Button(action: onDismiss) {
                     Image(systemName: "arrow.left")
@@ -265,22 +355,16 @@ private struct ExpandedSearchView: View {
             .background {
                 Capsule()
                     .fill(SteddiTheme.surfacePrimary)
-                    .overlay(
-                        Capsule()
-                            .stroke(SteddiTheme.accent.opacity(0.25), lineWidth: 1)
-                    )
+                    .overlay(Capsule().stroke(SteddiTheme.accent.opacity(0.25), lineWidth: 1))
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
 
-            // Results — grow downward from the search bar
             if !results.isEmpty {
                 ScrollView {
                     VStack(spacing: 2) {
                         ForEach(results) { result in
-                            Button {
-                                onSelectResult(result)
-                            } label: {
+                            Button { onSelectResult(result) } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: "mappin")
                                         .font(.body)
@@ -301,10 +385,7 @@ private struct ExpandedSearchView: View {
 
                                     Spacer()
 
-                                    // Pin button
-                                    Button {
-                                        onPinResult(result)
-                                    } label: {
+                                    Button { onPinResult(result) } label: {
                                         Image(systemName: "mappin.circle.fill")
                                             .font(.title3)
                                             .foregroundStyle(SteddiTheme.accent)
@@ -328,10 +409,7 @@ private struct ExpandedSearchView: View {
                 .background {
                     RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
                         .fill(SteddiTheme.surfacePrimary.opacity(0.95))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                                .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
-                        )
+                        .overlay(RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium).stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1))
                         .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
                 }
                 .padding(.horizontal, 16)
@@ -345,29 +423,19 @@ private struct ExpandedSearchView: View {
                     .padding(.top, 24)
             }
         }
-        .onAppear {
-            isSearchFocused = true
-        }
+        .onAppear { isSearchFocused = true }
     }
 
     private func debounceSearch(_ query: String) {
         searchTask?.cancel()
-        guard !query.isEmpty else {
-            results = []
-            return
-        }
+        guard !query.isEmpty else { results = []; return }
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
             do {
-                let searchResults = try await geocodingService.search(
-                    query: query,
-                    proximity: currentLocation
-                )
+                let r = try await geocodingService.search(query: query, proximity: currentLocation)
                 if !Task.isCancelled {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        results = searchResults
-                    }
+                    withAnimation(.easeOut(duration: 0.2)) { results = r }
                 }
             } catch {}
         }
@@ -380,45 +448,27 @@ private struct AddLocationSheet: View {
     let coordinate: CLLocationCoordinate2D?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-
     @State private var name = ""
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField("Location name", text: $name)
-                }
+                Section { TextField("Location name", text: $name) }
                 if let coord = coordinate {
                     Section {
-                        HStack {
-                            Text("Latitude")
-                            Spacer()
-                            Text(String(format: "%.4f", coord.latitude))
-                                .foregroundStyle(.secondary)
-                        }
-                        HStack {
-                            Text("Longitude")
-                            Spacer()
-                            Text(String(format: "%.4f", coord.longitude))
-                                .foregroundStyle(.secondary)
-                        }
+                        HStack { Text("Latitude"); Spacer(); Text(String(format: "%.4f", coord.latitude)).foregroundStyle(.secondary) }
+                        HStack { Text("Longitude"); Spacer(); Text(String(format: "%.4f", coord.longitude)).foregroundStyle(.secondary) }
                     }
                 }
             }
             .navigationTitle("Pin Location")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
+                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
-                        save()
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(name.isEmpty || coordinate == nil)
+                    Button("Save") { save(); dismiss() }
+                        .fontWeight(.semibold)
+                        .disabled(name.isEmpty || coordinate == nil)
                 }
             }
         }
@@ -426,12 +476,7 @@ private struct AddLocationSheet: View {
 
     private func save() {
         guard let coord = coordinate else { return }
-        let location = PinnedLocation(
-            name: name,
-            latitude: coord.latitude,
-            longitude: coord.longitude
-        )
-        modelContext.insert(location)
+        modelContext.insert(PinnedLocation(name: name, latitude: coord.latitude, longitude: coord.longitude))
     }
 }
 
