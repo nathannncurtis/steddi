@@ -21,3 +21,4 @@ Secrets.swift
 
 # Mapbox
 .netrc
+tests/__pycache__/
