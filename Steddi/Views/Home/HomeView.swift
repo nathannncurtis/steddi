@@ -387,6 +387,9 @@ struct HomeView: View {
             }
             .frame(width: 280)
             .background(SteddiTheme.surfacePrimary)
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
+            .shadow(color: .black.opacity(0.3), radius: 12, x: 4)
+            .padding(.leading, 44) // shift right to clear the dynamic island/notch area
 
             // Map fills the rest
             Spacer(minLength: 0)
