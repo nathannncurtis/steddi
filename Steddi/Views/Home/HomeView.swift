@@ -363,6 +363,25 @@ struct HomeView: View {
         }
     }
 
+    /// Resolve direction for display on the commute card — shows where you'd go
+    private func resolveCardDirection(_ commute: Commute) -> (destination: String, direction: CommuteDirection) {
+        guard let currentLoc = locationService.currentLocation else {
+            return (commute.destination?.name ?? "—", .originToDestination)
+        }
+
+        let result = CommuteDirectionResolver.resolve(
+            commute: commute,
+            currentLocation: currentLoc
+        )
+
+        switch result {
+        case .confident(let dir, let name):
+            return (name, dir)
+        case .ambiguous(let originName, let destName):
+            return ("\(originName) ↔ \(destName)", .originToDestination)
+        }
+    }
+
     private func startCommute(_ commute: Commute, direction: CommuteDirection) {
         let target: PinnedLocation? = direction == .originToDestination ? commute.destination : commute.origin
         guard let target else { return }
@@ -479,12 +498,11 @@ struct HomeView: View {
                         .foregroundStyle(SteddiTheme.textPrimary)
 
                     HStack(spacing: 4) {
-                        Text(commute.origin?.name ?? "—")
-                            .foregroundStyle(SteddiTheme.textSecondary)
-                        Image(systemName: "arrow.right")
+                        let resolved = resolveCardDirection(commute)
+                        Image(systemName: "location.fill")
                             .font(.caption2)
-                            .foregroundStyle(SteddiTheme.textMuted)
-                        Text(commute.destination?.name ?? "—")
+                            .foregroundStyle(SteddiTheme.accent)
+                        Text(resolved.destination)
                             .foregroundStyle(SteddiTheme.textSecondary)
                     }
                     .font(SteddiTheme.body(13))
