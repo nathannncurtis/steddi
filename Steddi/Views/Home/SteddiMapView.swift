@@ -39,6 +39,8 @@ class SteddiMapContainer: UIViewController {
     var isInNavigation = false
     private var currentIs3D = true
     private var navProvider: MapboxNavigationProvider?
+    private var navRouteCoords: [CLLocationCoordinate2D] = []
+    private var smoothedBearing: Double = 0
 
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
 
@@ -155,6 +157,54 @@ class SteddiMapContainer: UIViewController {
         )
     }
 
+    /// Get the bearing along the route at the closest point to the user's position.
+    /// This gives a stable, route-following bearing instead of noisy GPS course.
+    static func bearingAlongRoute(from position: CLLocationCoordinate2D, routeCoords: [CLLocationCoordinate2D]) -> Double {
+        guard routeCoords.count >= 2 else { return 0 }
+
+        // Find the closest route segment
+        var bestIndex = 0
+        var bestDist = Double.greatestFiniteMagnitude
+        let posLoc = CLLocation(latitude: position.latitude, longitude: position.longitude)
+
+        for i in 0..<routeCoords.count {
+            let d = posLoc.distance(from: CLLocation(latitude: routeCoords[i].latitude, longitude: routeCoords[i].longitude))
+            if d < bestDist {
+                bestDist = d
+                bestIndex = i
+            }
+        }
+
+        // Use the next point on the route to determine forward bearing
+        let lookAheadIndex = min(bestIndex + 3, routeCoords.count - 1) // look a few points ahead for stability
+        guard lookAheadIndex > bestIndex else { return 0 }
+
+        let from = routeCoords[bestIndex]
+        let to = routeCoords[lookAheadIndex]
+
+        let dLon = (to.longitude - from.longitude) * .pi / 180
+        let lat1 = from.latitude * .pi / 180
+        let lat2 = to.latitude * .pi / 180
+
+        let y = sin(dLon) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+        var bearing = atan2(y, x) * 180 / .pi
+        if bearing < 0 { bearing += 360 }
+        return bearing
+    }
+
+    /// Smooth bearing transitions to prevent jerky camera rotation.
+    static func smoothBearing(current: Double, target: Double, factor: Double) -> Double {
+        // Handle the 360/0 wraparound
+        var diff = target - current
+        if diff > 180 { diff -= 360 }
+        if diff < -180 { diff += 360 }
+        var result = current + diff * factor
+        if result < 0 { result += 360 }
+        if result >= 360 { result -= 360 }
+        return result
+    }
+
     /// Offset a coordinate by a distance along a bearing (for chase-cam look-ahead)
     static func offsetCoordinate(_ coord: CLLocationCoordinate2D, distanceMeters: Double, bearingDegrees: Double) -> CLLocationCoordinate2D {
         let R = 6371000.0 // earth radius in meters
@@ -180,8 +230,9 @@ class SteddiMapContainer: UIViewController {
         // Start active guidance on the navigation core
         provider.tripSession().startActiveGuidance(with: routes, startLegIndex: 0)
 
-        // Show route line as UIKit overlay (immune to 3D lighting)
+        // Store route coordinates for bearing calculation
         let coords = routes.mainRoute.route.shape?.coordinates ?? []
+        navRouteCoords = coords
         showRouteLine(coords)
 
         // Initial camera
@@ -193,26 +244,39 @@ class SteddiMapContainer: UIViewController {
         ))
 
         // Follow location during nav — "chase cam" style
-        // Offset the center ahead of the user so they sit in the lower third
         provider.navigation().locationMatching
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self else { return }
                 let coord = state.enhancedLocation.coordinate
-                let bearing = state.enhancedLocation.course >= 0 ? state.enhancedLocation.course : 0
 
                 if self.currentIs3D {
-                    // Push the camera center forward along the bearing
-                    // so the user's position appears in the lower third
-                    let offsetMeters: Double = 150 // look ~150m ahead
-                    let lookAhead = Self.offsetCoordinate(coord, distanceMeters: offsetMeters, bearingDegrees: bearing)
+                    // Get bearing from route geometry (stable, not jumpy GPS course)
+                    let routeBearing = Self.bearingAlongRoute(
+                        from: coord,
+                        routeCoords: self.navRouteCoords
+                    )
+
+                    // Smooth the bearing to prevent jerky rotation
+                    self.smoothedBearing = Self.smoothBearing(
+                        current: self.smoothedBearing,
+                        target: routeBearing,
+                        factor: 0.15
+                    )
+
+                    // Offset camera center ahead so user sits in lower third
+                    let lookAhead = Self.offsetCoordinate(
+                        coord,
+                        distanceMeters: 80,
+                        bearingDegrees: self.smoothedBearing
+                    )
 
                     self.mapView.camera.ease(
                         to: CameraOptions(
                             center: lookAhead,
-                            zoom: 17.0,
-                            bearing: bearing,
-                            pitch: 55
+                            zoom: 18.0,
+                            bearing: self.smoothedBearing,
+                            pitch: 65
                         ),
                         duration: 1.0,
                         curve: .linear,
