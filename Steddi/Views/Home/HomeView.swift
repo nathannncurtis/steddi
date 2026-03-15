@@ -270,13 +270,9 @@ struct HomeView: View {
                 placesTab
             }
         }
-        .safeAreaPadding(.bottom)
-        .background(
-            SteddiTheme.surfacePrimary
-                .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
-        )
+        .padding(.bottom, 80) // extra space inside so background extends past screen edge
+        .background(SteddiTheme.surfacePrimary.shadow(color: .black.opacity(0.3), radius: 20, y: -5))
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
-        .ignoresSafeArea(.container, edges: .bottom)
     }
 
     // MARK: - Commutes Tab
