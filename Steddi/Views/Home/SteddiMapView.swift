@@ -238,20 +238,20 @@ class SteddiMapContainer: UIViewController {
         var source = GeoJSONSource(id: "steddi-route-source")
         source.data = .geometry(.lineString(LineString(coordinates)))
 
-        // Bottom layer: white border/casing
+        // Bottom layer: lavender glow/casing
         var glowLayer = LineLayer(id: "steddi-route-glow", source: "steddi-route-source")
         glowLayer.slot = .top
-        glowLayer.lineColor = .constant(StyleColor(.white))
-        glowLayer.lineWidth = .constant(12)
-        glowLayer.lineOpacity = .constant(0.8)
+        glowLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
+        glowLayer.lineWidth = .constant(14)
+        glowLayer.lineOpacity = .constant(0.7)
         glowLayer.lineCap = .constant(.round)
         glowLayer.lineJoin = .constant(.round)
 
-        // Top layer: same lavender as the puck triangle
+        // Top layer: bright white so it's visible on ANY map background
         var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
         lineLayer.slot = .top
-        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
-        lineLayer.lineWidth = .constant(8)
+        lineLayer.lineColor = .constant(StyleColor(.white))
+        lineLayer.lineWidth = .constant(6)
         lineLayer.lineOpacity = .constant(1.0)
         lineLayer.lineCap = .constant(.round)
         lineLayer.lineJoin = .constant(.round)
