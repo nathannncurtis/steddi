@@ -97,7 +97,7 @@ struct HomeView: View {
                     }
                     Spacer()
                 }
-                .animation(.easeInOut(duration: 0.3), value: showSearch)
+                .animation(.easeOut(duration: 0.15), value: showSearch)
 
                 bottomSheet
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -195,7 +195,7 @@ struct HomeView: View {
     private var topBar: some View {
         HStack(spacing: 12) {
             Button {
-                withAnimation(.easeInOut(duration: 0.3)) { showSearch = true }
+                showSearch = true
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
@@ -445,14 +445,14 @@ private struct ExpandedSearchView: View {
                     .padding(.top, 24)
             }
         }
-        .onAppear { isSearchFocused = true }
+        .task { isSearchFocused = true }
     }
 
     private func debounceSearch(_ query: String) {
         searchTask?.cancel()
         guard !query.isEmpty else { results = []; return }
         searchTask = Task {
-            try? await Task.sleep(for: .milliseconds(300))
+            try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
             do {
                 let r = try await geocodingService.search(query: query, proximity: currentLocation)
