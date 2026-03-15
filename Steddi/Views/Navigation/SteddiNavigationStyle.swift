@@ -15,7 +15,7 @@ class SteddiNightStyle: NightStyle {
 
     public required init() {
         super.init()
-        mapStyleURL = URL(string: StyleURI.dark.rawValue)!
+        mapStyleURL = URL(string: StyleURI.standard.rawValue)!
         previewMapStyleURL = mapStyleURL
         styleType = .night
         statusBarStyle = .lightContent

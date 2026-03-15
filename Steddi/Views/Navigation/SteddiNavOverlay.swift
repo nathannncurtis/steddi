@@ -8,42 +8,90 @@ import Combine
 struct SteddiNavOverlay: View {
     let provider: MapboxNavigationProvider
     let onEndNavigation: () -> Void
+    var onToggleVoice: () -> Void = {}
+    var onToggleView: (Bool) -> Void = { _ in }
 
     @State private var instruction: String = ""
     @State private var stepDistance: String = ""
+    @State private var stepDistanceRaw: Double = 0
     @State private var etaMinutes: Int = 0
     @State private var distanceRemaining: String = ""
     @State private var arrivalTime: String = ""
     @State private var roadName: String = ""
-    @State private var maneuverType: String = "arrow.up"  // SF Symbol
+    @State private var maneuverType: String = "arrow.up"
     @State private var hasArrived = false
 
+    // Speed
+    @State private var currentSpeedMph: Double = 0
+    @State private var speedLimitMph: Double? = nil
+
+    // Compass
+    @State private var headingDegrees: Double = 0
+
+    // Next maneuver preview
+    @State private var followOnInstruction: String = ""
+    @State private var followOnManeuverSymbol: String = ""
+
+    // Toggles
+    @State var isVoiceOn: Bool = true
+    @State var is3DView: Bool = true
+
+    // Report
+    @State private var showReportSheet = false
+    @State private var showReportedToast = false
+    @State private var reportedType: String = ""
+
     var body: some View {
-        VStack {
-            // Top instruction banner
-            topBanner
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+        ZStack {
+            // Main layout
+            VStack(spacing: 0) {
+                // Top: instruction banner
+                topBanner
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
 
-            Spacer()
+                // Next maneuver preview
+                if !followOnInstruction.isEmpty {
+                    followOnBanner
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                }
 
-            // Road name
-            if !roadName.isEmpty {
-                Text(roadName)
-                    .font(SteddiTheme.body(13))
-                    .foregroundStyle(SteddiTheme.textSecondary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background {
-                        Capsule()
-                            .fill(SteddiTheme.surfacePrimary.opacity(0.85))
-                            .overlay(Capsule().stroke(SteddiTheme.accent.opacity(0.1), lineWidth: 1))
-                    }
-                    .padding(.bottom, 8)
+                // Street name capsule
+                if !roadName.isEmpty {
+                    streetNameCapsule
+                        .padding(.top, 10)
+                }
+
+                Spacer()
+
+                // Bottom: ETA bar with speedometer
+                bottomBar
             }
 
-            // Bottom ETA bar
-            bottomBar
+            // Floating right-side buttons
+            VStack(spacing: 12) {
+                compassButton
+                voiceButton
+                viewToggleButton
+                reportButton
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.trailing, 16)
+            .padding(.top, 180)
+
+            // Reported toast
+            if showReportedToast {
+                reportedToast
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 100)
+            }
+        }
+        .sheet(isPresented: $showReportSheet) {
+            reportSheet
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
         .onAppear { startObserving() }
     }
@@ -52,20 +100,23 @@ struct SteddiNavOverlay: View {
 
     private var topBanner: some View {
         HStack(spacing: 16) {
-            // Maneuver icon — large and glanceable
+            // Maneuver icon — large and prominent
             Image(systemName: maneuverType)
-                .font(.system(size: 36, weight: .bold))
+                .font(.system(size: 40, weight: .bold))
                 .foregroundStyle(SteddiTheme.accent)
-                .frame(width: 64, height: 64)
-                .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 16))
+                .frame(width: 72, height: 72)
+                .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 18))
 
             VStack(alignment: .leading, spacing: 6) {
+                // Distance — LARGE mono for glanceability
                 Text(stepDistance)
-                    .font(SteddiTheme.mono(28))
+                    .font(SteddiTheme.mono(34))
                     .foregroundStyle(SteddiTheme.textPrimary)
+                    .minimumScaleFactor(0.7)
 
+                // Instruction — clear and readable
                 Text(instruction)
-                    .font(SteddiTheme.body(17))
+                    .font(SteddiTheme.body(18))
                     .foregroundStyle(SteddiTheme.textSecondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -73,35 +124,170 @@ struct SteddiNavOverlay: View {
 
             Spacer()
         }
-        .padding(18)
+        .padding(20)
         .background {
             RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                        .stroke(SteddiTheme.accent.opacity(0.1), lineWidth: 1)
+                        .fill(SteddiTheme.surfacePrimary.opacity(0.82))
                 )
-                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
+                        .stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
         }
+    }
+
+    // MARK: - Follow-On Banner
+
+    private var followOnBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: followOnManeuverSymbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(SteddiTheme.accent.opacity(0.7))
+                .frame(width: 28, height: 28)
+
+            Text("Then: \(followOnInstruction)")
+                .font(SteddiTheme.body(14))
+                .foregroundStyle(SteddiTheme.textMuted)
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                .fill(SteddiTheme.surfacePrimary.opacity(0.75))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                        .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
+                )
+        }
+    }
+
+    // MARK: - Street Name Capsule
+
+    private var streetNameCapsule: some View {
+        Text(roadName)
+            .font(SteddiTheme.body(14))
+            .foregroundStyle(SteddiTheme.textSecondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 7)
+            .background {
+                Capsule()
+                    .fill(SteddiTheme.surfacePrimary.opacity(0.85))
+                    .overlay(
+                        Capsule()
+                            .stroke(SteddiTheme.accent.opacity(0.25), lineWidth: 1)
+                    )
+            }
+    }
+
+    // MARK: - Floating Buttons
+
+    private var compassButton: some View {
+        Button {
+            is3DView.toggle()
+            onToggleView(is3DView)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(SteddiTheme.surfacePrimary.opacity(0.88))
+                    .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1))
+                    .frame(width: 44, height: 44)
+
+                Text("N")
+                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .foregroundStyle(SteddiTheme.warmRed)
+                    .rotationEffect(.degrees(-headingDegrees))
+                    .offset(y: -6)
+
+                // Small triangle pointer
+                Triangle()
+                    .fill(SteddiTheme.warmRed)
+                    .frame(width: 6, height: 5)
+                    .rotationEffect(.degrees(-headingDegrees))
+                    .offset(y: 4)
+            }
+            .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+        }
+    }
+
+    private var voiceButton: some View {
+        Button {
+            isVoiceOn.toggle()
+            onToggleVoice()
+        } label: {
+            floatingButtonCircle(
+                symbol: isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill",
+                isActive: isVoiceOn
+            )
+        }
+    }
+
+    private var viewToggleButton: some View {
+        Button {
+            is3DView.toggle()
+            onToggleView(is3DView)
+        } label: {
+            floatingButtonCircle(
+                symbol: is3DView ? "cube" : "square",
+                isActive: is3DView
+            )
+        }
+    }
+
+    private var reportButton: some View {
+        Button {
+            showReportSheet = true
+        } label: {
+            floatingButtonCircle(
+                symbol: "exclamationmark.bubble.fill",
+                isActive: false
+            )
+        }
+    }
+
+    private func floatingButtonCircle(symbol: String, isActive: Bool) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 17, weight: .medium))
+            .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textMuted)
+            .frame(width: 44, height: 44)
+            .background {
+                Circle()
+                    .fill(SteddiTheme.surfacePrimary.opacity(0.88))
+                    .overlay(
+                        Circle()
+                            .stroke(isActive ? SteddiTheme.accent.opacity(0.2) : SteddiTheme.textMuted.opacity(0.1), lineWidth: 1)
+                    )
+            }
+            .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
     }
 
     // MARK: - Bottom Bar
 
     private var bottomBar: some View {
-        HStack {
-            // ETA info — large and glanceable
+        HStack(alignment: .bottom, spacing: 16) {
+            // Speedometer
+            speedometer
+                .padding(.trailing, 4)
+
+            // ETA info
             VStack(alignment: .leading, spacing: 6) {
                 Text("\(etaMinutes) min")
-                    .font(SteddiTheme.heading(28))
+                    .font(SteddiTheme.heading(26))
                     .foregroundStyle(SteddiTheme.textPrimary)
 
                 HStack(spacing: 14) {
                     Text(distanceRemaining)
-                        .font(SteddiTheme.mono(16))
+                        .font(SteddiTheme.mono(15))
                         .foregroundStyle(SteddiTheme.textSecondary)
 
                     Text(arrivalTime)
-                        .font(SteddiTheme.mono(16))
+                        .font(SteddiTheme.mono(15))
                         .foregroundStyle(SteddiTheme.textMuted)
                 }
             }
@@ -110,7 +296,7 @@ struct SteddiNavOverlay: View {
 
             // Steady line accent
             SteadyLine(color: SteddiTheme.accent, height: 2)
-                .frame(width: 40)
+                .frame(width: 36)
 
             Spacer()
 
@@ -124,15 +310,148 @@ struct SteddiNavOverlay: View {
                     .background(SteddiTheme.warmRed, in: Capsule())
             }
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
         .background {
             UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
+                        .fill(SteddiTheme.surfacePrimary.opacity(0.82))
+                )
                 .overlay(
                     UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
                         .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
+                .shadow(color: .black.opacity(0.35), radius: 20, y: -5)
+        }
+    }
+
+    // MARK: - Speedometer
+
+    private var speedometer: some View {
+        let overLimit: Double = {
+            guard let limit = speedLimitMph else { return 0 }
+            return currentSpeedMph - limit
+        }()
+
+        let speedColor: Color = {
+            if overLimit > 10 { return SteddiTheme.warmRed }
+            if overLimit > 0 { return SteddiTheme.accent }
+            return SteddiTheme.textPrimary
+        }()
+
+        let bgColor: Color = {
+            if overLimit > 10 { return SteddiTheme.warmRedSubtle }
+            return SteddiTheme.surfaceSecondary
+        }()
+
+        return ZStack {
+            // Background circle
+            Circle()
+                .fill(bgColor)
+                .overlay(
+                    Circle()
+                        .stroke(speedColor.opacity(0.3), lineWidth: 2)
+                )
+
+            // Speed arc gauge
+            Circle()
+                .trim(from: 0, to: min(1.0, currentSpeedMph / max(1, (speedLimitMph ?? 65) * 1.3)))
+                .stroke(speedColor.opacity(0.5), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .padding(3)
+
+            // Speed value
+            VStack(spacing: 0) {
+                Text("\(Int(currentSpeedMph))")
+                    .font(SteddiTheme.mono(22))
+                    .foregroundStyle(speedColor)
+
+                Text("mph")
+                    .font(SteddiTheme.body(9))
+                    .foregroundStyle(SteddiTheme.textMuted)
+            }
+        }
+        .frame(width: 64, height: 64)
+    }
+
+    // MARK: - Report Sheet
+
+    private var reportSheet: some View {
+        NavigationStack {
+            List {
+                reportOption(icon: "exclamationmark.triangle.fill", label: "Hazard", color: SteddiTheme.accent)
+                reportOption(icon: "shield.fill", label: "Police", color: SteddiTheme.accent)
+                reportOption(icon: "car.side.fill", label: "Accident", color: SteddiTheme.warmRed)
+                reportOption(icon: "road.lanes", label: "Road Closure", color: SteddiTheme.warmRed)
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(SteddiTheme.surfacePrimary)
+            .navigationTitle("Report")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showReportSheet = false }
+                        .foregroundStyle(SteddiTheme.accent)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func reportOption(icon: String, label: String, color: Color) -> some View {
+        Button {
+            reportedType = label
+            showReportSheet = false
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showReportedToast = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showReportedToast = false
+                }
+            }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundStyle(color)
+                    .frame(width: 32)
+
+                Text(label)
+                    .font(SteddiTheme.body(17))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(SteddiTheme.textMuted)
+            }
+            .padding(.vertical, 4)
+        }
+        .listRowBackground(SteddiTheme.surfaceSecondary)
+    }
+
+    // MARK: - Reported Toast
+
+    private var reportedToast: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(SteddiTheme.sage)
+            Text("\(reportedType) Reported")
+                .font(SteddiTheme.body(15))
+                .foregroundStyle(SteddiTheme.textPrimary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background {
+            Capsule()
+                .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                .overlay(Capsule().stroke(SteddiTheme.sage.opacity(0.3), lineWidth: 1))
+                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
         }
     }
 
@@ -154,15 +473,39 @@ struct SteddiNavOverlay: View {
                 // Current step instruction
                 let step = progress.currentLegProgress.currentStep
                 instruction = step.instructions
-                stepDistance = formatDistance(progress.currentLegProgress.currentStepProgress.distanceRemaining)
+                stepDistanceRaw = progress.currentLegProgress.currentStepProgress.distanceRemaining
+                stepDistance = formatDistance(stepDistanceRaw)
                 maneuverType = sfSymbol(for: step.maneuverType, direction: step.maneuverDirection)
+
+                // Follow-on step (next maneuver preview)
+                if let followOn = progress.currentLegProgress.followOnStep {
+                    followOnInstruction = followOn.instructions
+                    followOnManeuverSymbol = sfSymbol(for: followOn.maneuverType, direction: followOn.maneuverDirection)
+                } else {
+                    followOnInstruction = ""
+                    followOnManeuverSymbol = ""
+                }
             }
         }
 
-        // Road name
+        // Location matching — road name, speed, heading
         Task { @MainActor in
             for await state in nav.locationMatching.values {
                 roadName = state.roadName?.text ?? ""
+
+                // Current speed (m/s -> mph)
+                let speedMS = state.currentSpeed.converted(to: .metersPerSecond).value
+                currentSpeedMph = max(0, speedMS * 2.23694)
+
+                // Speed limit
+                if let limitValue = state.speedLimit.value {
+                    speedLimitMph = limitValue.converted(to: .milesPerHour).value
+                } else {
+                    speedLimitMph = nil
+                }
+
+                // Heading for compass
+                headingDegrees = state.location.course
             }
         }
 
@@ -225,5 +568,18 @@ struct SteddiNavOverlay: View {
         case .depart: return "location.fill"
         default: return "arrow.up"
         }
+    }
+}
+
+// MARK: - Triangle Shape
+
+private struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
