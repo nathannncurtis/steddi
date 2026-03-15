@@ -54,6 +54,17 @@ struct SettingsView: View {
                     Text("Navigation Defaults")
                 }
 
+                // MARK: - Commutes
+                Section {
+                    NavigationLink {
+                        CommuteListView()
+                    } label: {
+                        Label("Manage Commutes", systemImage: "arrow.triangle.swap")
+                    }
+                } header: {
+                    Text("Commutes")
+                }
+
                 // MARK: - No-Go Zones
                 Section {
                     ForEach(globalNoGoZones) { zone in
