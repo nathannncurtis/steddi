@@ -41,6 +41,9 @@ struct HomeView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            // Bottom fill — matches sheet color, covers safe area
+            SteddiTheme.surfacePrimary.ignoresSafeArea()
+
             // Unified map — same instance for home + navigation
             SteddiMapView(
                 isNavigating: $isNavigating,
@@ -270,7 +273,6 @@ struct HomeView: View {
                 placesTab
             }
         }
-        .padding(.bottom, 80) // extra space inside so background extends past screen edge
         .background(SteddiTheme.surfacePrimary.shadow(color: .black.opacity(0.3), radius: 20, y: -5))
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
     }
