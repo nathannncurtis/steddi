@@ -334,7 +334,67 @@ struct HomeView: View {
         let trip = CommuteTrip(commute: commute, direction: direction)
         modelContext.insert(trip)
 
-        navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
+        // Check for a saved preferred route in this direction
+        if let preferredRoute = commute.preferredRoute(for: direction) {
+            navigateWithSavedRoute(preferredRoute, to: target)
+        } else {
+            // No saved route — use standard routing
+            navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
+        }
+    }
+
+    /// Navigate using a saved route's polyline as waypoints
+    private func navigateWithSavedRoute(_ savedRoute: Route, to target: PinnedLocation) {
+        navigationDestination = target
+        isCalculatingRoute = true
+
+        Task {
+            locationService.startUpdating()
+            var currentLocation = locationService.currentLocation
+            for _ in 0..<20 {
+                if currentLocation != nil { break }
+                try? await Task.sleep(for: .milliseconds(500))
+                currentLocation = locationService.currentLocation
+            }
+
+            guard let currentLocation else {
+                isCalculatingRoute = false
+                return
+            }
+
+            let provider = MapboxNavigationProvider(coreConfig: .init())
+
+            // Decode saved polyline and sample waypoints from it
+            let routeCoords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
+
+            // Build waypoints: current position + sampled points along saved route + destination
+            // Sample every ~20th coordinate to stay under the 25 waypoint API limit
+            var waypointCoords: [CLLocationCoordinate2D] = [currentLocation.coordinate]
+            let step = max(1, routeCoords.count / 20)
+            for i in stride(from: step, to: routeCoords.count - 1, by: step) {
+                waypointCoords.append(routeCoords[i])
+            }
+            waypointCoords.append(target.coordinate)
+
+            var waypoints = waypointCoords.map { Waypoint(coordinate: $0) }
+            waypoints[0].name = "Current Location"
+            waypoints[waypoints.count - 1].name = target.name
+
+            let routeOptions = NavigationRouteOptions(waypoints: waypoints)
+
+            do {
+                let routes = try await provider.routingProvider().calculateRoutes(options: routeOptions).value
+                locationService.startRecording()
+                self.navProvider = provider
+                self.navigationRoutes = routes
+                isCalculatingRoute = false
+                isNavigating = true
+            } catch {
+                // Fall back to standard routing if saved route fails
+                isCalculatingRoute = false
+                navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
+            }
+        }
     }
 
     private func commuteCard(_ commute: Commute) -> some View {
