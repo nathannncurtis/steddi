@@ -39,6 +39,55 @@ class SteddiMapContainer: UIViewController {
 
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
 
+    /// Creates a soft-cornered triangle pointing up in lavender.
+    static func makePuckImage() -> UIImage {
+        let size = CGSize(width: 44, height: 44)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let lavender = UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)
+
+            // Rounded triangle pointing up
+            let path = UIBezierPath()
+            let inset: CGFloat = 4
+            let w = size.width - inset * 2
+            let h = size.height - inset * 2
+            let cornerRadius: CGFloat = 6
+
+            // Three points: top center, bottom left, bottom right
+            let top = CGPoint(x: size.width / 2, y: inset)
+            let bottomLeft = CGPoint(x: inset, y: inset + h)
+            let bottomRight = CGPoint(x: inset + w, y: inset + h)
+
+            // Draw with rounded corners
+            path.move(to: CGPoint(
+                x: (top.x + bottomLeft.x) / 2 + cornerRadius * 0.5,
+                y: (top.y + bottomLeft.y) / 2 - cornerRadius * 0.3
+            ))
+            path.addQuadCurve(to: CGPoint(
+                x: (top.x + bottomRight.x) / 2 - cornerRadius * 0.5,
+                y: (top.y + bottomRight.y) / 2 - cornerRadius * 0.3
+            ), controlPoint: top)
+            path.addQuadCurve(to: CGPoint(
+                x: (bottomRight.x + bottomLeft.x) / 2 + cornerRadius * 0.3,
+                y: bottomRight.y - cornerRadius * 0.2
+            ), controlPoint: bottomRight)
+            path.addQuadCurve(to: CGPoint(
+                x: (top.x + bottomLeft.x) / 2 + cornerRadius * 0.5,
+                y: (top.y + bottomLeft.y) / 2 - cornerRadius * 0.3
+            ), controlPoint: bottomLeft)
+            path.close()
+
+            // Fill with lavender
+            lavender.setFill()
+            path.fill()
+
+            // Subtle lighter inner stroke
+            UIColor(red: 0.73, green: 0.68, blue: 0.87, alpha: 0.5).setStroke()
+            path.lineWidth = 1.5
+            path.stroke()
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -46,9 +95,11 @@ class SteddiMapContainer: UIViewController {
         mapView = MapView(frame: view.bounds, mapInitOptions: initOptions)
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
-        // Lavender puck
+        // Lavender soft triangle puck
         var puckConfig = Puck2DConfiguration()
-        puckConfig.pulsing = .init(color: UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 0.3))
+        puckConfig.topImage = Self.makePuckImage()
+        puckConfig.pulsing = .init(color: UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 0.25))
+        puckConfig.scale = .constant(0.8)
         mapView.location.options.puckType = .puck2D(puckConfig)
         mapView.location.options.puckBearing = .heading
 
