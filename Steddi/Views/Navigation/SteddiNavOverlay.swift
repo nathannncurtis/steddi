@@ -270,37 +270,39 @@ struct SteddiNavOverlay: View {
     // MARK: - Bottom Bar
 
     private var bottomBar: some View {
-        HStack(alignment: .bottom, spacing: 16) {
-            // Speedometer
+        HStack(alignment: .center, spacing: 0) {
+            // Speedometer — left
             speedometer
-                .padding(.trailing, 4)
 
-            // ETA info
-            VStack(alignment: .leading, spacing: 6) {
-                Text("\(etaMinutes) min")
-                    .font(SteddiTheme.heading(26))
-                    .foregroundStyle(SteddiTheme.textPrimary)
+            // ETA block — center
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Text("\(etaMinutes)")
+                        .font(SteddiTheme.mono(32))
+                        .foregroundStyle(SteddiTheme.textPrimary)
+                    Text("min")
+                        .font(SteddiTheme.body(14))
+                        .foregroundStyle(SteddiTheme.textSecondary)
+                        .padding(.top, 8)
+                }
 
-                HStack(spacing: 14) {
+                HStack(spacing: 8) {
                     Text(distanceRemaining)
-                        .font(SteddiTheme.mono(15))
+                        .font(SteddiTheme.mono(13))
                         .foregroundStyle(SteddiTheme.textSecondary)
 
+                    Circle()
+                        .fill(SteddiTheme.textMuted)
+                        .frame(width: 3, height: 3)
+
                     Text(arrivalTime)
-                        .font(SteddiTheme.mono(15))
+                        .font(SteddiTheme.mono(13))
                         .foregroundStyle(SteddiTheme.textMuted)
                 }
             }
+            .frame(maxWidth: .infinity)
 
-            Spacer()
-
-            // Steady line accent
-            SteadyLine(color: SteddiTheme.accent, height: 2)
-                .frame(width: 36)
-
-            Spacer()
-
-            // End button
+            // End button — right
             Button(action: onEndNavigation) {
                 Text("End")
                     .font(.body.weight(.semibold))
@@ -310,8 +312,8 @@ struct SteddiNavOverlay: View {
                     .background(SteddiTheme.warmRed, in: Capsule())
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 18)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .background {
             UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
                 .fill(.ultraThinMaterial)

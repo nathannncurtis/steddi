@@ -143,8 +143,8 @@ class SteddiMapContainer: UIViewController {
         guard currentIs3D != is3D else { return }
         currentIs3D = is3D
 
-        let pitch: CGFloat = is3D ? 60 : 0
-        let zoom: CGFloat = is3D ? 17.5 : 16
+        let pitch: CGFloat = is3D ? 70 : 0
+        let zoom: CGFloat = is3D ? 18.5 : 16.5
         mapView.camera.ease(
             to: CameraOptions(
                 center: mapView.location.latestLocation?.coordinate,
@@ -187,8 +187,8 @@ class SteddiMapContainer: UIViewController {
                 guard let self else { return }
                 let coord = state.enhancedLocation.coordinate
                 let bearing = state.enhancedLocation.course >= 0 ? state.enhancedLocation.course : 0
-                let navPitch: CGFloat = self.currentIs3D ? 60 : 0
-                let navZoom: CGFloat = self.currentIs3D ? 17.5 : 16
+                let navPitch: CGFloat = self.currentIs3D ? 70 : 0
+                let navZoom: CGFloat = self.currentIs3D ? 18.5 : 16.5
                 self.mapView.camera.ease(
                     to: CameraOptions(
                         center: coord,
@@ -240,17 +240,17 @@ class SteddiMapContainer: UIViewController {
 
         // Bottom layer: bright glow/casing
         var glowLayer = LineLayer(id: "steddi-route-glow", source: "steddi-route-source")
-        glowLayer.lineColor = .constant(StyleColor(UIColor(red: 0.73, green: 0.68, blue: 0.87, alpha: 1.0))) // Lighter lavender
-        glowLayer.lineWidth = .constant(12)
-        glowLayer.lineOpacity = .constant(0.4)
-        glowLayer.lineBlur = .constant(6)
+        glowLayer.lineColor = .constant(StyleColor(UIColor(red: 0.55, green: 0.70, blue: 1.0, alpha: 1.0)))
+        glowLayer.lineWidth = .constant(14)
+        glowLayer.lineOpacity = .constant(0.5)
+        glowLayer.lineBlur = .constant(8)
         glowLayer.lineCap = .constant(.round)
         glowLayer.lineJoin = .constant(.round)
 
-        // Top layer: bright, high-contrast route line — cyan-tinted for visibility on dark map
+        // Top layer: bright white-ish route line that pops on any background
         var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
-        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.65, green: 0.78, blue: 0.95, alpha: 1.0))) // Light periwinkle blue — high contrast
-        lineLayer.lineWidth = .constant(7)
+        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.75, green: 0.82, blue: 1.0, alpha: 1.0))) // Bright periwinkle
+        lineLayer.lineWidth = .constant(8)
         lineLayer.lineOpacity = .constant(1.0)
         lineLayer.lineCap = .constant(.round)
         lineLayer.lineJoin = .constant(.round)
