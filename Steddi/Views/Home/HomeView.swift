@@ -70,7 +70,7 @@ struct HomeView: View {
                 onArrival: {},
                 onCancelled: {}
             )
-            .ignoresSafeArea(edges: [.top, .leading, .trailing]) // keep bottom for sheet, ignore the rest
+            .ignoresSafeArea() // map fills everything, UI floats on top
 
             // Navigation overlay
             if let provider = navProvider, isNavigating {
