@@ -1,24 +1,41 @@
 import SwiftUI
 import SwiftData
+import MapboxMaps
+import CoreLocation
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(LocationService.self) private var locationService
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
 
+    @State private var viewport: Viewport = .followPuck(zoom: 14)
     @State private var showSettings = false
     @State private var showAddLocation = false
     @State private var selectedLocation: PinnedLocation?
-    @State private var longPressCoordinate: (Double, Double)?
+    @State private var longPressCoordinate: CLLocationCoordinate2D?
 
     var body: some View {
         ZStack(alignment: .top) {
-            // TODO: Replace with Mapbox MapView — long press gesture will come from map delegate
-            MapPlaceholderView()
-                .ignoresSafeArea()
-                .onLongPressGesture {
-                    // Placeholder: in real implementation, this captures the map coordinate
-                    showAddLocation = true
+            // Mapbox map
+            Map(viewport: $viewport) {
+                // User location puck
+                Puck2D(bearing: .heading)
+
+                // Pin annotations for saved locations
+                ForEvery(pinnedLocations) { location in
+                    PointAnnotation(coordinate: location.coordinate)
+                        .image(.init(image: UIImage(systemName: location.icon)!.withTintColor(.systemBlue, renderingMode: .alwaysOriginal), name: location.icon))
+                        .onTapGesture {
+                            selectedLocation = location
+                        }
                 }
+            }
+            .mapStyle(.standard(lightPreset: .dusk))
+            .onMapLongPressGesture { context in
+                longPressCoordinate = context.coordinate
+                showAddLocation = true
+            }
+            .ignoresSafeArea()
 
             // Settings gear
             HStack {
@@ -50,8 +67,8 @@ struct HomeView: View {
                                 LocationCardView(
                                     name: location.name,
                                     icon: location.icon,
-                                    etaMinutes: estimatedETA(for: location),
-                                    delayMinutes: estimatedDelay(for: location),
+                                    etaMinutes: nil,
+                                    delayMinutes: nil,
                                     onTap: {
                                         selectedLocation = location
                                     }
@@ -64,6 +81,10 @@ struct HomeView: View {
                 }
             }
         }
+        .onAppear {
+            locationService.requestPermission()
+            locationService.startUpdating()
+        }
         .fullScreenCover(item: $selectedLocation) { location in
             ActiveNavigationView(destination: location)
         }
@@ -71,8 +92,7 @@ struct HomeView: View {
             SettingsView()
         }
         .sheet(isPresented: $showAddLocation) {
-            // TODO: Add location flow with map coordinate from long press
-            Text("Add pinned location")
+            AddLocationSheet(coordinate: longPressCoordinate)
                 .presentationDetents([.medium])
         }
     }
@@ -90,22 +110,72 @@ struct HomeView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 40)
     }
+}
 
-    // MARK: - Placeholder helpers
-    // TODO: Replace with real ETA from NavigationViewModel / Mapbox Directions API
+// MARK: - Add Location Sheet
 
-    private func estimatedETA(for location: PinnedLocation) -> Int? {
-        // Placeholder — will come from live traffic data
-        nil
+private struct AddLocationSheet: View {
+    let coordinate: CLLocationCoordinate2D?
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var name = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Location name", text: $name)
+                }
+
+                if let coord = coordinate {
+                    Section {
+                        HStack {
+                            Text("Latitude")
+                            Spacer()
+                            Text(String(format: "%.4f", coord.latitude))
+                                .foregroundStyle(.secondary)
+                        }
+                        HStack {
+                            Text("Longitude")
+                            Spacer()
+                            Text(String(format: "%.4f", coord.longitude))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Pin Location")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        save()
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(name.isEmpty || coordinate == nil)
+                }
+            }
+        }
     }
 
-    private func estimatedDelay(for location: PinnedLocation) -> Int? {
-        // Placeholder — will come from comparing current vs typical duration
-        nil
+    private func save() {
+        guard let coord = coordinate else { return }
+        let location = PinnedLocation(
+            name: name,
+            latitude: coord.latitude,
+            longitude: coord.longitude
+        )
+        modelContext.insert(location)
     }
 }
 
 #Preview {
     HomeView()
         .modelContainer(for: PinnedLocation.self, inMemory: true)
+        .environment(LocationService())
 }
