@@ -338,6 +338,8 @@ struct RoutePlannerMap: UIViewRepresentable {
     let polyline: String?
     let onTapMap: (CLLocationCoordinate2D) -> Void
     @Binding var mapViewRef: MapView?
+    /// Only fit camera on first route load, not on waypoint updates
+    private var shouldFitCamera: Bool { waypoints.isEmpty }
 
     func makeUIView(context: Context) -> MapView {
         let mapView = MapView(frame: .zero, mapInitOptions: MapInitOptions(styleURI: .standard))
@@ -383,15 +385,17 @@ struct RoutePlannerMap: UIViewRepresentable {
             try? mapView.mapboxMap.addSource(source)
             try? mapView.mapboxMap.addLayer(layer)
 
-            // Fit camera to route
-            let camera = mapView.mapboxMap.camera(
-                for: .lineString(LineString(coords)),
-                padding: UIEdgeInsets(top: 80, left: 40, bottom: 200, right: 40),
-                bearing: nil,
-                pitch: nil
-            )
-            mapView.mapboxMap.setCamera(to: camera)
-        } else if let origin {
+            // Only fit camera on initial route, not after adding waypoints
+            if shouldFitCamera {
+                let camera = mapView.mapboxMap.camera(
+                    for: .lineString(LineString(coords)),
+                    padding: UIEdgeInsets(top: 80, left: 40, bottom: 200, right: 40),
+                    bearing: nil,
+                    pitch: nil
+                )
+                mapView.mapboxMap.setCamera(to: camera)
+            }
+        } else if let origin, shouldFitCamera {
             mapView.mapboxMap.setCamera(to: CameraOptions(center: origin, zoom: 12))
         }
 
