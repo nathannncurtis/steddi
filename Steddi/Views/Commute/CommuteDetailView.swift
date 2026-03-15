@@ -154,9 +154,7 @@ struct CommuteDetailView: View {
             Text("This will also delete all routes associated with this commute.")
         }
         .sheet(isPresented: $showAddRoute) {
-            // TODO: Route recording/planning flow
-            Text("Route recording flow")
-                .presentationDetents([.medium])
+            RoutePlannerView(commute: commute)
         }
         .sheet(isPresented: $showOriginPicker) {
             LocationPickerView(title: "Pick Origin") { location in
