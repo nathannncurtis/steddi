@@ -26,6 +26,9 @@ struct HomeView: View {
     @State private var showPostArrival = false
     @State private var longPressCoordinate: CLLocationCoordinate2D?
     @State private var recordedPoints: [GPSPoint] = []
+    // Set to true to auto-start nav for testing, false for normal use
+    private let debugAutoNav = false
+    @State private var debugDidAutoNav = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -111,6 +114,13 @@ struct HomeView: View {
         .onAppear {
             locationService.requestPermission()
             locationService.startUpdating()
+        }
+        .task {
+            if debugAutoNav && !debugDidAutoNav {
+                debugDidAutoNav = true
+                try? await Task.sleep(for: .seconds(3))
+                navigateTo(name: "Debug Target", coordinate: CLLocationCoordinate2D(latitude: 33.980, longitude: -117.375))
+            }
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()

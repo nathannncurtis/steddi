@@ -165,18 +165,9 @@ class SteddiMapContainer: UIViewController {
         // Start active guidance on the navigation core
         provider.tripSession().startActiveGuidance(with: routes, startLegIndex: 0)
 
-        // Show route line on map — delay briefly so we draw AFTER the SDK's own layers
+        // Show route line as UIKit overlay (immune to 3D lighting)
         let coords = routes.mainRoute.route.shape?.coordinates ?? []
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            // Remove any SDK-drawn route layers first
-            let allLayers = self?.mapView.mapboxMap.allLayerIdentifiers ?? []
-            for layer in allLayers {
-                if layer.id.contains("route") || layer.id.contains("navigation") {
-                    try? self?.mapView.mapboxMap.removeLayer(withId: layer.id)
-                }
-            }
-            self?.showRouteLine(coords)
-        }
+        showRouteLine(coords)
 
         let pitch: CGFloat = currentIs3D ? 60 : 0
         let zoom: CGFloat = currentIs3D ? 17.5 : 16
@@ -247,32 +238,22 @@ class SteddiMapContainer: UIViewController {
         var source = GeoJSONSource(id: "steddi-route-source")
         source.data = .geometry(.lineString(LineString(coordinates)))
 
-        // Bottom layer: lavender glow/casing
-        var glowLayer = LineLayer(id: "steddi-route-glow", source: "steddi-route-source")
-        glowLayer.slot = .top
-        glowLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
-        glowLayer.lineWidth = .constant(14)
-        glowLayer.lineOpacity = .constant(0.7)
-        glowLayer.lineCap = .constant(.round)
-        glowLayer.lineJoin = .constant(.round)
-
-        // Top layer: bright white so it's visible on ANY map background
+        // Lavender route line — fullbright, no border
         var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
         lineLayer.slot = .top
-        lineLayer.lineColor = .constant(StyleColor(.white))
-        lineLayer.lineWidth = .constant(6)
+        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
+        lineLayer.lineWidth = .constant(8)
         lineLayer.lineOpacity = .constant(1.0)
         lineLayer.lineCap = .constant(.round)
         lineLayer.lineJoin = .constant(.round)
+        lineLayer.lineEmissiveStrength = .constant(1.0) // fullbright — ignores 3D lighting
 
         try? mapView.mapboxMap.addSource(source)
-        try? mapView.mapboxMap.addLayer(glowLayer)
         try? mapView.mapboxMap.addLayer(lineLayer)
     }
 
     private func removeRouteLine() {
         try? mapView.mapboxMap.removeLayer(withId: "steddi-route-line")
-        try? mapView.mapboxMap.removeLayer(withId: "steddi-route-glow")
         try? mapView.mapboxMap.removeSource(withId: "steddi-route-source")
     }
 }
