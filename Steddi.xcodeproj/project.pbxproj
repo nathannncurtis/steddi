@@ -15,6 +15,7 @@
 		1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */; };
 		26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */; };
 		2C6330DE7990CFA8460540EB /* MapPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7702DF1E920EA12B3826B4A /* MapPlaceholderView.swift */; };
+		3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335291BA198DC1134B9072E8 /* LocationPickerView.swift */; };
 		571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7111C46770386A928275F35 /* SettingsView.swift */; };
 		57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */; };
 		6800D461D639A3F83F785759 /* MapboxNavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D9396E84675B13A27578B0 /* MapboxNavigationView.swift */; };
@@ -55,6 +56,7 @@
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
+		335291BA198DC1134B9072E8 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiTheme.swift; sourceTree = "<group>"; };
 		3B4F33590D3CEB7AA217E684 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		4CDEFFA656C308FF61D985BF /* NoGoZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZone.swift; sourceTree = "<group>"; };
@@ -146,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				51B20A5C03C61B4E42CEF0C7 /* ColorSwatchPreview.swift */,
+				335291BA198DC1134B9072E8 /* LocationPickerView.swift */,
 				C7702DF1E920EA12B3826B4A /* MapPlaceholderView.swift */,
 			);
 			path = Components;
@@ -343,6 +346,7 @@
 				84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */,
 				1D615842BD301291CE02D709 /* HomeViewModel.swift in Sources */,
 				FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */,
+				3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */,
 				13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */,
 				26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */,
 				2C6330DE7990CFA8460540EB /* MapPlaceholderView.swift in Sources */,

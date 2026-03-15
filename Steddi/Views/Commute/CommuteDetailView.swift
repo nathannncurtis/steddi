@@ -6,10 +6,11 @@ struct CommuteDetailView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \PinnedLocation.sortOrder) private var locations: [PinnedLocation]
 
     @State private var showDeleteConfirmation = false
     @State private var showAddRoute = false
+    @State private var showOriginPicker = false
+    @State private var showDestinationPicker = false
 
     var body: some View {
         Form {
@@ -17,19 +18,33 @@ struct CommuteDetailView: View {
             Section {
                 TextField("Name", text: $commute.name)
 
-                Picker("Origin", selection: $commute.origin) {
-                    Text("Select").tag(nil as PinnedLocation?)
-                    ForEach(locations) { location in
-                        Label(location.name, systemImage: location.icon)
-                            .tag(location as PinnedLocation?)
+                Button {
+                    showOriginPicker = true
+                } label: {
+                    HStack {
+                        Text("Origin")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(commute.origin?.name ?? "Select")
+                            .foregroundStyle(commute.origin != nil ? SteddiTheme.accent : .secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
-                Picker("Destination", selection: $commute.destination) {
-                    Text("Select").tag(nil as PinnedLocation?)
-                    ForEach(locations) { location in
-                        Label(location.name, systemImage: location.icon)
-                            .tag(location as PinnedLocation?)
+                Button {
+                    showDestinationPicker = true
+                } label: {
+                    HStack {
+                        Text("Destination")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(commute.destination?.name ?? "Select")
+                            .foregroundStyle(commute.destination != nil ? SteddiTheme.accent : .secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -142,6 +157,16 @@ struct CommuteDetailView: View {
             // TODO: Route recording/planning flow
             Text("Route recording flow")
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showOriginPicker) {
+            LocationPickerView(title: "Pick Origin") { location in
+                commute.origin = location
+            }
+        }
+        .sheet(isPresented: $showDestinationPicker) {
+            LocationPickerView(title: "Pick Destination") { location in
+                commute.destination = location
+            }
         }
     }
 

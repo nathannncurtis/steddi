@@ -8,41 +8,39 @@ struct CommuteListView: View {
     @State private var showNewCommute = false
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if commutes.isEmpty {
-                    ContentUnavailableView(
-                        "No commutes yet",
-                        systemImage: "arrow.triangle.swap",
-                        description: Text("Create a commute to link two pinned locations with your preferred routes.")
-                    )
-                } else {
-                    List {
-                        ForEach(commutes) { commute in
-                            NavigationLink(value: commute) {
-                                commuteRow(commute)
-                            }
+        Group {
+            if commutes.isEmpty {
+                ContentUnavailableView(
+                    "No commutes yet",
+                    systemImage: "arrow.triangle.swap",
+                    description: Text("Create a commute to link two locations with your preferred routes.")
+                )
+            } else {
+                List {
+                    ForEach(commutes) { commute in
+                        NavigationLink(value: commute) {
+                            commuteRow(commute)
                         }
-                        .onDelete(perform: deleteCommutes)
                     }
+                    .onDelete(perform: deleteCommutes)
                 }
             }
-            .navigationTitle("Commutes")
-            .navigationDestination(for: Commute.self) { commute in
-                CommuteDetailView(commute: commute)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showNewCommute = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
+        }
+        .navigationTitle("Commutes")
+        .navigationDestination(for: Commute.self) { commute in
+            CommuteDetailView(commute: commute)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showNewCommute = true
+                } label: {
+                    Image(systemName: "plus")
                 }
             }
-            .sheet(isPresented: $showNewCommute) {
-                NewCommuteSheet()
-            }
+        }
+        .sheet(isPresented: $showNewCommute) {
+            NewCommuteSheet()
         }
     }
 
@@ -86,11 +84,12 @@ struct CommuteListView: View {
 private struct NewCommuteSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \PinnedLocation.sortOrder) private var locations: [PinnedLocation]
 
     @State private var name = ""
     @State private var origin: PinnedLocation?
     @State private var destination: PinnedLocation?
+    @State private var showOriginPicker = false
+    @State private var showDestinationPicker = false
 
     var body: some View {
         NavigationStack {
@@ -100,23 +99,47 @@ private struct NewCommuteSheet: View {
                 }
 
                 Section {
-                    Picker("Origin", selection: $origin) {
-                        Text("Select").tag(nil as PinnedLocation?)
-                        ForEach(locations) { location in
-                            Label(location.name, systemImage: location.icon)
-                                .tag(location as PinnedLocation?)
+                    // Origin
+                    Button {
+                        showOriginPicker = true
+                    } label: {
+                        HStack {
+                            Text("Origin")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if let origin {
+                                Text(origin.name)
+                                    .foregroundStyle(SteddiTheme.accent)
+                            } else {
+                                Text("Search or pick")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
 
-                    Picker("Destination", selection: $destination) {
-                        Text("Select").tag(nil as PinnedLocation?)
-                        ForEach(locations) { location in
-                            Label(location.name, systemImage: location.icon)
-                                .tag(location as PinnedLocation?)
+                    // Destination
+                    Button {
+                        showDestinationPicker = true
+                    } label: {
+                        HStack {
+                            Text("Destination")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if let destination {
+                                Text(destination.name)
+                                    .foregroundStyle(SteddiTheme.accent)
+                            } else {
+                                Text("Search or pick")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                } footer: {
-                    Text("Pin locations from the home screen first.")
                 }
             }
             .navigationTitle("New Commute")
@@ -134,6 +157,16 @@ private struct NewCommuteSheet: View {
                     .disabled(name.isEmpty || origin == nil || destination == nil)
                 }
             }
+            .sheet(isPresented: $showOriginPicker) {
+                LocationPickerView(title: "Pick Origin") { location in
+                    origin = location
+                }
+            }
+            .sheet(isPresented: $showDestinationPicker) {
+                LocationPickerView(title: "Pick Destination") { location in
+                    destination = location
+                }
+            }
         }
     }
 
@@ -148,6 +181,8 @@ private struct NewCommuteSheet: View {
 }
 
 #Preview {
-    CommuteListView()
-        .modelContainer(for: Commute.self, inMemory: true)
+    NavigationStack {
+        CommuteListView()
+    }
+    .modelContainer(for: Commute.self, inMemory: true)
 }
