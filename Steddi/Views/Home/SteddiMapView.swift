@@ -240,6 +240,7 @@ class SteddiMapContainer: UIViewController {
 
         // Bottom layer: white border/casing
         var glowLayer = LineLayer(id: "steddi-route-glow", source: "steddi-route-source")
+        glowLayer.slot = .top
         glowLayer.lineColor = .constant(StyleColor(.white))
         glowLayer.lineWidth = .constant(12)
         glowLayer.lineOpacity = .constant(0.8)
@@ -248,6 +249,7 @@ class SteddiMapContainer: UIViewController {
 
         // Top layer: same lavender as the puck triangle
         var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
+        lineLayer.slot = .top
         lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
         lineLayer.lineWidth = .constant(8)
         lineLayer.lineOpacity = .constant(1.0)
@@ -255,9 +257,8 @@ class SteddiMapContainer: UIViewController {
         lineLayer.lineJoin = .constant(.round)
 
         try? mapView.mapboxMap.addSource(source)
-        // Add above all existing layers so the route draws on top of roads
-        try? mapView.mapboxMap.addLayer(glowLayer, layerPosition: .above(mapView.mapboxMap.allLayerIdentifiers.last?.id ?? ""))
-        try? mapView.mapboxMap.addLayer(lineLayer, layerPosition: .above("steddi-route-glow"))
+        try? mapView.mapboxMap.addLayer(glowLayer)
+        try? mapView.mapboxMap.addLayer(lineLayer)
     }
 
     private func removeRouteLine() {
