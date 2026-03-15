@@ -84,9 +84,9 @@ class SteddiMapContainer: UIViewController {
             lavender.setFill()
             path.fill()
 
-            // Subtle lighter inner stroke
-            UIColor(red: 0.73, green: 0.68, blue: 0.87, alpha: 0.5).setStroke()
-            path.lineWidth = 1.5
+            // White border
+            UIColor.white.setStroke()
+            path.lineWidth = 2.5
             path.stroke()
         }
     }
@@ -238,18 +238,17 @@ class SteddiMapContainer: UIViewController {
         var source = GeoJSONSource(id: "steddi-route-source")
         source.data = .geometry(.lineString(LineString(coordinates)))
 
-        // Bottom layer: neon glow casing
+        // Bottom layer: white border/casing
         var glowLayer = LineLayer(id: "steddi-route-glow", source: "steddi-route-source")
-        glowLayer.lineColor = .constant(StyleColor(UIColor(red: 0.40, green: 0.85, blue: 1.0, alpha: 1.0))) // Bright cyan glow
-        glowLayer.lineWidth = .constant(16)
-        glowLayer.lineOpacity = .constant(0.6)
-        glowLayer.lineBlur = .constant(10)
+        glowLayer.lineColor = .constant(StyleColor(.white))
+        glowLayer.lineWidth = .constant(12)
+        glowLayer.lineOpacity = .constant(0.8)
         glowLayer.lineCap = .constant(.round)
         glowLayer.lineJoin = .constant(.round)
 
-        // Top layer: bright cyan-white line — unmissable on dark map
+        // Top layer: same lavender as the puck triangle
         var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
-        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.50, green: 0.92, blue: 1.0, alpha: 1.0))) // Bright cyan
+        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
         lineLayer.lineWidth = .constant(8)
         lineLayer.lineOpacity = .constant(1.0)
         lineLayer.lineCap = .constant(.round)
