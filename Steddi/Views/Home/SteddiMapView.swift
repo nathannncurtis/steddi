@@ -19,6 +19,7 @@ struct SteddiMapView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> SteddiMapContainer {
         let vc = SteddiMapContainer()
         vc.onLongPress = onLongPress
+        vc.view.insetsLayoutMarginsFromSafeArea = false
         return vc
     }
 
@@ -93,12 +94,20 @@ class SteddiMapContainer: UIViewController {
         }
     }
 
+    override var prefersHomeIndicatorAutoHidden: Bool { false }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        mapView?.frame = view.bounds
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
         let initOptions = MapInitOptions(styleURI: .standard)
         mapView = MapView(frame: view.bounds, mapInitOptions: initOptions)
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        mapView.insetsLayoutMarginsFromSafeArea = false
 
         // Lavender soft triangle puck
         var puckConfig = Puck2DConfiguration()
