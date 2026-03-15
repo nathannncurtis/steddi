@@ -272,7 +272,7 @@ struct HomeView: View {
 
             Spacer(minLength: 0)
         }
-        .frame(maxHeight: UIScreen.main.bounds.height * 0.45)
+        .padding(.bottom, 34) // home indicator safe area
         .background {
             UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
                 .fill(SteddiTheme.surfacePrimary)
