@@ -269,19 +269,18 @@ struct HomeView: View {
             case .places:
                 placesTab
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(.bottom, 34) // home indicator safe area
-        .background {
-            UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                .fill(SteddiTheme.surfacePrimary)
-                .overlay(
+        .padding(.bottom, 34)
+        .background(
+            SteddiTheme.surfacePrimary
+                .overlay(alignment: .top) {
                     UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
                         .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
-                )
+                        .frame(height: 2)
+                }
                 .shadow(color: .black.opacity(0.3), radius: 20, y: -5)
-        }
+        )
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
     }
 
     // MARK: - Commutes Tab
