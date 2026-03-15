@@ -54,8 +54,8 @@ struct HomeView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Background behind everything — clear so map shows through safe areas
-            Color.clear.ignoresSafeArea()
+            // Background behind safe area — dark so no white gaps in landscape
+            Color.black.ignoresSafeArea()
 
             // Unified map — same instance for home + navigation
             SteddiMapView(
