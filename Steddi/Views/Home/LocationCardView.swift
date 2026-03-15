@@ -7,45 +7,64 @@ struct LocationCardView: View {
     let delayMinutes: Int?
     let onTap: () -> Void
 
-    var trafficColor: Color {
-        guard let delay = delayMinutes else { return .green }
-        if delay <= 2 { return .green }
-        if delay <= 8 { return .orange }
-        return .red
+    private var trafficStatus: SteddiTheme.TrafficStatus {
+        guard let delay = delayMinutes else { return .unknown }
+        if delay <= 2 { return .clear }
+        if delay <= 8 { return .moderate }
+        return .heavy
     }
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
+                // Icon with amber accent background
                 Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(.primary)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(SteddiTheme.amber)
+                    .frame(width: 36, height: 36)
+                    .background(SteddiTheme.amberSubtle, in: RoundedRectangle(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .font(SteddiTheme.heading(15))
+                        .foregroundStyle(SteddiTheme.textPrimary)
 
                     if let eta = etaMinutes {
-                        Text("\(eta) min")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            Text("\(eta) min")
+                                .font(SteddiTheme.mono(13))
+                                .foregroundStyle(trafficStatus.color)
+
+                            if let delay = delayMinutes, delay > 2 {
+                                Text("+\(delay)")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(trafficStatus.color, in: Capsule())
+                            }
+                        }
                     }
                 }
 
-                if let delay = delayMinutes, delay > 2 {
-                    Text("+\(delay)")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(trafficColor, in: Capsule())
-                }
+                Spacer(minLength: 4)
+
+                // Subtle chevron
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SteddiTheme.textMuted)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                    .fill(SteddiTheme.surfacePrimary.opacity(0.9))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                            .stroke(SteddiTheme.amber.opacity(0.08), lineWidth: 1)
+                    )
+            }
         }
-        .glassEffect(.regular, in: .capsule)
         .buttonStyle(.plain)
     }
 }
@@ -72,10 +91,11 @@ struct LocationCardView: View {
             LocationCardView(
                 name: "Gym",
                 icon: "figure.run",
-                etaMinutes: 45,
-                delayMinutes: 12,
+                etaMinutes: nil,
+                delayMinutes: nil,
                 onTap: {}
             )
         }
+        .padding(.horizontal, 20)
     }
 }

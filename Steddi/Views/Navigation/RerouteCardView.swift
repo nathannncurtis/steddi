@@ -12,58 +12,69 @@ struct RerouteCardView: View {
     var body: some View {
         if isVisible {
             VStack(spacing: 16) {
+                // Steady line accent
+                SteadyLine(color: SteddiTheme.amber, height: 2)
+                    .padding(.horizontal, 20)
+
                 VStack(spacing: 6) {
                     Text("Faster route available")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                        .font(SteddiTheme.heading(17))
+                        .foregroundStyle(SteddiTheme.textPrimary)
 
                     if !routeName.isEmpty {
                         Text(routeName)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(SteddiTheme.body(14))
+                            .foregroundStyle(SteddiTheme.textSecondary)
                     }
                 }
 
                 // Time savings — large and glanceable
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Text("Save ~\(timeSavingsMinutes) min")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(.green)
+                        .font(SteddiTheme.heading(22))
+                        .foregroundStyle(SteddiTheme.sage)
 
                     Text("(\(percentageSavings)%)")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .font(SteddiTheme.mono(14))
+                        .foregroundStyle(SteddiTheme.textSecondary)
                 }
 
                 // Action buttons
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     Button("Stay") {
                         hide()
                         onStay()
                     }
                     .font(.body.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SteddiTheme.textSecondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.vertical, 14)
+                    .background(SteddiTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 14))
 
                     Button("Switch") {
                         hide()
                         onSwitch()
                     }
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SteddiTheme.surfacePrimary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(.blue, in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.vertical, 14)
+                    .background(SteddiTheme.amber, in: RoundedRectangle(cornerRadius: 14))
                 }
             }
             .padding(20)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .background {
+                RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
+                    .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
+                            .stroke(SteddiTheme.amber.opacity(0.12), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.4), radius: 16, y: 4)
+            }
             .padding(.horizontal, 16)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .onAppear {
-                // Auto-dismiss after 30 seconds if ignored — counts as "stay"
                 DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
                     guard isVisible else { return }
                     hide()
