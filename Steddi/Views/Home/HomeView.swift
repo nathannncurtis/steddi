@@ -119,33 +119,11 @@ struct HomeView: View {
 
             // Home UI — hides during navigation
             if !isNavigating && !isCalculatingRoute {
-                VStack {
-                    if showSearch {
-                        ExpandedSearchView(
-                            currentLocation: locationService.currentLocation?.coordinate,
-                            onSelectResult: { result in
-                                showSearch = false
-                                navigateTo(
-                                    name: result.name,
-                                    coordinate: result.coordinate,
-                                    address: result.address
-                                )
-                            },
-                            onPinResult: { result in
-                                showSearch = false
-                                pinLocation(from: result)
-                            },
-                            onDismiss: {
-                                showSearch = false
-                            }
-                        )
-                    } else {
-                        topBar
-                    }
-                    Spacer()
+                if isLandscape {
+                    landscapeLayout
+                } else {
+                    portraitLayout
                 }
-
-                bottomSheet
             }
 
             // Loading overlay
@@ -296,6 +274,126 @@ struct HomeView: View {
     }
 
     // MARK: - Bottom Sheet
+
+    // MARK: - Portrait Layout
+
+    private var portraitLayout: some View {
+        Group {
+            VStack {
+                if showSearch {
+                    ExpandedSearchView(
+                        currentLocation: locationService.currentLocation?.coordinate,
+                        onSelectResult: { result in
+                            showSearch = false
+                            navigateTo(name: result.name, coordinate: result.coordinate, address: result.address)
+                        },
+                        onPinResult: { result in
+                            showSearch = false
+                            pinLocation(from: result)
+                        },
+                        onDismiss: { showSearch = false }
+                    )
+                } else {
+                    topBar
+                }
+                Spacer()
+            }
+            bottomSheet
+        }
+    }
+
+    // MARK: - Landscape Layout
+
+    private var landscapeLayout: some View {
+        HStack(spacing: 0) {
+            // Side panel on the left
+            VStack(spacing: 0) {
+                // Search bar compact
+                if showSearch {
+                    ExpandedSearchView(
+                        currentLocation: locationService.currentLocation?.coordinate,
+                        onSelectResult: { result in
+                            showSearch = false
+                            navigateTo(name: result.name, coordinate: result.coordinate, address: result.address)
+                        },
+                        onPinResult: { result in
+                            showSearch = false
+                            pinLocation(from: result)
+                        },
+                        onDismiss: { showSearch = false }
+                    )
+                } else {
+                    // Search + settings row
+                    HStack(spacing: 8) {
+                        Button { showSearch = true } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(SteddiTheme.accent)
+                                Text("Where to?")
+                                    .font(SteddiTheme.heading(15))
+                                    .foregroundStyle(SteddiTheme.textPrimary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background {
+                                Capsule()
+                                    .fill(SteddiTheme.surfaceSecondary.opacity(0.8))
+                                    .overlay(Capsule().stroke(SteddiTheme.accent.opacity(0.1), lineWidth: 1))
+                            }
+                        }
+
+                        Button { showSettings = true } label: {
+                            Image(systemName: "gearshape.fill")
+                                .font(.caption)
+                                .foregroundStyle(SteddiTheme.textSecondary)
+                                .frame(width: 36, height: 36)
+                                .background(SteddiTheme.surfaceSecondary.opacity(0.8), in: Circle())
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+
+                    // Tabs
+                    HStack(spacing: 0) {
+                        ForEach(SheetTab.allCases, id: \.self) { tab in
+                            Button { sheetTab = tab } label: {
+                                Text(tab.rawValue)
+                                    .font(SteddiTheme.heading(12))
+                                    .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textMuted)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 6)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 6)
+
+                    SteadyLine(color: SteddiTheme.accent, height: 1)
+                        .padding(.horizontal, 20)
+
+                    // Content — compact
+                    ScrollView {
+                        switch sheetTab {
+                        case .commutes:
+                            commutesTab
+                        case .places:
+                            placesTab
+                        }
+                    }
+                }
+            }
+            .frame(width: 280)
+            .background(SteddiTheme.surfacePrimary)
+
+            // Map fills the rest
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Bottom Sheet (portrait only)
 
     private var bottomSheet: some View {
         VStack(spacing: 0) {
