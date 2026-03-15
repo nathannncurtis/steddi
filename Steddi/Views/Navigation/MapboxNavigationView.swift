@@ -16,7 +16,7 @@ struct MapboxNavigationView: UIViewControllerRepresentable {
             mapboxNavigation: provider.mapboxNavigation,
             voiceController: provider.routeVoiceController,
             eventsManager: provider.eventsManager(),
-            styles: [StandardDayStyle(), StandardNightStyle()]
+            styles: [SteddiDayStyle(), SteddiNightStyle()]
         )
         let vc = NavigationViewController(
             navigationRoutes: navigationRoutes,

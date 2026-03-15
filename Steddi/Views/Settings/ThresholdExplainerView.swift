@@ -18,7 +18,7 @@ struct ThresholdExplainerView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Image(systemName: "arrow.triangle.branch")
                             .font(.largeTitle)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(SteddiTheme.accent)
 
                         Text("How reroute thresholds work")
                             .font(.title2.weight(.bold))
@@ -107,7 +107,7 @@ struct ThresholdExplainerView: View {
             Spacer()
 
             Image(systemName: wouldNotify ? "bell.fill" : "bell.slash")
-                .foregroundStyle(wouldNotify ? .blue : .secondary)
+                .foregroundStyle(wouldNotify ? SteddiTheme.accent : .secondary)
                 .font(.title3)
         }
         .padding(12)

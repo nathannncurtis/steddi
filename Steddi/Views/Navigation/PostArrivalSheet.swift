@@ -55,7 +55,7 @@ struct PostArrivalSheet: View {
 
                         if selectedCommute != nil {
                             Toggle("Set as preferred route", isOn: $saveAsPreferred)
-                                .tint(.blue)
+                                .tint(SteddiTheme.accent)
                         }
                     }
                     .padding(.horizontal)
@@ -76,7 +76,7 @@ struct PostArrivalSheet: View {
                                     .foregroundStyle(.white)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 14)
-                                    .background(.blue, in: RoundedRectangle(cornerRadius: 12))
+                                    .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 12))
                             }
                         }
                         .disabled(isSaving)
@@ -99,7 +99,7 @@ struct PostArrivalSheet: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(.blue, in: RoundedRectangle(cornerRadius: 12))
+                    .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal)
                     .padding(.bottom, 16)
                 }

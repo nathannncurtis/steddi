@@ -91,7 +91,7 @@ struct CommuteDetailView: View {
                             .monospacedDigit()
                     }
                     Slider(value: $commute.thresholdPercentage, in: 0.05...0.50, step: 0.05)
-                        .tint(.blue)
+                        .tint(SteddiTheme.accent)
                 }
 
                 Stepper(
@@ -168,7 +168,7 @@ struct CommuteDetailView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(route.source == .recorded ? .green : .blue, in: Capsule())
+                        .background(route.source == .recorded ? SteddiTheme.sage : SteddiTheme.accent, in: Capsule())
 
                     if let duration = route.typicalDurationSeconds {
                         Text("\(Int(duration / 60)) min typical")

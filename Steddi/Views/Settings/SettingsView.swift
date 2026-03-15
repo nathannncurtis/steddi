@@ -37,7 +37,7 @@ struct SettingsView: View {
                                 .monospacedDigit()
                         }
                         Slider(value: $thresholdPercentage, in: 0.05...0.50, step: 0.05)
-                            .tint(.blue)
+                            .tint(SteddiTheme.accent)
                     }
 
                     Stepper("Hard floor: \(hardMinuteFloor) min", value: $hardMinuteFloor, in: 2...30)

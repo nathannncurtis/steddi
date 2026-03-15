@@ -47,7 +47,7 @@ struct OnboardingView: View {
 
                         Image(systemName: page.icon)
                             .font(.system(size: 64))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(SteddiTheme.accent)
                             .padding(.bottom, 8)
 
                         VStack(spacing: 8) {
@@ -84,7 +84,7 @@ struct OnboardingView: View {
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(.blue, in: RoundedRectangle(cornerRadius: 14))
+                            .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
                     }
                 } else {
                     Button {
@@ -97,7 +97,7 @@ struct OnboardingView: View {
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(.blue, in: RoundedRectangle(cornerRadius: 14))
+                            .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
                     }
                 }
 
