@@ -28,7 +28,7 @@ final class NavigationViewModel {
     private let navigationCoordinator: NavigationCoordinator
     private let locationService: LocationService
     private let mapMatchingService: MapMatchingService
-    private var navigationTask: Task<Void, Never>?
+    nonisolated(unsafe) private var navigationTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -45,7 +45,8 @@ final class NavigationViewModel {
     }
 
     deinit {
-        navigationTask?.cancel()
+        let task = navigationTask
+        task?.cancel()
     }
 
     // MARK: - Navigation Lifecycle

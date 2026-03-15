@@ -21,7 +21,7 @@ final class RouteRecordingViewModel {
     private let modelContext: ModelContext
     private let locationService: LocationService
     private let mapMatchingService: MapMatchingService
-    private var durationTimer: Task<Void, Never>?
+    nonisolated(unsafe) private var durationTimer: Task<Void, Never>?
     private var recordingStartTime: Date?
 
     // MARK: - Init
@@ -37,7 +37,8 @@ final class RouteRecordingViewModel {
     }
 
     deinit {
-        durationTimer?.cancel()
+        let timer = durationTimer
+        timer?.cancel()
     }
 
     // MARK: - Recording Lifecycle

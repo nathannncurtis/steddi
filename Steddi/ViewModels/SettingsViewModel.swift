@@ -75,11 +75,12 @@ final class SettingsViewModel {
     // MARK: - Init
 
     init(modelContext: ModelContext) {
+        let s = AppSettings()
         self.modelContext = modelContext
-        self.defaultThresholdPercentage = settings.defaultThresholdPercentage
-        self.defaultHardMinuteFloor = settings.defaultHardMinuteFloor
-        self.voiceGuidanceEnabled = settings.voiceGuidanceEnabled
-        self.units = settings.units
+        self.defaultThresholdPercentage = s.defaultThresholdPercentage
+        self.defaultHardMinuteFloor = s.defaultHardMinuteFloor
+        self.voiceGuidanceEnabled = s.voiceGuidanceEnabled
+        self.units = s.units
     }
 
     // MARK: - Data Loading

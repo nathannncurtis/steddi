@@ -26,7 +26,7 @@ final class HomeViewModel {
 
     private let modelContext: ModelContext
     private let directionsService: DirectionsService
-    private var etaRefreshTask: Task<Void, Never>?
+    nonisolated(unsafe) private var etaRefreshTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -36,7 +36,8 @@ final class HomeViewModel {
     }
 
     deinit {
-        etaRefreshTask?.cancel()
+        let task = etaRefreshTask
+        task?.cancel()
     }
 
     // MARK: - Data Loading
