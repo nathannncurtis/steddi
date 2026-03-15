@@ -238,18 +238,18 @@ class SteddiMapContainer: UIViewController {
         var source = GeoJSONSource(id: "steddi-route-source")
         source.data = .geometry(.lineString(LineString(coordinates)))
 
-        // Bottom layer: bright glow/casing
+        // Bottom layer: neon glow casing
         var glowLayer = LineLayer(id: "steddi-route-glow", source: "steddi-route-source")
-        glowLayer.lineColor = .constant(StyleColor(UIColor(red: 0.55, green: 0.70, blue: 1.0, alpha: 1.0)))
-        glowLayer.lineWidth = .constant(14)
-        glowLayer.lineOpacity = .constant(0.5)
-        glowLayer.lineBlur = .constant(8)
+        glowLayer.lineColor = .constant(StyleColor(UIColor(red: 0.40, green: 0.85, blue: 1.0, alpha: 1.0))) // Bright cyan glow
+        glowLayer.lineWidth = .constant(16)
+        glowLayer.lineOpacity = .constant(0.6)
+        glowLayer.lineBlur = .constant(10)
         glowLayer.lineCap = .constant(.round)
         glowLayer.lineJoin = .constant(.round)
 
-        // Top layer: bright white-ish route line that pops on any background
+        // Top layer: bright cyan-white line — unmissable on dark map
         var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
-        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.75, green: 0.82, blue: 1.0, alpha: 1.0))) // Bright periwinkle
+        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.50, green: 0.92, blue: 1.0, alpha: 1.0))) // Bright cyan
         lineLayer.lineWidth = .constant(8)
         lineLayer.lineOpacity = .constant(1.0)
         lineLayer.lineCap = .constant(.round)
