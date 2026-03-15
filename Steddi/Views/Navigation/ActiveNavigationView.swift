@@ -1,101 +1,126 @@
 import SwiftUI
+import SwiftData
+import MapboxNavigationCore
+import MapboxDirections
+import CoreLocation
 
 struct ActiveNavigationView: View {
     let destination: PinnedLocation
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(LocationService.self) private var locationService
 
-    // TODO: Replace with @Environment NavigationViewModel when ready
-    @State private var etaMinutes: Int = 0
-    @State private var remainingDistance: Double = 0
-    @State private var routeName: String = ""
-    @State private var showRerouteCard = false
+    @State private var navigationRoutes: NavigationRoutes?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
     @State private var showPostArrival = false
+    @State private var recordedPoints: [GPSPoint] = []
+
+    // Shared navigation provider — must be a single instance app-wide
+    // In production this would be injected; for now create per-session
+    @State private var mapboxNavProvider: MapboxNavigationProvider?
 
     var body: some View {
         ZStack {
-            // TODO: Replace with Mapbox navigation view
-            MapPlaceholderView()
-                .ignoresSafeArea()
-
-            VStack {
-                // Top info bar
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(routeName.isEmpty ? destination.name : routeName)
-                            .font(.headline)
-                            .foregroundStyle(.white)
-
-                        HStack(spacing: 12) {
-                            Label("\(etaMinutes) min", systemImage: "clock")
-                            Label(formattedDistance, systemImage: "road.lanes")
-                        }
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.8))
+            if isLoading {
+                loadingView
+            } else if let error = errorMessage {
+                errorView(error)
+            } else if let routes = navigationRoutes, let provider = mapboxNavProvider {
+                MapboxNavigationView(
+                    navigationRoutes: routes,
+                    provider: provider,
+                    onArrival: {
+                        recordedPoints = locationService.stopRecording()
+                        showPostArrival = true
+                    },
+                    onCancelled: {
+                        locationService.stopRecording()
+                        dismiss()
                     }
-
-                    Spacer()
-                }
-                .padding(16)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
-                Spacer()
-
-                // Reroute suggestion overlay
-                if showRerouteCard {
-                    RerouteCardView(
-                        routeName: "Via I-10 East",
-                        timeSavingsMinutes: 7,
-                        percentageSavings: 23,
-                        onSwitch: {
-                            // TODO: Accept reroute via NavigationViewModel
-                            showRerouteCard = false
-                        },
-                        onStay: {
-                            showRerouteCard = false
-                        }
-                    )
-                }
-
-                // End navigation button
-                Button {
-                    showPostArrival = true
-                } label: {
-                    Label("End", systemImage: "xmark")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 14)
-                        .background(.red, in: Capsule())
-                }
-                .padding(.bottom, 40)
+                )
+                .ignoresSafeArea()
             }
+        }
+        .task {
+            await calculateRoute()
         }
         .sheet(isPresented: $showPostArrival, onDismiss: {
             dismiss()
         }) {
-            PostArrivalSheet(destinationName: destination.name)
-                .presentationDetents([.medium, .large])
+            PostArrivalSheet(
+                destinationName: destination.name,
+                recordedPoints: recordedPoints
+            )
+            .presentationDetents([.medium, .large])
         }
     }
 
-    private var formattedDistance: String {
-        if remainingDistance < 1000 {
-            return "\(Int(remainingDistance)) m"
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(x: 1.5, y: 1.5)
+            Text("Calculating route...")
+                .font(.headline)
+                .foregroundStyle(.secondary)
         }
-        return String(format: "%.1f mi", remainingDistance / 1609.34)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
     }
-}
 
-#Preview {
-    ActiveNavigationView(
-        destination: PinnedLocation(
-            name: "Work",
-            latitude: 34.0522,
-            longitude: -118.2437,
-            icon: "building.2.fill"
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundStyle(.orange)
+            Text("Route Error")
+                .font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Go Back") {
+                dismiss()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
+    }
+
+    private func calculateRoute() async {
+        guard let currentLocation = locationService.currentLocation else {
+            errorMessage = "Unable to determine your location."
+            isLoading = false
+            return
+        }
+
+        let provider = MapboxNavigationProvider(coreConfig: .init())
+        self.mapboxNavProvider = provider
+
+        let origin = Waypoint(
+            coordinate: currentLocation.coordinate,
+            name: "Current Location"
         )
-    )
+        let dest = Waypoint(
+            coordinate: destination.coordinate,
+            name: destination.name
+        )
+
+        let routeOptions = NavigationRouteOptions(waypoints: [origin, dest])
+
+        do {
+            let routes = try await provider.routingProvider().calculateRoutes(options: routeOptions).value
+            self.navigationRoutes = routes
+            isLoading = false
+
+            // Start GPS recording for potential route save
+            locationService.startRecording()
+        } catch {
+            errorMessage = "Could not find a route to \(destination.name)."
+            isLoading = false
+        }
+    }
 }

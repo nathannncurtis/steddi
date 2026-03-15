@@ -3,6 +3,7 @@ import SwiftData
 
 struct PostArrivalSheet: View {
     let destinationName: String
+    let recordedPoints: [GPSPoint]
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -11,7 +12,9 @@ struct PostArrivalSheet: View {
     @State private var routeName = ""
     @State private var selectedCommute: Commute?
     @State private var saveAsPreferred = false
-    @State private var routeWasRecorded = true // TODO: Get from RouteRecordingViewModel
+    @State private var isSaving = false
+
+    private var hasRecordedRoute: Bool { recordedPoints.count >= 2 }
 
     var body: some View {
         NavigationStack {
@@ -22,7 +25,7 @@ struct PostArrivalSheet: View {
                         .font(.system(size: 48))
                         .foregroundStyle(.green)
 
-                    Text("You have arrived!")
+                    Text("You've arrived!")
                         .font(.title2.weight(.bold))
 
                     Text(destinationName)
@@ -31,7 +34,7 @@ struct PostArrivalSheet: View {
                 }
                 .padding(.top, 8)
 
-                if routeWasRecorded {
+                if hasRecordedRoute {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 16) {
@@ -41,7 +44,6 @@ struct PostArrivalSheet: View {
                         TextField("Route name (optional)", text: $routeName)
                             .textFieldStyle(.roundedBorder)
 
-                        // Commute picker
                         if !commutes.isEmpty {
                             Picker("Add to commute", selection: $selectedCommute) {
                                 Text("None").tag(nil as Commute?)
@@ -60,19 +62,24 @@ struct PostArrivalSheet: View {
 
                     Spacer()
 
-                    // Action buttons
                     VStack(spacing: 12) {
                         Button {
-                            saveRoute()
-                            dismiss()
+                            Task { await saveRoute() }
                         } label: {
-                            Text("Save Route")
-                                .font(.headline)
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(.blue, in: RoundedRectangle(cornerRadius: 12))
+                            if isSaving {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                            } else {
+                                Text("Save Route")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(.blue, in: RoundedRectangle(cornerRadius: 12))
+                            }
                         }
+                        .disabled(isSaving)
 
                         Button("Discard") {
                             dismiss()
@@ -101,31 +108,71 @@ struct PostArrivalSheet: View {
         }
     }
 
-    private func saveRoute() {
-        // TODO: Get encoded polyline from RouteRecordingViewModel
-        let rank = saveAsPreferred ? 0 : (selectedCommute?.orderedRoutes.count ?? 0)
-        let route = Route(
-            rank: rank,
-            encodedPolyline: "", // Placeholder
-            name: routeName.isEmpty ? nil : routeName,
-            source: .recorded
-        )
+    private func saveRoute() async {
+        isSaving = true
 
-        if let commute = selectedCommute {
-            route.commute = commute
-            // If saving as preferred, bump existing routes
+        let service = MapMatchingService(accessToken: MapboxTokenProvider.accessToken)
+
+        do {
+            let matched = try await service.matchTrace(recordedPoints)
+
+            let rank: Int
             if saveAsPreferred {
-                for existing in commute.orderedRoutes {
-                    existing.rank += 1
+                // Bump existing routes
+                if let commute = selectedCommute {
+                    for existing in commute.orderedRoutes {
+                        existing.rank += 1
+                    }
                 }
+                rank = 0
+            } else {
+                rank = selectedCommute?.orderedRoutes.count ?? 0
             }
+
+            let route = Route(
+                rank: rank,
+                encodedPolyline: matched.encodedPolyline,
+                name: routeName.isEmpty ? nil : routeName,
+                distanceMeters: matched.distanceMeters,
+                source: .recorded
+            )
+
+            if let commute = selectedCommute {
+                route.commute = commute
+                if commute.routes == nil {
+                    commute.routes = []
+                }
+                commute.routes?.append(route)
+            }
+
+            modelContext.insert(route)
+
+            // Save drive record
+            let record = DriveRecord()
+            record.rawGPSPoints = recordedPoints
+            record.matchedPolyline = matched.encodedPolyline
+            record.associatedCommute = selectedCommute
+            record.wasConverted = true
+            record.endedAt = Date()
+            modelContext.insert(record)
+
+            try? modelContext.save()
+        } catch {
+            // If map matching fails, still save the raw points
+            let record = DriveRecord()
+            record.rawGPSPoints = recordedPoints
+            record.wasConverted = false
+            record.endedAt = Date()
+            modelContext.insert(record)
+            try? modelContext.save()
         }
 
-        modelContext.insert(route)
+        isSaving = false
+        dismiss()
     }
 }
 
 #Preview {
-    PostArrivalSheet(destinationName: "Work")
-        .modelContainer(for: [Commute.self, Route.self], inMemory: true)
+    PostArrivalSheet(destinationName: "Work", recordedPoints: [])
+        .modelContainer(for: [Commute.self, Route.self, DriveRecord.self], inMemory: true)
 }

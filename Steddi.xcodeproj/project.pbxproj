@@ -17,6 +17,7 @@
 		2C6330DE7990CFA8460540EB /* MapPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7702DF1E920EA12B3826B4A /* MapPlaceholderView.swift */; };
 		571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7111C46770386A928275F35 /* SettingsView.swift */; };
 		57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */; };
+		6800D461D639A3F83F785759 /* MapboxNavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D9396E84675B13A27578B0 /* MapboxNavigationView.swift */; };
 		6C0862A6626424EBC6622731 /* Commute.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */; };
 		6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62156E1FDD078D989A2441A /* OfflineCacheService.swift */; };
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
@@ -60,6 +61,7 @@
 		82950853F7696A66EC5389FA /* CommuteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDetailView.swift; sourceTree = "<group>"; };
 		8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedLocation.swift; sourceTree = "<group>"; };
 		8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneEditorView.swift; sourceTree = "<group>"; };
+		95D9396E84675B13A27578B0 /* MapboxNavigationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapboxNavigationView.swift; sourceTree = "<group>"; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A65698E48E91527E20620496 /* NavigationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationViewModel.swift; sourceTree = "<group>"; };
 		A69AB47369E5D3B8FDF81F54 /* CommuteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteViewModel.swift; sourceTree = "<group>"; };
@@ -169,6 +171,7 @@
 			isa = PBXGroup;
 			children = (
 				5D04E323A7006F464191A685 /* ActiveNavigationView.swift */,
+				95D9396E84675B13A27578B0 /* MapboxNavigationView.swift */,
 				BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */,
 				F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */,
 			);
@@ -327,6 +330,7 @@
 				13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */,
 				26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */,
 				2C6330DE7990CFA8460540EB /* MapPlaceholderView.swift in Sources */,
+				6800D461D639A3F83F785759 /* MapboxNavigationView.swift in Sources */,
 				EE11B267B397E2C0E0CF8524 /* MapboxTokenProvider.swift in Sources */,
 				1660BAFCB0C76446A1AAB133 /* NavigationCoordinator.swift in Sources */,
 				EA73BB9CC81F233C29A24487 /* NavigationViewModel.swift in Sources */,
