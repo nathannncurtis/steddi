@@ -357,7 +357,7 @@ struct HomeView: View {
                 .padding(.horizontal, 20)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(commutes.prefix(4)) { commute in
+                    ForEach(commutes.prefix(isLandscape ? 2 : 4)) { commute in
                         commuteCard(commute)
                     }
                 }
@@ -542,7 +542,7 @@ struct HomeView: View {
                     .padding(.horizontal, 20)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(pinnedLocations.prefix(6)) { location in
+                    ForEach(pinnedLocations.prefix(isLandscape ? 2 : 6)) { location in
                         LocationCardView(
                             name: location.name,
                             icon: location.icon,
