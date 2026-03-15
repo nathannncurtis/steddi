@@ -98,7 +98,7 @@ class SteddiMapContainer: UIViewController {
         // Lavender soft triangle puck
         var puckConfig = Puck2DConfiguration()
         puckConfig.topImage = Self.makePuckImage()
-        puckConfig.pulsing = .init(color: UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 0.25))
+        puckConfig.pulsing = nil
         puckConfig.scale = .constant(0.8)
         mapView.location.options.puckType = .puck2D(puckConfig)
         mapView.location.options.puckBearing = .heading
@@ -144,26 +144,32 @@ class SteddiMapContainer: UIViewController {
         let coords = routes.mainRoute.route.shape?.coordinates ?? []
         showRouteLine(coords)
 
-        // Camera follows route
+        // Camera follows route — tight zoom, tilted, heading-locked
         mapView.mapboxMap.setCamera(to: CameraOptions(
             center: mapView.location.latestLocation?.coordinate,
-            zoom: 16,
+            zoom: 17.5,
             bearing: 0,
-            pitch: 45
+            pitch: 60
         ))
 
-        // Follow location during nav
+        // Follow location during nav — smooth camera tracking
         provider.navigation().locationMatching
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self else { return }
                 let coord = state.enhancedLocation.coordinate
-                self.mapView.mapboxMap.setCamera(to: CameraOptions(
-                    center: coord,
-                    zoom: 16,
-                    bearing: state.enhancedLocation.course,
-                    pitch: 50
-                ))
+                let bearing = state.enhancedLocation.course >= 0 ? state.enhancedLocation.course : 0
+                self.mapView.camera.ease(
+                    to: CameraOptions(
+                        center: coord,
+                        zoom: 17.5,
+                        bearing: bearing,
+                        pitch: 60
+                    ),
+                    duration: 1.0,
+                    curve: .linear,
+                    completion: nil
+                )
             }
             .store(in: &cancellables)
     }

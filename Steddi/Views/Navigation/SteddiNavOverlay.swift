@@ -51,28 +51,29 @@ struct SteddiNavOverlay: View {
     // MARK: - Top Banner
 
     private var topBanner: some View {
-        HStack(spacing: 14) {
-            // Maneuver icon
+        HStack(spacing: 16) {
+            // Maneuver icon — large and glanceable
             Image(systemName: maneuverType)
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(size: 36, weight: .bold))
                 .foregroundStyle(SteddiTheme.accent)
-                .frame(width: 52, height: 52)
-                .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 14))
+                .frame(width: 64, height: 64)
+                .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 16))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(stepDistance)
-                    .font(SteddiTheme.mono(22))
+                    .font(SteddiTheme.mono(28))
                     .foregroundStyle(SteddiTheme.textPrimary)
 
                 Text(instruction)
-                    .font(SteddiTheme.body(15))
+                    .font(SteddiTheme.body(17))
                     .foregroundStyle(SteddiTheme.textSecondary)
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer()
         }
-        .padding(16)
+        .padding(18)
         .background {
             RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
                 .fill(SteddiTheme.surfacePrimary.opacity(0.95))
@@ -88,19 +89,19 @@ struct SteddiNavOverlay: View {
 
     private var bottomBar: some View {
         HStack {
-            // ETA info
-            VStack(alignment: .leading, spacing: 4) {
+            // ETA info — large and glanceable
+            VStack(alignment: .leading, spacing: 6) {
                 Text("\(etaMinutes) min")
-                    .font(SteddiTheme.heading(22))
+                    .font(SteddiTheme.heading(28))
                     .foregroundStyle(SteddiTheme.textPrimary)
 
-                HStack(spacing: 12) {
+                HStack(spacing: 14) {
                     Text(distanceRemaining)
-                        .font(SteddiTheme.mono(14))
+                        .font(SteddiTheme.mono(16))
                         .foregroundStyle(SteddiTheme.textSecondary)
 
                     Text(arrivalTime)
-                        .font(SteddiTheme.mono(14))
+                        .font(SteddiTheme.mono(16))
                         .foregroundStyle(SteddiTheme.textMuted)
                 }
             }
