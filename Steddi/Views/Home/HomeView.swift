@@ -47,25 +47,22 @@ struct HomeView: View {
             )
             .ignoresSafeArea()
 
-            // Navigation overlay — shows during navigation
-            if isNavigating, let provider = navProvider {
+            // Navigation overlay
+            if let provider = navProvider, isNavigating {
                 SteddiNavOverlay(
                     provider: provider,
                     onEndNavigation: {
                         recordedPoints = locationService.stopRecording()
                         provider.tripSession().setToIdle()
                         is3DNav = true
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            isNavigating = false
-                            navigationRoutes = nil
-                        }
+                        isNavigating = false
+                        navigationRoutes = nil
                         showPostArrival = true
                     },
                     onToggleView: { is3D in
                         is3DNav = is3D
                     }
                 )
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
             // Home UI — hides during navigation
@@ -75,7 +72,7 @@ struct HomeView: View {
                         ExpandedSearchView(
                             currentLocation: locationService.currentLocation?.coordinate,
                             onSelectResult: { result in
-                                withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
+                                showSearch = false
                                 navigateTo(
                                     name: result.name,
                                     coordinate: result.coordinate,
@@ -83,34 +80,27 @@ struct HomeView: View {
                                 )
                             },
                             onPinResult: { result in
-                                withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
+                                showSearch = false
                                 pinLocation(from: result)
                             },
                             onDismiss: {
-                                withAnimation(.easeInOut(duration: 0.3)) { showSearch = false }
+                                showSearch = false
                             }
                         )
-                        .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
                     } else {
                         topBar
-                            .transition(.opacity)
                     }
                     Spacer()
                 }
-                .animation(.easeOut(duration: 0.15), value: showSearch)
 
                 bottomSheet
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             // Loading overlay
             if isCalculatingRoute {
                 routeLoadingOverlay
-                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.4), value: isNavigating)
-        .animation(.easeInOut(duration: 0.3), value: isCalculatingRoute)
         .onAppear {
             locationService.requestPermission()
             locationService.startUpdating()
@@ -445,7 +435,9 @@ private struct ExpandedSearchView: View {
                     .padding(.top, 24)
             }
         }
-        .task { isSearchFocused = true }
+        .onAppear {
+            DispatchQueue.main.async { isSearchFocused = true }
+        }
     }
 
     private func debounceSearch(_ query: String) {
