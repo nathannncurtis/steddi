@@ -56,7 +56,7 @@ struct SteddiNavOverlay: View {
                 // Top: instruction banner — below dynamic island
                 topBanner
                     .padding(.horizontal, 16)
-                    .safeAreaPadding(.top)
+                    .padding(.top, 60)
                     .padding(.top, 8)
 
                 // Next maneuver preview
