@@ -147,6 +147,14 @@ struct HomeView: View {
             locationService.requestPermission()
             locationService.startUpdating()
         }
+        .task {
+            // TEST FLAG: set to true to jump straight into turn-by-turn on launch
+            let testTBT = false
+            if testTBT {
+                try? await Task.sleep(for: .seconds(3))
+                navigateTo(name: "Test Dest", coordinate: CLLocationCoordinate2D(latitude: 33.980, longitude: -117.375))
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .steddiSaveRouteFromNotification)) { _ in
             if pendingTraceForSave && !recordedPoints.isEmpty {
                 showPostArrival = true
