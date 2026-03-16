@@ -131,107 +131,114 @@ struct SteddiNavOverlay: View {
     // MARK: - Landscape Nav Layout
 
     private var landscapeNavLayout: some View {
-        HStack(spacing: 0) {
-            // Left panel — all nav info
-            VStack(spacing: 8) {
-                // Compact instruction
-                HStack(spacing: 12) {
+        ZStack {
+            // Top-left: instruction card (floating)
+            VStack {
+                HStack(spacing: 10) {
                     Image(systemName: maneuverType)
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(SteddiTheme.accent)
-                        .frame(width: 48, height: 48)
+                        .frame(width: 44, height: 44)
                         .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 12))
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(stepDistance)
-                            .font(SteddiTheme.mono(24))
+                            .font(SteddiTheme.mono(22))
                             .foregroundStyle(SteddiTheme.textPrimary)
                         Text(instruction)
-                            .font(SteddiTheme.body(14))
+                            .font(SteddiTheme.body(13))
                             .foregroundStyle(SteddiTheme.textSecondary)
-                            .lineLimit(2)
+                            .lineLimit(1)
                     }
-                    Spacer()
                 }
                 .padding(12)
+                .frame(width: 260, alignment: .leading)
+                .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
 
-                // Next maneuver
+                // Next maneuver (compact, below instruction)
                 if !followOnInstruction.isEmpty {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         Image(systemName: followOnManeuverSymbol)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(SteddiTheme.accent.opacity(0.7))
                         Text("Then: \(followOnInstruction)")
-                            .font(SteddiTheme.body(12))
+                            .font(SteddiTheme.body(11))
                             .foregroundStyle(SteddiTheme.textMuted)
                             .lineLimit(1)
                     }
-                    .padding(.horizontal, 12)
-                }
-
-                // Street name
-                if !roadName.isEmpty {
-                    Text(roadName)
-                        .font(SteddiTheme.body(12))
-                        .foregroundStyle(SteddiTheme.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(SteddiTheme.surfaceElevated.opacity(0.6), in: Capsule())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(width: 260, alignment: .leading)
+                    .background(SteddiTheme.surfacePrimary.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
                 }
 
                 Spacer()
+            }
+            .padding(.leading, 50) // clear notch
+            .padding(.top, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-                // ETA + speed + end
-                HStack(spacing: 12) {
-                    // Speedometer compact
-                    speedometer
-                        .frame(width: 50, height: 50)
+            // Bottom-left: ETA + speedometer + End (floating)
+            HStack(spacing: 10) {
+                speedometer
+                    .frame(width: 46, height: 46)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 4) {
-                            Text("\(etaMinutes)")
-                                .font(SteddiTheme.mono(22))
-                                .foregroundStyle(SteddiTheme.textPrimary)
-                            Text("min")
-                                .font(SteddiTheme.body(12))
-                                .foregroundStyle(SteddiTheme.textSecondary)
-                        }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 3) {
+                        Text("\(etaMinutes)")
+                            .font(SteddiTheme.mono(20))
+                            .foregroundStyle(SteddiTheme.textPrimary)
+                        Text("min")
+                            .font(SteddiTheme.body(11))
+                            .foregroundStyle(SteddiTheme.textSecondary)
+                    }
+                    HStack(spacing: 6) {
                         Text(distanceRemaining)
-                            .font(SteddiTheme.mono(12))
+                            .font(SteddiTheme.mono(11))
+                            .foregroundStyle(SteddiTheme.textMuted)
+                        Text(arrivalTime)
+                            .font(SteddiTheme.mono(11))
                             .foregroundStyle(SteddiTheme.textMuted)
                     }
-
-                    Spacer()
-
-                    Button(action: onEndNavigation) {
-                        Text("End")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
-                            .background(SteddiTheme.warmRed, in: Capsule())
-                    }
                 }
-                .padding(12)
+
+                Button(action: onEndNavigation) {
+                    Text("End")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(SteddiTheme.warmRed, in: Capsule())
+                }
             }
-            .frame(width: 300)
-            .padding(.leading, 44) // clear notch
-            .background(SteddiTheme.surfacePrimary.opacity(0.95))
-            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
-            .shadow(color: .black.opacity(0.3), radius: 12, x: 4)
+            .padding(10)
+            .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
+            .shadow(color: .black.opacity(0.3), radius: 8, y: -2)
+            .padding(.leading, 50) // clear notch
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
-            // Map fills the rest — buttons float on far right
-            ZStack(alignment: .trailing) {
-                Color.clear // spacer for map
-                VStack(spacing: 10) {
-                    Spacer()
-                    compassButton
-                    voiceButton
-                    viewToggleButton
-                    reportButton
-                    Spacer()
-                }
-                .padding(.trailing, 16)
+            // Right side: floating buttons
+            VStack(spacing: 8) {
+                compassButton
+                voiceButton
+                viewToggleButton
+                reportButton
+            }
+            .padding(.trailing, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+
+            // Street name: centered bottom
+            if !roadName.isEmpty {
+                Text(roadName)
+                    .font(SteddiTheme.body(11))
+                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 8)
             }
         }
     }
