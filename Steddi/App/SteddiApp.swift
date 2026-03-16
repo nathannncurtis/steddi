@@ -42,6 +42,7 @@ struct SteddiApp: App {
             DriveRecord.self,
             NoGoZone.self,
             CommuteTrip.self,
+            Report.self,
         ])
         .environment(locationService)
         .environment(offlineCacheService)

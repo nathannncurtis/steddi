@@ -15,6 +15,13 @@ struct SettingsView: View {
     @State private var showNoGoEditor = false
     @State private var showThresholdExplainer = false
     @State private var showDonation = false
+    @State private var showDeleteAllConfirmation = false
+
+    private static var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
 
     private var useMiles: Binding<Bool> {
         Binding(
@@ -108,8 +115,9 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
-                            .foregroundStyle(.secondary)
+                        Text(Self.appVersion)
+                            .foregroundStyle(SteddiTheme.textSecondary)
+                            .font(SteddiTheme.mono(14))
                     }
 
                     Button {
@@ -119,6 +127,20 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("About")
+                }
+
+                // MARK: - Danger Zone
+                Section {
+                    Button(role: .destructive) {
+                        showDeleteAllConfirmation = true
+                    } label: {
+                        Label("Delete All Data", systemImage: "trash.fill")
+                            .foregroundStyle(SteddiTheme.warmRed)
+                    }
+                } header: {
+                    Text("Danger Zone")
+                } footer: {
+                    Text("Permanently removes all commutes, routes, pinned locations, drive records, no-go zones, and commute trips.")
                 }
             }
             .navigationTitle("Settings")
@@ -141,12 +163,37 @@ struct SettingsView: View {
             .sheet(isPresented: $showDonation) {
                 DonationView()
             }
+            .confirmationDialog(
+                "Delete All Data",
+                isPresented: $showDeleteAllConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Everything", role: .destructive) {
+                    deleteAllData()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete all commutes, routes, pinned locations, drive records, no-go zones, and commute trips. This action cannot be undone.")
+            }
         }
     }
 
     private func deleteNoGoZones(at offsets: IndexSet) {
         for index in offsets {
             modelContext.delete(globalNoGoZones[index])
+        }
+    }
+
+    private func deleteAllData() {
+        do {
+            try modelContext.delete(model: PinnedLocation.self)
+            try modelContext.delete(model: Commute.self)
+            try modelContext.delete(model: Route.self)
+            try modelContext.delete(model: DriveRecord.self)
+            try modelContext.delete(model: NoGoZone.self)
+            try modelContext.delete(model: CommuteTrip.self)
+        } catch {
+            print("Failed to delete all data: \(error)")
         }
     }
 }

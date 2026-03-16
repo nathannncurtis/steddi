@@ -3,6 +3,7 @@ import MapboxNavigationCore
 import MapboxDirections
 import Combine
 import AVFoundation
+import CoreLocation
 
 /// Custom Steddi turn-by-turn overlay — replaces stock Mapbox NavigationViewController UI.
 /// Uses Mapbox NavigationCore for routing brain, but renders its own SwiftUI interface.
@@ -12,6 +13,7 @@ struct SteddiNavOverlay: View {
     var onToggleVoice: () -> Void = {}
     var onToggleView: (Bool) -> Void = { _ in }
     var onSwitchRoute: ((Route) -> Void)? = nil
+    var onReport: ((String, CLLocationCoordinate2D) -> Void)? = nil
     var commute: Commute? = nil
     var direction: CommuteDirection? = nil
 
@@ -35,6 +37,9 @@ struct SteddiNavOverlay: View {
 
     // Compass
     @State private var headingDegrees: Double = 0
+
+    // Current coordinate for reports
+    @State private var currentCoordinate: CLLocationCoordinate2D?
 
     // Next maneuver preview
     @State private var followOnInstruction: String = ""
@@ -117,7 +122,7 @@ struct SteddiNavOverlay: View {
 
             // Floating buttons — right side
             VStack(spacing: 12) {
-                compassButton
+                compassIndicator
                 voiceButton
                 viewToggleButton
                 reportButton
@@ -181,8 +186,7 @@ struct SteddiNavOverlay: View {
 
             // Bottom-left: ETA + speedometer + End (floating)
             HStack(spacing: 10) {
-                speedometer
-                    .frame(width: 46, height: 46)
+                speedometer(size: 38)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 3) {
@@ -221,7 +225,7 @@ struct SteddiNavOverlay: View {
 
             // Left side: buttons vertically between the two cards
             VStack(spacing: 4) {
-                landscapeButton("location.north.fill", rotationDegrees: -headingDegrees) { is3DView.toggle(); onToggleView(is3DView) }
+                landscapeCompassIndicator
                 landscapeButton(isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") {
                     isVoiceOn.toggle()
                     if isVoiceOn {
@@ -343,32 +347,27 @@ struct SteddiNavOverlay: View {
 
     // MARK: - Floating Buttons
 
-    private var compassButton: some View {
-        Button {
-            is3DView.toggle()
-            onToggleView(is3DView)
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(SteddiTheme.surfacePrimary.opacity(0.88))
-                    .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1))
-                    .frame(width: 44, height: 44)
+    private var compassIndicator: some View {
+        ZStack {
+            Circle()
+                .fill(SteddiTheme.surfacePrimary.opacity(0.88))
+                .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1))
+                .frame(width: 44, height: 44)
 
-                Text("N")
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
-                    .foregroundStyle(SteddiTheme.warmRed)
-                    .rotationEffect(.degrees(-headingDegrees))
-                    .offset(y: -6)
+            Text("N")
+                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                .foregroundStyle(SteddiTheme.warmRed)
+                .rotationEffect(.degrees(-headingDegrees))
+                .offset(y: -6)
 
-                // Small triangle pointer
-                Triangle()
-                    .fill(SteddiTheme.warmRed)
-                    .frame(width: 6, height: 5)
-                    .rotationEffect(.degrees(-headingDegrees))
-                    .offset(y: 4)
-            }
-            .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+            // Small triangle pointer
+            Triangle()
+                .fill(SteddiTheme.warmRed)
+                .frame(width: 6, height: 5)
+                .rotationEffect(.degrees(-headingDegrees))
+                .offset(y: 4)
         }
+        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
     }
 
     private var voiceButton: some View {
@@ -410,6 +409,28 @@ struct SteddiNavOverlay: View {
         }
     }
 
+    private var landscapeCompassIndicator: some View {
+        ZStack {
+            Circle()
+                .fill(SteddiTheme.surfacePrimary.opacity(0.88))
+                .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
+                .frame(width: 44, height: 44)
+
+            Text("N")
+                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                .foregroundStyle(SteddiTheme.warmRed)
+                .rotationEffect(.degrees(-headingDegrees))
+                .offset(y: -5)
+
+            Triangle()
+                .fill(SteddiTheme.warmRed)
+                .frame(width: 5, height: 4)
+                .rotationEffect(.degrees(-headingDegrees))
+                .offset(y: 3)
+        }
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+    }
+
     /// Slightly smaller button for landscape — 36x36 instead of 44x44
     private func landscapeButton(_ symbol: String, rotationDegrees: Double = 0, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -448,7 +469,7 @@ struct SteddiNavOverlay: View {
     private var bottomBar: some View {
         HStack(alignment: .center, spacing: 0) {
             // Speedometer — left
-            speedometer
+            speedometer(size: 64)
 
             // ETA block — center
             VStack(spacing: 4) {
@@ -507,7 +528,7 @@ struct SteddiNavOverlay: View {
 
     // MARK: - Speedometer
 
-    private var speedometer: some View {
+    private func speedometer(size: CGFloat) -> some View {
         let overLimit: Double = {
             guard let limit = speedLimitMph else { return 0 }
             return currentSpeedMph - limit
@@ -524,6 +545,8 @@ struct SteddiNavOverlay: View {
             return SteddiTheme.surfaceSecondary
         }()
 
+        let scale = size / 64.0
+
         return ZStack {
             // Background circle
             Circle()
@@ -536,22 +559,22 @@ struct SteddiNavOverlay: View {
             // Speed arc gauge
             Circle()
                 .trim(from: 0, to: min(1.0, currentSpeedMph / max(1, (speedLimitMph ?? 65) * 1.3)))
-                .stroke(speedColor.opacity(0.5), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(speedColor.opacity(0.5), style: StrokeStyle(lineWidth: max(2, 3 * scale), lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .padding(3)
+                .padding(3 * scale)
 
             // Speed value
             VStack(spacing: 0) {
                 Text("\(Int(currentSpeedMph))")
-                    .font(SteddiTheme.mono(22))
+                    .font(SteddiTheme.mono(22 * scale))
                     .foregroundStyle(speedColor)
 
                 Text("mph")
-                    .font(SteddiTheme.body(9))
+                    .font(SteddiTheme.body(9 * scale))
                     .foregroundStyle(SteddiTheme.textMuted)
             }
         }
-        .frame(width: 64, height: 64)
+        .frame(width: size, height: size)
     }
 
     // MARK: - Report Sheet
@@ -583,6 +606,9 @@ struct SteddiNavOverlay: View {
         Button {
             reportedType = label
             showReportSheet = false
+            if let coord = currentCoordinate {
+                onReport?(label, coord)
+            }
             withAnimation(.easeInOut(duration: 0.3)) {
                 showReportedToast = true
             }
@@ -684,6 +710,9 @@ struct SteddiNavOverlay: View {
 
                 // Heading for compass
                 headingDegrees = state.location.course
+
+                // Track coordinate for reports
+                currentCoordinate = state.location.coordinate
             }
         }
 

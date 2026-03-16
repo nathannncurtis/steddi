@@ -123,6 +123,10 @@ struct HomeView: View {
                         navigationRoutes = nil
                         navigateWithSavedRoute(route, to: target)
                     },
+                    onReport: { type, coordinate in
+                        let report = Report(type: type, latitude: coordinate.latitude, longitude: coordinate.longitude)
+                        modelContext.insert(report)
+                    },
                     commute: activeCommute,
                     direction: activeDirection
                 )
@@ -845,6 +849,12 @@ private struct ExpandedSearchView: View {
 
                                     Spacer()
 
+                                    if let distanceText = formattedDistance(to: result) {
+                                        Text(distanceText)
+                                            .font(SteddiTheme.mono(12))
+                                            .foregroundStyle(SteddiTheme.textMuted)
+                                    }
+
                                     Button { onPinResult(result) } label: {
                                         Image(systemName: "mappin.circle.fill")
                                             .font(.title3)
@@ -900,6 +910,20 @@ private struct ExpandedSearchView: View {
                     withAnimation(.easeOut(duration: 0.2)) { results = r }
                 }
             } catch {}
+        }
+    }
+
+    private func formattedDistance(to result: GeocodingResult) -> String? {
+        guard let currentLocation else { return nil }
+        let from = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
+        let to = CLLocation(latitude: result.coordinate.latitude, longitude: result.coordinate.longitude)
+        let meters = from.distance(from: to)
+        let miles = meters / 1609.344
+        if miles < 0.1 {
+            let feet = Int(meters * 3.28084)
+            return "\(feet) ft"
+        } else {
+            return String(format: "%.1f mi", miles)
         }
     }
 }
