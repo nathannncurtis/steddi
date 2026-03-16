@@ -53,9 +53,10 @@ struct SteddiNavOverlay: View {
         ZStack {
             // Main layout
             VStack(spacing: 0) {
-                // Top: instruction banner
+                // Top: instruction banner — below dynamic island
                 topBanner
                     .padding(.horizontal, 16)
+                    .safeAreaPadding(.top)
                     .padding(.top, 8)
 
                 // Next maneuver preview
