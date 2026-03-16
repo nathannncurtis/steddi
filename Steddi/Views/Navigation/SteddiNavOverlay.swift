@@ -10,6 +10,13 @@ struct SteddiNavOverlay: View {
     let onEndNavigation: () -> Void
     var onToggleVoice: () -> Void = {}
     var onToggleView: (Bool) -> Void = { _ in }
+    var onSwitchRoute: ((Route) -> Void)? = nil
+    var commute: Commute? = nil
+    var direction: CommuteDirection? = nil
+
+    // Reroute suggestion
+    @State private var rerouteSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)? = nil
+    @State private var currentRemainingETA: TimeInterval = 0
 
     @State private var instruction: String = ""
     @State private var stepDistance: String = ""
@@ -64,6 +71,23 @@ struct SteddiNavOverlay: View {
                 }
 
                 Spacer()
+
+                // Reroute suggestion card
+                if let suggestion = rerouteSuggestion {
+                    RerouteCardView(
+                        routeName: suggestion.route.name ?? "Faster route",
+                        timeSavingsMinutes: Int(suggestion.savingsMinutes),
+                        percentageSavings: Int(suggestion.savingsPercentage * 100),
+                        onSwitch: {
+                            onSwitchRoute?(suggestion.route)
+                            rerouteSuggestion = nil
+                        },
+                        onStay: {
+                            rerouteSuggestion = nil
+                        }
+                    )
+                    .padding(.bottom, 8)
+                }
 
                 // Bottom: ETA bar with speedometer
                 bottomBar
@@ -517,6 +541,63 @@ struct SteddiNavOverlay: View {
                 if arrival.event != nil {
                     hasArrived = true
                     onEndNavigation()
+                }
+            }
+        }
+
+        // Reroute engine — periodic fallback check (every 5 minutes)
+        if let commute, let direction {
+            Task { @MainActor in
+                let directionsService = DirectionsService(accessToken: MapboxTokenProvider.accessToken)
+
+                while !Task.isCancelled && !hasArrived {
+                    try? await Task.sleep(for: .seconds(300)) // 5 min safety net poll
+                    guard !Task.isCancelled, !hasArrived else { break }
+                    guard rerouteSuggestion == nil else { continue } // don't stack suggestions
+
+                    guard let currentLocation = nav.currentLocationMatching?.enhancedLocation,
+                          let currentProgress = nav.currentRouteProgress else { continue }
+
+                    let remainingETA = currentProgress.routeProgress.durationRemaining
+                    currentRemainingETA = remainingETA
+
+                    // Check each fallback route
+                    let fallbacks = commute.orderedRoutes(for: direction).filter { $0.rank > 0 }
+                    guard !fallbacks.isEmpty else { continue }
+
+                    var bestSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)?
+                    var bestSavings: TimeInterval = 0
+
+                    for fallback in fallbacks {
+                        do {
+                            let fallbackETA = try await directionsService.fetchETA(
+                                from: currentLocation.coordinate,
+                                along: fallback.encodedPolyline
+                            )
+
+                            let decision = RerouteEngine.evaluate(
+                                remainingETASeconds: remainingETA,
+                                fallbackETASeconds: fallbackETA,
+                                basePercentage: commute.thresholdPercentage,
+                                hardMinuteFloor: commute.hardMinuteFloor
+                            )
+
+                            if decision.shouldReroute, decision.savingsSeconds > bestSavings {
+                                bestSavings = decision.savingsSeconds
+                                bestSuggestion = (
+                                    route: fallback,
+                                    savingsMinutes: decision.savingsMinutes,
+                                    savingsPercentage: decision.savingsSeconds / remainingETA
+                                )
+                            }
+                        } catch {
+                            continue
+                        }
+                    }
+
+                    if let suggestion = bestSuggestion {
+                        rerouteSuggestion = suggestion
+                    }
                 }
             }
         }

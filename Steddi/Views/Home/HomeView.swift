@@ -113,7 +113,18 @@ struct HomeView: View {
                     },
                     onToggleView: { is3D in
                         is3DNav = is3D
-                    }
+                    },
+                    onSwitchRoute: { route in
+                        // Reroute to the fallback
+                        let target: PinnedLocation? = activeDirection == .originToDestination ? activeCommute?.destination : activeCommute?.origin
+                        guard let target else { return }
+                        provider.tripSession().setToIdle()
+                        isNavigating = false
+                        navigationRoutes = nil
+                        navigateWithSavedRoute(route, to: target)
+                    },
+                    commute: activeCommute,
+                    direction: activeDirection
                 )
             }
 
