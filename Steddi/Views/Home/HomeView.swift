@@ -45,12 +45,12 @@ struct HomeView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
+    // Live ETAs for commute cards
+    @State private var commuteETAs: [UUID: Int] = [:]
+
     // Direction picker for ambiguous commutes
     @State private var showDirectionPicker = false
     @State private var directionPickerCommute: Commute?
-    // Set to true to auto-start nav for testing, false for normal use
-    private let debugAutoNav = false
-    @State private var debugDidAutoNav = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -153,10 +153,10 @@ struct HomeView: View {
             }
         }
         .task {
-            if debugAutoNav && !debugDidAutoNav {
-                debugDidAutoNav = true
-                try? await Task.sleep(for: .seconds(3))
-                navigateTo(name: "Debug Target", coordinate: CLLocationCoordinate2D(latitude: 33.980, longitude: -117.375))
+            // Periodically refresh ETAs for commute cards
+            while !Task.isCancelled {
+                await refreshCommuteETAs()
+                try? await Task.sleep(for: .seconds(300)) // every 5 minutes
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -633,6 +633,12 @@ struct HomeView: View {
                             .foregroundStyle(SteddiTheme.accent)
                         Text(resolved.destination)
                             .foregroundStyle(SteddiTheme.textSecondary)
+                        if let eta = commuteETAs[commute.id] {
+                            Spacer()
+                            Text("\(eta) min")
+                                .font(SteddiTheme.mono(14))
+                                .foregroundStyle(SteddiTheme.sage)
+                        }
                     }
                     .font(SteddiTheme.body(13))
                 }
@@ -721,6 +727,24 @@ struct HomeView: View {
                 .font(SteddiTheme.body(14))
                 .foregroundStyle(SteddiTheme.textSecondary)
                 .multilineTextAlignment(.center)
+        }
+    }
+
+    private func refreshCommuteETAs() async {
+        guard let currentLoc = locationService.currentLocation else { return }
+        let service = DirectionsService(accessToken: MapboxTokenProvider.accessToken)
+
+        for commute in commutes {
+            let resolved = resolveCardDirection(commute)
+            let target: PinnedLocation? = resolved.direction == .originToDestination ? commute.destination : commute.origin
+            guard let target else { continue }
+
+            do {
+                let route = try await service.fetchRoute(from: currentLoc.coordinate, to: target.coordinate)
+                commuteETAs[commute.id] = Int(ceil(route.durationSeconds / 60))
+            } catch {
+                // Silently fail — card just won't show ETA
+            }
         }
     }
 

@@ -2,6 +2,7 @@ import SwiftUI
 import MapboxNavigationCore
 import MapboxDirections
 import Combine
+import AVFoundation
 
 /// Custom Steddi turn-by-turn overlay — replaces stock Mapbox NavigationViewController UI.
 /// Uses Mapbox NavigationCore for routing brain, but renders its own SwiftUI interface.
@@ -243,7 +244,11 @@ struct SteddiNavOverlay: View {
     private var voiceButton: some View {
         Button {
             isVoiceOn.toggle()
-            onToggleVoice()
+            if isVoiceOn {
+                try? AVAudioSession.sharedInstance().setActive(true)
+            } else {
+                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            }
         } label: {
             floatingButtonCircle(
                 symbol: isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill",
