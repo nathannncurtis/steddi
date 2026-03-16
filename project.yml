@@ -24,6 +24,9 @@ targets:
         MBXAccessToken: "pk.eyJ1IjoibmF0aGFuY3VydGlzIiwiYSI6ImNtbXF2YXRhbzEycGgycG9tNTAwaTRmY2YifQ.ch8h2pYyvMaAuoKgEIgDlw"
         NSLocationWhenInUseUsageDescription: "Steddi needs your location to navigate and record routes."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Steddi needs background location access to continue navigation when the app is in the background."
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - steddi
         UIBackgroundModes:
           - audio
           - location

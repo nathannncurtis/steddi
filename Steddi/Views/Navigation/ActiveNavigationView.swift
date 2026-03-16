@@ -51,10 +51,12 @@ struct ActiveNavigationView: View {
             dismiss()
         }) {
             PostArrivalSheet(
-                destinationName: destination.name,
-                recordedPoints: recordedPoints
+                recordedPoints: recordedPoints,
+                commute: nil,
+                direction: nil,
+                onEditRoute: {}
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
         }
     }
 

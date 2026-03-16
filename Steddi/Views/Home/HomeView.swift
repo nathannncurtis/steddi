@@ -52,6 +52,16 @@ struct HomeView: View {
     @State private var showDirectionPicker = false
     @State private var directionPickerCommute: Commute?
 
+    // Post-arrival → route planner handoff
+    @State private var showRoutePlanner = false
+    @State private var routePlannerCommute: Commute?
+
+    // Stashed commute/direction for post-arrival (persists after nav ends)
+    @State private var arrivalCommute: Commute?
+    @State private var arrivalDirection: CommuteDirection?
+    @State private var testPolyline: String? = nil
+    private let mockPolyline = "gipx_Appax~Exr@GzBu@p@iBGqKAgI?uBjCAz{@?dNFzPPfAClKA`VGnS?vA?dGBtLKrAQ|DmArCwA|FnOjCvHhAvGTnE?jEe@xEkBfJsDbMuHdT{GvPeC`IeAnGoA~Vy@xXU~^LvM`@hFzAvI`F|NnChHnBvG~ArHlAvL`@dHInLqBxYoBl[cAhL{AnJoCpLoClJkGfPqEhIoFxH}GpHkCfC}FpEuFfDeIfDqKrCkIlA{]nC{Db@sFhAoEjBkEzCuD~CyCdDkDzF}ClHcBnH_AdIWjJJjJr@tI|ArHnCnJ|BdGjDxGbGnIlDtD"
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // Background behind safe area — dark so no white gaps in landscape
@@ -92,6 +102,10 @@ struct HomeView: View {
                             modelContext.insert(record)
                             recordedPoints = points
                         }
+
+                        // Stash commute/direction for post-arrival flow
+                        arrivalCommute = activeCommute
+                        arrivalDirection = activeDirection
 
                         // Check if we should prompt to save this route
                         if let commute = activeCommute,
@@ -195,10 +209,41 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showPostArrival) {
             PostArrivalSheet(
-                destinationName: navigationDestination?.name ?? "Destination",
-                recordedPoints: recordedPoints
+                recordedPoints: recordedPoints,
+                commute: arrivalCommute,
+                direction: arrivalDirection,
+                onEditRoute: {
+                    testPolyline = nil
+                    // Open route planner for this commute (or first available)
+                    if let commute = arrivalCommute ?? commutes.first {
+                        routePlannerCommute = commute
+                        showRoutePlanner = true
+                    }
+                },
+                preMatchedPolyline: recordedPoints.count < 20 ? mockPolyline : nil
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
+        }
+        .fullScreenCover(isPresented: $showRoutePlanner) {
+            if let commute = routePlannerCommute {
+                RoutePlannerView(commute: commute)
+            }
+        }
+        .onOpenURL { url in
+            // steddi://test-arrival — trigger post-arrival flow for testing
+            if url.host == "test-arrival" {
+                let polyline = "gipx_Appax~Exr@GzBu@p@iBGqKAgI?uBjCAz{@?dNFzPPfAClKA`VGnS?vA?dGBtLKrAQ|DmArCwA|FnOjCvHhAvGTnE?jEe@xEkBfJsDbMuHdT{GvPeC`IeAnGoA~Vy@xXU~^LvM`@hFzAvI`F|NnChHnBvG~ArHlAvL`@dHInLqBxYoBl[cAhL{AnJoCpLoClJkGfPqEhIoFxH}GpHkCfC}FpEuFfDeIfDqKrCkIlA{]nC{Db@sFhAoEjBkEzCuD~CyCdDkDzF}ClHcBnH_AdIWjJJjJr@tI|ArHnCnJ|BdGjDxGbGnIlDtD"
+                arrivalCommute = commutes.first
+                arrivalDirection = .originToDestination
+                testPolyline = polyline
+
+                // Create minimal GPS points (won't be used for matching since preMatchedPolyline is set)
+                let coords = PolylineEncoder.decode(polyline, precision: 6)
+                recordedPoints = coords.prefix(10).map { coord in
+                    GPSPoint(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
+                }
+                showPostArrival = true
+            }
         }
     }
 
@@ -758,6 +803,35 @@ struct HomeView: View {
                 // Silently fail — card just won't show ETA
             }
         }
+    }
+
+    /// Generate mock GPS trace from a hardcoded real route polyline for testing.
+    /// Uses a known-good Riverside route to guarantee Map Matching success.
+    private func generateMockTrace() async -> [GPSPoint] {
+        // Hardcoded polyline from a real Directions API response (UCR → Riverside Plaza, ~8 mi)
+        // This is a precision-6 encoded polyline that follows actual roads
+        let knownPolyline = "gipx_Appax~Exr@GzBu@p@iBGqKAgI?uBjCAz{@?dNFzPPfAClKA`VGnS?vA?dGBtLKrAQ|DmArCwA|FnOjCvHhAvGTnE?jEe@xEkBfJsDbMuHdT{GvPeC`IeAnGoA~Vy@xXU~^LvM`@hFzAvI`F|NnChHnBvG~ArHlAvL`@dHInLqBxYoBl[cAhL{AnJoCpLoClJkGfPqEhIoFxH}GpHkCfC}FpEuFfDeIfDqKrCkIlA{]nC{Db@sFhAoEjBkEzCuD~CyCdDkDzF}ClHcBnH_AdIWjJJjJr@tI|ArHnCnJ|BdGjDxGbGnIlDtD"
+
+        let coords = PolylineEncoder.decode(knownPolyline, precision: 6)
+        guard coords.count >= 2 else { return [] }
+
+        // Sample to ~40 points with realistic timestamps (3 sec apart)
+        let step = max(1, coords.count / 40)
+        let baseTime = Date().addingTimeInterval(-Double(coords.count / step) * 3)
+        var points: [GPSPoint] = []
+        for i in stride(from: 0, to: coords.count, by: step) {
+            let loc = CLLocation(
+                coordinate: coords[i],
+                altitude: 250,
+                horizontalAccuracy: 8,
+                verticalAccuracy: 10,
+                course: 0,
+                speed: 13.4,
+                timestamp: baseTime.addingTimeInterval(Double(points.count) * 3)
+            )
+            points.append(GPSPoint(from: loc))
+        }
+        return points
     }
 
     private func pinLocation(from result: GeocodingResult) {
