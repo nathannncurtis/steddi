@@ -219,15 +219,16 @@ struct SteddiNavOverlay: View {
             .padding(.bottom, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
-            // Right side: floating buttons
+            // Left side: floating buttons (between the two cards, below next turn)
             VStack(spacing: 8) {
                 compassButton
                 voiceButton
                 viewToggleButton
                 reportButton
             }
-            .padding(.trailing, 12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .padding(.leading, 56) // clear notch
+            .padding(.top, 100) // below instruction + next turn cards
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             // Street name: centered bottom
             if !roadName.isEmpty {
