@@ -176,7 +176,7 @@ struct SteddiNavOverlay: View {
                 Spacer()
             }
             .padding(.leading, 50) // clear notch
-            .padding(.top, 8)
+            .padding(.top, 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             // Bottom-left: ETA + speedometer + End (floating)
@@ -216,19 +216,26 @@ struct SteddiNavOverlay: View {
             .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
             .shadow(color: .black.opacity(0.3), radius: 8, y: -2)
             .padding(.leading, 50) // clear notch
-            .padding(.bottom, 8)
+            .padding(.bottom, 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
-            // Left side: floating buttons (between the two cards, below next turn)
-            VStack(spacing: 8) {
-                compassButton
-                voiceButton
-                viewToggleButton
-                reportButton
+            // Left side: buttons vertically between the two cards
+            VStack(spacing: 4) {
+                landscapeButton("location.north.fill", rotationDegrees: -headingDegrees) { is3DView.toggle(); onToggleView(is3DView) }
+                landscapeButton(isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") {
+                    isVoiceOn.toggle()
+                    if isVoiceOn {
+                        try? AVAudioSession.sharedInstance().setActive(true)
+                    } else {
+                        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                    }
+                }
+                landscapeButton(is3DView ? "cube" : "square") { is3DView.toggle(); onToggleView(is3DView) }
+                landscapeButton("exclamationmark.bubble.fill") { showReportSheet = true }
             }
-            .padding(.leading, 56) // clear notch
-            .padding(.top, 100) // below instruction + next turn cards
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.leading, 50)
+            .padding(.top, 30)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
             // Street name: centered bottom
             if !roadName.isEmpty {
@@ -400,6 +407,23 @@ struct SteddiNavOverlay: View {
                 symbol: "exclamationmark.bubble.fill",
                 isActive: false
             )
+        }
+    }
+
+    /// Slightly smaller button for landscape — 36x36 instead of 44x44
+    private func landscapeButton(_ symbol: String, rotationDegrees: Double = 0, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(SteddiTheme.accent)
+                .rotationEffect(.degrees(rotationDegrees))
+                .frame(width: 44, height: 44)
+                .background {
+                    Circle()
+                        .fill(SteddiTheme.surfacePrimary.opacity(0.88))
+                        .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
+                }
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
         }
     }
 
