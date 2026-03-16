@@ -49,24 +49,48 @@ struct SteddiNavOverlay: View {
     @State private var showReportedToast = false
     @State private var reportedType: String = ""
 
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    private var isLandscape: Bool { verticalSizeClass == .compact }
+
     var body: some View {
         ZStack {
-            // Main layout
+            if isLandscape {
+                landscapeNavLayout
+            } else {
+                portraitNavLayout
+            }
+
+            // Reported toast
+            if showReportedToast {
+                reportedToast
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 60)
+            }
+        }
+        .sheet(isPresented: $showReportSheet) {
+            reportSheet
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .onAppear { startObserving() }
+    }
+
+    // MARK: - Portrait Nav Layout
+
+    private var portraitNavLayout: some View {
+        ZStack {
             VStack(spacing: 0) {
-                // Top: instruction banner — below dynamic island
                 topBanner
                     .padding(.horizontal, 16)
                     .padding(.top, 60)
-                    .padding(.top, 8)
 
-                // Next maneuver preview
                 if !followOnInstruction.isEmpty {
                     followOnBanner
                         .padding(.horizontal, 16)
                         .padding(.top, 6)
                 }
 
-                // Street name capsule
                 if !roadName.isEmpty {
                     streetNameCapsule
                         .padding(.top, 10)
@@ -74,7 +98,6 @@ struct SteddiNavOverlay: View {
 
                 Spacer()
 
-                // Reroute suggestion card
                 if let suggestion = rerouteSuggestion {
                     RerouteCardView(
                         routeName: suggestion.route.name ?? "Faster route",
@@ -84,18 +107,15 @@ struct SteddiNavOverlay: View {
                             onSwitchRoute?(suggestion.route)
                             rerouteSuggestion = nil
                         },
-                        onStay: {
-                            rerouteSuggestion = nil
-                        }
+                        onStay: { rerouteSuggestion = nil }
                     )
                     .padding(.bottom, 8)
                 }
 
-                // Bottom: ETA bar with speedometer
                 bottomBar
             }
 
-            // Floating right-side buttons
+            // Floating buttons — right side
             VStack(spacing: 12) {
                 compassButton
                 voiceButton
@@ -105,21 +125,115 @@ struct SteddiNavOverlay: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .padding(.trailing, 16)
             .padding(.top, 240)
+        }
+    }
 
-            // Reported toast
-            if showReportedToast {
-                reportedToast
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 100)
+    // MARK: - Landscape Nav Layout
+
+    private var landscapeNavLayout: some View {
+        HStack(spacing: 0) {
+            // Left panel — all nav info
+            VStack(spacing: 8) {
+                // Compact instruction
+                HStack(spacing: 12) {
+                    Image(systemName: maneuverType)
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(SteddiTheme.accent)
+                        .frame(width: 48, height: 48)
+                        .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 12))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(stepDistance)
+                            .font(SteddiTheme.mono(24))
+                            .foregroundStyle(SteddiTheme.textPrimary)
+                        Text(instruction)
+                            .font(SteddiTheme.body(14))
+                            .foregroundStyle(SteddiTheme.textSecondary)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                }
+                .padding(12)
+
+                // Next maneuver
+                if !followOnInstruction.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: followOnManeuverSymbol)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(SteddiTheme.accent.opacity(0.7))
+                        Text("Then: \(followOnInstruction)")
+                            .font(SteddiTheme.body(12))
+                            .foregroundStyle(SteddiTheme.textMuted)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 12)
+                }
+
+                // Street name
+                if !roadName.isEmpty {
+                    Text(roadName)
+                        .font(SteddiTheme.body(12))
+                        .foregroundStyle(SteddiTheme.textSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(SteddiTheme.surfaceElevated.opacity(0.6), in: Capsule())
+                }
+
+                Spacer()
+
+                // ETA + speed + end
+                HStack(spacing: 12) {
+                    // Speedometer compact
+                    speedometer
+                        .frame(width: 50, height: 50)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Text("\(etaMinutes)")
+                                .font(SteddiTheme.mono(22))
+                                .foregroundStyle(SteddiTheme.textPrimary)
+                            Text("min")
+                                .font(SteddiTheme.body(12))
+                                .foregroundStyle(SteddiTheme.textSecondary)
+                        }
+                        Text(distanceRemaining)
+                            .font(SteddiTheme.mono(12))
+                            .foregroundStyle(SteddiTheme.textMuted)
+                    }
+
+                    Spacer()
+
+                    Button(action: onEndNavigation) {
+                        Text("End")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(SteddiTheme.warmRed, in: Capsule())
+                    }
+                }
+                .padding(12)
+            }
+            .frame(width: 300)
+            .padding(.leading, 44) // clear notch
+            .background(SteddiTheme.surfacePrimary.opacity(0.95))
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
+            .shadow(color: .black.opacity(0.3), radius: 12, x: 4)
+
+            // Map fills the rest — buttons float on far right
+            ZStack(alignment: .trailing) {
+                Color.clear // spacer for map
+                VStack(spacing: 10) {
+                    Spacer()
+                    compassButton
+                    voiceButton
+                    viewToggleButton
+                    reportButton
+                    Spacer()
+                }
+                .padding(.trailing, 16)
             }
         }
-        .sheet(isPresented: $showReportSheet) {
-            reportSheet
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        }
-        .onAppear { startObserving() }
     }
 
     // MARK: - Top Banner
