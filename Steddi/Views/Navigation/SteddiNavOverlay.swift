@@ -547,34 +547,51 @@ struct SteddiNavOverlay: View {
 
         let scale = size / 64.0
 
-        return ZStack {
-            // Background circle
-            Circle()
-                .fill(bgColor)
-                .overlay(
-                    Circle()
-                        .stroke(speedColor.opacity(0.3), lineWidth: 2)
-                )
+        return ZStack(alignment: .topTrailing) {
+            ZStack {
+                // Background circle
+                Circle()
+                    .fill(bgColor)
+                    .overlay(
+                        Circle()
+                            .stroke(speedColor.opacity(0.3), lineWidth: 2)
+                    )
 
-            // Speed arc gauge
-            Circle()
-                .trim(from: 0, to: min(1.0, currentSpeedMph / max(1, (speedLimitMph ?? 65) * 1.3)))
-                .stroke(speedColor.opacity(0.5), style: StrokeStyle(lineWidth: max(2, 3 * scale), lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .padding(3 * scale)
+                // Speed arc gauge
+                Circle()
+                    .trim(from: 0, to: min(1.0, currentSpeedMph / max(1, (speedLimitMph ?? 65) * 1.3)))
+                    .stroke(speedColor.opacity(0.5), style: StrokeStyle(lineWidth: max(2, 3 * scale), lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .padding(3 * scale)
 
-            // Speed value
-            VStack(spacing: 0) {
-                Text("\(Int(currentSpeedMph))")
-                    .font(SteddiTheme.mono(22 * scale))
-                    .foregroundStyle(speedColor)
+                // Speed value
+                VStack(spacing: 0) {
+                    Text("\(Int(currentSpeedMph))")
+                        .font(SteddiTheme.mono(22 * scale))
+                        .foregroundStyle(speedColor)
 
-                Text("mph")
-                    .font(SteddiTheme.body(9 * scale))
-                    .foregroundStyle(SteddiTheme.textMuted)
+                    Text("mph")
+                        .font(SteddiTheme.body(9 * scale))
+                        .foregroundStyle(SteddiTheme.textMuted)
+                }
+            }
+            .frame(width: size, height: size)
+
+            // Speed limit badge — small bordered circle when limit is available
+            if let limit = speedLimitMph {
+                Text("\(Int(limit))")
+                    .font(SteddiTheme.mono(10 * scale))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .frame(width: 22 * scale, height: 22 * scale)
+                    .background(
+                        Circle()
+                            .fill(SteddiTheme.surfacePrimary)
+                            .overlay(Circle().stroke(SteddiTheme.textMuted.opacity(0.5), lineWidth: 1.5))
+                    )
+                    .offset(x: 4 * scale, y: -4 * scale)
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: size + 8, height: size + 8)
     }
 
     // MARK: - Report Sheet
