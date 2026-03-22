@@ -7,6 +7,7 @@ import CoreLocation
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LocationService.self) private var locationService
+    @Environment(NavigationStateManager.self) private var navStateManager
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
     @Query(sort: \Commute.createdAt) private var commutes: [Commute]
     @Query private var commuteTrips: [CommuteTrip]
@@ -242,6 +243,13 @@ struct HomeView: View {
             if let commute = routePlannerCommute {
                 RoutePlannerView(commute: commute)
             }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { navStateManager.isCarPlayActive && navStateManager.isNavigating },
+            set: { _ in }
+        )) {
+            PhoneCompanionView()
+                .environment(navStateManager)
         }
         .onOpenURL { url in
             // steddi://test-arrival — trigger post-arrival flow for testing

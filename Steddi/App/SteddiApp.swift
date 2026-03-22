@@ -9,6 +9,9 @@ struct SteddiApp: App {
     @State private var offlineCacheService = OfflineCacheService()
 
     init() {
+        // Ensure NavigationStateManager is initialized for CarPlay scene support
+        _ = NavigationStateManager.shared
+
         // Set up arrival notifications
         ArrivalNotificationService.shared.requestPermissionIfNeeded()
         ArrivalNotificationService.shared.registerCategory()
@@ -46,5 +49,6 @@ struct SteddiApp: App {
         ])
         .environment(locationService)
         .environment(offlineCacheService)
+        .environment(NavigationStateManager.shared)
     }
 }

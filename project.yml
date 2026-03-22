@@ -30,15 +30,29 @@ targets:
         UIBackgroundModes:
           - audio
           - location
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: "CarPlay"
+                UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate"
+            CPTemplateApplicationDashboardSceneSessionRoleApplication:
+              - UISceneConfigurationName: "CarPlay Dashboard"
+                UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate"
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: "Default"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: to.nathancurtis.steddi
       DEVELOPMENT_TEAM: ""
       INFOPLIST_FILE: Steddi/Info.plist
+      CODE_SIGN_ENTITLEMENTS: Steddi/Steddi.entitlements
     dependencies:
       - package: MapboxNavigation
         product: MapboxNavigationCore
       - package: MapboxNavigation
         product: MapboxNavigationUIKit
+      - framework: CarPlay.framework
+        embed: false
 
   SteddiTests:
     type: bundle.unit-test
