@@ -39,3 +39,13 @@ targets:
         product: MapboxNavigationCore
       - package: MapboxNavigation
         product: MapboxNavigationUIKit
+
+  SteddiTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - SteddiTests
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Steddi

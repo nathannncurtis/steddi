@@ -45,6 +45,11 @@ struct RerouteEngine {
             remainingMinutes: remainingMinutes
         )
 
+        // Guard against division by zero
+        guard remainingETASeconds != 0 else {
+            return RerouteDecision(shouldReroute: false, savingsSeconds: 0, reason: .belowThreshold(actual: 0, threshold: scaledPercentage))
+        }
+
         let actualPercentage = savingsSeconds / remainingETASeconds
 
         // Percentage threshold met — always suggest, regardless of hard floor
