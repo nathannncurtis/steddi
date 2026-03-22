@@ -9,6 +9,7 @@ struct HomeView: View {
     @Environment(LocationService.self) private var locationService
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
     @Query(sort: \Commute.createdAt) private var commutes: [Commute]
+    @Query private var commuteTrips: [CommuteTrip]
 
     // Bottom sheet tab
     @State private var sheetTab: SheetTab = .commutes
@@ -55,6 +56,12 @@ struct HomeView: View {
     // Post-arrival → route planner handoff
     @State private var showRoutePlanner = false
     @State private var routePlannerCommute: Commute?
+
+    // Donation milestone prompts
+    @AppStorage("appInstalledAt") private var appInstalledAt: Double = 0
+    @AppStorage("lastMilestoneShown") private var lastMilestoneShown: Double = 0
+    @AppStorage("milestoneDonationDismissCount") private var milestoneDonationDismissCount: Int = 0
+    @State private var showMilestoneDonation = false
 
     // Stashed commute/direction for post-arrival (persists after nav ends)
     @State private var arrivalCommute: Commute?
@@ -164,6 +171,7 @@ struct HomeView: View {
         .onAppear {
             locationService.requestPermission()
             locationService.startUpdating()
+            checkMilestoneDonation()
         }
         .task {
             // TEST FLAG: set to true to jump straight into turn-by-turn on launch
@@ -187,6 +195,12 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $showMilestoneDonation, onDismiss: {
+            milestoneDonationDismissCount += 1
+            lastMilestoneShown = Date().timeIntervalSince1970
+        }) {
+            DonationView()
         }
         .sheet(isPresented: $showAddLocation) {
             AddLocationSheet(coordinate: longPressCoordinate)
@@ -244,6 +258,31 @@ struct HomeView: View {
                 }
                 showPostArrival = true
             }
+        }
+    }
+
+    // MARK: - Donation Milestone
+
+    private func checkMilestoneDonation() {
+        let now = Date().timeIntervalSince1970
+
+        // Set install date on first launch
+        if appInstalledAt == 0 {
+            appInstalledAt = now
+            return
+        }
+
+        // Stop prompting after 3 dismissals
+        if milestoneDonationDismissCount >= 3 { return }
+
+        // Suppress re-prompt within 30 days
+        let thirtyDays: Double = 30 * 24 * 60 * 60
+        if now - lastMilestoneShown < thirtyDays { return }
+
+        // Trigger if 30+ days since install or 50+ trips
+        let daysSinceInstall = now - appInstalledAt
+        if daysSinceInstall >= thirtyDays || commuteTrips.count >= 50 {
+            showMilestoneDonation = true
         }
     }
 
@@ -557,7 +596,8 @@ struct HomeView: View {
 
         let result = CommuteDirectionResolver.resolve(
             commute: commute,
-            currentLocation: currentLoc
+            currentLocation: currentLoc,
+            trips: commuteTrips
         )
 
         switch result {
@@ -653,7 +693,8 @@ struct HomeView: View {
 
             let result = CommuteDirectionResolver.resolve(
                 commute: commute,
-                currentLocation: currentLoc
+                currentLocation: currentLoc,
+                trips: commuteTrips
             )
 
             switch result {

@@ -6,8 +6,10 @@ struct CommuteDetailView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(OfflineCacheService.self) private var offlineCacheService
 
     @State private var showDeleteConfirmation = false
+    @State private var downloadingRouteIDs: Set<UUID> = []
     @State private var showAddRoute = false
     @State private var showOriginPicker = false
     @State private var showDestinationPicker = false
@@ -197,12 +199,54 @@ struct CommuteDetailView: View {
                         .padding(.vertical, 2)
                         .background(route.source == .recorded ? SteddiTheme.sage : SteddiTheme.accent, in: Capsule())
 
+                    if offlineCacheService.downloadedRouteIDs.contains(route.id) {
+                        Text("Offline")
+                            .font(.caption2)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(SteddiTheme.accent.opacity(0.6), in: Capsule())
+                    }
+
                     if let duration = route.typicalDurationSeconds {
                         Text("\(Int(duration / 60)) min typical")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+
+            Spacer()
+
+            if downloadingRouteIDs.contains(route.id) {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button {
+                    toggleDownload(route)
+                } label: {
+                    let isDownloaded = offlineCacheService.downloadedRouteIDs.contains(route.id)
+                    Image(systemName: isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
+                        .font(.title3)
+                        .foregroundStyle(isDownloaded ? SteddiTheme.accent : .secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func toggleDownload(_ route: Route) {
+        if offlineCacheService.downloadedRouteIDs.contains(route.id) {
+            offlineCacheService.deleteDownloadedRoute(route)
+        } else {
+            downloadingRouteIDs.insert(route.id)
+            Task {
+                do {
+                    try offlineCacheService.downloadRoute(route)
+                } catch {
+                    // Download failed silently; the button stays hollow
+                }
+                downloadingRouteIDs.remove(route.id)
             }
         }
     }
