@@ -538,7 +538,6 @@
 					"$(inherited)",
 					"\".\"",
 				);
-				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Steddi/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -564,7 +563,6 @@
 					"$(inherited)",
 					"\".\"",
 				);
-				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Steddi/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
