@@ -97,6 +97,7 @@ struct HomeView: View {
                     onEndNavigation: {
                         let points = locationService.stopRecording()
                         provider.tripSession().setToIdle()
+                        navStateManager.stopObserving()
                         is3DNav = true
                         isNavigating = false
                         navigationRoutes = nil
@@ -141,6 +142,7 @@ struct HomeView: View {
                         let target: PinnedLocation? = activeDirection == .originToDestination ? activeCommute?.destination : activeCommute?.origin
                         guard let target else { return }
                         provider.tripSession().setToIdle()
+                        navStateManager.stopObserving()
                         isNavigating = false
                         navigationRoutes = nil
                         navigateWithSavedRoute(route, to: target)
@@ -335,6 +337,14 @@ struct HomeView: View {
 
                 self.navProvider = provider
                 self.navigationRoutes = routes
+
+                // Share navigation state for CarPlay
+                navStateManager.activeRouteCoords = routes.mainRoute.route.shape?.coordinates ?? []
+                navStateManager.startObserving(
+                    provider: provider,
+                    commute: activeCommute,
+                    direction: activeDirection
+                )
 
                 withAnimation(.easeInOut(duration: 0.4)) {
                     isCalculatingRoute = false
@@ -681,6 +691,15 @@ struct HomeView: View {
                 locationService.startRecording()
                 self.navProvider = provider
                 self.navigationRoutes = routes
+
+                // Share navigation state for CarPlay
+                navStateManager.activeRouteCoords = routes.mainRoute.route.shape?.coordinates ?? []
+                navStateManager.startObserving(
+                    provider: provider,
+                    commute: activeCommute,
+                    direction: activeDirection
+                )
+
                 isCalculatingRoute = false
                 isNavigating = true
             } catch {

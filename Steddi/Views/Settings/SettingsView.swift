@@ -129,6 +129,15 @@ struct SettingsView: View {
                     Text("About")
                 }
 
+                // MARK: - Developer
+                #if DEBUG
+                Section("Developer") {
+                    NavigationLink("CarPlay Preview") {
+                        CarPlayPreviewView()
+                    }
+                }
+                #endif
+
                 // MARK: - Danger Zone
                 Section {
                     Button(role: .destructive) {

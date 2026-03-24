@@ -26,6 +26,7 @@
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
 		8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */; };
 		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
+		87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64DED98F409553C18FBECB6 /* AppDelegate.swift */; };
 		87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */; };
 		8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82950853F7696A66EC5389FA /* CommuteDetailView.swift */; };
 		8C6902233D467F3E4CC209D5 /* CarPlay.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 536F40426EDB0B72A580D76E /* CarPlay.framework */; };
@@ -36,6 +37,7 @@
 		9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */; };
 		9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */; };
 		A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */; };
+		AFFADFDBFCD3570969DFC72A /* CarPlayPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E62D7671C726AFDDEBD1C2 /* CarPlayPreviewView.swift */; };
 		BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29048E65BF78AEB095A5D599 /* CommuteListView.swift */; };
 		BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */; };
 		C4C89A710971CA2A022090F7 /* ActiveNavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D04E323A7006F464191A685 /* ActiveNavigationView.swift */; };
@@ -46,6 +48,7 @@
 		D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */; };
 		D649B2DE89F3D939E458A826 /* MeasurementUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80E59AB1F96A5750EF1F970E /* MeasurementUnit.swift */; };
 		D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */; };
+		E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */; };
 		E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2113E7A877B78A7BF8CF75C /* Route.swift */; };
 		E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */; };
 		E8518F81F0D9BA02AAEA282D /* SteddiNavOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */; };
@@ -68,6 +71,7 @@
 
 /* Begin PBXFileReference section */
 		03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiNavOverlay.swift; sourceTree = "<group>"; };
+		06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSceneDelegate.swift; sourceTree = "<group>"; };
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
 		16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManagerTests.swift; sourceTree = "<group>"; };
@@ -107,9 +111,11 @@
 		CBD9B3AA19F39B9592040D98 /* MapboxTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapboxTokenProvider.swift; sourceTree = "<group>"; };
 		D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalNotificationService.swift; sourceTree = "<group>"; };
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
+		E64DED98F409553C18FBECB6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		EAA8B2837951D77986E1E11A /* Steddi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Steddi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCacheServiceTests.swift; sourceTree = "<group>"; };
 		EF4892145CE55DFF9FF13FC7 /* DonationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DonationView.swift; sourceTree = "<group>"; };
+		F1E62D7671C726AFDDEBD1C2 /* CarPlayPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayPreviewView.swift; sourceTree = "<group>"; };
 		F2113E7A877B78A7BF8CF75C /* Route.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Route.swift; sourceTree = "<group>"; };
 		F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiApp.swift; sourceTree = "<group>"; };
 		F62156E1FDD078D989A2441A /* OfflineCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCacheService.swift; sourceTree = "<group>"; };
@@ -139,6 +145,14 @@
 				671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */,
 			);
 			path = CarPlay;
+			sourceTree = "<group>";
+		};
+		04FB89B45AFB73CD1681AA4A /* Debug */ = {
+			isa = PBXGroup;
+			children = (
+				F1E62D7671C726AFDDEBD1C2 /* CarPlayPreviewView.swift */,
+			);
+			path = Debug;
 			sourceTree = "<group>";
 		};
 		1B08229D7455DAC8B35B5E17 /* Models */ = {
@@ -251,6 +265,8 @@
 		D742A2F1707D973EBE64708E /* App */ = {
 			isa = PBXGroup;
 			children = (
+				E64DED98F409553C18FBECB6 /* AppDelegate.swift */,
+				06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */,
 				F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */,
 			);
 			path = App;
@@ -288,6 +304,7 @@
 			children = (
 				374BB011618D654579D2A114 /* Commute */,
 				42FAB8BA9A51A05F1BCB2276 /* Components */,
+				04FB89B45AFB73CD1681AA4A /* Debug */,
 				FE8829E93E4A8DE87270F444 /* Home */,
 				B1894EE5BD1CDC02EA50F276 /* Navigation */,
 				AA49E1B7BCC0892981A2EA21 /* Onboarding */,
@@ -342,6 +359,7 @@
 			buildPhases = (
 				0782367559867DAD36C92E7E /* Sources */,
 				9A89A4FCD398806911D239C2 /* Frameworks */,
+				E706EC32DF07DB1A43780328 /* Re-sign with CarPlay entitlement */,
 			);
 			buildRules = (
 			);
@@ -393,14 +411,38 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		E706EC32DF07DB1A43780328 /* Re-sign with CarPlay entitlement */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Re-sign with CarPlay entitlement";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "codesign --force --sign \"-\" --entitlements \"${SRCROOT}/Steddi/Steddi.entitlements\" \"${BUILT_PRODUCTS_DIR}/${EXECUTABLE_PATH}\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		0782367559867DAD36C92E7E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				C4C89A710971CA2A022090F7 /* ActiveNavigationView.swift in Sources */,
+				87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */,
 				99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */,
 				60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */,
+				AFFADFDBFCD3570969DFC72A /* CarPlayPreviewView.swift in Sources */,
 				D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */,
 				6C0862A6626424EBC6622731 /* Commute.swift in Sources */,
 				8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */,
@@ -424,6 +466,7 @@
 				6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */,
 				87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */,
 				588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */,
+				E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */,
 				1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */,
 				E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */,
 				6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */,
@@ -467,18 +510,22 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "-";
 				DEVELOPMENT_TEAM = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\".\"",
 				);
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Steddi/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_CODE_SIGN_FLAGS = "--entitlements $(SRCROOT)/Steddi/Steddi.entitlements";
 				PRODUCT_BUNDLE_IDENTIFIER = to.nathancurtis.steddi;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -489,18 +536,22 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "-";
 				DEVELOPMENT_TEAM = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\".\"",
 				);
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Steddi/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_CODE_SIGN_FLAGS = "--entitlements $(SRCROOT)/Steddi/Steddi.entitlements";
 				PRODUCT_BUNDLE_IDENTIFIER = to.nathancurtis.steddi;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

@@ -43,6 +43,11 @@ final class NavigationStateManager {
 
     var upcomingSteps: [UpcomingStep] = []
 
+    /// The active navigation provider — shared so CarPlay can subscribe to the same session
+    var activeProvider: MapboxNavigationProvider? = nil
+    /// Route coordinates for map rendering
+    var activeRouteCoords: [CLLocationCoordinate2D] = []
+
     // MARK: - Task Storage
 
     private nonisolated(unsafe) var routeProgressTask: Task<Void, Never>?
@@ -60,8 +65,14 @@ final class NavigationStateManager {
         stopObserving()
 
         isNavigating = true
+        activeProvider = provider
         activeCommute = commute
         activeDirection = direction
+
+        // Store route coords for CarPlay map rendering
+        if let routeShape = provider.navigation().currentRouteProgress?.routeProgress.route.shape {
+            activeRouteCoords = routeShape.coordinates
+        }
 
         let nav = provider.navigation()
 
@@ -217,6 +228,8 @@ final class NavigationStateManager {
         hasArrived = false
         activeCommute = nil
         activeDirection = nil
+        activeProvider = nil
+        activeRouteCoords = []
         rerouteSuggestion = nil
         currentRemainingETA = 0
         upcomingSteps = []

@@ -4,15 +4,15 @@ import CoreLocation
 import Combine
 
 /// Hosts a MapboxMaps MapView sized to the CarPlay display.
-/// Simpler than SteddiMapView — optimized for the smaller CarPlay screen
-/// with chase-cam navigation and the same lavender route styling.
+/// Same lavender route styling and chase-cam as the phone, optimized for CarPlay screen.
 class CarPlayMapController: UIViewController {
 
     private var mapView: MapView!
     private var isInNavigation = false
     private var navRouteCoords: [CLLocationCoordinate2D] = []
     private var smoothedBearing: Double = 0
-    private var cancellables: [AnyCancelable] = []
+    private var cancellables: [AnyCancellable] = []
+    private var currentZoom: Double = 17.5
 
     // MARK: - Lifecycle
 
@@ -23,7 +23,7 @@ class CarPlayMapController: UIViewController {
         mapView = MapView(frame: view.bounds, mapInitOptions: initOptions)
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
-        // Lavender puck — same as SteddiMapView
+        // Lavender puck — same as phone
         var puckConfig = Puck2DConfiguration()
         puckConfig.topImage = SteddiMapContainer.makePuckImage()
         puckConfig.pulsing = nil
@@ -31,20 +31,17 @@ class CarPlayMapController: UIViewController {
         mapView.location.options.puckType = .puck2D(puckConfig)
         mapView.location.options.puckBearing = .heading
 
-        // Hide ornaments — CarPlay has its own chrome
+        // Hide ornaments — CarPlay template provides its own chrome
         mapView.ornaments.options.scaleBar.visibility = .hidden
         mapView.ornaments.options.compass.visibility = .hidden
 
-        // Initial camera
         mapView.mapboxMap.setCamera(to: CameraOptions(zoom: 14))
 
         view.backgroundColor = .black
         view.addSubview(mapView)
 
-        // Set map style
         updateMapStyle()
 
-        // Center on user once style loads
         mapView.mapboxMap.onStyleLoaded.observeNext { [weak self] _ in
             guard let self,
                   let coord = self.mapView.location.latestLocation?.coordinate else { return }
@@ -66,11 +63,8 @@ class CarPlayMapController: UIViewController {
 
     // MARK: - Map Style
 
-    /// Same logic as SteddiMapView: dusk for dark mode, time-based for light mode.
-    /// Kept simpler for CarPlay — no extra detail layers.
     private func updateMapStyle() {
         let isDark = traitCollection.userInterfaceStyle == .dark
-
         if isDark {
             mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
         } else {
@@ -87,27 +81,22 @@ class CarPlayMapController: UIViewController {
 
     // MARK: - Navigation
 
-    /// Begin showing the route line and switch to chase-cam mode.
     func startNavigation(routeCoords: [CLLocationCoordinate2D]) {
         guard !isInNavigation else { return }
         isInNavigation = true
         navRouteCoords = routeCoords
         smoothedBearing = 0
+        currentZoom = 17.5
 
         showRouteLine(routeCoords)
 
-        // Initial navigation camera
         if let coord = mapView.location.latestLocation?.coordinate {
             mapView.mapboxMap.setCamera(to: CameraOptions(
-                center: coord,
-                zoom: 17.0,
-                bearing: 0,
-                pitch: 55
+                center: coord, zoom: currentZoom, bearing: 0, pitch: 55
             ))
         }
     }
 
-    /// Stop navigation mode, remove route line, reset camera.
     func stopNavigation() {
         guard isInNavigation else { return }
         isInNavigation = false
@@ -115,56 +104,69 @@ class CarPlayMapController: UIViewController {
 
         removeRouteLine()
 
-        // Reset to overview
         mapView.mapboxMap.setCamera(to: CameraOptions(
             center: mapView.location.latestLocation?.coordinate,
-            zoom: 14,
-            bearing: 0,
-            pitch: 0
+            zoom: 14, bearing: 0, pitch: 0
         ))
     }
 
-    /// Update the chase-cam to follow the user's position and bearing.
-    /// Uses the same bearing-along-route and smoothing logic as SteddiMapContainer.
+    /// Chase-cam: follow user with route-based bearing, smoothed rotation, look-ahead offset
     func updateCamera(coordinate: CLLocationCoordinate2D, bearing: Double) {
         guard isInNavigation else { return }
 
-        // Get stable bearing from route geometry
         let routeBearing = SteddiMapContainer.bearingAlongRoute(
-            from: coordinate,
-            routeCoords: navRouteCoords
+            from: coordinate, routeCoords: navRouteCoords
         )
-
-        // Smooth the bearing to prevent jerky rotation
         smoothedBearing = SteddiMapContainer.smoothBearing(
-            current: smoothedBearing,
-            target: routeBearing,
-            factor: 0.15
+            current: smoothedBearing, target: routeBearing, factor: 0.15
         )
-
-        // Offset camera center ahead so the user sits in the lower third
         let lookAhead = SteddiMapContainer.offsetCoordinate(
-            coordinate,
-            distanceMeters: 80,
-            bearingDegrees: smoothedBearing
+            coordinate, distanceMeters: 80, bearingDegrees: smoothedBearing
         )
 
         mapView.camera.ease(
             to: CameraOptions(
-                center: lookAhead,
-                zoom: 17.5,
-                bearing: smoothedBearing,
-                pitch: 60
+                center: lookAhead, zoom: currentZoom,
+                bearing: smoothedBearing, pitch: 60
             ),
-            duration: 1.0,
-            curve: .linear,
-            completion: nil
+            duration: 1.0, curve: .linear, completion: nil
         )
+    }
+
+    // MARK: - Zoom Controls
+
+    func zoomIn() {
+        currentZoom = min(currentZoom + 1, 20)
+        if let center = mapView.mapboxMap.cameraState.center as? CLLocationCoordinate2D {
+            mapView.camera.ease(to: CameraOptions(center: center, zoom: currentZoom), duration: 0.3, curve: .easeInOut, completion: nil)
+        }
+    }
+
+    func zoomOut() {
+        currentZoom = max(currentZoom - 1, 12)
+        if let center = mapView.mapboxMap.cameraState.center as? CLLocationCoordinate2D {
+            mapView.camera.ease(to: CameraOptions(center: center, zoom: currentZoom), duration: 0.3, curve: .easeInOut, completion: nil)
+        }
+    }
+
+    func recenter() {
+        guard let coord = mapView.location.latestLocation?.coordinate else { return }
+        currentZoom = 17.5
+        if isInNavigation {
+            mapView.camera.ease(
+                to: CameraOptions(center: coord, zoom: currentZoom, bearing: smoothedBearing, pitch: 60),
+                duration: 0.5, curve: .easeInOut, completion: nil
+            )
+        } else {
+            mapView.camera.ease(
+                to: CameraOptions(center: coord, zoom: 14, bearing: 0, pitch: 0),
+                duration: 0.5, curve: .easeInOut, completion: nil
+            )
+        }
     }
 
     // MARK: - Route Line
 
-    /// Same lavender route line as SteddiMapContainer.
     private func showRouteLine(_ coordinates: [CLLocationCoordinate2D]) {
         guard !coordinates.isEmpty else { return }
 
@@ -178,7 +180,7 @@ class CarPlayMapController: UIViewController {
         lineLayer.lineOpacity = .constant(1.0)
         lineLayer.lineCap = .constant(.round)
         lineLayer.lineJoin = .constant(.round)
-        lineLayer.lineEmissiveStrength = .constant(1.0) // fullbright — ignores 3D lighting
+        lineLayer.lineEmissiveStrength = .constant(1.0)
 
         try? mapView.mapboxMap.addSource(source)
         try? mapView.mapboxMap.addLayer(lineLayer)

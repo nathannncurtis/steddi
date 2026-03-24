@@ -35,17 +35,26 @@ targets:
           UISceneConfigurations:
             CPTemplateApplicationSceneSessionRoleApplication:
               - UISceneConfigurationName: "CarPlay"
-                UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate"
-            CPTemplateApplicationDashboardSceneSessionRoleApplication:
-              - UISceneConfigurationName: "CarPlay Dashboard"
+                UISceneClassName: "CPTemplateApplicationScene"
                 UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate"
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: "Default"
+                UISceneClassName: "UIWindowScene"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: to.nathancurtis.steddi
       DEVELOPMENT_TEAM: ""
       INFOPLIST_FILE: Steddi/Info.plist
       CODE_SIGN_ENTITLEMENTS: Steddi/Steddi.entitlements
+      GENERATE_INFOPLIST_FILE: NO
+      CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
+      CODE_SIGN_IDENTITY: "-"
+      CODE_SIGNING_ALLOWED: YES
+      OTHER_CODE_SIGN_FLAGS: "--entitlements $(SRCROOT)/Steddi/Steddi.entitlements"
+    postBuildScripts:
+      - name: "Re-sign with CarPlay entitlement"
+        script: |
+          codesign --force --sign "-" --entitlements "${SRCROOT}/Steddi/Steddi.entitlements" "${BUILT_PRODUCTS_DIR}/${EXECUTABLE_PATH}"
+        basedOnDependencyAnalysis: false
     dependencies:
       - package: MapboxNavigation
         product: MapboxNavigationCore
