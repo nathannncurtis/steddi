@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */; };
 		13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4F33590D3CEB7AA217E684 /* LocationService.swift */; };
+		13B60D9B67536ABD172A889C /* IconGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70ACC4B25C91881AEFC7B21 /* IconGenerator.swift */; };
 		14146A9620680F297380CF6A /* MapboxNavigationCore in Frameworks */ = {isa = PBXBuildFile; productRef = BC2E9B263D66D768CAE7A99E /* MapboxNavigationCore */; };
 		1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50B3D1495689CE92E4ED80B /* GeocodingService.swift */; };
 		1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */; };
@@ -50,6 +51,7 @@
 		D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */; };
 		E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */; };
 		E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2113E7A877B78A7BF8CF75C /* Route.swift */; };
+		E7FD013198226D25A6927A6B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 770C65D4283DB277ED143EA4 /* Assets.xcassets */; };
 		E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */; };
 		E8518F81F0D9BA02AAEA282D /* SteddiNavOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */; };
 		EE11B267B397E2C0E0CF8524 /* MapboxTokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD9B3AA19F39B9592040D98 /* MapboxTokenProvider.swift */; };
@@ -93,6 +95,7 @@
 		72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiMapView.swift; sourceTree = "<group>"; };
 		7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDirectionResolver.swift; sourceTree = "<group>"; };
+		770C65D4283DB277ED143EA4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		80E59AB1F96A5750EF1F970E /* MeasurementUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementUnit.swift; sourceTree = "<group>"; };
 		82950853F7696A66EC5389FA /* CommuteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDetailView.swift; sourceTree = "<group>"; };
 		8B17DD42334CC352C81C1B71 /* Steddi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Steddi.entitlements; sourceTree = "<group>"; };
@@ -103,6 +106,7 @@
 		AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapMatchingService.swift; sourceTree = "<group>"; };
 		AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteTrip.swift; sourceTree = "<group>"; };
 		B385FB734BECC176514917FB /* RoutePlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlannerView.swift; sourceTree = "<group>"; };
+		B70ACC4B25C91881AEFC7B21 /* IconGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconGenerator.swift; sourceTree = "<group>"; };
 		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
 		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
 		C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayMapController.swift; sourceTree = "<group>"; };
@@ -173,6 +177,7 @@
 		308F7C4E16BF500275E6733D /* Steddi */ = {
 			isa = PBXGroup;
 			children = (
+				770C65D4283DB277ED143EA4 /* Assets.xcassets */,
 				09E03456CD2FFD70556659CE /* Info.plist */,
 				8B17DD42334CC352C81C1B71 /* Steddi.entitlements */,
 				D742A2F1707D973EBE64708E /* App */,
@@ -326,6 +331,7 @@
 		FF31CEBB3E9CBFBF76A9DADA /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				B70ACC4B25C91881AEFC7B21 /* IconGenerator.swift */,
 				CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */,
 				37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */,
 			);
@@ -358,6 +364,7 @@
 			buildConfigurationList = E358B2ECEE9BA63BC6035EDC /* Build configuration list for PBXNativeTarget "Steddi" */;
 			buildPhases = (
 				0782367559867DAD36C92E7E /* Sources */,
+				53D78B718272611936668DA3 /* Resources */,
 				9A89A4FCD398806911D239C2 /* Frameworks */,
 				E706EC32DF07DB1A43780328 /* Re-sign with CarPlay entitlement */,
 			);
@@ -411,6 +418,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		53D78B718272611936668DA3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E7FD013198226D25A6927A6B /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXShellScriptBuildPhase section */
 		E706EC32DF07DB1A43780328 /* Re-sign with CarPlay entitlement */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -454,6 +472,7 @@
 				943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */,
 				1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */,
 				84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */,
+				13B60D9B67536ABD172A889C /* IconGenerator.swift in Sources */,
 				FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */,
 				3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */,
 				13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */,

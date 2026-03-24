@@ -316,7 +316,7 @@ private struct RoutePreviewMap: UIViewRepresentable {
 
             var layer = LineLayer(id: "preview-route", source: "preview-source")
             layer.slot = .top
-            layer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
+            layer.lineColor = .constant(StyleColor(SteddiTheme.accentUIColor))
             layer.lineWidth = .constant(6)
             layer.lineOpacity = .constant(1.0)
             layer.lineEmissiveStrength = .constant(1.0)

@@ -11,11 +11,15 @@ struct SettingsView: View {
     @AppStorage("steddi.defaultHardMinuteFloor") private var hardMinuteFloor: Int = 10
     @AppStorage("steddi.voiceGuidanceEnabled") private var voiceGuidanceEnabled: Bool = true
     @AppStorage("steddi.units") private var units: String = MeasurementUnit.miles.rawValue
+    @AppStorage("accentColor") private var accentColor: String = SteddiTheme.AccentOption.lavender.rawValue
 
     @State private var showNoGoEditor = false
     @State private var showThresholdExplainer = false
     @State private var showDonation = false
     @State private var showDeleteAllConfirmation = false
+    #if DEBUG
+    @State private var iconGenMessage: String?
+    #endif
 
     private static var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -33,6 +37,43 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Appearance
+                Section {
+                    HStack(spacing: 12) {
+                        Spacer()
+                        ForEach(SteddiTheme.AccentOption.allCases, id: \.self) { option in
+                            let isSelected = accentColor == option.rawValue
+                            Button {
+                                accentColor = option.rawValue
+                            } label: {
+                                Circle()
+                                    .fill(option.color)
+                                    .frame(width: 36, height: 36)
+                                    .overlay {
+                                        if isSelected {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 14, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        }
+                                    }
+                                    .overlay {
+                                        if isSelected {
+                                            Circle()
+                                                .stroke(option.color, lineWidth: 3)
+                                                .frame(width: 44, height: 44)
+                                        }
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(option.displayName)
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("Appearance")
+                }
+
                 // MARK: - Navigation Defaults
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
@@ -134,6 +175,22 @@ struct SettingsView: View {
                 Section("Developer") {
                     NavigationLink("CarPlay Preview") {
                         CarPlayPreviewView()
+                    }
+
+                    Button {
+                        if let url = IconGenerator.generateAndSave() {
+                            iconGenMessage = "Saved to:\n\(url.path)"
+                        } else {
+                            iconGenMessage = "Failed to generate icon."
+                        }
+                    } label: {
+                        Label("Generate App Icon", systemImage: "app.dashed")
+                    }
+
+                    if let iconGenMessage {
+                        Text(iconGenMessage)
+                            .font(.caption)
+                            .foregroundStyle(SteddiTheme.textSecondary)
                     }
                 }
                 #endif

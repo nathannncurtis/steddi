@@ -175,7 +175,7 @@ class CarPlayMapController: UIViewController {
 
         var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
         lineLayer.slot = .top
-        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
+        lineLayer.lineColor = .constant(StyleColor(SteddiTheme.accentUIColor))
         lineLayer.lineWidth = .constant(8)
         lineLayer.lineOpacity = .constant(1.0)
         lineLayer.lineCap = .constant(.round)

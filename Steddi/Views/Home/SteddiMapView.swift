@@ -50,7 +50,7 @@ class SteddiMapContainer: UIViewController {
         let size = CGSize(width: 44, height: 44)
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
-            let lavender = UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)
+            let lavender = SteddiTheme.accentUIColor
 
             // Rounded triangle pointing up
             let path = UIBezierPath()
@@ -387,7 +387,7 @@ class SteddiMapContainer: UIViewController {
         // Lavender route line — fullbright, no border
         var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
         lineLayer.slot = .top
-        lineLayer.lineColor = .constant(StyleColor(UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)))
+        lineLayer.lineColor = .constant(StyleColor(SteddiTheme.accentUIColor))
         lineLayer.lineWidth = .constant(8)
         lineLayer.lineOpacity = .constant(1.0)
         lineLayer.lineCap = .constant(.round)

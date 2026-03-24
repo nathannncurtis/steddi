@@ -3,12 +3,57 @@ import SwiftUI
 /// Steddi's visual identity — warm, steady, confident.
 enum SteddiTheme {
 
+    // MARK: - Accent Color Options
+
+    enum AccentOption: String, CaseIterable {
+        case lavender, ocean, sage, coral, gold, slate
+
+        var color: Color {
+            switch self {
+            case .lavender: return Color(red: 0.61, green: 0.56, blue: 0.77)  // #9B8EC4
+            case .ocean:    return Color(red: 0.29, green: 0.56, blue: 0.85)  // #4A90D9
+            case .sage:     return Color(red: 0.42, green: 0.61, blue: 0.49)  // #6B9B7D
+            case .coral:    return Color(red: 0.83, green: 0.45, blue: 0.42)  // #D4726A
+            case .gold:     return Color(red: 0.77, green: 0.64, blue: 0.31)  // #C4A44E
+            case .slate:    return Color(red: 0.48, green: 0.55, blue: 0.60)  // #7A8B9A
+            }
+        }
+
+        var uiColor: UIColor {
+            switch self {
+            case .lavender: return UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)
+            case .ocean:    return UIColor(red: 0.29, green: 0.56, blue: 0.85, alpha: 1.0)
+            case .sage:     return UIColor(red: 0.42, green: 0.61, blue: 0.49, alpha: 1.0)
+            case .coral:    return UIColor(red: 0.83, green: 0.45, blue: 0.42, alpha: 1.0)
+            case .gold:     return UIColor(red: 0.77, green: 0.64, blue: 0.31, alpha: 1.0)
+            case .slate:    return UIColor(red: 0.48, green: 0.55, blue: 0.60, alpha: 1.0)
+            }
+        }
+
+        var displayName: String {
+            switch self {
+            case .lavender: return "Lavender"
+            case .ocean:    return "Ocean Blue"
+            case .sage:     return "Sage Green"
+            case .coral:    return "Coral"
+            case .gold:     return "Gold"
+            case .slate:    return "Slate"
+            }
+        }
+    }
+
+    static var currentAccentOption: AccentOption {
+        let raw = UserDefaults.standard.string(forKey: "accentColor") ?? AccentOption.lavender.rawValue
+        return AccentOption(rawValue: raw) ?? .lavender
+    }
+
     // MARK: - Signature Colors
 
-    /// Soft Lavender — Steddi's signature. Quiet confidence, calm, different.
-    static let accent = Color(red: 0.61, green: 0.56, blue: 0.77)       // #9B8EC4
-    static let accentLight = Color(red: 0.73, green: 0.68, blue: 0.87)  // #BAADDE
-    static let accentSubtle = Color(red: 0.61, green: 0.56, blue: 0.77).opacity(0.15)
+    /// User-selected accent color.
+    static var accent: Color { currentAccentOption.color }
+    static var accentLight: Color { accent.opacity(0.7) }
+    static var accentSubtle: Color { accent.opacity(0.15) }
+    static var accentUIColor: UIColor { currentAccentOption.uiColor }
 
     /// Sage green — "all clear" / "good to go" states.
     static let sage = Color(red: 0.13, green: 0.74, blue: 0.45)         // #22BD73
