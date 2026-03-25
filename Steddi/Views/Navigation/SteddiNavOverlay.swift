@@ -163,8 +163,8 @@ struct SteddiNavOverlay: View {
 
             // Bottom-left: buttons row + ETA + speedometer + End
             VStack(spacing: 6) {
-                // Buttons — horizontal row above the ETA bar
-                HStack(spacing: 8) {
+                // Buttons — horizontal row above the ETA bar, left aligned
+                HStack(spacing: 10) {
                     landscapeCompassIndicator
                     landscapeButton(isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") {
                         isVoiceOn.toggle()
@@ -391,31 +391,30 @@ struct SteddiNavOverlay: View {
             Circle()
                 .fill(SteddiTheme.surfacePrimary.opacity(0.88))
                 .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
-                .frame(width: 44, height: 44)
+                .frame(width: 50, height: 50)
 
             Text("N")
-                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                .font(.system(size: 16, weight: .heavy, design: .rounded))
                 .foregroundStyle(SteddiTheme.warmRed)
                 .rotationEffect(.degrees(-engine.headingDegrees))
-                .offset(y: -5)
+                .offset(y: -6)
 
             Triangle()
                 .fill(SteddiTheme.warmRed)
-                .frame(width: 5, height: 4)
+                .frame(width: 6, height: 5)
                 .rotationEffect(.degrees(-engine.headingDegrees))
-                .offset(y: 3)
+                .offset(y: 4)
         }
         .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
     }
 
-    /// Slightly smaller button for landscape — 36x36 instead of 44x44
     private func landscapeButton(_ symbol: String, rotationDegrees: Double = 0, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(SteddiTheme.accent)
                 .rotationEffect(.degrees(rotationDegrees))
-                .frame(width: 44, height: 44)
+                .frame(width: 50, height: 50)
                 .background {
                     Circle()
                         .fill(SteddiTheme.surfacePrimary.opacity(0.88))
