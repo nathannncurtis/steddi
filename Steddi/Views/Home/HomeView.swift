@@ -773,77 +773,94 @@ struct HomeView: View {
     /// When ambiguous (not near either endpoint), shows two rows — one per direction.
     @ViewBuilder
     private func commuteRows(_ commute: Commute) -> some View {
+        commuteCard(commute)
+    }
+
+    private func commuteCard(_ commute: Commute) -> some View {
         let result = resolveCardResult(commute)
+        let isConfident: Bool
+        let confidentDirection: CommuteDirection?
+
         switch result {
-        case .confident(let direction, let destName):
-            let etaKey = direction == .originToDestination ? "\(commute.id)-toDest" : "\(commute.id)-toOrigin"
-            singleCommuteCard(commute, destinationName: destName, etaKey: etaKey, direction: direction)
+        case .confident(let dir, _):
+            isConfident = true
+            confidentDirection = dir
         case .ambiguous:
-            // Show two rows — one for each direction
-            if let destName = commute.destination?.name {
-                singleCommuteCard(commute, destinationName: destName, etaKey: "\(commute.id)-toDest", direction: .originToDestination)
+            isConfident = false
+            confidentDirection = nil
+        }
+
+        return VStack(spacing: 0) {
+            // Commute name header
+            HStack {
+                Text(commute.name)
+                    .font(SteddiTheme.heading(15))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+                Spacer()
             }
-            if let originName = commute.origin?.name {
-                singleCommuteCard(commute, destinationName: originName, etaKey: "\(commute.id)-toOrigin", direction: .destinationToOrigin)
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            // Direction rows
+            if isConfident, let dir = confidentDirection {
+                // Near one endpoint — show single tappable destination
+                let destName = dir == .originToDestination ? commute.destination?.name : commute.origin?.name
+                let etaKey = dir == .originToDestination ? "\(commute.id)-toDest" : "\(commute.id)-toOrigin"
+                commuteDirectionRow(commute: commute, direction: dir, destName: destName ?? "—", etaKey: etaKey)
+                    .padding(.bottom, 12)
+            } else {
+                // Not near either — show both directions
+                if let destName = commute.destination?.name {
+                    commuteDirectionRow(commute: commute, direction: .originToDestination, destName: destName, etaKey: "\(commute.id)-toDest")
+                }
+                if let originName = commute.origin?.name {
+                    commuteDirectionRow(commute: commute, direction: .destinationToOrigin, destName: originName, etaKey: "\(commute.id)-toOrigin")
+                }
+                Spacer().frame(height: 12)
             }
+        }
+        .background {
+            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                .fill(SteddiTheme.surfaceSecondary.opacity(0.6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                        .stroke(SteddiTheme.accent.opacity(0.06), lineWidth: 1)
+                )
         }
     }
 
-    private func singleCommuteCard(_ commute: Commute, destinationName: String, etaKey: String, direction: CommuteDirection) -> some View {
+    /// A single tappable direction row within a commute card
+    private func commuteDirectionRow(commute: Commute, direction: CommuteDirection, destName: String, etaKey: String) -> some View {
         Button {
             startCommute(commute, direction: direction)
         } label: {
-            HStack(spacing: 12) {
-                // Route indicator
-                VStack(spacing: 2) {
-                    Circle()
-                        .fill(SteddiTheme.accent)
-                        .frame(width: 8, height: 8)
-                    Rectangle()
-                        .fill(SteddiTheme.accent.opacity(0.3))
-                        .frame(width: 2, height: 16)
-                    Circle()
-                        .fill(SteddiTheme.sage)
-                        .frame(width: 8, height: 8)
-                }
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.body)
+                    .foregroundStyle(SteddiTheme.accent)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(commute.name)
-                        .font(SteddiTheme.heading(15))
-                        .foregroundStyle(SteddiTheme.textPrimary)
-
-                    HStack(spacing: 4) {
-                        Image(systemName: "location.fill")
-                            .font(.caption2)
-                            .foregroundStyle(SteddiTheme.accent)
-                        Text("→ \(destinationName)")
-                            .foregroundStyle(SteddiTheme.textSecondary)
-                        if let eta = commuteETAs[etaKey] {
-                            Spacer()
-                            Text("\(eta) min")
-                                .font(SteddiTheme.mono(14))
-                                .foregroundStyle(SteddiTheme.sage)
-                        }
-                    }
-                    .font(SteddiTheme.body(13))
-                }
+                Text(destName)
+                    .font(SteddiTheme.body(14))
+                    .foregroundStyle(SteddiTheme.textSecondary)
 
                 Spacer()
 
+                if let eta = commuteETAs[etaKey] {
+                    Text("\(eta) min")
+                        .font(SteddiTheme.mono(14))
+                        .foregroundStyle(SteddiTheme.sage)
+                } else {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(SteddiTheme.textMuted)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                    .fill(SteddiTheme.surfaceSecondary.opacity(0.6))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                            .stroke(SteddiTheme.accent.opacity(0.06), lineWidth: 1)
-                    )
-            }
+            .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
     }
@@ -932,22 +949,41 @@ struct HomeView: View {
         guard let currentLoc = locationService.currentLocation else { return }
 
         for commute in commutes {
-            // Always fetch ETAs for both directions
+            // ETA to destination — use saved route waypoints if available
             if let dest = commute.destination {
                 do {
+                    let destination: CLLocationCoordinate2D
+                    if let savedRoute = commute.preferredRoute(for: .originToDestination) {
+                        // Use the saved route's endpoint for more accurate ETA
+                        let coords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
+                        destination = coords.last ?? dest.coordinate
+                    } else {
+                        destination = dest.coordinate
+                    }
+
                     let request = MKDirections.Request()
                     request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
-                    request.destination = MKMapItem(placemark: MKPlacemark(coordinate: dest.coordinate))
+                    request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
                     request.transportType = .automobile
                     let eta = try await MKDirections(request: request).calculateETA()
                     commuteETAs["\(commute.id)-toDest"] = Int(ceil(eta.expectedTravelTime / 60))
                 } catch {}
             }
+
+            // ETA to origin — same logic
             if let origin = commute.origin {
                 do {
+                    let destination: CLLocationCoordinate2D
+                    if let savedRoute = commute.preferredRoute(for: .destinationToOrigin) {
+                        let coords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
+                        destination = coords.last ?? origin.coordinate
+                    } else {
+                        destination = origin.coordinate
+                    }
+
                     let request = MKDirections.Request()
                     request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
-                    request.destination = MKMapItem(placemark: MKPlacemark(coordinate: origin.coordinate))
+                    request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
                     request.transportType = .automobile
                     let eta = try await MKDirections(request: request).calculateETA()
                     commuteETAs["\(commute.id)-toOrigin"] = Int(ceil(eta.expectedTravelTime / 60))
