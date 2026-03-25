@@ -545,7 +545,7 @@ struct HomeView: View {
                     }
                 }
             }
-            .frame(width: 340)
+            .frame(width: 280)
             .padding(.leading, 44) // shift content right to clear notch
             .background(
                 SteddiTheme.surfacePrimary
@@ -655,7 +655,7 @@ struct HomeView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                 }
-                .frame(maxHeight: 160)
+                .frame(maxHeight: isLandscape ? .infinity : 160)
             }
         }
     }
@@ -890,7 +890,7 @@ struct HomeView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .frame(maxHeight: 160)
+                .frame(maxHeight: isLandscape ? .infinity : 160)
             }
         }
     }
