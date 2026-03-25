@@ -11,8 +11,8 @@ struct CommuteDirectionResolver {
         case ambiguous(originName: String, destinationName: String)
     }
 
-    /// The radius (meters) within which we're confident the user is "at" an endpoint.
-    private static let proximityRadius: Double = 500
+    /// The radius (meters) within which we're confident the user is "at" an endpoint (~500 feet).
+    private static let proximityRadius: Double = 152
 
     /// Resolve the likely direction for a commute from the user's current location and time.
     static func resolve(

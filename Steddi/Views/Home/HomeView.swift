@@ -1118,11 +1118,28 @@ private struct AddLocationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var name = ""
+    @State private var selectedIcon = "mappin.circle.fill"
+
+    private static let iconOptions: [(symbol: String, label: String)] = [
+        ("house.fill", "Home"),
+        ("building.2.fill", "Work"),
+        ("figure.run", "Gym"),
+        ("cart.fill", "Shopping"),
+        ("fork.knife", "Food"),
+        ("cup.and.saucer.fill", "Coffee"),
+        ("airplane", "Airport"),
+        ("cross.fill", "Hospital"),
+        ("book.fill", "School"),
+        ("mappin.circle.fill", "Other"),
+    ]
 
     var body: some View {
         NavigationStack {
             Form {
                 Section { TextField("Location name", text: $name) }
+                Section("Icon") {
+                    iconPicker
+                }
                 if let coord = coordinate {
                     Section {
                         HStack { Text("Latitude"); Spacer(); Text(String(format: "%.4f", coord.latitude)).foregroundStyle(.secondary) }
@@ -1143,9 +1160,36 @@ private struct AddLocationSheet: View {
         }
     }
 
+    private var iconPicker: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
+            ForEach(Self.iconOptions, id: \.symbol) { option in
+                let isSelected = selectedIcon == option.symbol
+                Button {
+                    selectedIcon = option.symbol
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: option.symbol)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(isSelected ? .white : SteddiTheme.accent)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                Circle()
+                                    .fill(isSelected ? SteddiTheme.accent : SteddiTheme.accentSubtle)
+                            )
+                        Text(option.label)
+                            .font(.caption2)
+                            .foregroundStyle(isSelected ? SteddiTheme.textPrimary : SteddiTheme.textMuted)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
     private func save() {
         guard let coord = coordinate else { return }
-        modelContext.insert(PinnedLocation(name: name, latitude: coord.latitude, longitude: coord.longitude))
+        modelContext.insert(PinnedLocation(name: name, latitude: coord.latitude, longitude: coord.longitude, icon: selectedIcon))
     }
 }
 
