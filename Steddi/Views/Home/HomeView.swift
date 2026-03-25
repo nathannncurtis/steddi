@@ -857,29 +857,39 @@ struct HomeView: View {
                     .padding(.vertical, 24)
                     .padding(.horizontal, 20)
             } else {
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(pinnedLocations) { location in
-                            LocationCardView(
-                                name: location.name,
-                                icon: location.icon,
-                                etaMinutes: nil,
-                                delayMinutes: nil,
-                                onTap: {
-                                    navigateTo(
-                                        name: location.name,
-                                        coordinate: location.coordinate,
-                                        address: location.address
-                                    )
-                                }
-                            )
-                        }
+                List {
+                    ForEach(pinnedLocations) { location in
+                        LocationCardView(
+                            name: location.name,
+                            icon: location.icon,
+                            etaMinutes: nil,
+                            delayMinutes: nil,
+                            onTap: {
+                                navigateTo(
+                                    name: location.name,
+                                    coordinate: location.coordinate,
+                                    address: location.address
+                                )
+                            }
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    .onMove(perform: movePlaces)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .frame(maxHeight: 160)
             }
+        }
+    }
+
+    private func movePlaces(from source: IndexSet, to destination: Int) {
+        var items = pinnedLocations
+        items.move(fromOffsets: source, toOffset: destination)
+        for (index, item) in items.enumerated() {
+            item.sortOrder = index
         }
     }
 
