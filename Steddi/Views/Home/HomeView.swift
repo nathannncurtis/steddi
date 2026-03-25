@@ -52,6 +52,8 @@ struct HomeView: View {
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
     // Live ETAs for commute cards — key: "\(commute.id)-toOrigin" or "\(commute.id)-toDest"
+    @State private var commuteETAs: [String: Int] = [:]
+
     /// Distance in miles from current location to a coordinate
     private func distanceMiles(to coord: CLLocationCoordinate2D) -> Double? {
         guard let loc = locationService.currentLocation else { return nil }
@@ -721,19 +723,6 @@ struct HomeView: View {
                 return
             }
 
-            // Decode saved polyline and sample waypoints from it
-            let routeCoords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
-
-            // Build waypoints: current position + sampled points along saved route + destination
-            // Sample every ~20th coordinate to stay under the 25 waypoint API limit
-            var waypointCoords: [CLLocationCoordinate2D] = [currentLocation.coordinate]
-            let sampleStep = max(1, routeCoords.count / 20)
-            for i in stride(from: sampleStep, to: routeCoords.count - 1, by: sampleStep) {
-                waypointCoords.append(routeCoords[i])
-            }
-            waypointCoords.append(target.coordinate)
-
-            // Use MKDirections with waypoints — route through sampled points
             let request = MKDirections.Request()
             request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLocation.coordinate))
             request.destination = MKMapItem(placemark: MKPlacemark(coordinate: target.coordinate))
@@ -745,7 +734,6 @@ struct HomeView: View {
                 let response = try await directions.calculate()
                 guard let route = response.routes.first else {
                     isCalculatingRoute = false
-                    navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
                     return
                 }
 
@@ -769,9 +757,7 @@ struct HomeView: View {
                 isCalculatingRoute = false
                 isNavigating = true
             } catch {
-                // Fall back to standard routing if saved route fails
                 isCalculatingRoute = false
-                navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
             }
         }
     }
