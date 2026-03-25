@@ -149,6 +149,9 @@ class SteddiMapContainer: UIViewController {
 
         // Observe accent color changes
         NotificationCenter.default.addObserver(self, selector: #selector(accentColorChanged), name: .steddiAccentColorChanged, object: nil)
+
+        // Center on user location once available
+        mapView.setUserTrackingMode(.follow, animated: false)
     }
 
     @objc private func accentColorChanged() {
@@ -181,8 +184,8 @@ class SteddiMapContainer: UIViewController {
         let center = mapView.userLocation.coordinate
         let camera = MKMapCamera(
             lookingAtCenter: center,
-            fromDistance: is3D ? 800 : 1200,
-            pitch: is3D ? 60 : 0,
+            fromDistance: is3D ? 1000 : 2000,
+            pitch: is3D ? 55 : 0,
             heading: is3D ? smoothedBearing : 0
         )
         UIView.animate(withDuration: 0.5) {
@@ -274,8 +277,8 @@ class SteddiMapContainer: UIViewController {
         let userCoord = mapView.userLocation.coordinate
         let camera = MKMapCamera(
             lookingAtCenter: userCoord,
-            fromDistance: currentIs3D ? 800 : 1200,
-            pitch: currentIs3D ? 60 : 0,
+            fromDistance: currentIs3D ? 1000 : 2000,
+            pitch: currentIs3D ? 55 : 0,
             heading: 0
         )
         mapView.setCamera(camera, animated: true)
@@ -356,23 +359,24 @@ extension SteddiMapContainer: MKMapViewDelegate {
             // Offset camera center ahead so user sits in lower third
             let lookAhead = Self.offsetCoordinate(
                 coord,
-                distanceMeters: 80,
+                distanceMeters: 100,
                 bearingDegrees: smoothedBearing
             )
 
             let camera = MKMapCamera(
                 lookingAtCenter: lookAhead,
-                fromDistance: 800,
-                pitch: 65,
+                fromDistance: 1000,
+                pitch: 55,
                 heading: smoothedBearing
             )
             UIView.animate(withDuration: 1.0, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
                 mapView.setCamera(camera, animated: false)
             }
         } else {
+            // 2D mode: north-up, centered on user, good zoom
             let camera = MKMapCamera(
                 lookingAtCenter: coord,
-                fromDistance: 1200,
+                fromDistance: 2000,
                 pitch: 0,
                 heading: 0
             )
