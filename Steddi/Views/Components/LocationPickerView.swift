@@ -11,6 +11,7 @@ struct LocationPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     @State private var query = ""
     @State private var searchResults: [GeocodingResult] = []

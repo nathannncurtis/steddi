@@ -4,6 +4,7 @@ import SwiftData
 struct CommuteListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Commute.createdAt, order: .reverse) private var commutes: [Commute]
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     @State private var showNewCommute = false
 

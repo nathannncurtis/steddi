@@ -8,6 +8,7 @@ struct NoGoZoneEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(LocationService.self) private var locationService
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     @State private var name = ""
     @State private var radiusMeters: Double = 200

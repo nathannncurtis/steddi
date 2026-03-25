@@ -13,6 +13,7 @@ struct PostArrivalSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     @State private var isMatching = true
     @State private var matchedRoute: MatchedRoute?

@@ -6,6 +6,7 @@ struct ThresholdExplainerView: View {
     let hardMinuteFloor: Int
 
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     /// Display percentage as whole number
     private var displayPercentage: Int { Int(thresholdPercentage * 100) }

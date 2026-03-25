@@ -8,6 +8,7 @@ import CoreLocation
 /// Custom Steddi turn-by-turn overlay — replaces stock Mapbox NavigationViewController UI.
 /// Uses Mapbox NavigationCore for routing brain, but renders its own SwiftUI interface.
 struct SteddiNavOverlay: View {
+    @AppStorage("accentColor") private var accentColor = "lavender"
     let provider: MapboxNavigationProvider
     let onEndNavigation: () -> Void
     var onToggleVoice: () -> Void = {}

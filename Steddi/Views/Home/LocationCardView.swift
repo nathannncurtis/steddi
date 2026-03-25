@@ -6,6 +6,7 @@ struct LocationCardView: View {
     let etaMinutes: Int?
     let delayMinutes: Int?
     let onTap: () -> Void
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     private var trafficStatus: SteddiTheme.TrafficStatus {
         guard let delay = delayMinutes else { return .unknown }

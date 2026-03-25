@@ -6,6 +6,7 @@ import CoreLocation
 /// Displays detailed turn-by-turn info, upcoming steps list, route overview, and speedometer.
 struct PhoneCompanionView: View {
     @Environment(NavigationStateManager.self) private var navState
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     var body: some View {
         ZStack {

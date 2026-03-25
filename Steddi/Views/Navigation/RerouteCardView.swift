@@ -7,6 +7,7 @@ struct RerouteCardView: View {
     let onSwitch: () -> Void
     let onStay: () -> Void
 
+    @AppStorage("accentColor") private var accentColor = "lavender"
     @State private var isVisible = true
 
     var body: some View {

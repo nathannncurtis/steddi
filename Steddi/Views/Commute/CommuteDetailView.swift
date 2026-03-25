@@ -3,6 +3,7 @@ import SwiftData
 
 struct CommuteDetailView: View {
     @Bindable var commute: Commute
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss

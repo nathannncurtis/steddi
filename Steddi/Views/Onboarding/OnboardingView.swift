@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("accentColor") private var accentColor = "lavender"
     @State private var currentPage = 0
     @State private var showDonation = false
 

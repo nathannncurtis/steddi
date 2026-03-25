@@ -12,6 +12,9 @@ struct HomeView: View {
     @Query(sort: \Commute.createdAt) private var commutes: [Commute]
     @Query private var commuteTrips: [CommuteTrip]
 
+    // Accent color — triggers re-render of entire home + children when changed
+    @AppStorage("accentColor") private var accentColor = "lavender"
+
     // Bottom sheet tab
     @State private var sheetTab: SheetTab = .commutes
 

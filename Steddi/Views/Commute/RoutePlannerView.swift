@@ -10,6 +10,7 @@ struct RoutePlannerView: View {
     let commute: Commute
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     @State private var direction: CommuteDirection = .originToDestination
     @State private var routeName = ""
