@@ -246,6 +246,94 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
+    // MARK: - Route Preview
+
+    /// Show a route preview before starting navigation (Apple's required flow)
+    @MainActor
+    private func showRoutePreview(name: String, coordinate: CLLocationCoordinate2D) async {
+        guard let interfaceController else { return }
+
+        // Calculate the route
+        guard let currentLoc = CLLocationManager().location else {
+            showError("Unable to determine your location.")
+            return
+        }
+
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        request.transportType = .automobile
+
+        guard let response = try? await MKDirections(request: request).calculate(),
+              let route = response.routes.first else {
+            showError("Could not calculate route to \(name).")
+            return
+        }
+
+        // Build preview template
+        let distanceMiles = route.distance / 1609.34
+        let distanceText = distanceMiles < 10
+            ? String(format: "%.1f mi", distanceMiles)
+            : "\(Int(distanceMiles)) mi"
+        let etaMinutes = Int(ceil(route.expectedTravelTime / 60))
+
+        let routeInfo = CPListItem(text: "\(etaMinutes) min", detailText: distanceText)
+        if let img = UIImage(systemName: "car.fill")?
+            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 22, weight: .medium))
+            .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
+            routeInfo.setImage(img)
+        }
+
+        let arrivalTime = Date().addingTimeInterval(route.expectedTravelTime)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        let arrivalItem = CPListItem(text: "Arrive \(formatter.string(from: arrivalTime))", detailText: "via \(route.name ?? "fastest route")")
+        if let img = UIImage(systemName: "clock")?
+            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)) {
+            arrivalItem.setImage(img)
+        }
+
+        let section = CPListSection(items: [routeInfo, arrivalItem])
+        let previewTemplate = CPListTemplate(title: "Route to \(name)", sections: [section])
+
+        // Add "Start" and "Cancel" buttons via alert after pushing preview
+        let startAction = CPAlertAction(title: "Start Navigation", style: .default) { [weak self] _ in
+            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
+            self?.interfaceController?.popToRootTemplate(animated: false, completion: nil)
+            // Trigger navigation on the phone via notification
+            NotificationCenter.default.post(
+                name: .steddiNavigateToLocation,
+                object: nil,
+                userInfo: ["lat": coordinate.latitude, "lng": coordinate.longitude, "name": name]
+            )
+        }
+
+        let cancelAction = CPAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
+            self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
+        }
+
+        // Push preview, then show start/cancel alert
+        interfaceController.pushTemplate(previewTemplate, animated: true) { _, _ in
+            let alert = CPAlertTemplate(
+                titleVariants: ["\(etaMinutes) min to \(name) (\(distanceText))"],
+                actions: [startAction, cancelAction]
+            )
+            interfaceController.presentTemplate(alert, animated: true, completion: nil)
+        }
+    }
+
+    /// Show an error alert on CarPlay
+    @MainActor
+    private func showError(_ message: String) {
+        guard let interfaceController else { return }
+        let action = CPAlertAction(title: "OK", style: .default) { [weak self] _ in
+            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
+        }
+        let alert = CPAlertTemplate(titleVariants: [message], actions: [action])
+        interfaceController.presentTemplate(alert, animated: true, completion: nil)
+    }
+
     // MARK: - Dismiss Navigation
 
     @MainActor
@@ -284,6 +372,19 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                     }
 
                     let item = CPListItem(text: commute.name, detailText: detail)
+                    item.handler = { [weak self] _, completion in
+                        // Default to destination — user can pick direction on phone
+                        let dest = commute.destination
+                        if let dest {
+                            Task { @MainActor in
+                                await self?.showRoutePreview(
+                                    name: dest.name,
+                                    coordinate: dest.coordinate
+                                )
+                            }
+                        }
+                        completion()
+                    }
                     items.append(item)
                 }
             }
@@ -314,6 +415,15 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             if let locations = try? context.fetch(descriptor) {
                 for location in locations.prefix(12) {
                     let item = CPListItem(text: location.name, detailText: location.address ?? "")
+                    item.handler = { [weak self] _, completion in
+                        Task { @MainActor in
+                            await self?.showRoutePreview(
+                                name: location.name,
+                                coordinate: location.coordinate
+                            )
+                        }
+                        completion()
+                    }
                     items.append(item)
                 }
             }
