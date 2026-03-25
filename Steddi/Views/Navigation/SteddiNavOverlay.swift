@@ -168,11 +168,7 @@ struct SteddiNavOverlay: View {
                     landscapeCompassIndicator
                     landscapeButton(isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") {
                         isVoiceOn.toggle()
-                        if isVoiceOn {
-                            try? AVAudioSession.sharedInstance().setActive(true)
-                        } else {
-                            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-                        }
+                        VoiceGuidanceService.shared.enabled = isVoiceOn
                     }
                     landscapeButton(is3DView ? "cube" : "square") { is3DView.toggle(); onToggleView(is3DView) }
                     landscapeButton("exclamationmark.bubble.fill") { showReportSheet = true }
@@ -350,11 +346,7 @@ struct SteddiNavOverlay: View {
     private var voiceButton: some View {
         Button {
             isVoiceOn.toggle()
-            if isVoiceOn {
-                try? AVAudioSession.sharedInstance().setActive(true)
-            } else {
-                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            }
+            VoiceGuidanceService.shared.enabled = isVoiceOn
         } label: {
             floatingButtonCircle(
                 symbol: isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill",

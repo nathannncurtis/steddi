@@ -75,6 +75,7 @@ final class NavigationEngine {
     }
 
     func stopNavigation() {
+        VoiceGuidanceService.shared.stop()
         isNavigating = false
         activeRoute = nil
         steps = []
@@ -153,6 +154,11 @@ final class NavigationEngine {
         maneuverType = Self.sfSymbolFromInstruction(step.instructions)
         roadName = Self.extractRoadName(from: step.instructions)
 
+        // Speak the instruction
+        if !step.instructions.isEmpty {
+            VoiceGuidanceService.shared.speakWithDistance(step.instructions, distance: step.distance)
+        }
+
         // Follow-on step
         let nextIndex = currentStepIndex + 1
         if nextIndex < steps.count {
@@ -187,6 +193,7 @@ final class NavigationEngine {
         let destination = CLLocation(latitude: lastCoord.latitude, longitude: lastCoord.longitude)
         if location.distance(from: destination) < arrivalDistance {
             hasArrived = true
+            VoiceGuidanceService.shared.speakArrival()
             instruction = "You have arrived"
             maneuverType = "flag.fill"
             stepDistance = ""
