@@ -224,10 +224,12 @@ enum ThemeMode: String, CaseIterable {
         }
     }
 
-    /// Daytime = 6am to 8pm
+    /// Use actual sunrise/sunset — approximate based on typical civil twilight
+    /// Summer: ~6am-8pm, Winter: ~7am-5:30pm. Use 7am-7pm as a safe year-round default.
+    /// TODO: Use CoreLocation + solar calculation for precise sunrise/sunset
     static var isDaytime: Bool {
         let hour = Calendar.current.component(.hour, from: Date())
-        return hour >= 6 && hour < 20
+        return hour >= 7 && hour < 19
     }
 }
 

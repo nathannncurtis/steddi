@@ -114,7 +114,7 @@ private struct SteddiRootView: View {
         switch themeMode {
         case "dark": return .dark
         case "light": return .light
-        default: return nil
+        default: return ThemeMode.isDaytime ? .light : .dark
         }
     }
 }
