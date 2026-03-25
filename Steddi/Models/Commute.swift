@@ -12,6 +12,14 @@ final class Commute {
     var isActive: Bool
     var createdAt: Date
 
+    // Schedule-based direction rules
+    var scheduleToDestDays: String?      // e.g. "2,3,4,5,6" (weekday components, Sun=1..Sat=7)
+    var scheduleToDestStartHour: Int?    // e.g. 6
+    var scheduleToDestEndHour: Int?      // e.g. 10
+    var scheduleToOriginDays: String?    // e.g. "2,3,4,5,6"
+    var scheduleToOriginStartHour: Int?  // e.g. 15
+    var scheduleToOriginEndHour: Int?    // e.g. 19
+
     @Relationship(deleteRule: .cascade)
     var routes: [Route]?
 

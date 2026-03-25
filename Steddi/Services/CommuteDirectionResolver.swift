@@ -43,8 +43,48 @@ struct CommuteDirectionResolver {
             return .confident(.destinationToOrigin, destinationName: origin.name)
         }
 
-        // Not at either endpoint — always ask
+        // 2. Schedule-based direction — user-configured time rules
+        if let scheduleDir = scheduledDirection(commute: commute, now: now) {
+            let name = scheduleDir == .originToDestination ? destination.name : origin.name
+            return .confident(scheduleDir, destinationName: name)
+        }
+
+        // 3. Not at either endpoint and no schedule match — ask
         return .ambiguous(originName: origin.name, destinationName: destination.name)
+    }
+
+    // MARK: - Schedule Rules
+
+    /// Check if the current day-of-week and hour match the user's configured schedule.
+    private static func scheduledDirection(
+        commute: Commute,
+        now: Date
+    ) -> CommuteDirection? {
+        let cal = Calendar.current
+        let currentDay = cal.component(.weekday, from: now)  // Sun=1 .. Sat=7
+        let currentHour = cal.component(.hour, from: now)
+
+        // Check "go to destination" schedule
+        if let daysStr = commute.scheduleToDestDays,
+           let startHour = commute.scheduleToDestStartHour,
+           let endHour = commute.scheduleToDestEndHour {
+            let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
+            if days.contains(currentDay) && currentHour >= startHour && currentHour < endHour {
+                return .originToDestination
+            }
+        }
+
+        // Check "go to origin" schedule
+        if let daysStr = commute.scheduleToOriginDays,
+           let startHour = commute.scheduleToOriginStartHour,
+           let endHour = commute.scheduleToOriginEndHour {
+            let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
+            if days.contains(currentDay) && currentHour >= startHour && currentHour < endHour {
+                return .destinationToOrigin
+            }
+        }
+
+        return nil
     }
 
     // MARK: - Learned Patterns

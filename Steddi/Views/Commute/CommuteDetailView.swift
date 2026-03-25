@@ -15,6 +15,13 @@ struct CommuteDetailView: View {
     @State private var showOriginPicker = false
     @State private var showDestinationPicker = false
 
+    // Schedule UI state
+    @State private var useSchedule = false
+
+    private static let dayAbbreviations = ["S", "M", "T", "W", "T", "F", "S"]
+    // weekday components: Sun=1..Sat=7
+    private static let weekdayValues = [1, 2, 3, 4, 5, 6, 7]
+
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
         Form {
@@ -131,6 +138,119 @@ struct CommuteDetailView: View {
                 Text("Override the global defaults for this commute.")
             }
 
+            // MARK: - Auto-Direction Schedule
+            Section {
+                Toggle("Use time-based direction", isOn: $useSchedule)
+                    .onChange(of: useSchedule) { _, newValue in
+                        if !newValue {
+                            commute.scheduleToDestDays = nil
+                            commute.scheduleToDestStartHour = nil
+                            commute.scheduleToDestEndHour = nil
+                            commute.scheduleToOriginDays = nil
+                            commute.scheduleToOriginStartHour = nil
+                            commute.scheduleToOriginEndHour = nil
+                        } else {
+                            // Set defaults: Mon-Fri
+                            if commute.scheduleToDestDays == nil {
+                                commute.scheduleToDestDays = "2,3,4,5,6"
+                                commute.scheduleToDestStartHour = 6
+                                commute.scheduleToDestEndHour = 10
+                            }
+                            if commute.scheduleToOriginDays == nil {
+                                commute.scheduleToOriginDays = "2,3,4,5,6"
+                                commute.scheduleToOriginStartHour = 15
+                                commute.scheduleToOriginEndHour = 19
+                            }
+                        }
+                    }
+
+                if useSchedule {
+                    // Go to destination schedule
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Go to \(commute.destination?.name ?? "Destination")")
+                            .font(.subheadline.weight(.semibold))
+
+                        dayPicker(
+                            selectedDays: Binding(
+                                get: { parseDays(commute.scheduleToDestDays) },
+                                set: { commute.scheduleToDestDays = encodeDays($0) }
+                            )
+                        )
+
+                        HStack {
+                            Text("From")
+                                .foregroundStyle(.secondary)
+                            Picker("Start", selection: Binding(
+                                get: { commute.scheduleToDestStartHour ?? 6 },
+                                set: { commute.scheduleToDestStartHour = $0 }
+                            )) {
+                                ForEach(0..<24, id: \.self) { h in
+                                    Text(formatHour(h)).tag(h)
+                                }
+                            }
+                            .labelsHidden()
+
+                            Text("to")
+                                .foregroundStyle(.secondary)
+                            Picker("End", selection: Binding(
+                                get: { commute.scheduleToDestEndHour ?? 10 },
+                                set: { commute.scheduleToDestEndHour = $0 }
+                            )) {
+                                ForEach(0..<24, id: \.self) { h in
+                                    Text(formatHour(h)).tag(h)
+                                }
+                            }
+                            .labelsHidden()
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    // Go to origin schedule
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Go to \(commute.origin?.name ?? "Origin")")
+                            .font(.subheadline.weight(.semibold))
+
+                        dayPicker(
+                            selectedDays: Binding(
+                                get: { parseDays(commute.scheduleToOriginDays) },
+                                set: { commute.scheduleToOriginDays = encodeDays($0) }
+                            )
+                        )
+
+                        HStack {
+                            Text("From")
+                                .foregroundStyle(.secondary)
+                            Picker("Start", selection: Binding(
+                                get: { commute.scheduleToOriginStartHour ?? 15 },
+                                set: { commute.scheduleToOriginStartHour = $0 }
+                            )) {
+                                ForEach(0..<24, id: \.self) { h in
+                                    Text(formatHour(h)).tag(h)
+                                }
+                            }
+                            .labelsHidden()
+
+                            Text("to")
+                                .foregroundStyle(.secondary)
+                            Picker("End", selection: Binding(
+                                get: { commute.scheduleToOriginEndHour ?? 19 },
+                                set: { commute.scheduleToOriginEndHour = $0 }
+                            )) {
+                                ForEach(0..<24, id: \.self) { h in
+                                    Text(formatHour(h)).tag(h)
+                                }
+                            }
+                            .labelsHidden()
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            } header: {
+                Text("Auto-Direction Schedule")
+            } footer: {
+                Text("When not near either endpoint, use these rules to pick direction automatically.")
+            }
+
             // MARK: - Active Toggle
             Section {
                 Toggle("Active", isOn: $commute.isActive)
@@ -164,6 +284,9 @@ struct CommuteDetailView: View {
         .sheet(isPresented: $showAddRoute) {
             RoutePlannerView(commute: commute)
         }
+        .onAppear {
+            useSchedule = commute.scheduleToDestDays != nil || commute.scheduleToOriginDays != nil
+        }
         .sheet(isPresented: $showOriginPicker) {
             LocationPickerView(title: "Pick Origin") { location in
                 commute.origin = location
@@ -174,6 +297,48 @@ struct CommuteDetailView: View {
                 commute.destination = location
             }
         }
+    }
+
+    // MARK: - Schedule Helpers
+
+    private func dayPicker(selectedDays: Binding<Set<Int>>) -> some View {
+        HStack(spacing: 6) {
+            ForEach(Array(zip(Self.weekdayValues, Self.dayAbbreviations)), id: \.0) { weekday, abbr in
+                Text(abbr)
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 32, height: 32)
+                    .background(
+                        selectedDays.wrappedValue.contains(weekday)
+                            ? SteddiTheme.accent
+                            : Color(.systemGray5)
+                    )
+                    .foregroundStyle(selectedDays.wrappedValue.contains(weekday) ? .white : .primary)
+                    .clipShape(Circle())
+                    .onTapGesture {
+                        if selectedDays.wrappedValue.contains(weekday) {
+                            selectedDays.wrappedValue.remove(weekday)
+                        } else {
+                            selectedDays.wrappedValue.insert(weekday)
+                        }
+                    }
+            }
+        }
+    }
+
+    private func parseDays(_ str: String?) -> Set<Int> {
+        guard let str else { return [] }
+        return Set(str.split(separator: ",").compactMap { Int($0) })
+    }
+
+    private func encodeDays(_ days: Set<Int>) -> String {
+        days.sorted().map(String.init).joined(separator: ",")
+    }
+
+    private func formatHour(_ hour: Int) -> String {
+        if hour == 0 { return "12 AM" }
+        if hour < 12 { return "\(hour) AM" }
+        if hour == 12 { return "12 PM" }
+        return "\(hour - 12) PM"
     }
 
     private func routeRow(_ route: Route) -> some View {
