@@ -181,15 +181,20 @@ class SteddiMapContainer: UIViewController {
         guard currentIs3D != is3D else { return }
         currentIs3D = is3D
 
-        let center = mapView.userLocation.coordinate
-        let camera = MKMapCamera(
-            lookingAtCenter: center,
-            fromDistance: is3D ? 1000 : 2000,
-            pitch: is3D ? 55 : 0,
-            heading: is3D ? smoothedBearing : 0
-        )
-        UIView.animate(withDuration: 0.5) {
-            self.mapView.setCamera(camera, animated: false)
+        if is3D {
+            // 3D: course-up with slight pitch, like Apple Maps default nav view
+            mapView.setUserTrackingMode(.followWithHeading, animated: true)
+            let camera = mapView.camera.copy() as! MKMapCamera
+            camera.pitch = 33
+            camera.centerCoordinateDistance = 600
+            mapView.setCamera(camera, animated: true)
+        } else {
+            // 2D: flat, course-up (heading still follows), like Apple Maps 2D
+            mapView.setUserTrackingMode(.followWithHeading, animated: true)
+            let camera = mapView.camera.copy() as! MKMapCamera
+            camera.pitch = 0
+            camera.centerCoordinateDistance = 1500
+            mapView.setCamera(camera, animated: true)
         }
     }
 
@@ -273,15 +278,17 @@ class SteddiMapContainer: UIViewController {
         routeOverlay = polyline
         mapView.addOverlay(polyline, level: .aboveRoads)
 
-        // Initial camera
-        let userCoord = mapView.userLocation.coordinate
-        let camera = MKMapCamera(
-            lookingAtCenter: userCoord,
-            fromDistance: currentIs3D ? 1000 : 2000,
-            pitch: currentIs3D ? 55 : 0,
-            heading: 0
-        )
-        mapView.setCamera(camera, animated: true)
+        // Use Apple's built-in tracking — handles heading, position, everything
+        mapView.setUserTrackingMode(.followWithHeading, animated: true)
+
+        // Set initial pitch/distance based on 3D preference
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self else { return }
+            let camera = self.mapView.camera.copy() as! MKMapCamera
+            camera.pitch = self.currentIs3D ? 33 : 0
+            camera.centerCoordinateDistance = self.currentIs3D ? 600 : 1500
+            self.mapView.setCamera(camera, animated: true)
+        }
     }
 
     func stopNavigation() {
@@ -295,15 +302,8 @@ class SteddiMapContainer: UIViewController {
         }
         navRouteCoords = []
 
-        // Reset camera to overview
-        let userCoord = mapView.userLocation.coordinate
-        let camera = MKMapCamera(
-            lookingAtCenter: userCoord,
-            fromDistance: 5000,
-            pitch: 0,
-            heading: 0
-        )
-        mapView.setCamera(camera, animated: true)
+        // Reset to follow mode (no heading) for home screen
+        mapView.setUserTrackingMode(.follow, animated: true)
     }
 }
 
@@ -338,51 +338,10 @@ extension SteddiMapContainer: MKMapViewDelegate {
     }
 
     func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
-        guard isInNavigation else { return }
-
-        let coord = userLocation.coordinate
-
-        if currentIs3D {
-            // Get bearing from route geometry (stable, not jumpy GPS course)
-            let routeBearing = Self.bearingAlongRoute(
-                from: coord,
-                routeCoords: navRouteCoords
-            )
-
-            // Smooth the bearing to prevent jerky rotation
-            smoothedBearing = Self.smoothBearing(
-                current: smoothedBearing,
-                target: routeBearing,
-                factor: 0.15
-            )
-
-            // Offset camera center ahead so user sits in lower third
-            let lookAhead = Self.offsetCoordinate(
-                coord,
-                distanceMeters: 100,
-                bearingDegrees: smoothedBearing
-            )
-
-            let camera = MKMapCamera(
-                lookingAtCenter: lookAhead,
-                fromDistance: 1000,
-                pitch: 55,
-                heading: smoothedBearing
-            )
-            UIView.animate(withDuration: 1.0, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
-                mapView.setCamera(camera, animated: false)
-            }
-        } else {
-            // 2D mode: north-up, centered on user, good zoom
-            let camera = MKMapCamera(
-                lookingAtCenter: coord,
-                fromDistance: 2000,
-                pitch: 0,
-                heading: 0
-            )
-            UIView.animate(withDuration: 1.0, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
-                mapView.setCamera(camera, animated: false)
-            }
+        // MKMapView handles camera following via userTrackingMode
+        // We just track the bearing for the puck rotation
+        if isInNavigation, let location = userLocation.location, location.course >= 0 {
+            smoothedBearing = Self.smoothBearing(current: smoothedBearing, target: location.course, factor: 0.15)
         }
     }
 }
