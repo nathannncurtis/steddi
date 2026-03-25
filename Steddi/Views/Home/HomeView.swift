@@ -545,7 +545,7 @@ struct HomeView: View {
                     }
                 }
             }
-            .frame(width: 280)
+            .frame(width: 340)
             .padding(.leading, 44) // shift content right to clear notch
             .background(
                 SteddiTheme.surfacePrimary
