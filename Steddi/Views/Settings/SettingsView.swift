@@ -266,7 +266,7 @@ struct SettingsView: View {
         switch themeMode {
         case "dark": return .dark
         case "light": return .light
-        default: return SteddiTheme.ThemeMode.isDaytime ? .light : .dark
+        default: return ThemeMode.isDaytime ? .light : .dark
         }
     }
 
