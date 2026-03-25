@@ -22,6 +22,7 @@ struct PostArrivalSheet: View {
     @State private var isSaving = false
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         NavigationStack {
             VStack(spacing: 0) {
                 if isMatching {

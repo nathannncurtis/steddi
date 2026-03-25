@@ -12,6 +12,7 @@ struct ThresholdExplainerView: View {
     private var displayPercentage: Int { Int(thresholdPercentage * 100) }
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {

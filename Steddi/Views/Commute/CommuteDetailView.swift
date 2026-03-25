@@ -16,6 +16,7 @@ struct CommuteDetailView: View {
     @State private var showDestinationPicker = false
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         Form {
             // MARK: - Basic Info
             Section {

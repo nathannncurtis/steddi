@@ -59,6 +59,7 @@ struct SteddiNavOverlay: View {
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         ZStack {
             if isLandscape {
                 landscapeNavLayout

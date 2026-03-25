@@ -9,6 +9,7 @@ struct CommuteListView: View {
     @State private var showNewCommute = false
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         Group {
             if commutes.isEmpty {
                 ContentUnavailableView(

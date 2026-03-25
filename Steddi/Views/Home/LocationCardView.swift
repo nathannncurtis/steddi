@@ -16,6 +16,7 @@ struct LocationCardView: View {
     }
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // Icon with amber accent background

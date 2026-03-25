@@ -24,6 +24,7 @@ struct NoGoZoneEditorView: View {
     private let geocodingService = GeocodingService(accessToken: MapboxTokenProvider.accessToken)
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         ZStack {
             // Full-screen map
             NoGoZoneMap(

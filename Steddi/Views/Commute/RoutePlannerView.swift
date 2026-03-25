@@ -32,6 +32,7 @@ struct RoutePlannerView: View {
     }
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         ZStack {
             // Full-screen map
             RoutePlannerMap(

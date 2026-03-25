@@ -40,6 +40,7 @@ struct OnboardingView: View {
     ]
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         VStack(spacing: 0) {
             TabView(selection: $currentPage) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { index, page in

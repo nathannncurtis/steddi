@@ -11,6 +11,7 @@ struct RerouteCardView: View {
     @State private var isVisible = true
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         if isVisible {
             VStack(spacing: 16) {
                 // Steady line accent

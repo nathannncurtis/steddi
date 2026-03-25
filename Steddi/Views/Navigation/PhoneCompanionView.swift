@@ -9,6 +9,7 @@ struct PhoneCompanionView: View {
     @AppStorage("accentColor") private var accentColor = "lavender"
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         ZStack {
             // Full background
             SteddiTheme.surfacePrimary
