@@ -3,7 +3,7 @@ import CoreLocation
 import SwiftData
 
 /// Resolves which direction a user is likely going when they tap a commute.
-/// Priority: proximity → time-based smart defaults → ask.
+/// Only uses proximity — if you're at one endpoint, go to the other. Otherwise, ask.
 struct CommuteDirectionResolver {
 
     enum Result {
@@ -14,7 +14,8 @@ struct CommuteDirectionResolver {
     /// The radius (meters) within which we're confident the user is "at" an endpoint (~500 feet).
     private static let proximityRadius: Double = 152
 
-    /// Resolve the likely direction for a commute from the user's current location and time.
+    /// Resolve the likely direction for a commute from the user's current location.
+    /// Only auto-resolves if the user is physically at one of the endpoints.
     static func resolve(
         commute: Commute,
         currentLocation: CLLocation,
@@ -34,7 +35,7 @@ struct CommuteDirectionResolver {
         let distToOrigin = currentLocation.distance(from: originLoc)
         let distToDest = currentLocation.distance(from: destLoc)
 
-        // 1. Proximity — if near one endpoint, go to the other
+        // Only auto-resolve if physically at one endpoint
         if distToOrigin < proximityRadius && distToDest >= proximityRadius {
             return .confident(.originToDestination, destinationName: destination.name)
         }
@@ -42,19 +43,7 @@ struct CommuteDirectionResolver {
             return .confident(.destinationToOrigin, destinationName: origin.name)
         }
 
-        // 2. Learned patterns — if we have enough trip data, use it
-        if let learned = learnedDirection(commute: commute, trips: trips, now: now) {
-            let name = learned == .originToDestination ? destination.name : origin.name
-            return .confident(learned, destinationName: name)
-        }
-
-        // 3. Smart defaults — weekday time-based heuristic
-        if let defaultDir = smartDefault(now: now) {
-            let name = defaultDir == .originToDestination ? destination.name : origin.name
-            return .confident(defaultDir, destinationName: name)
-        }
-
-        // 4. Ambiguous — ask the user
+        // Not at either endpoint — always ask
         return .ambiguous(originName: origin.name, destinationName: destination.name)
     }
 
