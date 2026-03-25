@@ -1,19 +1,21 @@
 # Steddi TODO
 
 ## Priority 1 — Bugs
-- CommuteDirectionResolver.resolve() calls in HomeView omit the `trips:` parameter — learned patterns are never used, always falls back to smart defaults
+- Navigation camera still not matching Apple Maps behavior — needs more tuning
+- Commute routing broken: everything shows 5 min ETA, nav stops mid-road. Likely direction resolver or destination logic issue. Direct pin-to-location routing works fine.
 
-## Priority 2 — Features (Backend Done, Needs UI)
-- Offline route download buttons in CommuteDetailView (OfflineCacheService is complete, no UI to trigger downloads or show offline status)
-- Donation prompt at milestones (30 days installed, 50 commutes) — DonationView exists but only shows in onboarding/settings, no milestone tracking
+## Priority 2 — Polish
+- Theme mode picker: dark / light / dynamic — should be part of onboarding AND in settings. If dark: map + UI always dark. If light: always light. If dynamic: follows system. Currently always forced dark.
+- Floating nav buttons spacing may need adjustment after migration
 
-## Priority 3 — Future
-- CarPlay support (requires CarPlay entitlement + SceneDelegate)
-- Custom voice guidance (currently uses Mapbox standard voices)
-- App icon and branding
+## Priority 3 — Features
+- CarPlay map view (requires Apple navigation entitlement — apply after dev account)
+- Custom voice guidance
 - App Store listing copy and screenshots
+- Website (steddi.io) — React+Vite site in progress, needs scroll video animation + Porsche-style layout
 
-## Priority 4 — Requires Physical Device
-- On-device GPS trace testing (map matching, route recording)
-- Apple Developer account + TestFlight
+## Priority 4 — Requires Physical Device / Account
+- On-device GPS trace testing
+- Apple Developer account ($99) + TestFlight
+- CarPlay navigation entitlement application
 - App Store submission
