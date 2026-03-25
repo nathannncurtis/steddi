@@ -52,7 +52,14 @@ struct HomeView: View {
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
     // Live ETAs for commute cards — key: "\(commute.id)-toOrigin" or "\(commute.id)-toDest"
-    @State private var commuteETAs: [String: Int] = [:]
+    @State private var commuteETAs: [String: Int] = {
+        // Load cached ETAs immediately so cards show numbers on launch
+        if let data = UserDefaults.standard.data(forKey: "cachedCommuteETAs"),
+           let cached = try? JSONDecoder().decode([String: Int].self, from: data) {
+            return cached
+        }
+        return [:]
+    }()
 
     // Direction picker for ambiguous commutes
     @State private var showDirectionPicker = false
@@ -201,7 +208,7 @@ struct HomeView: View {
             // Periodically refresh ETAs for commute cards
             while !Task.isCancelled {
                 await refreshCommuteETAs()
-                try? await Task.sleep(for: .seconds(300)) // every 5 minutes
+                try? await Task.sleep(for: .seconds(180)) // refresh every 3 minutes
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -948,47 +955,43 @@ struct HomeView: View {
     private func refreshCommuteETAs() async {
         guard let currentLoc = locationService.currentLocation else { return }
 
-        for commute in commutes {
-            // ETA to destination — use saved route waypoints if available
-            if let dest = commute.destination {
-                do {
-                    let destination: CLLocationCoordinate2D
-                    if let savedRoute = commute.preferredRoute(for: .originToDestination) {
-                        // Use the saved route's endpoint for more accurate ETA
-                        let coords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
-                        destination = coords.last ?? dest.coordinate
-                    } else {
-                        destination = dest.coordinate
+        // Fetch all ETAs in parallel
+        await withTaskGroup(of: (String, Int)?.self) { group in
+            for commute in commutes {
+                if let dest = commute.destination {
+                    group.addTask {
+                        let coord = dest.coordinate
+                        let request = MKDirections.Request()
+                        request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
+                        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: coord))
+                        request.transportType = .automobile
+                        guard let eta = try? await MKDirections(request: request).calculateETA() else { return nil }
+                        return ("\(commute.id)-toDest", Int(ceil(eta.expectedTravelTime / 60)))
                     }
-
-                    let request = MKDirections.Request()
-                    request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
-                    request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
-                    request.transportType = .automobile
-                    let eta = try await MKDirections(request: request).calculateETA()
-                    commuteETAs["\(commute.id)-toDest"] = Int(ceil(eta.expectedTravelTime / 60))
-                } catch {}
+                }
+                if let origin = commute.origin {
+                    group.addTask {
+                        let coord = origin.coordinate
+                        let request = MKDirections.Request()
+                        request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
+                        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: coord))
+                        request.transportType = .automobile
+                        guard let eta = try? await MKDirections(request: request).calculateETA() else { return nil }
+                        return ("\(commute.id)-toOrigin", Int(ceil(eta.expectedTravelTime / 60)))
+                    }
+                }
             }
 
-            // ETA to origin — same logic
-            if let origin = commute.origin {
-                do {
-                    let destination: CLLocationCoordinate2D
-                    if let savedRoute = commute.preferredRoute(for: .destinationToOrigin) {
-                        let coords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
-                        destination = coords.last ?? origin.coordinate
-                    } else {
-                        destination = origin.coordinate
-                    }
-
-                    let request = MKDirections.Request()
-                    request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
-                    request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
-                    request.transportType = .automobile
-                    let eta = try await MKDirections(request: request).calculateETA()
-                    commuteETAs["\(commute.id)-toOrigin"] = Int(ceil(eta.expectedTravelTime / 60))
-                } catch {}
+            for await result in group {
+                if let (key, mins) = result {
+                    commuteETAs[key] = mins
+                }
             }
+        }
+
+        // Cache to disk for instant display on next launch
+        if let data = try? JSONEncoder().encode(commuteETAs) {
+            UserDefaults.standard.set(data, forKey: "cachedCommuteETAs")
         }
     }
 
