@@ -29,7 +29,7 @@
 - OSRM map matching replacing Mapbox Map Matching
 - MKLocalSearch replacing Mapbox Geocoding
 - 6 accent colors with live updates across all UI + puck + route line
-- Dark/Light/Dynamic theme mode (time-of-day based)
+- Dark/Light/Dynamic theme mode (real solar calculation based on GPS — handles DST, seasons, polar regions)
 - Unified commute cards with both directions + instant distance + background ETA
 - Proximity-only direction resolver (500ft threshold)
 - Configurable time-based direction rules per commute
@@ -47,6 +47,7 @@
 - Donation milestones
 - Saved route routing fix
 - App Store listing copy + privacy policy
-- Test coverage updated post-migration
-- Code cleanup (dead code, worktrees, debug logs removed)
-- 141+ tests (Swift + Python)
+- Test coverage (181 tests: 105 Swift + 76 Python)
+- Code cleanup (dead code, worktree artifacts, debug logs removed)
+- Proper code signing with Apple Developer account
+- Applied for CarPlay navigation entitlement
