@@ -45,7 +45,7 @@ final class GeocodingService {
 
         let result = try JSONDecoder().decode(SearchBoxResponse.self, from: data)
 
-        return result.features.compactMap { feature in
+        let parsed = result.features.enumerated().compactMap { (index, feature) -> (result: GeocodingResult, apiRank: Int)? in
             // Search Box v1: coordinates in geometry (GeoJSON) or properties.coordinates
             let coordinate: CLLocationCoordinate2D?
             if let geom = feature.geometry?.coordinates, geom.count >= 2 {
@@ -58,12 +58,40 @@ final class GeocodingService {
 
             guard let coord = coordinate else { return nil }
 
-            return GeocodingResult(
+            let geocodingResult = GeocodingResult(
                 name: feature.properties.name_preferred ?? feature.properties.name ?? feature.properties.full_address ?? "Unknown",
                 address: feature.properties.full_address ?? feature.properties.place_formatted ?? "",
                 coordinate: coord
             )
+            return (result: geocodingResult, apiRank: index)
         }
+
+        // Re-rank by combined relevance + proximity score
+        guard let prox = proximity else {
+            return parsed.map(\.result)
+        }
+
+        let userLocation = CLLocation(latitude: prox.latitude, longitude: prox.longitude)
+
+        return parsed.sorted { a, b in
+            let distA = userLocation.distance(from: CLLocation(latitude: a.result.coordinate.latitude, longitude: a.result.coordinate.longitude))
+            let distB = userLocation.distance(from: CLLocation(latitude: b.result.coordinate.latitude, longitude: b.result.coordinate.longitude))
+
+            // Combined score: API relevance (lower rank = more relevant) + distance penalty
+            // Normalize distance to ~0-1 range (50km = 1.0)
+            let distScoreA = min(distA / 50_000, 1.0)
+            let distScoreB = min(distB / 50_000, 1.0)
+
+            // API rank normalized to 0-1
+            let relevanceA = Double(a.apiRank) / max(Double(parsed.count), 1.0)
+            let relevanceB = Double(b.apiRank) / max(Double(parsed.count), 1.0)
+
+            // Weight: 60% proximity, 40% relevance
+            let scoreA = distScoreA * 0.6 + relevanceA * 0.4
+            let scoreB = distScoreB * 0.6 + relevanceB * 0.4
+
+            return scoreA < scoreB
+        }.map(\.result)
     }
 }
 

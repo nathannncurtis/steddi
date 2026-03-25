@@ -131,7 +131,7 @@ struct SteddiNavOverlay: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .padding(.trailing, 16)
-            .padding(.top, 240)
+            .padding(.top, 270)
         }
     }
 
