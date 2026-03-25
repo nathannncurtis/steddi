@@ -629,21 +629,24 @@ struct HomeView: View {
                 .padding(.vertical, 24)
                 .padding(.horizontal, 20)
             } else {
-                VStack(spacing: 8) {
-                    ForEach(commutes) { commute in
-                        commuteRows(commute)
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(commutes) { commute in
+                            commuteRows(commute)
+                        }
+                        Button {
+                            showCommuteList = true
+                        } label: {
+                            Label("New Commute", systemImage: "plus")
+                                .font(SteddiTheme.heading(13))
+                                .foregroundStyle(SteddiTheme.accent)
+                        }
+                        .padding(.top, 4)
                     }
-                    Button {
-                        showCommuteList = true
-                    } label: {
-                        Label("New Commute", systemImage: "plus")
-                            .font(SteddiTheme.heading(13))
-                            .foregroundStyle(SteddiTheme.accent)
-                    }
-                    .padding(.top, 4)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .frame(maxHeight: 160)
             }
         }
     }
@@ -854,25 +857,28 @@ struct HomeView: View {
                     .padding(.vertical, 24)
                     .padding(.horizontal, 20)
             } else {
-                VStack(spacing: 8) {
-                    ForEach(pinnedLocations.prefix(isLandscape ? 2 : 6)) { location in
-                        LocationCardView(
-                            name: location.name,
-                            icon: location.icon,
-                            etaMinutes: nil,
-                            delayMinutes: nil,
-                            onTap: {
-                                navigateTo(
-                                    name: location.name,
-                                    coordinate: location.coordinate,
-                                    address: location.address
-                                )
-                            }
-                        )
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(pinnedLocations) { location in
+                            LocationCardView(
+                                name: location.name,
+                                icon: location.icon,
+                                etaMinutes: nil,
+                                delayMinutes: nil,
+                                onTap: {
+                                    navigateTo(
+                                        name: location.name,
+                                        coordinate: location.coordinate,
+                                        address: location.address
+                                    )
+                                }
+                            )
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .frame(maxHeight: 160)
             }
         }
     }
