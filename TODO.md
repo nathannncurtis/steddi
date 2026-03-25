@@ -1,25 +1,20 @@
 # Steddi TODO
 
-## Priority 1 — Polish
-- Navigation voice guidance (currently silent — no TTS for maneuvers)
+## Priority 1 — Website (steddi.io)
+- Waitlist form / email capture (currently button goes nowhere)
+- Deploy to GitHub Pages or Vercel
+- Custom domain (steddi.io)
 
-## Priority 2 — Website (steddi.io)
-- Scroll-driven hero video animation (video exists, needs proper integration)
-- Porsche-style layout: full-bleed sections, parallax, progressive reveals
-- Need fresh app screenshots with device frames for the site
-- React + Vite project at ~/projects/steddi-website
-
-## Priority 3 — CarPlay
+## Priority 2 — CarPlay
 - Waiting on CarPlay navigation entitlement approval
 - Once approved: swap CPListTemplate → CPMapTemplate for full map view
 - CarPlayMapController already written and ready
 
-## Priority 4 — App Store Prep
-- Fresh screenshots with iPhone device frames
+## Priority 3 — App Store Prep
 - TestFlight beta testing
 - App Store submission
 
-## Priority 5 — Requires Physical Device
+## Priority 4 — Requires Physical Device
 - On-device GPS testing (arrival detection, map matching, route recording)
 - NavigationEngine real-world validation
 
@@ -29,13 +24,13 @@
 - OSRM map matching replacing Mapbox Map Matching
 - MKLocalSearch replacing Mapbox Geocoding
 - 6 accent colors with live updates across all UI + puck + route line
-- Dark/Light/Dynamic theme mode (real solar calculation based on GPS — handles DST, seasons, polar regions)
+- Dark/Light/Dynamic theme mode (real solar calculation based on GPS)
 - Unified commute cards with both directions + instant distance + background ETA
 - Proximity-only direction resolver (500ft threshold)
 - Configurable time-based direction rules per commute
 - Icon picker for pinned locations
 - Commute creation from home screen
-- Scrollable commute/places tabs (max 2 visible)
+- Scrollable commute/places tabs (max 2 visible, no limit in landscape)
 - Reorderable places
 - CarPlay TBT list with route preview flow (select → preview → confirm → navigate)
 - Phone companion view for CarPlay
@@ -51,3 +46,7 @@
 - Code cleanup (dead code, worktree artifacts, debug logs removed)
 - Proper code signing with Apple Developer account
 - Applied for CarPlay navigation entitlement
+- Landscape nav UI: bigger elements, horizontal button row
+- Landscape home: cards no longer clipped
+- Website: video hero, slide-in showcase, privacy section, waitlist CTA
+- Navigation voice guidance (AVSpeechSynthesizer)
