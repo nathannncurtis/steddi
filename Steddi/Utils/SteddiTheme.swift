@@ -239,13 +239,16 @@ enum ThemeMode: String, CaseIterable {
     }
 
     /// Solar calculation — determines if the sun is above the horizon at a given coordinate and time.
-    /// Uses the standard astronomical algorithm for sunrise/sunset.
+    /// Uses UTC time + longitude to derive local solar time — independent of device timezone.
     static func sunIsUp(at coordinate: CLLocationCoordinate2D, date: Date) -> Bool {
-        let cal = Calendar.current
-        let dayOfYear = Double(cal.ordinality(of: .day, in: .year, for: date) ?? 1)
-        let lat = coordinate.latitude
+        var utcCal = Calendar(identifier: .gregorian)
+        utcCal.timeZone = TimeZone(identifier: "UTC")!
 
-        // Solar declination (simplified)
+        let dayOfYear = Double(utcCal.ordinality(of: .day, in: .year, for: date) ?? 1)
+        let lat = coordinate.latitude
+        let lon = coordinate.longitude
+
+        // Solar declination
         let declination = -23.44 * cos(2.0 * .pi / 365.0 * (dayOfYear + 10))
 
         // Hour angle at sunrise/sunset
@@ -254,29 +257,20 @@ enum ThemeMode: String, CaseIterable {
         let cosHourAngle = -tan(latRad) * tan(decRad)
 
         // Handle polar day/night
-        if cosHourAngle < -1 { return true }  // Midnight sun
-        if cosHourAngle > 1 { return false }  // Polar night
+        if cosHourAngle < -1 { return true }   // Midnight sun
+        if cosHourAngle > 1 { return false }   // Polar night
 
         let hourAngle = acos(cosHourAngle) * 180.0 / .pi
-
-        // Convert to hours from solar noon
         let sunriseOffset = hourAngle / 15.0  // degrees to hours
-        let solarNoon = 12.0 // approximate — ignoring longitude equation of time for simplicity
 
-        // Timezone offset from UTC in hours
-        let tzOffset = Double(cal.timeZone.secondsFromGMT(for: date)) / 3600.0
+        // Local solar time from UTC + longitude (15° per hour)
+        let utcHour = Double(utcCal.component(.hour, from: date)) + Double(utcCal.component(.minute, from: date)) / 60.0
+        let localSolarHour = (utcHour + lon / 15.0).truncatingRemainder(dividingBy: 24.0) + (lon >= 0 ? 0 : 24)
 
-        // Longitude correction: 4 minutes per degree from standard meridian
-        let standardMeridian = round(tzOffset) * 15.0
-        let lonCorrection = (coordinate.longitude - standardMeridian) * 4.0 / 60.0
+        let sunrise = 12.0 - sunriseOffset
+        let sunset = 12.0 + sunriseOffset
 
-        let localSolarNoon = solarNoon - lonCorrection
-        let sunrise = localSolarNoon - sunriseOffset
-        let sunset = localSolarNoon + sunriseOffset
-
-        let currentHour = Double(cal.component(.hour, from: date)) + Double(cal.component(.minute, from: date)) / 60.0
-
-        return currentHour >= sunrise && currentHour < sunset
+        return localSolarHour >= sunrise && localSolarHour < sunset
     }
 }
 
