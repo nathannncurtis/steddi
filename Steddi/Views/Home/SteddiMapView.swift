@@ -180,22 +180,10 @@ class SteddiMapContainer: UIViewController {
     func set3DView(_ is3D: Bool) {
         guard currentIs3D != is3D else { return }
         currentIs3D = is3D
-
-        if is3D {
-            // 3D: course-up with slight pitch, like Apple Maps default nav view
-            mapView.setUserTrackingMode(.followWithHeading, animated: true)
-            let camera = mapView.camera.copy() as! MKMapCamera
-            camera.pitch = 33
-            camera.centerCoordinateDistance = 600
-            mapView.setCamera(camera, animated: true)
-        } else {
-            // 2D: flat, course-up (heading still follows), like Apple Maps 2D
-            mapView.setUserTrackingMode(.followWithHeading, animated: true)
-            let camera = mapView.camera.copy() as! MKMapCamera
-            camera.pitch = 0
-            camera.centerCoordinateDistance = 1500
-            mapView.setCamera(camera, animated: true)
-        }
+        // Update camera immediately with current location
+        let coord = mapView.userLocation.coordinate
+        guard CLLocationCoordinate2DIsValid(coord) else { return }
+        applyCameraForNav(at: coord, course: smoothedBearing, animated: true)
     }
 
     /// Get the bearing along the route at the closest point to the user's position.
@@ -278,17 +266,8 @@ class SteddiMapContainer: UIViewController {
         routeOverlay = polyline
         mapView.addOverlay(polyline, level: .aboveRoads)
 
-        // Use Apple's built-in tracking — handles heading, position, everything
-        mapView.setUserTrackingMode(.followWithHeading, animated: true)
-
-        // Set initial pitch/distance based on 3D preference
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self else { return }
-            let camera = self.mapView.camera.copy() as! MKMapCamera
-            camera.pitch = self.currentIs3D ? 33 : 0
-            camera.centerCoordinateDistance = self.currentIs3D ? 600 : 1500
-            self.mapView.setCamera(camera, animated: true)
-        }
+        // Don't use userTrackingMode — we manage the camera manually like Apple Maps does
+        mapView.setUserTrackingMode(.none, animated: false)
     }
 
     func stopNavigation() {
@@ -338,10 +317,48 @@ extension SteddiMapContainer: MKMapViewDelegate {
     }
 
     func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
-        // MKMapView handles camera following via userTrackingMode
-        // We just track the bearing for the puck rotation
-        if isInNavigation, let location = userLocation.location, location.course >= 0 {
-            smoothedBearing = Self.smoothBearing(current: smoothedBearing, target: location.course, factor: 0.15)
+        guard isInNavigation else { return }
+        guard let location = userLocation.location else { return }
+
+        let course = location.course >= 0 ? location.course : smoothedBearing
+        smoothedBearing = Self.smoothBearing(current: smoothedBearing, target: course, factor: 0.2)
+
+        applyCameraForNav(at: location.coordinate, course: smoothedBearing, animated: true)
+    }
+
+    /// Apply the navigation camera — matches Apple Maps driving view behavior
+    private func applyCameraForNav(at coord: CLLocationCoordinate2D, course: Double, animated: Bool) {
+        if currentIs3D {
+            // 3D driving view: tilted, course-up, user in lower third
+            let lookAhead = Self.offsetCoordinate(coord, distanceMeters: 60, bearingDegrees: course)
+            let camera = MKMapCamera(
+                lookingAtCenter: lookAhead,
+                fromDistance: 600,
+                pitch: 45,
+                heading: course
+            )
+            if animated {
+                UIView.animate(withDuration: 0.8, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+                    self.mapView.setCamera(camera, animated: false)
+                }
+            } else {
+                mapView.setCamera(camera, animated: false)
+            }
+        } else {
+            // 2D driving view: flat, course-up, centered on user
+            let camera = MKMapCamera(
+                lookingAtCenter: coord,
+                fromDistance: 1200,
+                pitch: 0,
+                heading: course
+            )
+            if animated {
+                UIView.animate(withDuration: 0.8, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+                    self.mapView.setCamera(camera, animated: false)
+                }
+            } else {
+                mapView.setCamera(camera, animated: false)
+            }
         }
     }
 }
