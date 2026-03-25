@@ -207,11 +207,12 @@ enum ThemeMode: String, CaseIterable {
         }
     }
 
+    /// Resolve the current color scheme based on mode and time of day
     var colorScheme: ColorScheme? {
         switch self {
         case .dark: return .dark
         case .light: return .light
-        case .dynamic: return nil // follows system
+        case .dynamic: return Self.isDaytime ? .light : .dark
         }
     }
 
@@ -219,8 +220,14 @@ enum ThemeMode: String, CaseIterable {
         switch self {
         case .dark: return .dark
         case .light: return .light
-        case .dynamic: return .unspecified
+        case .dynamic: return Self.isDaytime ? .light : .dark
         }
+    }
+
+    /// Daytime = 6am to 8pm
+    static var isDaytime: Bool {
+        let hour = Calendar.current.component(.hour, from: Date())
+        return hour >= 6 && hour < 20
     }
 }
 

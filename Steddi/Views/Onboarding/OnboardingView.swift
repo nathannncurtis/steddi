@@ -154,7 +154,7 @@ struct OnboardingView: View {
             }
 
             VStack(spacing: 12) {
-                themeCard(mode: "dynamic", icon: "iphone", label: "Dynamic", description: "Follows your device — recommended", recommended: true)
+                themeCard(mode: "dynamic", icon: "sun.horizon.fill", label: "Dynamic", description: "Light by day, dark by night", recommended: true)
                 themeCard(mode: "dark", icon: "moon.fill", label: "Dark", description: "Always dark")
                 themeCard(mode: "light", icon: "sun.max.fill", label: "Light", description: "Always light")
             }
