@@ -154,7 +154,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let currentItem = CPListItem(text: distance, detailText: instruction)
         if let img = UIImage(systemName: stateManager.maneuverType)?
             .withConfiguration(UIImage.SymbolConfiguration(pointSize: 28, weight: .bold))
-            .withTintColor(.systemPurple, renderingMode: .alwaysOriginal) {
+            .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
             currentItem.setImage(img)
         }
 
@@ -165,7 +165,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             let followItem = CPListItem(text: "Then", detailText: stateManager.followOnInstruction)
             if let img = UIImage(systemName: stateManager.followOnManeuverSymbol)?
                 .withConfiguration(UIImage.SymbolConfiguration(pointSize: 22, weight: .medium))
-                .withTintColor(.systemPurple, renderingMode: .alwaysOriginal) {
+                .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
                 followItem.setImage(img)
             }
             nextItems.append(followItem)

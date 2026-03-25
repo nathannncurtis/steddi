@@ -19,7 +19,7 @@ enum IconGenerator {
     private static let size: CGFloat = 1024
 
     private static let backgroundColor = UIColor(red: 0.11, green: 0.10, blue: 0.09, alpha: 1.0)
-    private static let roadColor = UIColor(red: 0.61, green: 0.56, blue: 0.77, alpha: 1.0)
+    private static var roadColor: UIColor { SteddiTheme.accentUIColor }
     private static let edgeLineColor = UIColor.white.withAlphaComponent(0.50)
     private static let centerLineColor = UIColor.white.withAlphaComponent(0.22)
 

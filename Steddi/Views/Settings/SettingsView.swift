@@ -45,6 +45,7 @@ struct SettingsView: View {
                             let isSelected = accentColor == option.rawValue
                             Button {
                                 accentColor = option.rawValue
+                                NotificationCenter.default.post(name: .steddiAccentColorChanged, object: nil)
                             } label: {
                                 Circle()
                                     .fill(option.color)

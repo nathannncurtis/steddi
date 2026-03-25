@@ -194,6 +194,12 @@ struct SteddiCard<Content: View>: View {
     }
 }
 
+// MARK: - Accent Color Change Notification
+
+extension Notification.Name {
+    static let steddiAccentColorChanged = Notification.Name("steddiAccentColorChanged")
+}
+
 #Preview {
     ZStack {
         Color.black.ignoresSafeArea()

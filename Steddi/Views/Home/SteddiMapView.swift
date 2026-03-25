@@ -154,6 +154,24 @@ class SteddiMapContainer: UIViewController {
         // Long press gesture
         let lp = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
         mapView.addGestureRecognizer(lp)
+
+        // Observe accent color changes
+        NotificationCenter.default.addObserver(self, selector: #selector(accentColorChanged), name: .steddiAccentColorChanged, object: nil)
+    }
+
+    @objc private func accentColorChanged() {
+        // Recreate puck with new color
+        var puckConfig = Puck2DConfiguration()
+        puckConfig.topImage = Self.makePuckImage()
+        puckConfig.pulsing = nil
+        puckConfig.scale = .constant(0.8)
+        mapView.location.options.puckType = .puck2D(puckConfig)
+
+        // Refresh route line if showing
+        if isInNavigation {
+            removeRouteLine()
+            showRouteLine(navRouteCoords)
+        }
     }
 
     private var cancellables: [AnyCancelable] = []
