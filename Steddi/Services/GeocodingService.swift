@@ -1,15 +1,11 @@
 import Foundation
 import CoreLocation
+import MapKit
 
-/// Wraps Mapbox Geocoding API for place search (forward geocoding).
+/// Wraps Apple's MKLocalSearch for place search (forward geocoding).
 final class GeocodingService {
-    private let accessToken: String
-    private let session: URLSession
 
-    init(accessToken: String, session: URLSession = .shared) {
-        self.accessToken = accessToken
-        self.session = session
-    }
+    init() {}
 
     /// Search for places matching a query string.
     /// Biases results toward the given proximity coordinate.
@@ -20,48 +16,28 @@ final class GeocodingService {
     ) async throws -> [GeocodingResult] {
         guard !query.isEmpty else { return [] }
 
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? query
-
-        var components = URLComponents(string: "https://api.mapbox.com/search/searchbox/v1/forward")!
-        var queryItems = [
-            URLQueryItem(name: "q", value: query),
-            URLQueryItem(name: "access_token", value: accessToken),
-            URLQueryItem(name: "limit", value: String(limit)),
-            URLQueryItem(name: "language", value: "en"),
-            URLQueryItem(name: "types", value: "poi,address,street,place"),
-        ]
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
 
         if let prox = proximity {
-            queryItems.append(URLQueryItem(name: "proximity", value: "\(prox.longitude),\(prox.latitude)"))
+            request.region = MKCoordinateRegion(
+                center: prox,
+                span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+            )
         }
 
-        components.queryItems = queryItems
+        let localSearch = MKLocalSearch(request: request)
+        let response = try await localSearch.start()
 
-        let (data, response) = try await session.data(from: components.url!)
-
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw GeocodingError.apiError
-        }
-
-        let result = try JSONDecoder().decode(SearchBoxResponse.self, from: data)
-
-        let parsed = result.features.enumerated().compactMap { (index, feature) -> (result: GeocodingResult, apiRank: Int)? in
-            // Search Box v1: coordinates in geometry (GeoJSON) or properties.coordinates
-            let coordinate: CLLocationCoordinate2D?
-            if let geom = feature.geometry?.coordinates, geom.count >= 2 {
-                coordinate = CLLocationCoordinate2D(latitude: geom[1], longitude: geom[0])
-            } else if let propCoords = feature.properties.coordinates {
-                coordinate = CLLocationCoordinate2D(latitude: propCoords.latitude, longitude: propCoords.longitude)
-            } else {
-                coordinate = nil
-            }
-
-            guard let coord = coordinate else { return nil }
+        let parsed = response.mapItems.prefix(limit).enumerated().map { (index, mapItem) -> (result: GeocodingResult, apiRank: Int) in
+            let name = mapItem.name ?? "Unknown"
+            let address = mapItem.placemark.title ?? formatAddress(mapItem.placemark)
+            let coordinate = mapItem.placemark.coordinate
 
             let geocodingResult = GeocodingResult(
-                name: feature.properties.name_preferred ?? feature.properties.name ?? feature.properties.full_address ?? "Unknown",
-                address: feature.properties.full_address ?? feature.properties.place_formatted ?? "",
-                coordinate: coord
+                name: name,
+                address: address,
+                coordinate: coordinate
             )
             return (result: geocodingResult, apiRank: index)
         }
@@ -93,6 +69,18 @@ final class GeocodingService {
             return scoreA < scoreB
         }.map(\.result)
     }
+
+    // MARK: - Helpers
+
+    private func formatAddress(_ placemark: MKPlacemark) -> String {
+        let parts = [
+            [placemark.subThoroughfare, placemark.thoroughfare].compactMap { $0 }.joined(separator: " "),
+            placemark.locality,
+            placemark.administrativeArea,
+            placemark.postalCode
+        ].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.joined(separator: ", ")
+    }
 }
 
 struct GeocodingResult: Identifiable, Hashable {
@@ -107,34 +95,6 @@ struct GeocodingResult: Identifiable, Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
-    }
-}
-
-// MARK: - Search Box v1 API Response
-
-private struct SearchBoxResponse: Decodable {
-    let features: [Feature]
-
-    struct Feature: Decodable {
-        let properties: Properties
-        let geometry: Geometry?
-    }
-
-    struct Properties: Decodable {
-        let name: String?
-        let name_preferred: String?
-        let full_address: String?
-        let place_formatted: String?
-        let coordinates: Coordinates?
-    }
-
-    struct Coordinates: Decodable {
-        let longitude: Double
-        let latitude: Double
-    }
-
-    struct Geometry: Decodable {
-        let coordinates: [Double]
     }
 }
 

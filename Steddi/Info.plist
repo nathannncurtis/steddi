@@ -29,8 +29,6 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>MBXAccessToken</key>
-	<string>pk.eyJ1IjoibmF0aGFuY3VydGlzIiwiYSI6ImNtbXF2YXRhbzEycGgycG9tNTAwaTRmY2YifQ.ch8h2pYyvMaAuoKgEIgDlw</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Steddi needs background location access to continue navigation when the app is in the background.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

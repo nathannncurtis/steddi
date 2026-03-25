@@ -1,65 +1,56 @@
 import UIKit
-import MapboxMaps
+import MapKit
 import CoreLocation
 import Combine
 
-/// Hosts a MapboxMaps MapView sized to the CarPlay display.
-/// Same lavender route styling and chase-cam as the phone, optimized for CarPlay screen.
-class CarPlayMapController: UIViewController {
+/// Hosts an MKMapView sized to the CarPlay display.
+/// Same route styling and chase-cam as the phone, optimized for CarPlay screen.
+class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
-    private var mapView: MapView!
+    private var mapView: MKMapView!
     private var isInNavigation = false
     private var navRouteCoords: [CLLocationCoordinate2D] = []
     private var smoothedBearing: Double = 0
     private var cancellables: [AnyCancellable] = []
     private var currentZoom: Double = 17.5
+    private var routeOverlay: MKPolyline?
 
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        let initOptions = MapInitOptions(styleURI: .standard)
-        mapView = MapView(frame: view.bounds, mapInitOptions: initOptions)
+        mapView = MKMapView(frame: view.bounds)
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        mapView.overrideUserInterfaceStyle = .dark
+        mapView.delegate = self
 
-        // Lavender puck — same as phone
-        var puckConfig = Puck2DConfiguration()
-        puckConfig.topImage = SteddiMapContainer.makePuckImage()
-        puckConfig.pulsing = nil
-        puckConfig.scale = .constant(0.8)
-        mapView.location.options.puckType = .puck2D(puckConfig)
-        mapView.location.options.puckBearing = .heading
+        let config = MKStandardMapConfiguration(emphasisStyle: .muted)
+        mapView.preferredConfiguration = config
+
+        mapView.showsUserLocation = true
 
         // Hide ornaments — CarPlay template provides its own chrome
-        mapView.ornaments.options.scaleBar.visibility = .hidden
-        mapView.ornaments.options.compass.visibility = .hidden
+        mapView.showsCompass = false
+        mapView.showsScale = false
 
-        mapView.mapboxMap.setCamera(to: CameraOptions(zoom: 14))
+        let region = MKCoordinateRegion(
+            center: mapView.userLocation.coordinate.latitude != 0
+                ? mapView.userLocation.coordinate
+                : CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+            latitudinalMeters: 5000,
+            longitudinalMeters: 5000
+        )
+        mapView.setRegion(region, animated: false)
 
         view.backgroundColor = .black
         view.addSubview(mapView)
-
-        updateMapStyle()
-
-        mapView.mapboxMap.onStyleLoaded.observeNext { [weak self] _ in
-            guard let self,
-                  let coord = self.mapView.location.latestLocation?.coordinate else { return }
-            self.mapView.mapboxMap.setCamera(to: CameraOptions(center: coord, zoom: 14))
-        }.store(in: &cancellables)
 
         // Observe accent color changes
         NotificationCenter.default.addObserver(self, selector: #selector(accentColorChanged), name: .steddiAccentColorChanged, object: nil)
     }
 
     @objc private func accentColorChanged() {
-        // Recreate puck with new color
-        var puckConfig = Puck2DConfiguration()
-        puckConfig.topImage = SteddiMapContainer.makePuckImage()
-        puckConfig.pulsing = nil
-        puckConfig.scale = .constant(0.8)
-        mapView.location.options.puckType = .puck2D(puckConfig)
-
         // Refresh route line if showing
         if isInNavigation {
             removeRouteLine()
@@ -70,31 +61,6 @@ class CarPlayMapController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         mapView?.frame = view.bounds
-    }
-
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-        if traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle {
-            updateMapStyle()
-        }
-    }
-
-    // MARK: - Map Style
-
-    private func updateMapStyle() {
-        let isDark = traitCollection.userInterfaceStyle == .dark
-        if isDark {
-            mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
-        } else {
-            let hour = Calendar.current.component(.hour, from: Date())
-            if hour >= 19 || hour < 6 {
-                mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
-            } else if hour >= 17 {
-                mapView.mapboxMap.mapStyle = .standard(lightPreset: .dawn)
-            } else {
-                mapView.mapboxMap.mapStyle = .standard(lightPreset: .day)
-            }
-        }
     }
 
     // MARK: - Navigation
@@ -108,10 +74,14 @@ class CarPlayMapController: UIViewController {
 
         showRouteLine(routeCoords)
 
-        if let coord = mapView.location.latestLocation?.coordinate {
-            mapView.mapboxMap.setCamera(to: CameraOptions(
-                center: coord, zoom: currentZoom, bearing: 0, pitch: 55
-            ))
+        if let userCoord = mapView.userLocation.location?.coordinate {
+            let camera = MKMapCamera(
+                lookingAtCenter: userCoord,
+                fromDistance: zoomToDistance(currentZoom),
+                pitch: 55,
+                heading: 0
+            )
+            mapView.setCamera(camera, animated: true)
         }
     }
 
@@ -122,10 +92,15 @@ class CarPlayMapController: UIViewController {
 
         removeRouteLine()
 
-        mapView.mapboxMap.setCamera(to: CameraOptions(
-            center: mapView.location.latestLocation?.coordinate,
-            zoom: 14, bearing: 0, pitch: 0
-        ))
+        if let userCoord = mapView.userLocation.location?.coordinate {
+            let camera = MKMapCamera(
+                lookingAtCenter: userCoord,
+                fromDistance: 5000,
+                pitch: 0,
+                heading: 0
+            )
+            mapView.setCamera(camera, animated: true)
+        }
     }
 
     /// Chase-cam: follow user with route-based bearing, smoothed rotation, look-ahead offset
@@ -142,44 +117,60 @@ class CarPlayMapController: UIViewController {
             coordinate, distanceMeters: 80, bearingDegrees: smoothedBearing
         )
 
-        mapView.camera.ease(
-            to: CameraOptions(
-                center: lookAhead, zoom: currentZoom,
-                bearing: smoothedBearing, pitch: 60
-            ),
-            duration: 1.0, curve: .linear, completion: nil
+        let camera = MKMapCamera(
+            lookingAtCenter: lookAhead,
+            fromDistance: zoomToDistance(currentZoom),
+            pitch: 60,
+            heading: smoothedBearing
         )
+        UIView.animate(withDuration: 1.0, delay: 0, options: [.curveLinear]) {
+            self.mapView.setCamera(camera, animated: false)
+        }
     }
 
     // MARK: - Zoom Controls
 
     func zoomIn() {
         currentZoom = min(currentZoom + 1, 20)
-        if let center = mapView.mapboxMap.cameraState.center as? CLLocationCoordinate2D {
-            mapView.camera.ease(to: CameraOptions(center: center, zoom: currentZoom), duration: 0.3, curve: .easeInOut, completion: nil)
-        }
+        let camera = MKMapCamera(
+            lookingAtCenter: mapView.centerCoordinate,
+            fromDistance: zoomToDistance(currentZoom),
+            pitch: mapView.camera.pitch,
+            heading: mapView.camera.heading
+        )
+        mapView.setCamera(camera, animated: true)
     }
 
     func zoomOut() {
         currentZoom = max(currentZoom - 1, 12)
-        if let center = mapView.mapboxMap.cameraState.center as? CLLocationCoordinate2D {
-            mapView.camera.ease(to: CameraOptions(center: center, zoom: currentZoom), duration: 0.3, curve: .easeInOut, completion: nil)
-        }
+        let camera = MKMapCamera(
+            lookingAtCenter: mapView.centerCoordinate,
+            fromDistance: zoomToDistance(currentZoom),
+            pitch: mapView.camera.pitch,
+            heading: mapView.camera.heading
+        )
+        mapView.setCamera(camera, animated: true)
     }
 
     func recenter() {
-        guard let coord = mapView.location.latestLocation?.coordinate else { return }
+        guard let coord = mapView.userLocation.location?.coordinate else { return }
         currentZoom = 17.5
         if isInNavigation {
-            mapView.camera.ease(
-                to: CameraOptions(center: coord, zoom: currentZoom, bearing: smoothedBearing, pitch: 60),
-                duration: 0.5, curve: .easeInOut, completion: nil
+            let camera = MKMapCamera(
+                lookingAtCenter: coord,
+                fromDistance: zoomToDistance(currentZoom),
+                pitch: 60,
+                heading: smoothedBearing
             )
+            mapView.setCamera(camera, animated: true)
         } else {
-            mapView.camera.ease(
-                to: CameraOptions(center: coord, zoom: 14, bearing: 0, pitch: 0),
-                duration: 0.5, curve: .easeInOut, completion: nil
+            let camera = MKMapCamera(
+                lookingAtCenter: coord,
+                fromDistance: 5000,
+                pitch: 0,
+                heading: 0
             )
+            mapView.setCamera(camera, animated: true)
         }
     }
 
@@ -187,25 +178,37 @@ class CarPlayMapController: UIViewController {
 
     private func showRouteLine(_ coordinates: [CLLocationCoordinate2D]) {
         guard !coordinates.isEmpty else { return }
-
-        var source = GeoJSONSource(id: "steddi-route-source")
-        source.data = .geometry(.lineString(LineString(coordinates)))
-
-        var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
-        lineLayer.slot = .top
-        lineLayer.lineColor = .constant(StyleColor(SteddiTheme.accentUIColor))
-        lineLayer.lineWidth = .constant(8)
-        lineLayer.lineOpacity = .constant(1.0)
-        lineLayer.lineCap = .constant(.round)
-        lineLayer.lineJoin = .constant(.round)
-        lineLayer.lineEmissiveStrength = .constant(1.0)
-
-        try? mapView.mapboxMap.addSource(source)
-        try? mapView.mapboxMap.addLayer(lineLayer)
+        let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+        routeOverlay = polyline
+        mapView.addOverlay(polyline, level: .aboveRoads)
     }
 
     private func removeRouteLine() {
-        try? mapView.mapboxMap.removeLayer(withId: "steddi-route-line")
-        try? mapView.mapboxMap.removeSource(withId: "steddi-route-source")
+        if let overlay = routeOverlay {
+            mapView.removeOverlay(overlay)
+            routeOverlay = nil
+        }
+    }
+
+    // MARK: - MKMapViewDelegate
+
+    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        if let polyline = overlay as? MKPolyline {
+            let renderer = MKPolylineRenderer(polyline: polyline)
+            renderer.strokeColor = SteddiTheme.accentUIColor
+            renderer.lineWidth = 8
+            renderer.lineCap = .round
+            renderer.lineJoin = .round
+            return renderer
+        }
+        return MKOverlayRenderer(overlay: overlay)
+    }
+
+    // MARK: - Helpers
+
+    /// Convert a zoom level to MKMapCamera distance (approximate)
+    private func zoomToDistance(_ zoom: Double) -> CLLocationDistance {
+        let lat = mapView.centerCoordinate.latitude
+        return 156543.03 * cos(lat * .pi / 180) / pow(2, zoom) * 256
     }
 }

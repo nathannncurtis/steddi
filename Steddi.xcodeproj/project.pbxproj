@@ -10,7 +10,6 @@
 		10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */; };
 		13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4F33590D3CEB7AA217E684 /* LocationService.swift */; };
 		13B60D9B67536ABD172A889C /* IconGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70ACC4B25C91881AEFC7B21 /* IconGenerator.swift */; };
-		14146A9620680F297380CF6A /* MapboxNavigationCore in Frameworks */ = {isa = PBXBuildFile; productRef = BC2E9B263D66D768CAE7A99E /* MapboxNavigationCore */; };
 		1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50B3D1495689CE92E4ED80B /* GeocodingService.swift */; };
 		1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */; };
 		26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */; };
@@ -25,6 +24,7 @@
 		6C0862A6626424EBC6622731 /* Commute.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */; };
 		6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62156E1FDD078D989A2441A /* OfflineCacheService.swift */; };
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
+		7AC6366691401A8DB28223A8 /* NavigationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */; };
 		8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */; };
 		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
 		87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64DED98F409553C18FBECB6 /* AppDelegate.swift */; };
@@ -32,7 +32,6 @@
 		8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82950853F7696A66EC5389FA /* CommuteDetailView.swift */; };
 		8C6902233D467F3E4CC209D5 /* CarPlay.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 536F40426EDB0B72A580D76E /* CarPlay.framework */; };
 		943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */; };
-		94917EB5D159208BBD3D964B /* MapboxNavigationUIKit in Frameworks */ = {isa = PBXBuildFile; productRef = CC82367AFB74F13DBB9DE75C /* MapboxNavigationUIKit */; };
 		967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDEFFA656C308FF61D985BF /* NoGoZone.swift */; };
 		99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */; };
 		9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */; };
@@ -43,7 +42,6 @@
 		BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */; };
 		C4C89A710971CA2A022090F7 /* ActiveNavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D04E323A7006F464191A685 /* ActiveNavigationView.swift */; };
 		C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */; };
-		CB0A1E2F3D4B5C6A7E8F9012 /* NavigationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1C2D3E4F5A6B7C8D9E0F12 /* NavigationEngine.swift */; };
 		CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */; };
 		CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B385FB734BECC176514917FB /* RoutePlannerView.swift */; };
 		D5D2CC709306B626B120D222 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4892145CE55DFF9FF13FC7 /* DonationView.swift */; };
@@ -55,7 +53,6 @@
 		E7FD013198226D25A6927A6B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 770C65D4283DB277ED143EA4 /* Assets.xcassets */; };
 		E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */; };
 		E8518F81F0D9BA02AAEA282D /* SteddiNavOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */; };
-		EE11B267B397E2C0E0CF8524 /* MapboxTokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD9B3AA19F39B9592040D98 /* MapboxTokenProvider.swift */; };
 		F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */; };
 		F988967C38892DF7EE141166 /* NavigationStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */; };
 		FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598632F13EF2804C543D14D0 /* LocationCardView.swift */; };
@@ -104,17 +101,16 @@
 		8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneEditorView.swift; sourceTree = "<group>"; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManager.swift; sourceTree = "<group>"; };
-		AB1C2D3E4F5A6B7C8D9E0F12 /* NavigationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationEngine.swift; sourceTree = "<group>"; };
 		AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapMatchingService.swift; sourceTree = "<group>"; };
 		AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteTrip.swift; sourceTree = "<group>"; };
 		B385FB734BECC176514917FB /* RoutePlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlannerView.swift; sourceTree = "<group>"; };
+		B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationEngine.swift; sourceTree = "<group>"; };
 		B70ACC4B25C91881AEFC7B21 /* IconGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconGenerator.swift; sourceTree = "<group>"; };
 		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
 		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
 		C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayMapController.swift; sourceTree = "<group>"; };
 		CADE3A03C008B4BD3D0FE2E6 /* Report.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report.swift; sourceTree = "<group>"; };
 		CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoder.swift; sourceTree = "<group>"; };
-		CBD9B3AA19F39B9592040D98 /* MapboxTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapboxTokenProvider.swift; sourceTree = "<group>"; };
 		D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalNotificationService.swift; sourceTree = "<group>"; };
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
 		E64DED98F409553C18FBECB6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -135,8 +131,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				14146A9620680F297380CF6A /* MapboxNavigationCore in Frameworks */,
-				94917EB5D159208BBD3D964B /* MapboxNavigationUIKit in Frameworks */,
 				8C6902233D467F3E4CC209D5 /* CarPlay.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -297,9 +291,8 @@
 				57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */,
 				D50B3D1495689CE92E4ED80B /* GeocodingService.swift */,
 				3B4F33590D3CEB7AA217E684 /* LocationService.swift */,
-				CBD9B3AA19F39B9592040D98 /* MapboxTokenProvider.swift */,
 				AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */,
-				AB1C2D3E4F5A6B7C8D9E0F12 /* NavigationEngine.swift */,
+				B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */,
 				A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */,
 				F62156E1FDD078D989A2441A /* OfflineCacheService.swift */,
 				0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */,
@@ -377,8 +370,6 @@
 			);
 			name = Steddi;
 			packageProductDependencies = (
-				BC2E9B263D66D768CAE7A99E /* MapboxNavigationCore */,
-				CC82367AFB74F13DBB9DE75C /* MapboxNavigationUIKit */,
 			);
 			productName = Steddi;
 			productReference = EAA8B2837951D77986E1E11A /* Steddi.app */;
@@ -407,9 +398,6 @@
 			);
 			mainGroup = D9743846EFCC6DEFFB968F58;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				63EA41F1D59ABB71AC77B8A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */,
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9C6D36121E1F61E20EE34C4D /* Products */;
 			projectDirPath = "";
@@ -480,9 +468,8 @@
 				3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */,
 				13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */,
 				26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */,
-				EE11B267B397E2C0E0CF8524 /* MapboxTokenProvider.swift in Sources */,
 				D649B2DE89F3D939E458A826 /* MeasurementUnit.swift in Sources */,
-				CB0A1E2F3D4B5C6A7E8F9012 /* NavigationEngine.swift in Sources */,
+				7AC6366691401A8DB28223A8 /* NavigationEngine.swift in Sources */,
 				F988967C38892DF7EE141166 /* NavigationStateManager.swift in Sources */,
 				967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */,
 				57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */,
@@ -763,30 +750,6 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		63EA41F1D59ABB71AC77B8A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/mapbox/mapbox-navigation-ios.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 3.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		BC2E9B263D66D768CAE7A99E /* MapboxNavigationCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 63EA41F1D59ABB71AC77B8A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */;
-			productName = MapboxNavigationCore;
-		};
-		CC82367AFB74F13DBB9DE75C /* MapboxNavigationUIKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 63EA41F1D59ABB71AC77B8A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */;
-			productName = MapboxNavigationUIKit;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F39B8109425B1F676A7AE95D /* Project object */;
 }

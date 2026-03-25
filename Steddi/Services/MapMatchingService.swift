@@ -1,15 +1,13 @@
 import Foundation
 import CoreLocation
 
-/// Handles snapping raw GPS traces to the road network via Mapbox Map Matching API.
+/// Handles snapping raw GPS traces to the road network via OSRM Map Matching API.
 /// Chunks traces that exceed the 100-coordinate API limit.
 final class MapMatchingService {
-    private let accessToken: String
     private let maxCoordinatesPerRequest = 100
     private let session: URLSession
 
-    init(accessToken: String, session: URLSession = .shared) {
-        self.accessToken = accessToken
+    init(session: URLSession = .shared) {
         self.session = session
     }
 
@@ -62,23 +60,21 @@ final class MapMatchingService {
         let coordinates = points.map { "\($0.longitude),\($0.latitude)" }.joined(separator: ";")
         let timestamps = points.map { String(Int($0.timestamp.timeIntervalSince1970)) }.joined(separator: ";")
 
-        var components = URLComponents(string: "https://api.mapbox.com/matching/v5/mapbox/driving/\(coordinates)")!
+        var components = URLComponents(string: "https://router.project-osrm.org/match/v1/driving/\(coordinates)")!
         components.queryItems = [
-            URLQueryItem(name: "access_token", value: accessToken),
-            URLQueryItem(name: "geometries", value: "polyline6"),
             URLQueryItem(name: "overview", value: "full"),
+            URLQueryItem(name: "geometries", value: "polyline6"),
             URLQueryItem(name: "timestamps", value: timestamps),
-            URLQueryItem(name: "tidy", value: "true"),
         ]
 
-        let (data, response) = try await session.data(from: components.url!)
+        let (data, response) = try await session.data(for: URLRequest(url: components.url!))
 
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw MapMatchingError.apiError
         }
 
         let result = try JSONDecoder().decode(MapMatchingResponse.self, from: data)
-        guard let matching = result.matchings.first else {
+        guard let matching = result.matchings?.first else {
             throw MapMatchingError.noMatch
         }
 
@@ -100,13 +96,12 @@ struct MatchedRoute {
 // MARK: - API Response Types
 
 struct MapMatchingResponse: Decodable {
-    let matchings: [Matching]
+    let matchings: [Matching]?
     let code: String
 
     struct Matching: Decodable {
         let geometry: String
         let distance: Double
-        let duration: Double
     }
 }
 

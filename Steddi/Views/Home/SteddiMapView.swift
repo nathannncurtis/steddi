@@ -1,17 +1,15 @@
 import SwiftUI
-import MapboxMaps
-import MapboxNavigationCore
-import MapboxDirections
+import MapKit
+import UIKit
 import CoreLocation
 import Combine
 
 /// Manages the map in a single UIKit view controller.
-/// Navigation uses the same map — Steddi's custom SwiftUI overlay replaces Mapbox's stock UI.
+/// Navigation uses the same map — Steddi's custom SwiftUI overlay replaces Apple's stock UI.
 struct SteddiMapView: UIViewControllerRepresentable {
     @Binding var isNavigating: Bool
     @Binding var is3DView: Bool
-    let navigationRoutes: NavigationRoutes?
-    let provider: MapboxNavigationProvider?
+    let navigationRoute: MKRoute?
     let onLongPress: (CLLocationCoordinate2D) -> Void
     let onArrival: () -> Void
     let onCancelled: () -> Void
@@ -24,9 +22,9 @@ struct SteddiMapView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ vc: SteddiMapContainer, context: Context) {
-        if isNavigating, let routes = navigationRoutes, let provider = provider {
+        if isNavigating, let route = navigationRoute {
             if !vc.isInNavigation {
-                vc.startNavigation(routes: routes, provider: provider)
+                vc.startNavigation(route: route)
             }
             vc.set3DView(is3DView)
         } else if !isNavigating && vc.isInNavigation {
@@ -36,12 +34,12 @@ struct SteddiMapView: UIViewControllerRepresentable {
 }
 
 class SteddiMapContainer: UIViewController {
-    private var mapView: MapView!
+    private var mapView: MKMapView!
     var isInNavigation = false
     private var currentIs3D = true
-    private var navProvider: MapboxNavigationProvider?
     private var navRouteCoords: [CLLocationCoordinate2D] = []
     private var smoothedBearing: Double = 0
+    private var routeOverlay: MKPolyline?
 
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
 
@@ -111,25 +109,29 @@ class SteddiMapContainer: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        let initOptions = MapInitOptions(styleURI: .standard)
-        mapView = MapView(frame: view.bounds, mapInitOptions: initOptions)
+        mapView = MKMapView(frame: view.bounds)
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         mapView.insetsLayoutMarginsFromSafeArea = false
+        mapView.delegate = self
 
-        // Lavender soft triangle puck
-        var puckConfig = Puck2DConfiguration()
-        puckConfig.topImage = Self.makePuckImage()
-        puckConfig.pulsing = nil
-        puckConfig.scale = .constant(0.8)
-        mapView.location.options.puckType = .puck2D(puckConfig)
-        mapView.location.options.puckBearing = .heading
+        // Clean muted dark map style
+        let config = MKStandardMapConfiguration(emphasisStyle: .muted)
+        config.showsTraffic = false
+        mapView.preferredConfiguration = config
+        mapView.overrideUserInterfaceStyle = .dark
+
+        // Show user location with custom puck (handled in delegate)
+        mapView.showsUserLocation = true
 
         // Hide ornaments that clash with Steddi UI
-        mapView.ornaments.options.scaleBar.visibility = .hidden
-        mapView.ornaments.options.compass.visibility = .hidden
+        mapView.showsCompass = false
+        mapView.showsScale = false
 
-        // Initial camera
-        mapView.mapboxMap.setCamera(to: CameraOptions(zoom: 14))
+        // Show 3D buildings
+        mapView.showsBuildings = true
+
+        // Clean map — hide POIs
+        mapView.pointOfInterestFilter = .excludingAll
 
         // Match the bottom sheet color so there's no visible gap below the sheet
         let sheetColor = UIColor { traits in
@@ -141,16 +143,6 @@ class SteddiMapContainer: UIViewController {
 
         view.addSubview(mapView)
 
-        // Set map style based on current system appearance
-        updateMapStyle()
-
-        // Follow user location on style load
-        mapView.mapboxMap.onStyleLoaded.observeNext { [weak self] _ in
-            guard let self,
-                  let coord = self.mapView.location.latestLocation?.coordinate else { return }
-            self.mapView.mapboxMap.setCamera(to: CameraOptions(center: coord, zoom: 14))
-        }.store(in: &cancellables)
-
         // Long press gesture
         let lp = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
         mapView.addGestureRecognizer(lp)
@@ -160,45 +152,17 @@ class SteddiMapContainer: UIViewController {
     }
 
     @objc private func accentColorChanged() {
-        // Recreate puck with new color
-        var puckConfig = Puck2DConfiguration()
-        puckConfig.topImage = Self.makePuckImage()
-        puckConfig.pulsing = nil
-        puckConfig.scale = .constant(0.8)
-        mapView.location.options.puckType = .puck2D(puckConfig)
+        // Refresh the user location annotation with new color
+        if let userAnnotation = mapView.annotations.first(where: { $0 is MKUserLocation }) {
+            mapView.removeAnnotation(userAnnotation)
+            mapView.showsUserLocation = true
+        }
 
         // Refresh route line if showing
-        if isInNavigation {
-            removeRouteLine()
-            showRouteLine(navRouteCoords)
-        }
-    }
-
-    private var cancellables: [AnyCancelable] = []
-
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-        if traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle {
-            updateMapStyle()
-        }
-    }
-
-    private func updateMapStyle() {
-        let isDark = traitCollection.userInterfaceStyle == .dark
-
-        if isDark {
-            mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
-        } else {
-            // Light mode — use day, but switch to dusk near sunset
-            let hour = Calendar.current.component(.hour, from: Date())
-            if hour >= 19 || hour < 6 {
-                // Evening/night — use dusk even in light mode
-                mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
-            } else if hour >= 17 {
-                // Golden hour — use dawn (warm sunset look)
-                mapView.mapboxMap.mapStyle = .standard(lightPreset: .dawn)
-            } else {
-                mapView.mapboxMap.mapStyle = .standard(lightPreset: .day)
+        if isInNavigation, let overlay = routeOverlay {
+            if let renderer = mapView.renderer(for: overlay) as? MKPolylineRenderer {
+                renderer.strokeColor = SteddiTheme.accentUIColor
+                renderer.setNeedsDisplay()
             }
         }
     }
@@ -206,7 +170,7 @@ class SteddiMapContainer: UIViewController {
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began else { return }
         let point = gesture.location(in: mapView)
-        let coordinate = mapView.mapboxMap.coordinate(for: point)
+        let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
         onLongPress?(coordinate)
     }
 
@@ -214,16 +178,16 @@ class SteddiMapContainer: UIViewController {
         guard currentIs3D != is3D else { return }
         currentIs3D = is3D
 
-        mapView.camera.ease(
-            to: CameraOptions(
-                center: mapView.location.latestLocation?.coordinate,
-                zoom: is3D ? 17.0 : 16.5,
-                pitch: is3D ? 55 : 0
-            ),
-            duration: 0.5,
-            curve: .easeInOut,
-            completion: nil
+        let center = mapView.userLocation.coordinate
+        let camera = MKMapCamera(
+            lookingAtCenter: center,
+            fromDistance: is3D ? 800 : 1200,
+            pitch: is3D ? 60 : 0,
+            heading: is3D ? smoothedBearing : 0
         )
+        UIView.animate(withDuration: 0.5) {
+            self.mapView.setCamera(camera, animated: false)
+        }
     }
 
     /// Get the bearing along the route at the closest point to the user's position.
@@ -291,133 +255,130 @@ class SteddiMapContainer: UIViewController {
         )
     }
 
-    func startNavigation(routes: NavigationRoutes, provider: MapboxNavigationProvider) {
+    func startNavigation(route: MKRoute) {
         guard !isInNavigation else { return }
         isInNavigation = true
-        self.navProvider = provider
-
-        // Start active guidance on the navigation core
-        provider.tripSession().startActiveGuidance(with: routes, startLegIndex: 0)
 
         // Store route coordinates for bearing calculation
-        let coords = routes.mainRoute.route.shape?.coordinates ?? []
+        let polyline = route.polyline
+        let pointCount = polyline.pointCount
+        var coords = [CLLocationCoordinate2D](repeating: CLLocationCoordinate2D(), count: pointCount)
+        polyline.getCoordinates(&coords, range: NSRange(location: 0, length: pointCount))
         navRouteCoords = coords
-        showRouteLine(coords)
+
+        // Add route overlay
+        routeOverlay = polyline
+        mapView.addOverlay(polyline, level: .aboveRoads)
 
         // Initial camera
-        mapView.mapboxMap.setCamera(to: CameraOptions(
-            center: mapView.location.latestLocation?.coordinate,
-            zoom: currentIs3D ? 17.0 : 16.0,
-            bearing: 0,
-            pitch: currentIs3D ? 55 : 0
-        ))
-
-        // Follow location during nav — "chase cam" style
-        provider.navigation().locationMatching
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                guard let self else { return }
-                let coord = state.enhancedLocation.coordinate
-
-                if self.currentIs3D {
-                    // Get bearing from route geometry (stable, not jumpy GPS course)
-                    let routeBearing = Self.bearingAlongRoute(
-                        from: coord,
-                        routeCoords: self.navRouteCoords
-                    )
-
-                    // Smooth the bearing to prevent jerky rotation
-                    self.smoothedBearing = Self.smoothBearing(
-                        current: self.smoothedBearing,
-                        target: routeBearing,
-                        factor: 0.15
-                    )
-
-                    // Offset camera center ahead so user sits in lower third
-                    let lookAhead = Self.offsetCoordinate(
-                        coord,
-                        distanceMeters: 80,
-                        bearingDegrees: self.smoothedBearing
-                    )
-
-                    self.mapView.camera.ease(
-                        to: CameraOptions(
-                            center: lookAhead,
-                            zoom: 18.0,
-                            bearing: self.smoothedBearing,
-                            pitch: 65
-                        ),
-                        duration: 1.0,
-                        curve: .linear,
-                        completion: nil
-                    )
-                } else {
-                    self.mapView.camera.ease(
-                        to: CameraOptions(
-                            center: coord,
-                            zoom: 16.5,
-                            bearing: 0,
-                            pitch: 0
-                        ),
-                        duration: 1.0,
-                        curve: .linear,
-                        completion: nil
-                    )
-                }
-            }
-            .store(in: &cancellables)
+        let userCoord = mapView.userLocation.coordinate
+        let camera = MKMapCamera(
+            lookingAtCenter: userCoord,
+            fromDistance: currentIs3D ? 800 : 1200,
+            pitch: currentIs3D ? 60 : 0,
+            heading: 0
+        )
+        mapView.setCamera(camera, animated: true)
     }
 
     func stopNavigation() {
         guard isInNavigation else { return }
         isInNavigation = false
 
-        // Cancel location following subscriptions
-        cancellables.removeAll()
+        // Remove route overlay
+        if let overlay = routeOverlay {
+            mapView.removeOverlay(overlay)
+            routeOverlay = nil
+        }
+        navRouteCoords = []
 
-        // Remove route line
-        removeRouteLine()
+        // Reset camera to overview
+        let userCoord = mapView.userLocation.coordinate
+        let camera = MKMapCamera(
+            lookingAtCenter: userCoord,
+            fromDistance: 5000,
+            pitch: 0,
+            heading: 0
+        )
+        mapView.setCamera(camera, animated: true)
+    }
+}
 
-        // Reset camera
-        mapView.mapboxMap.setCamera(to: CameraOptions(
-            center: mapView.location.latestLocation?.coordinate,
-            zoom: 14,
-            bearing: 0,
-            pitch: 0
-        ))
+// MARK: - MKMapViewDelegate
 
-        // Re-subscribe to style loaded for home mode
-        mapView.mapboxMap.onStyleLoaded.observeNext { [weak self] _ in
-            guard let self,
-                  let coord = self.mapView.location.latestLocation?.coordinate else { return }
-            self.mapView.mapboxMap.setCamera(to: CameraOptions(center: coord, zoom: 14))
-        }.store(in: &cancellables)
+extension SteddiMapContainer: MKMapViewDelegate {
+
+    func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+        // Custom puck for user location
+        guard annotation is MKUserLocation else { return nil }
+
+        let identifier = "SteddiPuck"
+        let annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+            ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+
+        annotationView.image = Self.makePuckImage()
+        annotationView.canShowCallout = false
+        annotationView.centerOffset = .zero
+        return annotationView
     }
 
-    // MARK: - Route Line
-
-    private func showRouteLine(_ coordinates: [CLLocationCoordinate2D]) {
-        guard !coordinates.isEmpty else { return }
-
-        var source = GeoJSONSource(id: "steddi-route-source")
-        source.data = .geometry(.lineString(LineString(coordinates)))
-
-        // Lavender route line — fullbright, no border
-        var lineLayer = LineLayer(id: "steddi-route-line", source: "steddi-route-source")
-        lineLayer.slot = .top
-        lineLayer.lineColor = .constant(StyleColor(SteddiTheme.accentUIColor))
-        lineLayer.lineWidth = .constant(8)
-        lineLayer.lineOpacity = .constant(1.0)
-        lineLayer.lineCap = .constant(.round)
-        lineLayer.lineJoin = .constant(.round)
-        lineLayer.lineEmissiveStrength = .constant(1.0) // fullbright — ignores 3D lighting
-
-        try? mapView.mapboxMap.addSource(source)
-        try? mapView.mapboxMap.addLayer(lineLayer)
+    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        if let polyline = overlay as? MKPolyline {
+            let renderer = MKPolylineRenderer(polyline: polyline)
+            renderer.strokeColor = SteddiTheme.accentUIColor
+            renderer.lineWidth = 6
+            renderer.lineCap = .round
+            renderer.lineJoin = .round
+            return renderer
+        }
+        return MKOverlayRenderer(overlay: overlay)
     }
 
-    private func removeRouteLine() {
-        try? mapView.mapboxMap.removeLayer(withId: "steddi-route-line")
-        try? mapView.mapboxMap.removeSource(withId: "steddi-route-source")
+    func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+        guard isInNavigation else { return }
+
+        let coord = userLocation.coordinate
+
+        if currentIs3D {
+            // Get bearing from route geometry (stable, not jumpy GPS course)
+            let routeBearing = Self.bearingAlongRoute(
+                from: coord,
+                routeCoords: navRouteCoords
+            )
+
+            // Smooth the bearing to prevent jerky rotation
+            smoothedBearing = Self.smoothBearing(
+                current: smoothedBearing,
+                target: routeBearing,
+                factor: 0.15
+            )
+
+            // Offset camera center ahead so user sits in lower third
+            let lookAhead = Self.offsetCoordinate(
+                coord,
+                distanceMeters: 80,
+                bearingDegrees: smoothedBearing
+            )
+
+            let camera = MKMapCamera(
+                lookingAtCenter: lookAhead,
+                fromDistance: 800,
+                pitch: 65,
+                heading: smoothedBearing
+            )
+            UIView.animate(withDuration: 1.0, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
+                mapView.setCamera(camera, animated: false)
+            }
+        } else {
+            let camera = MKMapCamera(
+                lookingAtCenter: coord,
+                fromDistance: 1200,
+                pitch: 0,
+                heading: 0
+            )
+            UIView.animate(withDuration: 1.0, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
+                mapView.setCamera(camera, animated: false)
+            }
+        }
     }
 }
