@@ -279,6 +279,12 @@ class SteddiMapContainer: UIViewController {
 
         // Don't use userTrackingMode — we manage the camera manually like Apple Maps does
         mapView.setUserTrackingMode(.none, animated: false)
+
+        // Set initial nav camera immediately so it doesn't stay zoomed out
+        let userCoord = mapView.userLocation.coordinate
+        if CLLocationCoordinate2DIsValid(userCoord) {
+            applyCameraForNav(at: userCoord, course: mapView.userLocation.location?.course ?? 0, animated: true)
+        }
     }
 
     func stopNavigation() {
