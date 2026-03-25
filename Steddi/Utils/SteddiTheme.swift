@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 /// Steddi's visual identity — warm, steady, confident.
 enum SteddiTheme {
@@ -224,12 +225,58 @@ enum ThemeMode: String, CaseIterable {
         }
     }
 
-    /// Use actual sunrise/sunset — approximate based on typical civil twilight
-    /// Summer: ~6am-8pm, Winter: ~7am-5:30pm. Use 7am-7pm as a safe year-round default.
-    /// TODO: Use CoreLocation + solar calculation for precise sunrise/sunset
+    /// Calculate whether the sun is up using the user's actual location and solar math.
+    /// Falls back to 7am-7pm if no location is available.
     static var isDaytime: Bool {
-        let hour = Calendar.current.component(.hour, from: Date())
-        return hour >= 7 && hour < 19
+        // Get the user's location from LocationService or CLLocationManager
+        let locManager = CLLocationManager()
+        guard let coord = locManager.location?.coordinate else {
+            // No location — fall back to simple time check
+            let hour = Calendar.current.component(.hour, from: Date())
+            return hour >= 7 && hour < 19
+        }
+        return sunIsUp(at: coord, date: Date())
+    }
+
+    /// Solar calculation — determines if the sun is above the horizon at a given coordinate and time.
+    /// Uses the standard astronomical algorithm for sunrise/sunset.
+    static func sunIsUp(at coordinate: CLLocationCoordinate2D, date: Date) -> Bool {
+        let cal = Calendar.current
+        let dayOfYear = Double(cal.ordinality(of: .day, in: .year, for: date) ?? 1)
+        let lat = coordinate.latitude
+
+        // Solar declination (simplified)
+        let declination = -23.44 * cos(2.0 * .pi / 365.0 * (dayOfYear + 10))
+
+        // Hour angle at sunrise/sunset
+        let latRad = lat * .pi / 180.0
+        let decRad = declination * .pi / 180.0
+        let cosHourAngle = -tan(latRad) * tan(decRad)
+
+        // Handle polar day/night
+        if cosHourAngle < -1 { return true }  // Midnight sun
+        if cosHourAngle > 1 { return false }  // Polar night
+
+        let hourAngle = acos(cosHourAngle) * 180.0 / .pi
+
+        // Convert to hours from solar noon
+        let sunriseOffset = hourAngle / 15.0  // degrees to hours
+        let solarNoon = 12.0 // approximate — ignoring longitude equation of time for simplicity
+
+        // Timezone offset from UTC in hours
+        let tzOffset = Double(cal.timeZone.secondsFromGMT(for: date)) / 3600.0
+
+        // Longitude correction: 4 minutes per degree from standard meridian
+        let standardMeridian = round(tzOffset) * 15.0
+        let lonCorrection = (coordinate.longitude - standardMeridian) * 4.0 / 60.0
+
+        let localSolarNoon = solarNoon - lonCorrection
+        let sunrise = localSolarNoon - sunriseOffset
+        let sunset = localSolarNoon + sunriseOffset
+
+        let currentHour = Double(cal.component(.hour, from: date)) + Double(cal.component(.minute, from: date)) / 60.0
+
+        return currentHour >= sunrise && currentHour < sunset
     }
 }
 
