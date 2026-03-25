@@ -1,5 +1,4 @@
 import SwiftUI
-import MapboxNavigationCore
 import CoreLocation
 
 /// Phone companion view shown when CarPlay is handling the map.

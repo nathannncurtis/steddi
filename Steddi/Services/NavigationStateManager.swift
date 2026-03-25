@@ -1,7 +1,6 @@
 import Foundation
 import CoreLocation
-import MapboxNavigationCore
-import MapboxDirections
+import MapKit
 
 /// Shared single source of truth for navigation state.
 /// Both the phone UI and CarPlay read from this object.
@@ -43,105 +42,69 @@ final class NavigationStateManager {
 
     var upcomingSteps: [UpcomingStep] = []
 
-    /// The active navigation provider — shared so CarPlay can subscribe to the same session
-    var activeProvider: MapboxNavigationProvider? = nil
+    /// The active navigation engine — shared so CarPlay can read the same state
+    var activeEngine: NavigationEngine? = nil
     /// Route coordinates for map rendering
     var activeRouteCoords: [CLLocationCoordinate2D] = []
 
     // MARK: - Task Storage
 
-    private nonisolated(unsafe) var routeProgressTask: Task<Void, Never>?
-    private nonisolated(unsafe) var locationMatchingTask: Task<Void, Never>?
-    private nonisolated(unsafe) var arrivalTask: Task<Void, Never>?
+    private nonisolated(unsafe) var pollingTask: Task<Void, Never>?
     private nonisolated(unsafe) var rerouteTask: Task<Void, Never>?
 
     // MARK: - Observation
 
     func startObserving(
-        provider: MapboxNavigationProvider,
+        engine: NavigationEngine,
         commute: Commute? = nil,
         direction: CommuteDirection? = nil
     ) {
         stopObserving()
 
         isNavigating = true
-        activeProvider = provider
+        activeEngine = engine
         activeCommute = commute
         activeDirection = direction
 
         // Store route coords for CarPlay map rendering
-        if let routeShape = provider.navigation().currentRouteProgress?.routeProgress.route.shape {
-            activeRouteCoords = routeShape.coordinates
-        }
+        activeRouteCoords = engine.routePolylineCoordinates
 
-        let nav = provider.navigation()
+        // Polling task — copies engine state to manager properties (for CarPlay to read)
+        pollingTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self, let engine = self.activeEngine else { break }
+                guard engine.isNavigating else { break }
 
-        // Route progress
-        routeProgressTask = Task { @MainActor [weak self] in
-            for await state in nav.routeProgress.values {
-                guard let self, let state else { continue }
-                let progress = state.routeProgress
+                self.instruction = engine.instruction
+                self.stepDistance = engine.stepDistance
+                self.stepDistanceRaw = engine.stepDistanceRaw
+                self.etaMinutes = engine.etaMinutes
+                self.distanceRemaining = engine.distanceRemaining
+                self.arrivalTime = engine.arrivalTime
+                self.roadName = engine.roadName
+                self.maneuverType = engine.maneuverType
+                self.followOnInstruction = engine.followOnInstruction
+                self.followOnManeuverSymbol = engine.followOnManeuverSymbol
+                self.currentSpeedMph = engine.currentSpeedMph
+                self.headingDegrees = engine.headingDegrees
+                self.currentCoordinate = engine.currentCoordinate
 
-                self.etaMinutes = max(1, Int(ceil(progress.durationRemaining / 60)))
-                self.distanceRemaining = Self.formatDistance(progress.distanceRemaining)
-                self.arrivalTime = Self.formatArrivalTime(progress.durationRemaining)
+                // Build upcoming steps from engine
+                self.upcomingSteps = Self.buildUpcomingSteps(from: engine)
 
-                // Current step
-                let step = progress.currentLegProgress.currentStep
-                self.instruction = step.instructions
-                self.stepDistanceRaw = progress.currentLegProgress.currentStepProgress.distanceRemaining
-                self.stepDistance = Self.formatDistance(self.stepDistanceRaw)
-                self.maneuverType = Self.sfSymbol(for: step.maneuverType, direction: step.maneuverDirection)
-
-                // Follow-on step
-                if let followOn = progress.currentLegProgress.followOnStep {
-                    self.followOnInstruction = followOn.instructions
-                    self.followOnManeuverSymbol = Self.sfSymbol(for: followOn.maneuverType, direction: followOn.maneuverDirection)
-                } else {
-                    self.followOnInstruction = ""
-                    self.followOnManeuverSymbol = ""
-                }
-
-                // Build upcoming steps from remaining steps in the current leg
-                self.upcomingSteps = Self.buildUpcomingSteps(from: progress)
-            }
-        }
-
-        // Location matching - road name, speed, heading
-        locationMatchingTask = Task { @MainActor [weak self] in
-            for await state in nav.locationMatching.values {
-                guard let self else { return }
-
-                self.roadName = state.roadName?.text ?? ""
-
-                let speedMS = state.currentSpeed.converted(to: .metersPerSecond).value
-                self.currentSpeedMph = max(0, speedMS * 2.23694)
-
-                if let limitValue = state.speedLimit.value {
-                    self.speedLimitMph = limitValue.converted(to: .milesPerHour).value
-                } else {
-                    self.speedLimitMph = nil
-                }
-
-                self.headingDegrees = state.location.course
-                self.currentCoordinate = state.location.coordinate
-            }
-        }
-
-        // Arrival
-        arrivalTask = Task { @MainActor [weak self] in
-            for await arrival in nav.waypointsArrival.values {
-                guard let self else { return }
-                if arrival.event != nil {
+                if engine.hasArrived {
                     self.hasArrived = true
+                    break
                 }
+
+                try? await Task.sleep(for: .milliseconds(500))
             }
         }
 
         // Reroute engine - periodic fallback check (every 5 minutes)
         if let commute, let direction {
             rerouteTask = Task { @MainActor [weak self] in
-                let directionsService = DirectionsService(accessToken: MapboxTokenProvider.accessToken)
+                let directionsService = DirectionsService()
 
                 while !Task.isCancelled {
                     guard let self else { break }
@@ -152,10 +115,12 @@ final class NavigationStateManager {
                     guard !self.hasArrived else { break }
                     guard self.rerouteSuggestion == nil else { continue }
 
-                    guard let currentLocation = nav.currentLocationMatching?.enhancedLocation,
-                          let currentProgress = nav.currentRouteProgress else { continue }
+                    guard let engine = self.activeEngine,
+                          engine.isNavigating,
+                          let currentCoord = engine.currentCoordinate else { continue }
 
-                    let remainingETA = currentProgress.routeProgress.durationRemaining
+                    // Use the engine's ETA (in seconds) — etaMinutes * 60 as approximation
+                    let remainingETA = Double(engine.etaMinutes) * 60.0
                     self.currentRemainingETA = remainingETA
 
                     let fallbacks = commute.orderedRoutes(for: direction).filter { $0.rank > 0 }
@@ -167,7 +132,7 @@ final class NavigationStateManager {
                     for fallback in fallbacks {
                         do {
                             let fallbackETA = try await directionsService.fetchETA(
-                                from: currentLocation.coordinate,
+                                from: currentCoord,
                                 along: fallback.encodedPolyline
                             )
 
@@ -200,14 +165,10 @@ final class NavigationStateManager {
     }
 
     func stopObserving() {
-        routeProgressTask?.cancel()
-        locationMatchingTask?.cancel()
-        arrivalTask?.cancel()
+        pollingTask?.cancel()
         rerouteTask?.cancel()
 
-        routeProgressTask = nil
-        locationMatchingTask = nil
-        arrivalTask = nil
+        pollingTask = nil
         rerouteTask = nil
 
         isNavigating = false
@@ -228,7 +189,7 @@ final class NavigationStateManager {
         hasArrived = false
         activeCommute = nil
         activeDirection = nil
-        activeProvider = nil
+        activeEngine = nil
         activeRouteCoords = []
         rerouteSuggestion = nil
         currentRemainingETA = 0
@@ -237,31 +198,23 @@ final class NavigationStateManager {
 
     // MARK: - Upcoming Steps Builder
 
-    private static func buildUpcomingSteps(from progress: RouteProgress) -> [UpcomingStep] {
-        let legProgress = progress.currentLegProgress
-        let steps = legProgress.leg.steps
-        let currentIndex = legProgress.stepIndex
+    private static func buildUpcomingSteps(from engine: NavigationEngine) -> [UpcomingStep] {
+        // The NavigationEngine tracks steps internally; build upcoming from its state
+        // We read the engine's current step index and expose the remaining steps
+        // Since NavigationEngine doesn't expose a steps array directly, we build
+        // from the follow-on instruction if available
+        var steps: [UpcomingStep] = []
 
-        // Gather remaining steps after the current one
-        guard currentIndex + 1 < steps.count else { return [] }
-
-        return steps[(currentIndex + 1)...].compactMap { step in
-            // Skip arrive steps with no real instruction
-            guard step.maneuverType != .arrive || step.instructions.isEmpty == false else {
-                return UpcomingStep(
-                    instruction: step.instructions,
-                    distance: formatDistance(step.distance),
-                    maneuverSymbol: sfSymbol(for: step.maneuverType, direction: step.maneuverDirection),
-                    roadName: step.names?.first
-                )
-            }
-            return UpcomingStep(
-                instruction: step.instructions,
-                distance: formatDistance(step.distance),
-                maneuverSymbol: sfSymbol(for: step.maneuverType, direction: step.maneuverDirection),
-                roadName: step.names?.first
-            )
+        if !engine.followOnInstruction.isEmpty {
+            steps.append(UpcomingStep(
+                instruction: engine.followOnInstruction,
+                distance: "",
+                maneuverSymbol: engine.followOnManeuverSymbol,
+                roadName: nil
+            ))
         }
+
+        return steps
     }
 
     // MARK: - Formatting
@@ -282,36 +235,6 @@ final class NavigationStateManager {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: arrival)
-    }
-
-    nonisolated static func sfSymbol(for maneuverType: ManeuverType, direction: ManeuverDirection?) -> String {
-        switch maneuverType {
-        case .turn:
-            switch direction {
-            case .left, .sharpLeft, .slightLeft: return "arrow.turn.up.left"
-            case .right, .sharpRight, .slightRight: return "arrow.turn.up.right"
-            case .uTurn: return "arrow.uturn.down"
-            default: return "arrow.up"
-            }
-        case .merge: return "arrow.merge"
-        case .takeOnRamp, .takeOffRamp:
-            switch direction {
-            case .left, .sharpLeft, .slightLeft: return "arrow.up.left"
-            case .right, .sharpRight, .slightRight: return "arrow.up.right"
-            default: return "arrow.up.right"
-            }
-        case .reachFork:
-            switch direction {
-            case .left, .slightLeft: return "arrow.up.left"
-            default: return "arrow.up.right"
-            }
-        case .reachEnd: return "arrow.turn.up.right"
-        case .useLane: return "arrow.up"
-        case .takeRotary, .takeRoundabout: return "arrow.triangle.2.circlepath"
-        case .arrive: return "flag.fill"
-        case .depart: return "location.fill"
-        default: return "arrow.up"
-        }
     }
 }
 

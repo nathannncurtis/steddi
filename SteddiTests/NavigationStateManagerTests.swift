@@ -119,7 +119,6 @@ struct FormatArrivalTimeTests {
     func returnsCorrectFormat() {
         let result = NavigationStateManager.formatArrivalTime(3600) // 1 hour from now
         // Should match pattern like "1:30 PM" or "12:00 AM"
-        let pattern = #/\d{1,2}:\d{2}\s(AM|PM)/#
         #expect(result.contains(try! Regex(#"\d{1,2}:\d{2} (AM|PM)"#)))
     }
 
@@ -142,182 +141,84 @@ struct FormatArrivalTimeTests {
     }
 }
 
-// MARK: - SF Symbol Mapping Tests
+// MARK: - SF Symbol From Instruction Tests
 
-@Suite("sfSymbol mapping")
-struct SFSymbolTests {
-
-    // MARK: Turn
+@Suite("sfSymbolFromInstruction")
+struct SFSymbolFromInstructionTests {
 
     @Test("Turn left returns arrow.turn.up.left")
     func turnLeft() {
-        #expect(NavigationStateManager.sfSymbol(for: .turn, direction: .left) == "arrow.turn.up.left")
-    }
-
-    @Test("Turn sharp left returns arrow.turn.up.left")
-    func turnSharpLeft() {
-        #expect(NavigationStateManager.sfSymbol(for: .turn, direction: .sharpLeft) == "arrow.turn.up.left")
-    }
-
-    @Test("Turn slight left returns arrow.turn.up.left")
-    func turnSlightLeft() {
-        #expect(NavigationStateManager.sfSymbol(for: .turn, direction: .slightLeft) == "arrow.turn.up.left")
+        #expect(NavigationEngine.sfSymbolFromInstruction("Turn left onto Main St") == "arrow.turn.up.left")
     }
 
     @Test("Turn right returns arrow.turn.up.right")
     func turnRight() {
-        #expect(NavigationStateManager.sfSymbol(for: .turn, direction: .right) == "arrow.turn.up.right")
+        #expect(NavigationEngine.sfSymbolFromInstruction("Turn right onto Broadway") == "arrow.turn.up.right")
     }
 
-    @Test("Turn sharp right returns arrow.turn.up.right")
-    func turnSharpRight() {
-        #expect(NavigationStateManager.sfSymbol(for: .turn, direction: .sharpRight) == "arrow.turn.up.right")
+    @Test("Sharp left returns arrow.turn.up.left")
+    func sharpLeft() {
+        #expect(NavigationEngine.sfSymbolFromInstruction("Make a sharp left") == "arrow.turn.up.left")
     }
 
-    @Test("Turn slight right returns arrow.turn.up.right")
-    func turnSlightRight() {
-        #expect(NavigationStateManager.sfSymbol(for: .turn, direction: .slightRight) == "arrow.turn.up.right")
+    @Test("Sharp right returns arrow.turn.up.right")
+    func sharpRight() {
+        #expect(NavigationEngine.sfSymbolFromInstruction("Make a sharp right") == "arrow.turn.up.right")
+    }
+
+    @Test("Slight left returns arrow.turn.up.left")
+    func slightLeft() {
+        #expect(NavigationEngine.sfSymbolFromInstruction("Slight left onto I-10") == "arrow.turn.up.left")
+    }
+
+    @Test("Bear right returns arrow.turn.up.right")
+    func bearRight() {
+        #expect(NavigationEngine.sfSymbolFromInstruction("Bear right onto US-60") == "arrow.turn.up.right")
     }
 
     @Test("U-turn returns arrow.uturn.down")
     func uTurn() {
-        #expect(NavigationStateManager.sfSymbol(for: .turn, direction: .uTurn) == "arrow.uturn.down")
+        #expect(NavigationEngine.sfSymbolFromInstruction("Make a U-turn") == "arrow.uturn.down")
     }
-
-    @Test("Turn with no direction returns arrow.up")
-    func turnNoDirection() {
-        #expect(NavigationStateManager.sfSymbol(for: .turn, direction: nil) == "arrow.up")
-    }
-
-    @Test("Turn with straight direction returns arrow.up")
-    func turnStraight() {
-        #expect(NavigationStateManager.sfSymbol(for: .turn, direction: .straightAhead) == "arrow.up")
-    }
-
-    // MARK: Merge
 
     @Test("Merge returns arrow.merge")
     func merge() {
-        #expect(NavigationStateManager.sfSymbol(for: .merge, direction: nil) == "arrow.merge")
+        #expect(NavigationEngine.sfSymbolFromInstruction("Merge onto I-15") == "arrow.merge")
     }
 
-    @Test("Merge with direction still returns arrow.merge")
-    func mergeWithDirection() {
-        #expect(NavigationStateManager.sfSymbol(for: .merge, direction: .left) == "arrow.merge")
+    @Test("Ramp left returns arrow.up.left")
+    func rampLeft() {
+        #expect(NavigationEngine.sfSymbolFromInstruction("Take the ramp on the left") == "arrow.up.left")
     }
 
-    // MARK: On-ramp / Off-ramp
-
-    @Test("On-ramp left returns arrow.up.left")
-    func onRampLeft() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeOnRamp, direction: .left) == "arrow.up.left")
-    }
-
-    @Test("On-ramp right returns arrow.up.right")
-    func onRampRight() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeOnRamp, direction: .right) == "arrow.up.right")
-    }
-
-    @Test("On-ramp slight left returns arrow.up.left")
-    func onRampSlightLeft() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeOnRamp, direction: .slightLeft) == "arrow.up.left")
-    }
-
-    @Test("On-ramp sharp right returns arrow.up.right")
-    func onRampSharpRight() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeOnRamp, direction: .sharpRight) == "arrow.up.right")
-    }
-
-    @Test("On-ramp nil direction defaults to arrow.up.right")
-    func onRampNilDirection() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeOnRamp, direction: nil) == "arrow.up.right")
-    }
-
-    @Test("Off-ramp left returns arrow.up.left")
-    func offRampLeft() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeOffRamp, direction: .left) == "arrow.up.left")
-    }
-
-    @Test("Off-ramp right returns arrow.up.right")
-    func offRampRight() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeOffRamp, direction: .right) == "arrow.up.right")
-    }
-
-    @Test("Off-ramp nil direction defaults to arrow.up.right")
-    func offRampNilDirection() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeOffRamp, direction: nil) == "arrow.up.right")
-    }
-
-    // MARK: Fork
-
-    @Test("Fork left returns arrow.up.left")
-    func forkLeft() {
-        #expect(NavigationStateManager.sfSymbol(for: .reachFork, direction: .left) == "arrow.up.left")
-    }
-
-    @Test("Fork slight left returns arrow.up.left")
-    func forkSlightLeft() {
-        #expect(NavigationStateManager.sfSymbol(for: .reachFork, direction: .slightLeft) == "arrow.up.left")
-    }
-
-    @Test("Fork right returns arrow.up.right")
-    func forkRight() {
-        #expect(NavigationStateManager.sfSymbol(for: .reachFork, direction: .right) == "arrow.up.right")
-    }
-
-    @Test("Fork nil direction defaults to arrow.up.right")
-    func forkNilDirection() {
-        #expect(NavigationStateManager.sfSymbol(for: .reachFork, direction: nil) == "arrow.up.right")
-    }
-
-    // MARK: End of Road
-
-    @Test("End of road returns arrow.turn.up.right")
-    func endOfRoad() {
-        #expect(NavigationStateManager.sfSymbol(for: .reachEnd, direction: nil) == "arrow.turn.up.right")
-    }
-
-    // MARK: Lane
-
-    @Test("Use lane returns arrow.up")
-    func useLane() {
-        #expect(NavigationStateManager.sfSymbol(for: .useLane, direction: nil) == "arrow.up")
-    }
-
-    // MARK: Rotary / Roundabout
-
-    @Test("Rotary returns arrow.triangle.2.circlepath")
-    func rotary() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeRotary, direction: nil) == "arrow.triangle.2.circlepath")
+    @Test("Ramp right returns arrow.up.right")
+    func rampRight() {
+        #expect(NavigationEngine.sfSymbolFromInstruction("Take the ramp") == "arrow.up.right")
     }
 
     @Test("Roundabout returns arrow.triangle.2.circlepath")
     func roundabout() {
-        #expect(NavigationStateManager.sfSymbol(for: .takeRoundabout, direction: nil) == "arrow.triangle.2.circlepath")
+        #expect(NavigationEngine.sfSymbolFromInstruction("Enter the roundabout") == "arrow.triangle.2.circlepath")
     }
-
-    // MARK: Arrive / Depart
 
     @Test("Arrive returns flag.fill")
     func arrive() {
-        #expect(NavigationStateManager.sfSymbol(for: .arrive, direction: nil) == "flag.fill")
+        #expect(NavigationEngine.sfSymbolFromInstruction("Arrive at your destination") == "flag.fill")
     }
 
     @Test("Depart returns location.fill")
     func depart() {
-        #expect(NavigationStateManager.sfSymbol(for: .depart, direction: nil) == "location.fill")
+        #expect(NavigationEngine.sfSymbolFromInstruction("Depart south on Main St") == "location.fill")
     }
 
-    // MARK: Default
-
-    @Test("Unknown maneuver type returns arrow.up")
-    func unknownType() {
-        #expect(NavigationStateManager.sfSymbol(for: .continue, direction: nil) == "arrow.up")
+    @Test("Continue straight returns arrow.up")
+    func continueStraight() {
+        #expect(NavigationEngine.sfSymbolFromInstruction("Continue on Main St") == "arrow.up")
     }
 
-    @Test("Continue maneuver type returns arrow.up")
-    func continueType() {
-        #expect(NavigationStateManager.sfSymbol(for: .continue, direction: nil) == "arrow.up")
+    @Test("Unknown instruction returns arrow.up")
+    func unknownInstruction() {
+        #expect(NavigationEngine.sfSymbolFromInstruction("Proceed carefully") == "arrow.up")
     }
 }
 
@@ -359,7 +260,7 @@ struct NavigationStateManagerStateTests {
     func stopObservingResetsState() {
         let manager = NavigationStateManager()
 
-        // Simulate having some state set (without needing MapboxNavigationProvider)
+        // Simulate having some state set
         manager.isNavigating = true
         manager.isCarPlayActive = true
         manager.instruction = "Turn left"

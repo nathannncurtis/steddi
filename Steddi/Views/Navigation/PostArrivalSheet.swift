@@ -1,6 +1,6 @@
 import SwiftUI
 import SwiftData
-import MapboxMaps
+import MapKit
 import CoreLocation
 
 struct PostArrivalSheet: View {
@@ -210,7 +210,7 @@ struct PostArrivalSheet: View {
             return
         }
 
-        let service = MapMatchingService(accessToken: MapboxTokenProvider.accessToken)
+        let service = MapMatchingService()
 
         do {
             let matched = try await service.matchTrace(recordedPoints)
@@ -276,65 +276,65 @@ private struct RoutePreviewMap: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeUIView(context: Context) -> MapView {
-        let mapView = MapView(frame: .zero, mapInitOptions: MapInitOptions(styleURI: .standard))
-        mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
-        mapView.ornaments.options.scaleBar.visibility = .hidden
-        mapView.ornaments.options.compass.visibility = .hidden
-        mapView.gestures.options.panEnabled = false
-        mapView.gestures.options.pinchEnabled = false
-        mapView.gestures.options.rotateEnabled = false
-        mapView.gestures.options.pitchEnabled = false
-        mapView.gestures.options.doubleTapToZoomInEnabled = false
-        mapView.gestures.options.doubleTouchToZoomOutEnabled = false
+    func makeUIView(context: Context) -> MKMapView {
+        let mapView = MKMapView(frame: .zero)
+        mapView.overrideUserInterfaceStyle = .dark
+        mapView.delegate = context.coordinator
 
-        context.coordinator.mapView = mapView
+        let config = MKStandardMapConfiguration(emphasisStyle: .muted)
+        mapView.preferredConfiguration = config
 
-        // Wait for style to load before adding route
-        mapView.mapboxMap.onStyleLoaded.observeNext { [weak mapView] _ in
-            guard let mapView else { return }
-            context.coordinator.addRoute(to: mapView, coordinates: coordinates)
-        }.store(in: &context.coordinator.cancellables)
+        mapView.showsCompass = false
+        mapView.showsScale = false
+        mapView.isScrollEnabled = false
+        mapView.isZoomEnabled = false
+        mapView.isRotateEnabled = false
+        mapView.isPitchEnabled = false
+
+        // Add route immediately if we have coordinates
+        if !coordinates.isEmpty {
+            let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+            mapView.addOverlay(polyline, level: .aboveRoads)
+            // Fit to route after layout
+            DispatchQueue.main.async {
+                mapView.setVisibleMapRect(
+                    polyline.boundingMapRect,
+                    edgePadding: UIEdgeInsets(top: 40, left: 40, bottom: 40, right: 40),
+                    animated: false
+                )
+            }
+        }
 
         return mapView
     }
 
-    func updateUIView(_ mapView: MapView, context: Context) {
-        context.coordinator.pendingCoordinates = coordinates
+    func updateUIView(_ mapView: MKMapView, context: Context) {
+        // Only update if coordinates changed and we haven't drawn yet
+        guard !coordinates.isEmpty, !context.coordinator.didAddRoute else { return }
+        context.coordinator.didAddRoute = true
+
+        let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+        mapView.addOverlay(polyline, level: .aboveRoads)
+        mapView.setVisibleMapRect(
+            polyline.boundingMapRect,
+            edgePadding: UIEdgeInsets(top: 40, left: 40, bottom: 40, right: 40),
+            animated: false
+        )
     }
 
-    class Coordinator {
-        weak var mapView: MapView?
-        var cancellables: [AnyCancelable] = []
-        var pendingCoordinates: [CLLocationCoordinate2D] = []
+    class Coordinator: NSObject, MKMapViewDelegate {
         var didAddRoute = false
 
-        func addRoute(to mapView: MapView, coordinates: [CLLocationCoordinate2D]) {
-            guard !coordinates.isEmpty, !didAddRoute else { return }
-            didAddRoute = true
-
-            var source = GeoJSONSource(id: "preview-source")
-            source.data = .geometry(.lineString(LineString(coordinates)))
-
-            var layer = LineLayer(id: "preview-route", source: "preview-source")
-            layer.slot = .top
-            layer.lineColor = .constant(StyleColor(SteddiTheme.accentUIColor))
-            layer.lineWidth = .constant(6)
-            layer.lineOpacity = .constant(1.0)
-            layer.lineEmissiveStrength = .constant(1.0)
-            layer.lineCap = .constant(.round)
-            layer.lineJoin = .constant(.round)
-
-            try? mapView.mapboxMap.addSource(source)
-            try? mapView.mapboxMap.addLayer(layer)
-
-            let camera = mapView.mapboxMap.camera(
-                for: .lineString(LineString(coordinates)),
-                padding: UIEdgeInsets(top: 40, left: 40, bottom: 40, right: 40),
-                bearing: nil,
-                pitch: nil
-            )
-            mapView.mapboxMap.setCamera(to: camera)
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let polyline = overlay as? MKPolyline {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                renderer.strokeColor = SteddiTheme.accentUIColor
+                renderer.lineWidth = 6
+                renderer.lineCap = .round
+                renderer.lineJoin = .round
+                return renderer
+            }
+            return MKOverlayRenderer(overlay: overlay)
         }
     }
 }

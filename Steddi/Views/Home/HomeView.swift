@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
-import MapboxNavigationCore
-import MapboxDirections
+import MapKit
 import CoreLocation
 
 struct HomeView: View {
@@ -25,10 +24,11 @@ struct HomeView: View {
 
     // Navigation state
     @State private var isNavigating = false
-    @State private var navigationRoutes: NavigationRoutes?
-    @State private var navProvider: MapboxNavigationProvider?
+    @State private var navigationRoute: MKRoute?
+    @State private var navigationEngine: NavigationEngine?
     @State private var isCalculatingRoute = false
     @State private var navigationDestination: PinnedLocation?
+    @State private var locationFeedTask: Task<Void, Never>?
 
     // Camera state
     @State private var is3DNav = true
@@ -83,8 +83,7 @@ struct HomeView: View {
             SteddiMapView(
                 isNavigating: $isNavigating,
                 is3DView: $is3DNav,
-                navigationRoutes: navigationRoutes,
-                provider: navProvider,
+                navigationRoute: navigationRoute,
                 onLongPress: { coord in
                     longPressCoordinate = coord
                     showAddLocation = true
@@ -95,16 +94,18 @@ struct HomeView: View {
             .ignoresSafeArea() // map fills everything, UI floats on top
 
             // Navigation overlay
-            if let provider = navProvider, isNavigating {
+            if let engine = navigationEngine, isNavigating {
                 SteddiNavOverlay(
-                    provider: provider,
+                    engine: engine,
                     onEndNavigation: {
                         let points = locationService.stopRecording()
-                        provider.tripSession().setToIdle()
+                        locationFeedTask?.cancel()
+                        locationFeedTask = nil
+                        navigationEngine?.stopNavigation()
                         navStateManager.stopObserving()
                         is3DNav = true
                         isNavigating = false
-                        navigationRoutes = nil
+                        navigationRoute = nil
 
                         // Save the raw drive record
                         if points.count >= 2 {
@@ -145,10 +146,12 @@ struct HomeView: View {
                         // Reroute to the fallback
                         let target: PinnedLocation? = activeDirection == .originToDestination ? activeCommute?.destination : activeCommute?.origin
                         guard let target else { return }
-                        provider.tripSession().setToIdle()
+                        locationFeedTask?.cancel()
+                        locationFeedTask = nil
+                        navigationEngine?.stopNavigation()
                         navStateManager.stopObserving()
                         isNavigating = false
-                        navigationRoutes = nil
+                        navigationRoute = nil
                         navigateWithSavedRoute(route, to: target)
                     },
                     onReport: { type, coordinate in
@@ -328,27 +331,37 @@ struct HomeView: View {
                 return
             }
 
-            let provider = MapboxNavigationProvider(coreConfig: .init())
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLocation.coordinate))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+            request.transportType = .automobile
 
-            let origin = Waypoint(coordinate: currentLocation.coordinate, name: "Current Location")
-            let destination = Waypoint(coordinate: coordinate, name: name)
-            let routeOptions = NavigationRouteOptions(waypoints: [origin, destination])
+            let directions = MKDirections(request: request)
 
             do {
-                let routes = try await provider.routingProvider().calculateRoutes(options: routeOptions).value
+                let response = try await directions.calculate()
+                guard let route = response.routes.first else {
+                    isCalculatingRoute = false
+                    return
+                }
 
                 locationService.startRecording()
 
-                self.navProvider = provider
-                self.navigationRoutes = routes
+                self.navigationRoute = route
+                let engine = NavigationEngine()
+                engine.startNavigation(route: route)
+                self.navigationEngine = engine
 
                 // Share navigation state for CarPlay
-                navStateManager.activeRouteCoords = routes.mainRoute.route.shape?.coordinates ?? []
+                navStateManager.activeRouteCoords = engine.routePolylineCoordinates
                 navStateManager.startObserving(
-                    provider: provider,
+                    engine: engine,
                     commute: activeCommute,
                     direction: activeDirection
                 )
+
+                // Start feeding location updates to the engine
+                startLocationFeed()
 
                 withAnimation(.easeInOut(duration: 0.4)) {
                     isCalculatingRoute = false
@@ -670,39 +683,50 @@ struct HomeView: View {
                 return
             }
 
-            let provider = MapboxNavigationProvider(coreConfig: .init())
-
             // Decode saved polyline and sample waypoints from it
             let routeCoords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
 
             // Build waypoints: current position + sampled points along saved route + destination
             // Sample every ~20th coordinate to stay under the 25 waypoint API limit
             var waypointCoords: [CLLocationCoordinate2D] = [currentLocation.coordinate]
-            let step = max(1, routeCoords.count / 20)
-            for i in stride(from: step, to: routeCoords.count - 1, by: step) {
+            let sampleStep = max(1, routeCoords.count / 20)
+            for i in stride(from: sampleStep, to: routeCoords.count - 1, by: sampleStep) {
                 waypointCoords.append(routeCoords[i])
             }
             waypointCoords.append(target.coordinate)
 
-            var waypoints = waypointCoords.map { Waypoint(coordinate: $0) }
-            waypoints[0].name = "Current Location"
-            waypoints[waypoints.count - 1].name = target.name
+            // Use MKDirections with waypoints — route through sampled points
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLocation.coordinate))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: target.coordinate))
+            request.transportType = .automobile
 
-            let routeOptions = NavigationRouteOptions(waypoints: waypoints)
+            let directions = MKDirections(request: request)
 
             do {
-                let routes = try await provider.routingProvider().calculateRoutes(options: routeOptions).value
+                let response = try await directions.calculate()
+                guard let route = response.routes.first else {
+                    isCalculatingRoute = false
+                    navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
+                    return
+                }
+
                 locationService.startRecording()
-                self.navProvider = provider
-                self.navigationRoutes = routes
+                self.navigationRoute = route
+                let engine = NavigationEngine()
+                engine.startNavigation(route: route)
+                self.navigationEngine = engine
 
                 // Share navigation state for CarPlay
-                navStateManager.activeRouteCoords = routes.mainRoute.route.shape?.coordinates ?? []
+                navStateManager.activeRouteCoords = engine.routePolylineCoordinates
                 navStateManager.startObserving(
-                    provider: provider,
+                    engine: engine,
                     commute: activeCommute,
                     direction: activeDirection
                 )
+
+                // Start feeding location updates to the engine
+                startLocationFeed()
 
                 isCalculatingRoute = false
                 isNavigating = true
@@ -861,7 +885,7 @@ struct HomeView: View {
 
     private func refreshCommuteETAs() async {
         guard let currentLoc = locationService.currentLocation else { return }
-        let service = DirectionsService(accessToken: MapboxTokenProvider.accessToken)
+        let service = DirectionsService()
 
         for commute in commutes {
             let resolved = resolveCardDirection(commute)
@@ -870,9 +894,22 @@ struct HomeView: View {
 
             do {
                 let route = try await service.fetchRoute(from: currentLoc.coordinate, to: target.coordinate)
-                commuteETAs[commute.id] = Int(ceil(route.durationSeconds / 60))
+                commuteETAs[commute.id] = Int(ceil(route.duration / 60))
             } catch {
                 // Silently fail — card just won't show ETA
+            }
+        }
+    }
+
+    /// Feed GPS location updates to the NavigationEngine while navigation is active.
+    private func startLocationFeed() {
+        locationFeedTask?.cancel()
+        locationFeedTask = Task { @MainActor in
+            while navigationEngine?.isNavigating == true, !Task.isCancelled {
+                if let location = locationService.currentLocation {
+                    navigationEngine?.updateLocation(location)
+                }
+                try? await Task.sleep(for: .milliseconds(500))
             }
         }
     }
@@ -930,7 +967,7 @@ private struct ExpandedSearchView: View {
     @State private var searchTask: Task<Void, Never>?
     @FocusState private var isSearchFocused: Bool
 
-    private let geocodingService = GeocodingService(accessToken: MapboxTokenProvider.accessToken)
+    private let geocodingService = GeocodingService()
 
     var body: some View {
         VStack(spacing: 0) {

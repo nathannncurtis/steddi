@@ -1,15 +1,12 @@
 import SwiftUI
-import MapboxNavigationCore
-import MapboxDirections
-import Combine
-import AVFoundation
 import CoreLocation
+import AVFoundation
 
-/// Custom Steddi turn-by-turn overlay — replaces stock Mapbox NavigationViewController UI.
-/// Uses Mapbox NavigationCore for routing brain, but renders its own SwiftUI interface.
+/// Custom Steddi turn-by-turn overlay — replaces stock navigation UI.
+/// Uses NavigationEngine for routing brain, renders its own SwiftUI interface.
 struct SteddiNavOverlay: View {
     @AppStorage("accentColor") private var accentColor = "lavender"
-    let provider: MapboxNavigationProvider
+    let engine: NavigationEngine
     let onEndNavigation: () -> Void
     var onToggleVoice: () -> Void = {}
     var onToggleView: (Bool) -> Void = { _ in }
@@ -21,30 +18,6 @@ struct SteddiNavOverlay: View {
     // Reroute suggestion
     @State private var rerouteSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)? = nil
     @State private var currentRemainingETA: TimeInterval = 0
-
-    @State private var instruction: String = ""
-    @State private var stepDistance: String = ""
-    @State private var stepDistanceRaw: Double = 0
-    @State private var etaMinutes: Int = 0
-    @State private var distanceRemaining: String = ""
-    @State private var arrivalTime: String = ""
-    @State private var roadName: String = ""
-    @State private var maneuverType: String = "arrow.up"
-    @State private var hasArrived = false
-
-    // Speed
-    @State private var currentSpeedMph: Double = 0
-    @State private var speedLimitMph: Double? = nil
-
-    // Compass
-    @State private var headingDegrees: Double = 0
-
-    // Current coordinate for reports
-    @State private var currentCoordinate: CLLocationCoordinate2D?
-
-    // Next maneuver preview
-    @State private var followOnInstruction: String = ""
-    @State private var followOnManeuverSymbol: String = ""
 
     // Toggles
     @State var isVoiceOn: Bool = true
@@ -80,7 +53,9 @@ struct SteddiNavOverlay: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
-        .onAppear { startObserving() }
+        .task {
+            startRerouteLoop()
+        }
     }
 
     // MARK: - Portrait Nav Layout
@@ -92,13 +67,13 @@ struct SteddiNavOverlay: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 60)
 
-                if !followOnInstruction.isEmpty {
+                if !engine.followOnInstruction.isEmpty {
                     followOnBanner
                         .padding(.horizontal, 16)
                         .padding(.top, 6)
                 }
 
-                if !roadName.isEmpty {
+                if !engine.roadName.isEmpty {
                     streetNameCapsule
                         .padding(.top, 10)
                 }
@@ -142,17 +117,17 @@ struct SteddiNavOverlay: View {
             // Top-left: instruction card (floating)
             VStack {
                 HStack(spacing: 10) {
-                    Image(systemName: maneuverType)
+                    Image(systemName: engine.maneuverType)
                         .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(SteddiTheme.accent)
                         .frame(width: 44, height: 44)
                         .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 12))
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(stepDistance)
+                        Text(engine.stepDistance)
                             .font(SteddiTheme.mono(22))
                             .foregroundStyle(SteddiTheme.textPrimary)
-                        Text(instruction)
+                        Text(engine.instruction)
                             .font(SteddiTheme.body(13))
                             .foregroundStyle(SteddiTheme.textSecondary)
                             .lineLimit(1)
@@ -164,12 +139,12 @@ struct SteddiNavOverlay: View {
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
 
                 // Next maneuver (compact, below instruction)
-                if !followOnInstruction.isEmpty {
+                if !engine.followOnInstruction.isEmpty {
                     HStack(spacing: 4) {
-                        Image(systemName: followOnManeuverSymbol)
+                        Image(systemName: engine.followOnManeuverSymbol)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(SteddiTheme.accent.opacity(0.7))
-                        Text("Then: \(followOnInstruction)")
+                        Text("Then: \(engine.followOnInstruction)")
                             .font(SteddiTheme.body(11))
                             .foregroundStyle(SteddiTheme.textMuted)
                             .lineLimit(1)
@@ -192,7 +167,7 @@ struct SteddiNavOverlay: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 3) {
-                        Text("\(etaMinutes)")
+                        Text("\(engine.etaMinutes)")
                             .font(SteddiTheme.mono(20))
                             .foregroundStyle(SteddiTheme.textPrimary)
                         Text("min")
@@ -200,10 +175,10 @@ struct SteddiNavOverlay: View {
                             .foregroundStyle(SteddiTheme.textSecondary)
                     }
                     HStack(spacing: 6) {
-                        Text(distanceRemaining)
+                        Text(engine.distanceRemaining)
                             .font(SteddiTheme.mono(11))
                             .foregroundStyle(SteddiTheme.textMuted)
-                        Text(arrivalTime)
+                        Text(engine.arrivalTime)
                             .font(SteddiTheme.mono(11))
                             .foregroundStyle(SteddiTheme.textMuted)
                     }
@@ -244,8 +219,8 @@ struct SteddiNavOverlay: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
             // Street name: centered bottom
-            if !roadName.isEmpty {
-                Text(roadName)
+            if !engine.roadName.isEmpty {
+                Text(engine.roadName)
                     .font(SteddiTheme.body(11))
                     .foregroundStyle(SteddiTheme.textSecondary)
                     .padding(.horizontal, 10)
@@ -262,7 +237,7 @@ struct SteddiNavOverlay: View {
     private var topBanner: some View {
         HStack(spacing: 16) {
             // Maneuver icon — large and prominent
-            Image(systemName: maneuverType)
+            Image(systemName: engine.maneuverType)
                 .font(.system(size: 40, weight: .bold))
                 .foregroundStyle(SteddiTheme.accent)
                 .frame(width: 72, height: 72)
@@ -270,13 +245,13 @@ struct SteddiNavOverlay: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 // Distance — LARGE mono for glanceability
-                Text(stepDistance)
+                Text(engine.stepDistance)
                     .font(SteddiTheme.mono(34))
                     .foregroundStyle(SteddiTheme.textPrimary)
                     .minimumScaleFactor(0.7)
 
                 // Instruction — clear and readable
-                Text(instruction)
+                Text(engine.instruction)
                     .font(SteddiTheme.body(18))
                     .foregroundStyle(SteddiTheme.textSecondary)
                     .lineLimit(2)
@@ -305,12 +280,12 @@ struct SteddiNavOverlay: View {
 
     private var followOnBanner: some View {
         HStack(spacing: 10) {
-            Image(systemName: followOnManeuverSymbol)
+            Image(systemName: engine.followOnManeuverSymbol)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(SteddiTheme.accent.opacity(0.7))
                 .frame(width: 28, height: 28)
 
-            Text("Then: \(followOnInstruction)")
+            Text("Then: \(engine.followOnInstruction)")
                 .font(SteddiTheme.body(14))
                 .foregroundStyle(SteddiTheme.textMuted)
                 .lineLimit(1)
@@ -332,7 +307,7 @@ struct SteddiNavOverlay: View {
     // MARK: - Street Name Capsule
 
     private var streetNameCapsule: some View {
-        Text(roadName)
+        Text(engine.roadName)
             .font(SteddiTheme.body(14))
             .foregroundStyle(SteddiTheme.textSecondary)
             .padding(.horizontal, 16)
@@ -359,14 +334,14 @@ struct SteddiNavOverlay: View {
             Text("N")
                 .font(.system(size: 15, weight: .heavy, design: .rounded))
                 .foregroundStyle(SteddiTheme.warmRed)
-                .rotationEffect(.degrees(-headingDegrees))
+                .rotationEffect(.degrees(-engine.headingDegrees))
                 .offset(y: -6)
 
             // Small triangle pointer
             Triangle()
                 .fill(SteddiTheme.warmRed)
                 .frame(width: 6, height: 5)
-                .rotationEffect(.degrees(-headingDegrees))
+                .rotationEffect(.degrees(-engine.headingDegrees))
                 .offset(y: 4)
         }
         .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
@@ -421,13 +396,13 @@ struct SteddiNavOverlay: View {
             Text("N")
                 .font(.system(size: 14, weight: .heavy, design: .rounded))
                 .foregroundStyle(SteddiTheme.warmRed)
-                .rotationEffect(.degrees(-headingDegrees))
+                .rotationEffect(.degrees(-engine.headingDegrees))
                 .offset(y: -5)
 
             Triangle()
                 .fill(SteddiTheme.warmRed)
                 .frame(width: 5, height: 4)
-                .rotationEffect(.degrees(-headingDegrees))
+                .rotationEffect(.degrees(-engine.headingDegrees))
                 .offset(y: 3)
         }
         .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
@@ -476,7 +451,7 @@ struct SteddiNavOverlay: View {
             // ETA block — center
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
-                    Text("\(etaMinutes)")
+                    Text("\(engine.etaMinutes)")
                         .font(SteddiTheme.mono(32))
                         .foregroundStyle(SteddiTheme.textPrimary)
                     Text("min")
@@ -486,7 +461,7 @@ struct SteddiNavOverlay: View {
                 }
 
                 HStack(spacing: 8) {
-                    Text(distanceRemaining)
+                    Text(engine.distanceRemaining)
                         .font(SteddiTheme.mono(13))
                         .foregroundStyle(SteddiTheme.textSecondary)
 
@@ -494,7 +469,7 @@ struct SteddiNavOverlay: View {
                         .fill(SteddiTheme.textMuted)
                         .frame(width: 3, height: 3)
 
-                    Text(arrivalTime)
+                    Text(engine.arrivalTime)
                         .font(SteddiTheme.mono(13))
                         .foregroundStyle(SteddiTheme.textMuted)
                 }
@@ -531,9 +506,10 @@ struct SteddiNavOverlay: View {
     // MARK: - Speedometer
 
     private func speedometer(size: CGFloat) -> some View {
+        let speedLimitMph: Double? = nil // NavigationEngine doesn't provide speed limits
         let overLimit: Double = {
             guard let limit = speedLimitMph else { return 0 }
-            return currentSpeedMph - limit
+            return engine.currentSpeedMph - limit
         }()
 
         let speedColor: Color = {
@@ -561,14 +537,14 @@ struct SteddiNavOverlay: View {
 
                 // Speed arc gauge
                 Circle()
-                    .trim(from: 0, to: min(1.0, currentSpeedMph / max(1, (speedLimitMph ?? 65) * 1.3)))
+                    .trim(from: 0, to: min(1.0, engine.currentSpeedMph / max(1, (speedLimitMph ?? 65) * 1.3)))
                     .stroke(speedColor.opacity(0.5), style: StrokeStyle(lineWidth: max(2, 3 * scale), lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .padding(3 * scale)
 
                 // Speed value
                 VStack(spacing: 0) {
-                    Text("\(Int(currentSpeedMph))")
+                    Text("\(Int(engine.currentSpeedMph))")
                         .font(SteddiTheme.mono(22 * scale))
                         .foregroundStyle(speedColor)
 
@@ -625,7 +601,7 @@ struct SteddiNavOverlay: View {
         Button {
             reportedType = label
             showReportSheet = false
-            if let coord = currentCoordinate {
+            if let coord = engine.currentCoordinate {
                 onReport?(label, coord)
             }
             withAnimation(.easeInOut(duration: 0.3)) {
@@ -678,126 +654,61 @@ struct SteddiNavOverlay: View {
         }
     }
 
-    // MARK: - Observation
+    // MARK: - Reroute Loop
 
-    private func startObserving() {
-        let nav = provider.navigation()
+    private func startRerouteLoop() {
+        guard let commute, let direction else { return }
 
-        // Route progress
         Task { @MainActor in
-            for await state in nav.routeProgress.values {
-                guard let state else { continue }
-                let progress = state.routeProgress
+            let directionsService = DirectionsService()
 
-                etaMinutes = max(1, Int(ceil(progress.durationRemaining / 60)))
-                distanceRemaining = formatDistance(progress.distanceRemaining)
-                arrivalTime = formatArrivalTime(progress.durationRemaining)
+            while !Task.isCancelled && !engine.hasArrived {
+                try? await Task.sleep(for: .seconds(300)) // 5 min safety net poll
+                guard !Task.isCancelled, !engine.hasArrived else { break }
+                guard rerouteSuggestion == nil else { continue }
 
-                // Current step instruction
-                let step = progress.currentLegProgress.currentStep
-                instruction = step.instructions
-                stepDistanceRaw = progress.currentLegProgress.currentStepProgress.distanceRemaining
-                stepDistance = formatDistance(stepDistanceRaw)
-                maneuverType = sfSymbol(for: step.maneuverType, direction: step.maneuverDirection)
+                guard let currentCoord = engine.currentCoordinate,
+                      engine.isNavigating else { continue }
 
-                // Follow-on step (next maneuver preview)
-                if let followOn = progress.currentLegProgress.followOnStep {
-                    followOnInstruction = followOn.instructions
-                    followOnManeuverSymbol = sfSymbol(for: followOn.maneuverType, direction: followOn.maneuverDirection)
-                } else {
-                    followOnInstruction = ""
-                    followOnManeuverSymbol = ""
-                }
-            }
-        }
+                let remainingETA = Double(engine.etaMinutes) * 60.0
+                currentRemainingETA = remainingETA
 
-        // Location matching — road name, speed, heading
-        Task { @MainActor in
-            for await state in nav.locationMatching.values {
-                roadName = state.roadName?.text ?? ""
+                // Check each fallback route
+                let fallbacks = commute.orderedRoutes(for: direction).filter { $0.rank > 0 }
+                guard !fallbacks.isEmpty else { continue }
 
-                // Current speed (m/s -> mph)
-                let speedMS = state.currentSpeed.converted(to: .metersPerSecond).value
-                currentSpeedMph = max(0, speedMS * 2.23694)
+                var bestSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)?
+                var bestSavings: TimeInterval = 0
 
-                // Speed limit
-                if let limitValue = state.speedLimit.value {
-                    speedLimitMph = limitValue.converted(to: .milesPerHour).value
-                } else {
-                    speedLimitMph = nil
-                }
+                for fallback in fallbacks {
+                    do {
+                        let fallbackETA = try await directionsService.fetchETA(
+                            from: currentCoord,
+                            along: fallback.encodedPolyline
+                        )
 
-                // Heading for compass
-                headingDegrees = state.location.course
+                        let decision = RerouteEngine.evaluate(
+                            remainingETASeconds: remainingETA,
+                            fallbackETASeconds: fallbackETA,
+                            basePercentage: commute.thresholdPercentage,
+                            hardMinuteFloor: commute.hardMinuteFloor
+                        )
 
-                // Track coordinate for reports
-                currentCoordinate = state.location.coordinate
-            }
-        }
-
-        // Arrival
-        Task { @MainActor in
-            for await arrival in nav.waypointsArrival.values {
-                if arrival.event != nil {
-                    hasArrived = true
-                    onEndNavigation()
-                }
-            }
-        }
-
-        // Reroute engine — periodic fallback check (every 5 minutes)
-        if let commute, let direction {
-            Task { @MainActor in
-                let directionsService = DirectionsService(accessToken: MapboxTokenProvider.accessToken)
-
-                while !Task.isCancelled && !hasArrived {
-                    try? await Task.sleep(for: .seconds(300)) // 5 min safety net poll
-                    guard !Task.isCancelled, !hasArrived else { break }
-                    guard rerouteSuggestion == nil else { continue } // don't stack suggestions
-
-                    guard let currentLocation = nav.currentLocationMatching?.enhancedLocation,
-                          let currentProgress = nav.currentRouteProgress else { continue }
-
-                    let remainingETA = currentProgress.routeProgress.durationRemaining
-                    currentRemainingETA = remainingETA
-
-                    // Check each fallback route
-                    let fallbacks = commute.orderedRoutes(for: direction).filter { $0.rank > 0 }
-                    guard !fallbacks.isEmpty else { continue }
-
-                    var bestSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)?
-                    var bestSavings: TimeInterval = 0
-
-                    for fallback in fallbacks {
-                        do {
-                            let fallbackETA = try await directionsService.fetchETA(
-                                from: currentLocation.coordinate,
-                                along: fallback.encodedPolyline
+                        if decision.shouldReroute, decision.savingsSeconds > bestSavings {
+                            bestSavings = decision.savingsSeconds
+                            bestSuggestion = (
+                                route: fallback,
+                                savingsMinutes: decision.savingsMinutes,
+                                savingsPercentage: decision.savingsSeconds / remainingETA
                             )
-
-                            let decision = RerouteEngine.evaluate(
-                                remainingETASeconds: remainingETA,
-                                fallbackETASeconds: fallbackETA,
-                                basePercentage: commute.thresholdPercentage,
-                                hardMinuteFloor: commute.hardMinuteFloor
-                            )
-
-                            if decision.shouldReroute, decision.savingsSeconds > bestSavings {
-                                bestSavings = decision.savingsSeconds
-                                bestSuggestion = (
-                                    route: fallback,
-                                    savingsMinutes: decision.savingsMinutes,
-                                    savingsPercentage: decision.savingsSeconds / remainingETA
-                                )
-                            }
-                        } catch {
-                            continue
                         }
+                    } catch {
+                        continue
                     }
+                }
 
-                    if let suggestion = bestSuggestion {
-                        rerouteSuggestion = suggestion
-                    }
+                if let suggestion = bestSuggestion {
+                    rerouteSuggestion = suggestion
                 }
             }
         }
@@ -821,36 +732,6 @@ struct SteddiNavOverlay: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: arrival)
-    }
-
-    private func sfSymbol(for maneuverType: ManeuverType, direction: ManeuverDirection?) -> String {
-        switch maneuverType {
-        case .turn:
-            switch direction {
-            case .left, .sharpLeft, .slightLeft: return "arrow.turn.up.left"
-            case .right, .sharpRight, .slightRight: return "arrow.turn.up.right"
-            case .uTurn: return "arrow.uturn.down"
-            default: return "arrow.up"
-            }
-        case .merge: return "arrow.merge"
-        case .takeOnRamp, .takeOffRamp:
-            switch direction {
-            case .left, .sharpLeft, .slightLeft: return "arrow.up.left"
-            case .right, .sharpRight, .slightRight: return "arrow.up.right"
-            default: return "arrow.up.right"
-            }
-        case .reachFork:
-            switch direction {
-            case .left, .slightLeft: return "arrow.up.left"
-            default: return "arrow.up.right"
-            }
-        case .reachEnd: return "arrow.turn.up.right"
-        case .useLane: return "arrow.up"
-        case .takeRotary, .takeRoundabout: return "arrow.triangle.2.circlepath"
-        case .arrive: return "flag.fill"
-        case .depart: return "location.fill"
-        default: return "arrow.up"
-        }
     }
 }
 

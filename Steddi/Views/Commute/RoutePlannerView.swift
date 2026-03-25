@@ -1,8 +1,6 @@
 import SwiftUI
 import SwiftData
-import MapboxMaps
-import MapboxNavigationCore
-import MapboxDirections
+import MapKit
 import CoreLocation
 
 /// Full-screen route planner — map takes priority, details in a bottom card.
@@ -21,7 +19,7 @@ struct RoutePlannerView: View {
     @State private var saveAsPreferred = true
     @State private var showDetails = false
     @State private var waypoints: [CLLocationCoordinate2D] = []
-    @State private var plannerMapView: MapView?
+    @State private var plannerMapView: MKMapView?
 
     private var originLocation: PinnedLocation? {
         direction == .originToDestination ? commute.origin : commute.destination
@@ -52,8 +50,10 @@ struct RoutePlannerView: View {
             VStack(spacing: 8) {
                 Button {
                     guard let mv = plannerMapView else { return }
-                    let zoom = min(mv.mapboxMap.cameraState.zoom + 1, 20)
-                    mv.camera.ease(to: CameraOptions(zoom: zoom), duration: 0.3, curve: .easeOut, completion: nil)
+                    var region = mv.region
+                    region.span.latitudeDelta /= 2
+                    region.span.longitudeDelta /= 2
+                    mv.setRegion(region, animated: true)
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .semibold))
@@ -64,8 +64,10 @@ struct RoutePlannerView: View {
 
                 Button {
                     guard let mv = plannerMapView else { return }
-                    let zoom = max(mv.mapboxMap.cameraState.zoom - 1, 3)
-                    mv.camera.ease(to: CameraOptions(zoom: zoom), duration: 0.3, curve: .easeOut, completion: nil)
+                    var region = mv.region
+                    region.span.latitudeDelta = min(region.span.latitudeDelta * 2, 180)
+                    region.span.longitudeDelta = min(region.span.longitudeDelta * 2, 360)
+                    mv.setRegion(region, animated: true)
                 } label: {
                     Image(systemName: "minus")
                         .font(.system(size: 18, weight: .semibold))
@@ -247,10 +249,10 @@ struct RoutePlannerView: View {
 
         isCalculating = true
 
-        let service = DirectionsService(accessToken: MapboxTokenProvider.accessToken)
+        let service = DirectionsService()
 
         // Build waypoints list: origin + user waypoints + destination
-        var allPoints = [origin.coordinate] + waypoints + [dest.coordinate]
+        let allPoints = [origin.coordinate] + waypoints + [dest.coordinate]
 
         do {
             // If we have waypoints, we need to route through them
@@ -258,40 +260,30 @@ struct RoutePlannerView: View {
             if waypoints.isEmpty {
                 let route = try await service.fetchRoute(from: origin.coordinate, to: dest.coordinate)
                 calculatedPolyline = route.encodedPolyline
-                calculatedDistance = route.distanceMeters
-                calculatedDuration = route.durationSeconds
+                calculatedDistance = route.distance
+                calculatedDuration = route.duration
             } else {
-                // Multi-waypoint: build coordinate string and hit API directly
-                let coords = allPoints.map { "\($0.longitude),\($0.latitude)" }.joined(separator: ";")
+                // Multi-waypoint: chain sequential MKDirections requests and stitch
+                var allCoords: [CLLocationCoordinate2D] = []
+                var totalDistance: Double = 0
+                var totalDuration: Double = 0
 
-                var components = URLComponents(string: "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/\(coords)")!
-                components.queryItems = [
-                    URLQueryItem(name: "access_token", value: MapboxTokenProvider.accessToken),
-                    URLQueryItem(name: "geometries", value: "polyline6"),
-                    URLQueryItem(name: "overview", value: "full"),
-                ]
-
-                let (data, response) = try await URLSession.shared.data(from: components.url!)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                    isCalculating = false
-                    return
-                }
-
-                struct DirResponse: Decodable {
-                    let routes: [DirRoute]
-                    struct DirRoute: Decodable {
-                        let geometry: String
-                        let distance: Double
-                        let duration: Double
+                for i in 0..<(allPoints.count - 1) {
+                    let segRoute = try await service.fetchRoute(from: allPoints[i], to: allPoints[i + 1])
+                    let segCoords = PolylineEncoder.decode(segRoute.encodedPolyline, precision: 6)
+                    // Avoid duplicate junction points
+                    if !allCoords.isEmpty && !segCoords.isEmpty {
+                        allCoords.append(contentsOf: segCoords.dropFirst())
+                    } else {
+                        allCoords.append(contentsOf: segCoords)
                     }
+                    totalDistance += segRoute.distance
+                    totalDuration += segRoute.duration
                 }
 
-                let result = try JSONDecoder().decode(DirResponse.self, from: data)
-                if let route = result.routes.first {
-                    calculatedPolyline = route.geometry
-                    calculatedDistance = route.distance
-                    calculatedDuration = route.duration
-                }
+                calculatedPolyline = PolylineEncoder.encode(allCoords, precision: 6)
+                calculatedDistance = totalDistance
+                calculatedDuration = totalDuration
             }
         } catch {}
 
@@ -339,15 +331,20 @@ struct RoutePlannerMap: UIViewRepresentable {
     let waypoints: [CLLocationCoordinate2D]
     let polyline: String?
     let onTapMap: (CLLocationCoordinate2D) -> Void
-    @Binding var mapViewRef: MapView?
+    @Binding var mapViewRef: MKMapView?
     /// Only fit camera on first route load, not on waypoint updates
     private var shouldFitCamera: Bool { waypoints.isEmpty }
 
-    func makeUIView(context: Context) -> MapView {
-        let mapView = MapView(frame: .zero, mapInitOptions: MapInitOptions(styleURI: .standard))
-        mapView.mapboxMap.mapStyle = .standard(lightPreset: .dusk)
-        mapView.ornaments.options.scaleBar.visibility = .hidden
-        mapView.ornaments.options.compass.visibility = .hidden
+    func makeUIView(context: Context) -> MKMapView {
+        let mapView = MKMapView(frame: .zero)
+        mapView.overrideUserInterfaceStyle = .dark
+        mapView.delegate = context.coordinator
+
+        let config = MKStandardMapConfiguration(emphasisStyle: .muted)
+        mapView.preferredConfiguration = config
+
+        mapView.showsCompass = false
+        mapView.showsScale = false
 
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         mapView.addGestureRecognizer(tap)
@@ -358,85 +355,87 @@ struct RoutePlannerMap: UIViewRepresentable {
         return mapView
     }
 
-    func updateUIView(_ mapView: MapView, context: Context) {
+    func updateUIView(_ mapView: MKMapView, context: Context) {
         context.coordinator.onTapMap = onTapMap
 
-        // Clean previous
-        try? mapView.mapboxMap.removeLayer(withId: "planner-route")
-        try? mapView.mapboxMap.removeSource(withId: "planner-source")
-        try? mapView.mapboxMap.removeLayer(withId: "planner-points")
-        try? mapView.mapboxMap.removeSource(withId: "planner-points-source")
+        // Clean previous overlays and annotations
+        mapView.removeOverlays(mapView.overlays)
+        let waypointAnnotations = mapView.annotations.filter { $0 is WaypointAnnotation }
+        mapView.removeAnnotations(waypointAnnotations)
 
         // Draw route
         if let polyline {
             let coords = PolylineEncoder.decode(polyline, precision: 6)
             guard !coords.isEmpty else { return }
 
-            var source = GeoJSONSource(id: "planner-source")
-            source.data = .geometry(.lineString(LineString(coords)))
-
-            var layer = LineLayer(id: "planner-route", source: "planner-source")
-            layer.slot = .top
-            layer.lineColor = .constant(StyleColor(SteddiTheme.accentUIColor))
-            layer.lineWidth = .constant(6)
-            layer.lineOpacity = .constant(1.0)
-            layer.lineEmissiveStrength = .constant(1.0)
-            layer.lineCap = .constant(.round)
-            layer.lineJoin = .constant(.round)
-
-            try? mapView.mapboxMap.addSource(source)
-            try? mapView.mapboxMap.addLayer(layer)
+            let overlay = MKPolyline(coordinates: coords, count: coords.count)
+            mapView.addOverlay(overlay, level: .aboveRoads)
 
             // Only fit camera on initial route, not after adding waypoints
             if shouldFitCamera {
-                let camera = mapView.mapboxMap.camera(
-                    for: .lineString(LineString(coords)),
-                    padding: UIEdgeInsets(top: 80, left: 40, bottom: 200, right: 40),
-                    bearing: nil,
-                    pitch: nil
-                )
-                mapView.mapboxMap.setCamera(to: camera)
+                let padding = UIEdgeInsets(top: 80, left: 40, bottom: 200, right: 40)
+                mapView.setVisibleMapRect(overlay.boundingMapRect, edgePadding: padding, animated: false)
             }
         } else if let origin, shouldFitCamera {
-            mapView.mapboxMap.setCamera(to: CameraOptions(center: origin, zoom: 12))
+            let region = MKCoordinateRegion(center: origin, latitudinalMeters: 5000, longitudinalMeters: 5000)
+            mapView.setRegion(region, animated: false)
         }
 
         // Draw waypoint markers
-        if !waypoints.isEmpty {
-            let points = waypoints.map { Point($0) }
-            let features = points.enumerated().map { (i, pt) -> Feature in
-                var f = Feature(geometry: .point(pt))
-                f.properties = ["index": .number(Double(i + 1))]
-                return f
-            }
-
-            var source = GeoJSONSource(id: "planner-points-source")
-            source.data = .featureCollection(FeatureCollection(features: features))
-
-            var layer = CircleLayer(id: "planner-points", source: "planner-points-source")
-            layer.slot = .top
-            layer.circleColor = .constant(StyleColor(SteddiTheme.accentUIColor))
-            layer.circleRadius = .constant(8)
-            layer.circleStrokeColor = .constant(StyleColor(.white))
-            layer.circleStrokeWidth = .constant(2)
-            layer.circleEmissiveStrength = .constant(1.0)
-
-            try? mapView.mapboxMap.addSource(source)
-            try? mapView.mapboxMap.addLayer(layer)
+        for (i, coord) in waypoints.enumerated() {
+            let annotation = WaypointAnnotation()
+            annotation.coordinate = coord
+            annotation.title = "\(i + 1)"
+            mapView.addAnnotation(annotation)
         }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    class Coordinator: NSObject {
-        weak var mapView: MapView?
+    class WaypointAnnotation: MKPointAnnotation {}
+
+    class Coordinator: NSObject, MKMapViewDelegate {
+        weak var mapView: MKMapView?
         var onTapMap: ((CLLocationCoordinate2D) -> Void)?
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let mapView, gesture.state == .ended else { return }
             let point = gesture.location(in: mapView)
-            let coord = mapView.mapboxMap.coordinate(for: point)
+            let coord = mapView.convert(point, toCoordinateFrom: mapView)
             onTapMap?(coord)
+        }
+
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let polyline = overlay as? MKPolyline {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                renderer.strokeColor = SteddiTheme.accentUIColor
+                renderer.lineWidth = 6
+                renderer.lineCap = .round
+                renderer.lineJoin = .round
+                return renderer
+            }
+            return MKOverlayRenderer(overlay: overlay)
+        }
+
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            guard let waypoint = annotation as? WaypointAnnotation else { return nil }
+            let identifier = "WaypointPin"
+            let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) ?? MKAnnotationView(annotation: waypoint, reuseIdentifier: identifier)
+            view.annotation = waypoint
+
+            // Draw a colored circle
+            let size: CGFloat = 20
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+            view.image = renderer.image { ctx in
+                let rect = CGRect(x: 0, y: 0, width: size, height: size)
+                ctx.cgContext.setFillColor(SteddiTheme.accentUIColor.cgColor)
+                ctx.cgContext.fillEllipse(in: rect)
+                ctx.cgContext.setStrokeColor(UIColor.white.cgColor)
+                ctx.cgContext.setLineWidth(2)
+                ctx.cgContext.strokeEllipse(in: rect.insetBy(dx: 1, dy: 1))
+            }
+            view.centerOffset = .zero
+            return view
         }
     }
 }

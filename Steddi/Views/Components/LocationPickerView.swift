@@ -17,7 +17,7 @@ struct LocationPickerView: View {
     @State private var searchResults: [GeocodingResult] = []
     @State private var searchTask: Task<Void, Never>?
 
-    private let geocodingService = GeocodingService(accessToken: MapboxTokenProvider.accessToken)
+    private let geocodingService = GeocodingService()
 
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change

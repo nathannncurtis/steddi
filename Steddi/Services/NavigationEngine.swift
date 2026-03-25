@@ -1,0 +1,436 @@
+import Foundation
+import MapKit
+import CoreLocation
+import Observation
+
+/// Custom turn-by-turn navigation engine that tracks user position along an MKRoute.
+/// Replaces MapboxNavigationCore with pure MapKit/CoreLocation logic.
+@Observable
+@MainActor
+final class NavigationEngine {
+
+    // MARK: - Public State
+
+    var isNavigating: Bool = false
+    var currentStepIndex: Int = 0
+    var instruction: String = ""
+    var stepDistance: String = ""
+    var stepDistanceRaw: Double = 0
+    var etaMinutes: Int = 0
+    var distanceRemaining: String = ""
+    var arrivalTime: String = ""
+    var roadName: String = ""
+    var maneuverType: String = "arrow.up"
+    var followOnInstruction: String = ""
+    var followOnManeuverSymbol: String = ""
+    var currentSpeedMph: Double = 0
+    var headingDegrees: Double = 0
+    var currentCoordinate: CLLocationCoordinate2D?
+    var hasArrived: Bool = false
+
+    /// Full route polyline coordinates for map rendering.
+    var routePolylineCoordinates: [CLLocationCoordinate2D] = []
+
+    // MARK: - Private State
+
+    private var activeRoute: MKRoute?
+    private var steps: [MKRoute.Step] = []
+
+    /// Cumulative distance from route start to the beginning of each step (indexed by step index).
+    private var stepStartDistances: [Double] = []
+
+    /// Total route distance in meters.
+    private var totalRouteDistance: Double = 0
+
+    /// Original expected travel time from the route, used for proportional ETA.
+    private var originalExpectedTravelTime: TimeInterval = 0
+
+    /// Running average speed in m/s for ETA smoothing.
+    private var averageSpeedMPS: Double = 0
+    private var speedSampleCount: Int = 0
+
+    // Thresholds
+    private let stepTransitionDistance: CLLocationDistance = 30 // meters
+    private let arrivalDistance: CLLocationDistance = 50 // meters
+
+    // MARK: - Start / Stop
+
+    func startNavigation(route: MKRoute) {
+        activeRoute = route
+        // Filter to steps that have actual instructions; keep all steps for distance tracking
+        let allSteps = route.steps
+        steps = allSteps.filter { !$0.instructions.isEmpty }
+        currentStepIndex = 0
+        isNavigating = true
+        hasArrived = false
+        totalRouteDistance = route.distance
+        originalExpectedTravelTime = route.expectedTravelTime
+        averageSpeedMPS = 0
+        speedSampleCount = 0
+        routePolylineCoordinates = Self.extractCoordinates(from: route.polyline)
+
+        // Precompute cumulative distances to the start of each filtered step
+        precomputeStepDistances()
+        updateCurrentStep()
+    }
+
+    func stopNavigation() {
+        isNavigating = false
+        activeRoute = nil
+        steps = []
+        stepStartDistances = []
+        currentStepIndex = 0
+        instruction = ""
+        stepDistance = ""
+        stepDistanceRaw = 0
+        etaMinutes = 0
+        distanceRemaining = ""
+        arrivalTime = ""
+        roadName = ""
+        maneuverType = "arrow.up"
+        followOnInstruction = ""
+        followOnManeuverSymbol = ""
+        currentSpeedMph = 0
+        headingDegrees = 0
+        currentCoordinate = nil
+        hasArrived = false
+        routePolylineCoordinates = []
+        totalRouteDistance = 0
+        originalExpectedTravelTime = 0
+        averageSpeedMPS = 0
+        speedSampleCount = 0
+    }
+
+    // MARK: - Location Updates
+
+    /// Called on each GPS update from LocationService.
+    func updateLocation(_ location: CLLocation) {
+        guard isNavigating, activeRoute != nil, !steps.isEmpty else { return }
+
+        currentCoordinate = location.coordinate
+        if location.course >= 0 {
+            headingDegrees = location.course
+        }
+        let speedMPS = max(0, location.speed)
+        currentSpeedMph = speedMPS * 2.23694
+
+        // Update running average speed (only when actually moving)
+        if speedMPS > 1.0 {
+            speedSampleCount += 1
+            averageSpeedMPS += (speedMPS - averageSpeedMPS) / Double(speedSampleCount)
+        }
+
+        // Check arrival at destination
+        if checkArrival(location: location) { return }
+
+        // Detect step transitions
+        advanceStepIfNeeded(location: location)
+
+        // Calculate distances and ETA
+        updateDistancesAndETA(location: location)
+    }
+
+    // MARK: - Step Management
+
+    private func precomputeStepDistances() {
+        stepStartDistances = []
+        var cumulative: Double = 0
+        for (index, step) in steps.enumerated() {
+            stepStartDistances.append(cumulative)
+            if index < steps.count - 1 {
+                cumulative += step.distance
+            }
+        }
+    }
+
+    private func updateCurrentStep() {
+        guard currentStepIndex < steps.count else { return }
+
+        let step = steps[currentStepIndex]
+        instruction = step.instructions
+        stepDistanceRaw = step.distance
+        stepDistance = Self.formatDistance(step.distance)
+        maneuverType = Self.sfSymbolFromInstruction(step.instructions)
+        roadName = Self.extractRoadName(from: step.instructions)
+
+        // Follow-on step
+        let nextIndex = currentStepIndex + 1
+        if nextIndex < steps.count {
+            let nextStep = steps[nextIndex]
+            followOnInstruction = nextStep.instructions
+            followOnManeuverSymbol = Self.sfSymbolFromInstruction(nextStep.instructions)
+        } else {
+            followOnInstruction = ""
+            followOnManeuverSymbol = ""
+        }
+    }
+
+    private func advanceStepIfNeeded(location: CLLocation) {
+        let nextIndex = currentStepIndex + 1
+        guard nextIndex < steps.count else { return }
+
+        let nextStep = steps[nextIndex]
+        let nextStepCoords = Self.extractCoordinates(from: nextStep.polyline)
+        guard let nextStepStart = nextStepCoords.first else { return }
+
+        let nextStepStartLocation = CLLocation(latitude: nextStepStart.latitude, longitude: nextStepStart.longitude)
+        let distanceToNextStep = location.distance(from: nextStepStartLocation)
+
+        if distanceToNextStep < stepTransitionDistance {
+            currentStepIndex = nextIndex
+            updateCurrentStep()
+        }
+    }
+
+    private func checkArrival(location: CLLocation) -> Bool {
+        guard let lastCoord = routePolylineCoordinates.last else { return false }
+        let destination = CLLocation(latitude: lastCoord.latitude, longitude: lastCoord.longitude)
+        if location.distance(from: destination) < arrivalDistance {
+            hasArrived = true
+            instruction = "You have arrived"
+            maneuverType = "flag.fill"
+            stepDistance = ""
+            stepDistanceRaw = 0
+            distanceRemaining = ""
+            etaMinutes = 0
+            arrivalTime = ""
+            followOnInstruction = ""
+            followOnManeuverSymbol = ""
+            return true
+        }
+        return false
+    }
+
+    // MARK: - Distance & ETA
+
+    private func updateDistancesAndETA(location: CLLocation) {
+        guard currentStepIndex < steps.count else { return }
+
+        let currentStep = steps[currentStepIndex]
+
+        // Distance from user to end of current step
+        let currentStepCoords = Self.extractCoordinates(from: currentStep.polyline)
+        let distAlongCurrentStep = Self.distanceFromPointToNearestSegment(
+            point: location.coordinate,
+            polyline: currentStepCoords
+        )
+        let remainingInCurrentStep = max(0, currentStep.distance - distAlongCurrentStep.distanceAlongPolyline)
+
+        // Sum remaining steps' distances
+        var totalRemaining = remainingInCurrentStep
+        for i in (currentStepIndex + 1)..<steps.count {
+            totalRemaining += steps[i].distance
+        }
+
+        // Update step distance (remaining in current step)
+        stepDistanceRaw = remainingInCurrentStep
+        stepDistance = Self.formatDistance(remainingInCurrentStep)
+
+        // Update total distance remaining
+        distanceRemaining = Self.formatDistance(totalRemaining)
+
+        // ETA calculation
+        let etaSeconds: TimeInterval
+        if averageSpeedMPS > 2.0 {
+            // Use actual average speed when we have reliable data
+            etaSeconds = totalRemaining / averageSpeedMPS
+        } else if totalRouteDistance > 0 {
+            // Proportional estimate from original route
+            let fraction = totalRemaining / totalRouteDistance
+            etaSeconds = originalExpectedTravelTime * fraction
+        } else {
+            etaSeconds = 0
+        }
+
+        etaMinutes = max(1, Int(ceil(etaSeconds / 60)))
+        arrivalTime = Self.formatArrivalTime(etaSeconds)
+    }
+
+    // MARK: - Geometry Helpers
+
+    /// Result of projecting a point onto a polyline.
+    private struct ProjectionResult {
+        /// Distance from the start of the polyline to the projected point, measured along the polyline.
+        let distanceAlongPolyline: Double
+        /// Perpendicular distance from the original point to its projection on the polyline.
+        let perpendicularDistance: Double
+    }
+
+    /// Finds the closest point on a polyline to a given coordinate and returns
+    /// both the perpendicular distance and the distance along the polyline.
+    private nonisolated static func distanceFromPointToNearestSegment(
+        point: CLLocationCoordinate2D,
+        polyline: [CLLocationCoordinate2D]
+    ) -> ProjectionResult {
+        guard polyline.count >= 2 else {
+            if let first = polyline.first {
+                let dist = Self.haversineDistance(from: point, to: first)
+                return ProjectionResult(distanceAlongPolyline: 0, perpendicularDistance: dist)
+            }
+            return ProjectionResult(distanceAlongPolyline: 0, perpendicularDistance: .greatestFiniteMagnitude)
+        }
+
+        var bestPerpDistance = Double.greatestFiniteMagnitude
+        var bestAlongDistance: Double = 0
+        var cumulativeDistance: Double = 0
+
+        for i in 0..<(polyline.count - 1) {
+            let segStart = polyline[i]
+            let segEnd = polyline[i + 1]
+            let segLength = haversineDistance(from: segStart, to: segEnd)
+
+            let (projDist, t) = perpendicularDistance(point: point, segStart: segStart, segEnd: segEnd)
+
+            if projDist < bestPerpDistance {
+                bestPerpDistance = projDist
+                bestAlongDistance = cumulativeDistance + segLength * t
+            }
+
+            cumulativeDistance += segLength
+        }
+
+        return ProjectionResult(distanceAlongPolyline: bestAlongDistance, perpendicularDistance: bestPerpDistance)
+    }
+
+    /// Returns (perpendicular distance, clamped t parameter) for a point projected onto a segment.
+    private nonisolated static func perpendicularDistance(
+        point: CLLocationCoordinate2D,
+        segStart: CLLocationCoordinate2D,
+        segEnd: CLLocationCoordinate2D
+    ) -> (distance: Double, t: Double) {
+        // Use flat-earth approximation (accurate enough at navigation scales)
+        let cosLat = cos(point.latitude * .pi / 180)
+        let px = (point.longitude - segStart.longitude) * cosLat
+        let py = point.latitude - segStart.latitude
+        let dx = (segEnd.longitude - segStart.longitude) * cosLat
+        let dy = segEnd.latitude - segStart.latitude
+
+        let segLenSq = dx * dx + dy * dy
+        var t: Double = 0
+        if segLenSq > 0 {
+            t = ((px * dx) + (py * dy)) / segLenSq
+            t = max(0, min(1, t))
+        }
+
+        let projLon = segStart.longitude + t * (segEnd.longitude - segStart.longitude)
+        let projLat = segStart.latitude + t * (segEnd.latitude - segStart.latitude)
+        let projCoord = CLLocationCoordinate2D(latitude: projLat, longitude: projLon)
+
+        let dist = haversineDistance(from: point, to: projCoord)
+        return (dist, t)
+    }
+
+    /// Haversine distance between two coordinates in meters.
+    private nonisolated static func haversineDistance(
+        from a: CLLocationCoordinate2D,
+        to b: CLLocationCoordinate2D
+    ) -> Double {
+        let R = 6_371_000.0 // Earth radius in meters
+        let dLat = (b.latitude - a.latitude) * .pi / 180
+        let dLon = (b.longitude - a.longitude) * .pi / 180
+        let lat1 = a.latitude * .pi / 180
+        let lat2 = b.latitude * .pi / 180
+
+        let sinDLat = sin(dLat / 2)
+        let sinDLon = sin(dLon / 2)
+        let h = sinDLat * sinDLat + cos(lat1) * cos(lat2) * sinDLon * sinDLon
+        return 2 * R * asin(sqrt(h))
+    }
+
+    // MARK: - Polyline Extraction
+
+    nonisolated static func extractCoordinates(from polyline: MKPolyline) -> [CLLocationCoordinate2D] {
+        let count = polyline.pointCount
+        var coords = [CLLocationCoordinate2D](repeating: CLLocationCoordinate2D(), count: count)
+        polyline.getCoordinates(&coords, range: NSRange(location: 0, length: count))
+        return coords
+    }
+
+    // MARK: - Formatting
+
+    nonisolated static func formatDistance(_ meters: Double) -> String {
+        if meters < 160 { // ~500 ft
+            return "\(Int(meters * 3.281)) ft"
+        }
+        let miles = meters / 1609.34
+        if miles < 10 {
+            return String(format: "%.1f mi", miles)
+        }
+        return "\(Int(miles)) mi"
+    }
+
+    nonisolated static func formatArrivalTime(_ secondsRemaining: TimeInterval) -> String {
+        let arrival = Date().addingTimeInterval(secondsRemaining)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: arrival)
+    }
+
+    // MARK: - Maneuver Symbol from Instruction Text
+
+    nonisolated static func sfSymbolFromInstruction(_ instruction: String) -> String {
+        let lower = instruction.lowercased()
+
+        if lower.contains("arrive") || lower.contains("destination") {
+            return "flag.fill"
+        }
+        if lower.contains("depart") || lower.contains("start") {
+            return "location.fill"
+        }
+        if lower.contains("u-turn") || lower.contains("uturn") {
+            return "arrow.uturn.down"
+        }
+        if lower.contains("roundabout") || lower.contains("rotary") {
+            return "arrow.triangle.2.circlepath"
+        }
+        if lower.contains("merge") {
+            return "arrow.merge"
+        }
+        if lower.contains("ramp") {
+            if lower.contains("left") {
+                return "arrow.up.left"
+            }
+            return "arrow.up.right"
+        }
+        if lower.contains("sharp left") {
+            return "arrow.turn.up.left"
+        }
+        if lower.contains("sharp right") {
+            return "arrow.turn.up.right"
+        }
+        if lower.contains("slight left") || lower.contains("bear left") || lower.contains("keep left") {
+            return "arrow.turn.up.left"
+        }
+        if lower.contains("slight right") || lower.contains("bear right") || lower.contains("keep right") {
+            return "arrow.turn.up.right"
+        }
+        if lower.contains("turn left") || lower.hasPrefix("left") {
+            return "arrow.turn.up.left"
+        }
+        if lower.contains("turn right") || lower.hasPrefix("right") {
+            return "arrow.turn.up.right"
+        }
+
+        return "arrow.up" // continue straight
+    }
+
+    // MARK: - Road Name Extraction
+
+    nonisolated static func extractRoadName(from instruction: String) -> String {
+        // Look for "onto <road name>" pattern
+        if let ontoRange = instruction.range(of: "onto ", options: .caseInsensitive) {
+            let roadName = String(instruction[ontoRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+            if !roadName.isEmpty {
+                return roadName
+            }
+        }
+        // Look for "on <road name>" pattern (less common)
+        if let onRange = instruction.range(of: " on ", options: .caseInsensitive) {
+            let roadName = String(instruction[onRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+            if !roadName.isEmpty {
+                return roadName
+            }
+        }
+        return ""
+    }
+}

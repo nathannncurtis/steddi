@@ -1,11 +1,8 @@
 import UIKit
 import CarPlay
-import MapboxMaps
-import MapboxNavigationCore
-import MapboxDirections
+import MapKit
 import SwiftData
 import CoreLocation
-import Combine
 
 // MARK: - CarPlaySceneDelegate
 
@@ -21,9 +18,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var rootTabBar: CPTabBarTemplate?
 
     private var modelContainer: ModelContainer?
-    private var cancellables: Set<AnyCancellable> = []
 
     private var stateManager: NavigationStateManager { NavigationStateManager.shared }
+
+    // Live update polling task
+    private var liveUpdateTask: Task<Void, Never>?
 
     // MARK: - Scene Connection
 
@@ -65,8 +64,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             stateManager.isCarPlayActive = true
 
             // If phone is already navigating, show map immediately
-            if stateManager.isNavigating, let provider = stateManager.activeProvider {
-                self.showNavigationUI(provider: provider)
+            if stateManager.isNavigating {
+                self.showNavigationUI()
             }
 
             // Watch for navigation state changes
@@ -80,7 +79,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         from window: CPWindow
     ) {
         dismissNavigation()
-        cancellables.removeAll()
         self.interfaceController = nil
         self.carWindow = nil
         self.rootTabBar = nil
@@ -95,7 +93,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         didDisconnect interfaceController: CPInterfaceController
     ) {
         dismissNavigation()
-        cancellables.removeAll()
         self.interfaceController = nil
         self.carWindow = nil
         self.rootTabBar = nil
@@ -114,8 +111,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 try? await Task.sleep(for: .seconds(1))
                 let isNav = stateManager.isNavigating
 
-                if isNav && !wasNavigating, let provider = stateManager.activeProvider {
-                    showNavigationUI(provider: provider)
+                if isNav && !wasNavigating {
+                    showNavigationUI()
                 } else if !isNav && wasNavigating {
                     dismissNavigation()
                 }
@@ -128,7 +125,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     // MARK: - Show Navigation
 
     @MainActor
-    private func showNavigationUI(provider: MapboxNavigationProvider) {
+    private func showNavigationUI() {
         guard let interfaceController, !isShowingNavigation else { return }
         isShowingNavigation = true
 
@@ -141,8 +138,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         interfaceController.setRootTemplate(navTemplate, animated: true, completion: nil)
         NSLog("[CarPlay] Navigation template set as root")
 
-        // Subscribe to live updates
-        subscribeLiveUpdates(provider: provider)
+        // Start polling for live updates
+        subscribeLiveUpdates()
     }
 
     /// Build a CPListTemplate with live TBT information
@@ -184,7 +181,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         var infoItems: [CPListItem] = []
 
         // ETA
-        let etaText = "\(stateManager.etaMinutes) min · \(stateManager.distanceRemaining)"
+        let etaText = "\(stateManager.etaMinutes) min \u{00B7} \(stateManager.distanceRemaining)"
         let etaItem = CPListItem(text: etaText, detailText: "Arrive \(stateManager.arrivalTime)")
         if let img = UIImage(systemName: "clock.fill")?
             .withConfiguration(UIImage.SymbolConfiguration(pointSize: 20, weight: .medium))
@@ -197,7 +194,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let speedText = "\(Int(stateManager.currentSpeedMph)) mph"
         var speedDetail = stateManager.roadName
         if let limit = stateManager.speedLimitMph {
-            speedDetail = "Limit \(Int(limit)) mph" + (speedDetail.isEmpty ? "" : " · \(speedDetail)")
+            speedDetail = "Limit \(Int(limit)) mph" + (speedDetail.isEmpty ? "" : " \u{00B7} \(speedDetail)")
         }
         let speedItem = CPListItem(text: speedText, detailText: speedDetail)
         let isOverLimit = stateManager.speedLimitMph != nil && stateManager.currentSpeedMph > (stateManager.speedLimitMph! + 5)
@@ -223,15 +220,14 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     // MARK: - Live Updates
 
     @MainActor
-    private func subscribeLiveUpdates(provider: MapboxNavigationProvider) {
-        let nav = provider.navigation()
+    private func subscribeLiveUpdates() {
+        liveUpdateTask?.cancel()
 
-        // Route progress → refresh the CarPlay list with updated TBT data
-        nav.routeProgress
-            .receive(on: DispatchQueue.main)
-            .compactMap { $0 }
-            .sink { [weak self] _ in
-                guard let self, let interfaceController = self.interfaceController else { return }
+        liveUpdateTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, let interfaceController = self.interfaceController else { break }
+                guard self.isShowingNavigation else { break }
 
                 // Rebuild the nav template with fresh data from NavigationStateManager
                 let updatedTemplate = self.buildNavTemplate()
@@ -240,24 +236,22 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 if let topTemplate = interfaceController.rootTemplate as? CPListTemplate {
                     topTemplate.updateSections(updatedTemplate.sections)
                 }
-            }
-            .store(in: &cancellables)
 
-        // Arrival → pop back to commutes/recents
-        nav.waypointsArrival
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] arrival in
-                guard arrival.event != nil else { return }
-                self?.dismissNavigation()
+                // Check for arrival
+                if self.stateManager.hasArrived {
+                    self.dismissNavigation()
+                    break
+                }
             }
-            .store(in: &cancellables)
+        }
     }
 
     // MARK: - Dismiss Navigation
 
     @MainActor
     private func dismissNavigation() {
-        cancellables.removeAll()
+        liveUpdateTask?.cancel()
+        liveUpdateTask = nil
         isShowingNavigation = false
 
         // Restore commutes/recents root
@@ -282,11 +276,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 for commute in commutes {
                     let originName = commute.origin?.name ?? "?"
                     let destName = commute.destination?.name ?? "?"
-                    var detail = "\(originName) → \(destName)"
+                    var detail = "\(originName) \u{2192} \(destName)"
 
                     if let duration = commute.preferredRoute?.typicalDurationSeconds {
                         let mins = Int(ceil(duration / 60))
-                        detail += " — ~\(mins) min"
+                        detail += " \u{2014} ~\(mins) min"
                     }
 
                     let item = CPListItem(text: commute.name, detailText: detail)
