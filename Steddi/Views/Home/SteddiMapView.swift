@@ -166,10 +166,10 @@ class SteddiMapContainer: UIViewController {
     }
 
     @objc private func accentColorChanged() {
-        // Refresh the user location annotation with new color
-        if let userAnnotation = mapView.annotations.first(where: { $0 is MKUserLocation }) {
-            mapView.removeAnnotation(userAnnotation)
-            mapView.showsUserLocation = true
+        // Update the puck image directly on the existing annotation view
+        if let userLocation = mapView.userLocation as MKAnnotation?,
+           let annotationView = mapView.view(for: userLocation) {
+            annotationView.image = Self.makePuckImage()
         }
 
         // Refresh route line if showing
