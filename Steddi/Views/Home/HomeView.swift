@@ -613,8 +613,8 @@ struct HomeView: View {
                 .padding(.horizontal, 20)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(commutes.prefix(isLandscape ? 2 : 4)) { commute in
-                        commuteCard(commute)
+                    ForEach(commutes) { commute in
+                        commuteRows(commute)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -623,18 +623,21 @@ struct HomeView: View {
         }
     }
 
-    /// Resolve direction for display on the commute card — shows where you'd go
-    private func resolveCardDirection(_ commute: Commute) -> (destination: String, direction: CommuteDirection) {
+    /// Resolve the raw direction result for a commute
+    private func resolveCardResult(_ commute: Commute) -> CommuteDirectionResolver.Result {
         guard let currentLoc = locationService.currentLocation else {
-            return (commute.destination?.name ?? "—", .originToDestination)
+            return .confident(.originToDestination, destinationName: commute.destination?.name ?? "—")
         }
-
-        let result = CommuteDirectionResolver.resolve(
+        return CommuteDirectionResolver.resolve(
             commute: commute,
             currentLocation: currentLoc,
             trips: commuteTrips
         )
+    }
 
+    /// Legacy helper used by ETA refresh
+    private func resolveCardDirection(_ commute: Commute) -> (destination: String, direction: CommuteDirection) {
+        let result = resolveCardResult(commute)
         switch result {
         case .confident(let dir, let name):
             return (name, dir)
@@ -738,27 +741,29 @@ struct HomeView: View {
         }
     }
 
-    private func commuteCard(_ commute: Commute) -> some View {
+    /// Produces one or two rows for a commute depending on direction resolution.
+    /// When ambiguous (not near either endpoint), shows two rows — one per direction.
+    @ViewBuilder
+    private func commuteRows(_ commute: Commute) -> some View {
+        let result = resolveCardResult(commute)
+        switch result {
+        case .confident(let direction, let destName):
+            let etaKey = direction == .originToDestination ? "\(commute.id)-toDest" : "\(commute.id)-toOrigin"
+            singleCommuteCard(commute, destinationName: destName, etaKey: etaKey, direction: direction)
+        case .ambiguous:
+            // Show two rows — one for each direction
+            if let destName = commute.destination?.name {
+                singleCommuteCard(commute, destinationName: destName, etaKey: "\(commute.id)-toDest", direction: .originToDestination)
+            }
+            if let originName = commute.origin?.name {
+                singleCommuteCard(commute, destinationName: originName, etaKey: "\(commute.id)-toOrigin", direction: .destinationToOrigin)
+            }
+        }
+    }
+
+    private func singleCommuteCard(_ commute: Commute, destinationName: String, etaKey: String, direction: CommuteDirection) -> some View {
         Button {
-            guard let currentLoc = locationService.currentLocation else {
-                // No location — just go to destination
-                startCommute(commute, direction: .originToDestination)
-                return
-            }
-
-            let result = CommuteDirectionResolver.resolve(
-                commute: commute,
-                currentLocation: currentLoc,
-                trips: commuteTrips
-            )
-
-            switch result {
-            case .confident(let direction, _):
-                startCommute(commute, direction: direction)
-            case .ambiguous:
-                directionPickerCommute = commute
-                showDirectionPicker = true
-            }
+            startCommute(commute, direction: direction)
         } label: {
             HStack(spacing: 12) {
                 // Route indicator
@@ -780,13 +785,12 @@ struct HomeView: View {
                         .foregroundStyle(SteddiTheme.textPrimary)
 
                     HStack(spacing: 4) {
-                        let resolved = resolveCardDirection(commute)
                         Image(systemName: "location.fill")
                             .font(.caption2)
                             .foregroundStyle(SteddiTheme.accent)
-                        Text(resolved.destination)
+                        Text("→ \(destinationName)")
                             .foregroundStyle(SteddiTheme.textSecondary)
-                        if let eta = commuteETAs[commute.id] {
+                        if let eta = commuteETAs[etaKey] {
                             Spacer()
                             Text("\(eta) min")
                                 .font(SteddiTheme.mono(14))
@@ -885,18 +889,28 @@ struct HomeView: View {
 
     private func refreshCommuteETAs() async {
         guard let currentLoc = locationService.currentLocation else { return }
-        let service = DirectionsService()
 
         for commute in commutes {
-            let resolved = resolveCardDirection(commute)
-            let target: PinnedLocation? = resolved.direction == .originToDestination ? commute.destination : commute.origin
-            guard let target else { continue }
-
-            do {
-                let route = try await service.fetchRoute(from: currentLoc.coordinate, to: target.coordinate)
-                commuteETAs[commute.id] = Int(ceil(route.duration / 60))
-            } catch {
-                // Silently fail — card just won't show ETA
+            // Always fetch ETAs for both directions
+            if let dest = commute.destination {
+                do {
+                    let request = MKDirections.Request()
+                    request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
+                    request.destination = MKMapItem(placemark: MKPlacemark(coordinate: dest.coordinate))
+                    request.transportType = .automobile
+                    let eta = try await MKDirections(request: request).calculateETA()
+                    commuteETAs["\(commute.id)-toDest"] = Int(ceil(eta.expectedTravelTime / 60))
+                } catch {}
+            }
+            if let origin = commute.origin {
+                do {
+                    let request = MKDirections.Request()
+                    request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
+                    request.destination = MKMapItem(placemark: MKPlacemark(coordinate: origin.coordinate))
+                    request.transportType = .automobile
+                    let eta = try await MKDirections(request: request).calculateETA()
+                    commuteETAs["\(commute.id)-toOrigin"] = Int(ceil(eta.expectedTravelTime / 60))
+                } catch {}
             }
         }
     }
