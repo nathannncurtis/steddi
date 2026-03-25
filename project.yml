@@ -36,18 +36,10 @@ targets:
                 UISceneClassName: "UIWindowScene"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: to.nathancurtis.steddi
-      DEVELOPMENT_TEAM: ""
+      DEVELOPMENT_TEAM: Z46423B3U9
+      CODE_SIGN_STYLE: Automatic
       INFOPLIST_FILE: Steddi/Info.plist
       CODE_SIGN_ENTITLEMENTS: Steddi/Steddi.entitlements
-      CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
-      CODE_SIGN_IDENTITY: "-"
-      CODE_SIGNING_ALLOWED: YES
-      OTHER_CODE_SIGN_FLAGS: "--entitlements $(SRCROOT)/Steddi/Steddi.entitlements"
-    postBuildScripts:
-      - name: "Re-sign with CarPlay entitlement"
-        script: |
-          codesign --force --sign "-" --entitlements "${SRCROOT}/Steddi/Steddi.entitlements" "${BUILT_PRODUCTS_DIR}/${EXECUTABLE_PATH}"
-        basedOnDependencyAnalysis: false
     dependencies:
       - framework: CarPlay.framework
         embed: false
@@ -59,5 +51,7 @@ targets:
       - SteddiTests
     settings:
       GENERATE_INFOPLIST_FILE: YES
+      DEVELOPMENT_TEAM: Z46423B3U9
+      CODE_SIGN_STYLE: Automatic
     dependencies:
       - target: Steddi

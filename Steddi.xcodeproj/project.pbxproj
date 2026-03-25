@@ -348,7 +348,6 @@
 				0782367559867DAD36C92E7E /* Sources */,
 				53D78B718272611936668DA3 /* Resources */,
 				9A89A4FCD398806911D239C2 /* Frameworks */,
-				E706EC32DF07DB1A43780328 /* Re-sign with CarPlay entitlement */,
 			);
 			buildRules = (
 			);
@@ -370,8 +369,13 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1630;
 				TargetAttributes = {
+					3664099A598646D462E4A556 = {
+						DevelopmentTeam = Z46423B3U9;
+						ProvisioningStyle = Automatic;
+					};
 					49639FACA6971E9D79146305 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = Z46423B3U9;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -405,28 +409,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		E706EC32DF07DB1A43780328 /* Re-sign with CarPlay entitlement */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Re-sign with CarPlay entitlement";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "codesign --force --sign \"-\" --entitlements \"${SRCROOT}/Steddi/Steddi.entitlements\" \"${BUILT_PRODUCTS_DIR}/${EXECUTABLE_PATH}\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		0782367559867DAD36C92E7E /* Sources */ = {
@@ -504,11 +486,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGNING_ALLOWED = YES;
-				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
-				CODE_SIGN_IDENTITY = "-";
-				DEVELOPMENT_TEAM = "";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = Z46423B3U9;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\".\"",
@@ -518,7 +499,6 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_CODE_SIGN_FLAGS = "--entitlements $(SRCROOT)/Steddi/Steddi.entitlements";
 				PRODUCT_BUNDLE_IDENTIFIER = to.nathancurtis.steddi;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -529,11 +509,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGNING_ALLOWED = YES;
-				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
-				CODE_SIGN_IDENTITY = "-";
-				DEVELOPMENT_TEAM = "";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = Z46423B3U9;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\".\"",
@@ -543,7 +522,6 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_CODE_SIGN_FLAGS = "--entitlements $(SRCROOT)/Steddi/Steddi.entitlements";
 				PRODUCT_BUNDLE_IDENTIFIER = to.nathancurtis.steddi;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -554,6 +532,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = Z46423B3U9;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -634,6 +614,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = Z46423B3U9;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
