@@ -52,14 +52,20 @@ struct HomeView: View {
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
     // Live ETAs for commute cards — key: "\(commute.id)-toOrigin" or "\(commute.id)-toDest"
-    @State private var commuteETAs: [String: Int] = {
-        // Load cached ETAs immediately so cards show numbers on launch
-        if let data = UserDefaults.standard.data(forKey: "cachedCommuteETAs"),
-           let cached = try? JSONDecoder().decode([String: Int].self, from: data) {
-            return cached
+    /// Distance in miles from current location to a coordinate
+    private func distanceMiles(to coord: CLLocationCoordinate2D) -> Double? {
+        guard let loc = locationService.currentLocation else { return nil }
+        let dist = loc.distance(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
+        return dist / 1609.34
+    }
+
+    private func formattedDistance(to coord: CLLocationCoordinate2D) -> String? {
+        guard let miles = distanceMiles(to: coord) else { return nil }
+        if miles < 10 {
+            return String(format: "%.1f mi", miles)
         }
-        return [:]
-    }()
+        return "\(Int(miles)) mi"
+    }
 
     // Direction picker for ambiguous commutes
     @State private var showDirectionPicker = false
@@ -204,13 +210,7 @@ struct HomeView: View {
                 showPostArrival = true
             }
         }
-        .task {
-            // Periodically refresh ETAs for commute cards
-            while !Task.isCancelled {
-                await refreshCommuteETAs()
-                try? await Task.sleep(for: .seconds(180)) // refresh every 3 minutes
-            }
-        }
+        // Distance is calculated locally — no async refresh needed
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -823,16 +823,15 @@ struct HomeView: View {
 
                 // Direction rows with ETAs
                 if isConfident, let dir = confidentDirection {
-                    let destName = dir == .originToDestination ? commute.destination?.name : commute.origin?.name
-                    let etaKey = dir == .originToDestination ? "\(commute.id)-toDest" : "\(commute.id)-toOrigin"
-                    commuteETARow(destName: destName ?? "—", etaKey: etaKey)
+                    let dest = dir == .originToDestination ? commute.destination : commute.origin
+                    commuteDistanceRow(destName: dest?.name ?? "—", coord: dest?.coordinate)
                         .padding(.bottom, 10)
                 } else {
-                    if let destName = commute.destination?.name {
-                        commuteETARow(destName: destName, etaKey: "\(commute.id)-toDest")
+                    if let dest = commute.destination {
+                        commuteDistanceRow(destName: dest.name, coord: dest.coordinate)
                     }
-                    if let originName = commute.origin?.name {
-                        commuteETARow(destName: originName, etaKey: "\(commute.id)-toOrigin")
+                    if let origin = commute.origin {
+                        commuteDistanceRow(destName: origin.name, coord: origin.coordinate)
                     }
                     Spacer().frame(height: 10)
                 }
@@ -849,8 +848,8 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
-    /// ETA display row within a commute card (not independently tappable — whole card handles tap)
-    private func commuteETARow(destName: String, etaKey: String) -> some View {
+    /// Distance display row within a commute card
+    private func commuteDistanceRow(destName: String, coord: CLLocationCoordinate2D?) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "arrow.right")
                 .font(.caption2.weight(.semibold))
@@ -863,13 +862,10 @@ struct HomeView: View {
 
             Spacer()
 
-            if let eta = commuteETAs[etaKey] {
-                Text("\(eta) min")
+            if let coord, let dist = formattedDistance(to: coord) {
+                Text(dist)
                     .font(SteddiTheme.mono(13))
                     .foregroundStyle(SteddiTheme.sage)
-            } else {
-                ProgressView()
-                    .controlSize(.mini)
             }
         }
         .padding(.horizontal, 14)
@@ -956,57 +952,7 @@ struct HomeView: View {
         }
     }
 
-    private func refreshCommuteETAs() async {
-        guard let currentLoc = locationService.currentLocation else {
-            NSLog("[ETA] No location available, skipping refresh")
-            return
-        }
-
-        let start = CFAbsoluteTimeGetCurrent()
-        NSLog("[ETA] Starting refresh for %d commutes", commutes.count)
-
-        // Fetch all ETAs in parallel
-        await withTaskGroup(of: (String, Int)?.self) { group in
-            for commute in commutes {
-                if let dest = commute.destination {
-                    group.addTask {
-                        let coord = dest.coordinate
-                        let request = MKDirections.Request()
-                        request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
-                        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: coord))
-                        request.transportType = .automobile
-                        guard let eta = try? await MKDirections(request: request).calculateETA() else { return nil }
-                        return ("\(commute.id)-toDest", Int(ceil(eta.expectedTravelTime / 60)))
-                    }
-                }
-                if let origin = commute.origin {
-                    group.addTask {
-                        let coord = origin.coordinate
-                        let request = MKDirections.Request()
-                        request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
-                        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: coord))
-                        request.transportType = .automobile
-                        guard let eta = try? await MKDirections(request: request).calculateETA() else { return nil }
-                        return ("\(commute.id)-toOrigin", Int(ceil(eta.expectedTravelTime / 60)))
-                    }
-                }
-            }
-
-            for await result in group {
-                if let (key, mins) = result {
-                    commuteETAs[key] = mins
-                }
-            }
-        }
-
-        let elapsed = CFAbsoluteTimeGetCurrent() - start
-        NSLog("[ETA] Refresh complete in %.2f seconds, got %d ETAs", elapsed, commuteETAs.count)
-
-        // Cache to disk for instant display on next launch
-        if let data = try? JSONEncoder().encode(commuteETAs) {
-            UserDefaults.standard.set(data, forKey: "cachedCommuteETAs")
-        }
-    }
+    // Distance is calculated locally via formattedDistance() — no async refresh needed
 
     /// Feed GPS location updates to the NavigationEngine while navigation is active.
     private func startLocationFeed() {
