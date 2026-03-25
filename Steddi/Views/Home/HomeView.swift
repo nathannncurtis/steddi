@@ -212,7 +212,7 @@ struct HomeView: View {
                 showPostArrival = true
             }
         }
-        // Distance is calculated locally — no async refresh needed
+        // Distance is calculated locally — ETAs fetched async in background
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -938,7 +938,53 @@ struct HomeView: View {
         }
     }
 
-    // Distance is calculated locally via formattedDistance() — no async refresh needed
+    // Distance is calculated locally via formattedDistance() — ETAs fetched async in background
+
+    /// Fetch ETAs for all commute destinations in parallel
+    private func refreshCommuteETAs() async {
+        guard let userLocation = locationService.currentLocation else { return }
+
+        await withTaskGroup(of: (String, Int?).self) { group in
+            for commute in commutes {
+                if let dest = commute.destination {
+                    let key = "\(commute.id)-toDest"
+                    let coord = dest.coordinate
+                    group.addTask {
+                        let eta = await Self.fetchETA(from: userLocation.coordinate, to: coord)
+                        return (key, eta)
+                    }
+                }
+                if let origin = commute.origin {
+                    let key = "\(commute.id)-toOrigin"
+                    let coord = origin.coordinate
+                    group.addTask {
+                        let eta = await Self.fetchETA(from: userLocation.coordinate, to: coord)
+                        return (key, eta)
+                    }
+                }
+            }
+
+            for await (key, eta) in group {
+                if let eta {
+                    commuteETAs[key] = eta
+                }
+            }
+        }
+    }
+
+    /// Calculate ETA in minutes using MKDirections
+    private static func fetchETA(from source: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) async -> Int? {
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: source))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
+        request.transportType = .automobile
+        do {
+            let response = try await MKDirections(request: request).calculateETA()
+            return Int(response.expectedTravelTime / 60)
+        } catch {
+            return nil
+        }
+    }
 
     /// Feed GPS location updates to the NavigationEngine while navigation is active.
     private func startLocationFeed() {
