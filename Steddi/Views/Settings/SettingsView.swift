@@ -12,7 +12,7 @@ struct SettingsView: View {
     @AppStorage("steddi.voiceGuidanceEnabled") private var voiceGuidanceEnabled: Bool = true
     @AppStorage("steddi.units") private var units: String = MeasurementUnit.miles.rawValue
     @AppStorage("accentColor") private var accentColor: String = SteddiTheme.AccentOption.lavender.rawValue
-    @AppStorage("themeMode") private var themeMode: String = "dark"
+    @AppStorage("themeMode") private var themeMode: String = "dynamic"
 
     @State private var showNoGoEditor = false
     @State private var showThresholdExplainer = false

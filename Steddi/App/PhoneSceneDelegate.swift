@@ -75,6 +75,10 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
         case "arrive":
             NotificationCenter.default.post(name: .steddiTestArrival, object: nil)
+        case "reset-onboarding":
+            UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
+            // Force restart by posting notification
+            NotificationCenter.default.post(name: .steddiResetOnboarding, object: nil)
         default:
             break
         }
@@ -87,12 +91,13 @@ extension Notification.Name {
     static let steddiNavigateToLocation = Notification.Name("steddiNavigateToLocation")
     static let steddiSearchQuery = Notification.Name("steddiSearchQuery")
     static let steddiTestArrival = Notification.Name("steddiTestArrival")
+    static let steddiResetOnboarding = Notification.Name("steddiResetOnboarding")
 }
 
 /// Reactive root view that switches between onboarding and home
 private struct SteddiRootView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @AppStorage("themeMode") private var themeMode = "dark"
+    @AppStorage("themeMode") private var themeMode = "dynamic"
 
     var body: some View {
         Group {

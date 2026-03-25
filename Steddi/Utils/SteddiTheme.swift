@@ -226,7 +226,7 @@ enum ThemeMode: String, CaseIterable {
 
 extension SteddiTheme {
     static var currentThemeMode: ThemeMode {
-        let raw = UserDefaults.standard.string(forKey: "themeMode") ?? ThemeMode.dark.rawValue
+        let raw = UserDefaults.standard.string(forKey: "themeMode") ?? ThemeMode.dynamic.rawValue
         return ThemeMode(rawValue: raw) ?? .dark
     }
 }

@@ -3,7 +3,7 @@ import SwiftUI
 struct OnboardingView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("accentColor") private var accentColor = "lavender"
-    @AppStorage("themeMode") private var themeMode = "dark"
+    @AppStorage("themeMode") private var themeMode = "dynamic"
     @State private var currentPage = 0
     @State private var showDonation = false
 
@@ -154,9 +154,9 @@ struct OnboardingView: View {
             }
 
             VStack(spacing: 12) {
+                themeCard(mode: "dynamic", icon: "iphone", label: "Dynamic", description: "Follows your device — recommended", recommended: true)
                 themeCard(mode: "dark", icon: "moon.fill", label: "Dark", description: "Always dark")
                 themeCard(mode: "light", icon: "sun.max.fill", label: "Light", description: "Always light")
-                themeCard(mode: "dynamic", icon: "iphone", label: "Dynamic", description: "Follows system setting")
             }
             .padding(.horizontal, 32)
 
@@ -165,7 +165,7 @@ struct OnboardingView: View {
         }
     }
 
-    private func themeCard(mode: String, icon: String, label: String, description: String) -> some View {
+    private func themeCard(mode: String, icon: String, label: String, description: String, recommended: Bool = false) -> some View {
         let isSelected = themeMode == mode
         return Button {
             themeMode = mode
@@ -178,8 +178,18 @@ struct OnboardingView: View {
                     .foregroundStyle(isSelected ? SteddiTheme.accent : .secondary)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(label)
-                        .font(.headline)
+                    HStack(spacing: 6) {
+                        Text(label)
+                            .font(.headline)
+                        if recommended {
+                            Text("Recommended")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(SteddiTheme.accent)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(SteddiTheme.accentSubtle, in: Capsule())
+                        }
+                    }
                     Text(description)
                         .font(.caption)
                         .foregroundStyle(.secondary)
