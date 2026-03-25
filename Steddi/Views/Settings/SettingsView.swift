@@ -258,6 +258,15 @@ struct SettingsView: View {
             } message: {
                 Text("This will permanently delete all commutes, routes, pinned locations, drive records, no-go zones, and commute trips. This action cannot be undone.")
             }
+            .preferredColorScheme(resolvedColorScheme)
+        }
+    }
+
+    private var resolvedColorScheme: ColorScheme? {
+        switch themeMode {
+        case "dark": return .dark
+        case "light": return .light
+        default: return SteddiTheme.ThemeMode.isDaytime ? .light : .dark
         }
     }
 
