@@ -797,79 +797,83 @@ struct HomeView: View {
             confidentDirection = nil
         }
 
-        return VStack(spacing: 0) {
-            // Commute name header
-            HStack {
-                Text(commute.name)
-                    .font(SteddiTheme.heading(15))
-                    .foregroundStyle(SteddiTheme.textPrimary)
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-
-            // Direction rows
+        return Button {
+            // Tapping the card body — if confident, go directly; if ambiguous, show picker
             if isConfident, let dir = confidentDirection {
-                // Near one endpoint — show single tappable destination
-                let destName = dir == .originToDestination ? commute.destination?.name : commute.origin?.name
-                let etaKey = dir == .originToDestination ? "\(commute.id)-toDest" : "\(commute.id)-toOrigin"
-                commuteDirectionRow(commute: commute, direction: dir, destName: destName ?? "—", etaKey: etaKey)
-                    .padding(.bottom, 12)
+                startCommute(commute, direction: dir)
             } else {
-                // Not near either — show both directions
-                if let destName = commute.destination?.name {
-                    commuteDirectionRow(commute: commute, direction: .originToDestination, destName: destName, etaKey: "\(commute.id)-toDest")
-                }
-                if let originName = commute.origin?.name {
-                    commuteDirectionRow(commute: commute, direction: .destinationToOrigin, destName: originName, etaKey: "\(commute.id)-toOrigin")
-                }
-                Spacer().frame(height: 12)
+                directionPickerCommute = commute
+                showDirectionPicker = true
             }
-        }
-        .background {
-            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                .fill(SteddiTheme.surfaceSecondary.opacity(0.6))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                        .stroke(SteddiTheme.accent.opacity(0.06), lineWidth: 1)
-                )
-        }
-    }
-
-    /// A single tappable direction row within a commute card
-    private func commuteDirectionRow(commute: Commute, direction: CommuteDirection, destName: String, etaKey: String) -> some View {
-        Button {
-            startCommute(commute, direction: direction)
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.body)
-                    .foregroundStyle(SteddiTheme.accent)
-
-                Text(destName)
-                    .font(SteddiTheme.body(14))
-                    .foregroundStyle(SteddiTheme.textSecondary)
-
-                Spacer()
-
-                if let eta = commuteETAs[etaKey] {
-                    Text("\(eta) min")
-                        .font(SteddiTheme.mono(14))
-                        .foregroundStyle(SteddiTheme.sage)
-                } else {
-                    ProgressView()
-                        .controlSize(.mini)
+            VStack(spacing: 0) {
+                // Commute name header + ETA summary
+                HStack {
+                    Text(commute.name)
+                        .font(SteddiTheme.heading(15))
+                        .foregroundStyle(SteddiTheme.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SteddiTheme.textMuted)
                 }
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
 
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(SteddiTheme.textMuted)
+                // Direction rows with ETAs
+                if isConfident, let dir = confidentDirection {
+                    let destName = dir == .originToDestination ? commute.destination?.name : commute.origin?.name
+                    let etaKey = dir == .originToDestination ? "\(commute.id)-toDest" : "\(commute.id)-toOrigin"
+                    commuteETARow(destName: destName ?? "—", etaKey: etaKey)
+                        .padding(.bottom, 10)
+                } else {
+                    if let destName = commute.destination?.name {
+                        commuteETARow(destName: destName, etaKey: "\(commute.id)-toDest")
+                    }
+                    if let originName = commute.origin?.name {
+                        commuteETARow(destName: originName, etaKey: "\(commute.id)-toOrigin")
+                    }
+                    Spacer().frame(height: 10)
+                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
+            .background {
+                RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                    .fill(SteddiTheme.surfaceSecondary.opacity(0.6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                            .stroke(SteddiTheme.accent.opacity(0.06), lineWidth: 1)
+                    )
+            }
         }
         .buttonStyle(.plain)
+    }
+
+    /// ETA display row within a commute card (not independently tappable — whole card handles tap)
+    private func commuteETARow(destName: String, etaKey: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(SteddiTheme.accent)
+
+            Text(destName)
+                .font(SteddiTheme.body(13))
+                .foregroundStyle(SteddiTheme.textSecondary)
+                .lineLimit(1)
+
+            Spacer()
+
+            if let eta = commuteETAs[etaKey] {
+                Text("\(eta) min")
+                    .font(SteddiTheme.mono(13))
+                    .foregroundStyle(SteddiTheme.sage)
+            } else {
+                ProgressView()
+                    .controlSize(.mini)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 3)
     }
 
     // MARK: - Places Tab
@@ -953,7 +957,13 @@ struct HomeView: View {
     }
 
     private func refreshCommuteETAs() async {
-        guard let currentLoc = locationService.currentLocation else { return }
+        guard let currentLoc = locationService.currentLocation else {
+            NSLog("[ETA] No location available, skipping refresh")
+            return
+        }
+
+        let start = CFAbsoluteTimeGetCurrent()
+        NSLog("[ETA] Starting refresh for %d commutes", commutes.count)
 
         // Fetch all ETAs in parallel
         await withTaskGroup(of: (String, Int)?.self) { group in
@@ -988,6 +998,9 @@ struct HomeView: View {
                 }
             }
         }
+
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+        NSLog("[ETA] Refresh complete in %.2f seconds, got %d ETAs", elapsed, commuteETAs.count)
 
         // Cache to disk for instant display on next launch
         if let data = try? JSONEncoder().encode(commuteETAs) {
