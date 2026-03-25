@@ -50,8 +50,8 @@ struct HomeView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
-    // Live ETAs for commute cards
-    @State private var commuteETAs: [UUID: Int] = [:]
+    // Live ETAs for commute cards — key: "\(commute.id)-toOrigin" or "\(commute.id)-toDest"
+    @State private var commuteETAs: [String: Int] = [:]
 
     // Direction picker for ambiguous commutes
     @State private var showDirectionPicker = false
