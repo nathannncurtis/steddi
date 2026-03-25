@@ -31,12 +31,17 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
 /// Reactive root view that switches between onboarding and home
 private struct SteddiRootView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("accentColor") private var accentColor = "lavender"
 
     var body: some View {
-        if hasCompletedOnboarding {
-            HomeView()
-        } else {
-            OnboardingView()
+        Group {
+            if hasCompletedOnboarding {
+                HomeView()
+            } else {
+                OnboardingView()
+            }
         }
+        .tint(SteddiTheme.accent)
+        .id("root-\(accentColor)")
     }
 }
