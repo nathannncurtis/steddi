@@ -37,6 +37,7 @@ struct HomeView: View {
     @State private var showSettings = false
     @State private var showSearch = false
     @State private var showAddLocation = false
+    @State private var showCommuteList = false
     @State private var showPostArrival = false
     @State private var longPressCoordinate: CLLocationCoordinate2D?
     @State private var recordedPoints: [GPSPoint] = []
@@ -215,6 +216,11 @@ struct HomeView: View {
         .sheet(isPresented: $showAddLocation) {
             AddLocationSheet(coordinate: longPressCoordinate)
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showCommuteList) {
+            NavigationStack {
+                CommuteListView()
+            }
         }
         .confirmationDialog(
             "Where are you headed?",
@@ -605,9 +611,20 @@ struct HomeView: View {
                     Text("No commutes yet")
                         .font(SteddiTheme.heading(16))
                         .foregroundStyle(SteddiTheme.textPrimary)
-                    Text("Set up a commute in Settings")
+                    Text("Create a commute to get started")
                         .font(SteddiTheme.body(14))
                         .foregroundStyle(SteddiTheme.textSecondary)
+                    Button {
+                        showCommuteList = true
+                    } label: {
+                        Label("New Commute", systemImage: "plus")
+                            .font(SteddiTheme.heading(14))
+                            .foregroundStyle(SteddiTheme.accent)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(SteddiTheme.accentSubtle, in: Capsule())
+                    }
+                    .padding(.top, 4)
                 }
                 .padding(.vertical, 24)
                 .padding(.horizontal, 20)
@@ -616,6 +633,14 @@ struct HomeView: View {
                     ForEach(commutes) { commute in
                         commuteRows(commute)
                     }
+                    Button {
+                        showCommuteList = true
+                    } label: {
+                        Label("New Commute", systemImage: "plus")
+                            .font(SteddiTheme.heading(13))
+                            .foregroundStyle(SteddiTheme.accent)
+                    }
+                    .padding(.top, 4)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
