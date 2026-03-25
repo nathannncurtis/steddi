@@ -118,7 +118,7 @@ class SteddiMapContainer: UIViewController {
         let config = MKStandardMapConfiguration(emphasisStyle: .muted)
         config.showsTraffic = false
         mapView.preferredConfiguration = config
-        mapView.overrideUserInterfaceStyle = .dark
+        applyThemeStyle()
 
         // Show user location with custom puck (handled in delegate)
         mapView.showsUserLocation = true
@@ -150,8 +150,19 @@ class SteddiMapContainer: UIViewController {
         // Observe accent color changes
         NotificationCenter.default.addObserver(self, selector: #selector(accentColorChanged), name: .steddiAccentColorChanged, object: nil)
 
+        // Observe theme mode changes
+        NotificationCenter.default.addObserver(self, selector: #selector(themeModeChanged), name: .steddiThemeModeChanged, object: nil)
+
         // Center on user location once available
         mapView.setUserTrackingMode(.follow, animated: false)
+    }
+
+    private func applyThemeStyle() {
+        mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
+    }
+
+    @objc private func themeModeChanged() {
+        applyThemeStyle()
     }
 
     @objc private func accentColorChanged() {

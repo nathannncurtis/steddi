@@ -21,7 +21,12 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             .environment(NavigationStateManager.shared)
 
         let window = UIWindow(windowScene: windowScene)
-        window.backgroundColor = .black
+        let mode = SteddiTheme.currentThemeMode
+        switch mode {
+        case .dark: window.backgroundColor = .black
+        case .light: window.backgroundColor = .white
+        case .dynamic: window.backgroundColor = .systemBackground
+        }
         window.rootViewController = UIHostingController(rootView: rootView)
         window.makeKeyAndVisible()
         self.window = window
@@ -87,12 +92,24 @@ extension Notification.Name {
 /// Reactive root view that switches between onboarding and home
 private struct SteddiRootView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("themeMode") private var themeMode = "dark"
 
     var body: some View {
-        if hasCompletedOnboarding {
-            HomeView()
-        } else {
-            OnboardingView()
+        Group {
+            if hasCompletedOnboarding {
+                HomeView()
+            } else {
+                OnboardingView()
+            }
+        }
+        .preferredColorScheme(resolvedColorScheme)
+    }
+
+    private var resolvedColorScheme: ColorScheme? {
+        switch themeMode {
+        case "dark": return .dark
+        case "light": return .light
+        default: return nil
         }
     }
 }

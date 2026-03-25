@@ -194,10 +194,48 @@ struct SteddiCard<Content: View>: View {
     }
 }
 
-// MARK: - Accent Color Change Notification
+// MARK: - Theme Mode
+
+enum ThemeMode: String, CaseIterable {
+    case dark, light, dynamic
+
+    var displayName: String {
+        switch self {
+        case .dark: return "Dark"
+        case .light: return "Light"
+        case .dynamic: return "Dynamic"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .dark: return .dark
+        case .light: return .light
+        case .dynamic: return nil // follows system
+        }
+    }
+
+    var mapInterfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .dark: return .dark
+        case .light: return .light
+        case .dynamic: return .unspecified
+        }
+    }
+}
+
+extension SteddiTheme {
+    static var currentThemeMode: ThemeMode {
+        let raw = UserDefaults.standard.string(forKey: "themeMode") ?? ThemeMode.dark.rawValue
+        return ThemeMode(rawValue: raw) ?? .dark
+    }
+}
+
+// MARK: - Notifications
 
 extension Notification.Name {
     static let steddiAccentColorChanged = Notification.Name("steddiAccentColorChanged")
+    static let steddiThemeModeChanged = Notification.Name("steddiThemeModeChanged")
 }
 
 #Preview {

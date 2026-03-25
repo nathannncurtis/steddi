@@ -42,7 +42,6 @@ struct PostArrivalSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .task { await matchTrace() }
     }
 
@@ -278,7 +277,7 @@ private struct RoutePreviewMap: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView(frame: .zero)
-        mapView.overrideUserInterfaceStyle = .dark
+        mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
         mapView.delegate = context.coordinator
 
         let config = MKStandardMapConfiguration(emphasisStyle: .muted)

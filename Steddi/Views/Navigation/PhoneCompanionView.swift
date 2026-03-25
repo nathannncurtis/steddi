@@ -54,7 +54,6 @@ struct PhoneCompanionView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Header Banner

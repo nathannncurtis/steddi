@@ -22,7 +22,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
         mapView = MKMapView(frame: view.bounds)
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        mapView.overrideUserInterfaceStyle = .dark
+        mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
         mapView.delegate = self
 
         let config = MKStandardMapConfiguration(emphasisStyle: .muted)
@@ -43,11 +43,22 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         )
         mapView.setRegion(region, animated: false)
 
-        view.backgroundColor = .black
+        switch SteddiTheme.currentThemeMode {
+        case .dark: view.backgroundColor = .black
+        case .light: view.backgroundColor = .white
+        case .dynamic: view.backgroundColor = .systemBackground
+        }
         view.addSubview(mapView)
 
         // Observe accent color changes
         NotificationCenter.default.addObserver(self, selector: #selector(accentColorChanged), name: .steddiAccentColorChanged, object: nil)
+
+        // Observe theme mode changes
+        NotificationCenter.default.addObserver(self, selector: #selector(themeModeChanged), name: .steddiThemeModeChanged, object: nil)
+    }
+
+    @objc private func themeModeChanged() {
+        mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
     }
 
     @objc private func accentColorChanged() {

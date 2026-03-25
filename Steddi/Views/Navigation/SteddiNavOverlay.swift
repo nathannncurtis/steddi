@@ -594,7 +594,6 @@ struct SteddiNavOverlay: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private func reportOption(icon: String, label: String, color: Color) -> some View {

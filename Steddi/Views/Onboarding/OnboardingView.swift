@@ -3,6 +3,7 @@ import SwiftUI
 struct OnboardingView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage("themeMode") private var themeMode = "dark"
     @State private var currentPage = 0
     @State private var showDonation = false
 
@@ -36,6 +37,12 @@ struct OnboardingView: View {
             "Set your threshold",
             "No nagging, ever",
             "Tell Steddi when a reroute is worth your attention. Small delays get ignored."
+        ),
+        (
+            "circle.lefthalf.filled",
+            "Choose your look",
+            "Light, dark, or match your device",
+            ""
         )
     ]
 
@@ -44,33 +51,38 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             TabView(selection: $currentPage) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                    VStack(spacing: 24) {
-                        Spacer()
+                    if index == themePageIndex {
+                        themeSelectionPage
+                            .tag(index)
+                    } else {
+                        VStack(spacing: 24) {
+                            Spacer()
 
-                        Image(systemName: page.icon)
-                            .font(.system(size: 64))
-                            .foregroundStyle(SteddiTheme.accent)
-                            .padding(.bottom, 8)
+                            Image(systemName: page.icon)
+                                .font(.system(size: 64))
+                                .foregroundStyle(SteddiTheme.accent)
+                                .padding(.bottom, 8)
 
-                        VStack(spacing: 8) {
-                            Text(page.title)
-                                .font(.title.weight(.bold))
+                            VStack(spacing: 8) {
+                                Text(page.title)
+                                    .font(.title.weight(.bold))
 
-                            Text(page.subtitle)
-                                .font(.title3)
+                                Text(page.subtitle)
+                                    .font(.title3)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Text(page.body)
+                                .font(.body)
                                 .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 40)
+
+                            Spacer()
+                            Spacer()
                         }
-
-                        Text(page.body)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
-
-                        Spacer()
-                        Spacer()
+                        .tag(index)
                     }
-                    .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
@@ -119,7 +131,79 @@ struct OnboardingView: View {
         }) {
             DonationView()
         }
-        .preferredColorScheme(.dark)
+    }
+
+    private var themePageIndex: Int { pages.count - 1 }
+
+    private var themeSelectionPage: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "circle.lefthalf.filled")
+                .font(.system(size: 64))
+                .foregroundStyle(SteddiTheme.accent)
+                .padding(.bottom, 8)
+
+            VStack(spacing: 8) {
+                Text("Choose your look")
+                    .font(.title.weight(.bold))
+
+                Text("Light, dark, or match your device")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 12) {
+                themeCard(mode: "dark", icon: "moon.fill", label: "Dark", description: "Always dark")
+                themeCard(mode: "light", icon: "sun.max.fill", label: "Light", description: "Always light")
+                themeCard(mode: "dynamic", icon: "iphone", label: "Dynamic", description: "Follows system setting")
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
+            Spacer()
+        }
+    }
+
+    private func themeCard(mode: String, icon: String, label: String, description: String) -> some View {
+        let isSelected = themeMode == mode
+        return Button {
+            themeMode = mode
+            NotificationCenter.default.post(name: .steddiThemeModeChanged, object: nil)
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .frame(width: 32)
+                    .foregroundStyle(isSelected ? SteddiTheme.accent : .secondary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.headline)
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(SteddiTheme.accent)
+                        .font(.title3)
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isSelected ? SteddiTheme.accent.opacity(0.12) : SteddiTheme.surfaceSecondary)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isSelected ? SteddiTheme.accent : .clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func completeOnboarding() {

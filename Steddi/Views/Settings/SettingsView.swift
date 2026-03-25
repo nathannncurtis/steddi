@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage("steddi.voiceGuidanceEnabled") private var voiceGuidanceEnabled: Bool = true
     @AppStorage("steddi.units") private var units: String = MeasurementUnit.miles.rawValue
     @AppStorage("accentColor") private var accentColor: String = SteddiTheme.AccentOption.lavender.rawValue
+    @AppStorage("themeMode") private var themeMode: String = "dark"
 
     @State private var showNoGoEditor = false
     @State private var showThresholdExplainer = false
@@ -71,6 +72,21 @@ struct SettingsView: View {
                         Spacer()
                     }
                     .padding(.vertical, 4)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Theme")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Picker("Theme", selection: $themeMode) {
+                            Text("Dark").tag("dark")
+                            Text("Light").tag("light")
+                            Text("Dynamic").tag("dynamic")
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .onChange(of: themeMode) {
+                        NotificationCenter.default.post(name: .steddiThemeModeChanged, object: nil)
+                    }
                 } header: {
                     Text("Appearance")
                 }
