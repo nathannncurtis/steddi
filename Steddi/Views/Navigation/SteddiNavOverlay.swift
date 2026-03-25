@@ -118,41 +118,41 @@ struct SteddiNavOverlay: View {
             VStack {
                 HStack(spacing: 10) {
                     Image(systemName: engine.maneuverType)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(SteddiTheme.accent)
-                        .frame(width: 44, height: 44)
-                        .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 12))
+                        .frame(width: 50, height: 50)
+                        .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 14))
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(engine.stepDistance)
-                            .font(SteddiTheme.mono(22))
+                            .font(SteddiTheme.mono(26))
                             .foregroundStyle(SteddiTheme.textPrimary)
                         Text(engine.instruction)
-                            .font(SteddiTheme.body(13))
+                            .font(SteddiTheme.body(15))
                             .foregroundStyle(SteddiTheme.textSecondary)
-                            .lineLimit(1)
+                            .lineLimit(2)
                     }
                 }
-                .padding(12)
-                .frame(width: 260, alignment: .leading)
+                .padding(14)
+                .frame(width: 300, alignment: .leading)
                 .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
 
                 // Next maneuver (compact, below instruction)
                 if !engine.followOnInstruction.isEmpty {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         Image(systemName: engine.followOnManeuverSymbol)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(SteddiTheme.accent.opacity(0.7))
                         Text("Then: \(engine.followOnInstruction)")
-                            .font(SteddiTheme.body(11))
+                            .font(SteddiTheme.body(13))
                             .foregroundStyle(SteddiTheme.textMuted)
                             .lineLimit(1)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .frame(width: 260, alignment: .leading)
-                    .background(SteddiTheme.surfacePrimary.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(width: 300, alignment: .leading)
+                    .background(SteddiTheme.surfacePrimary.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
                 }
 
                 Spacer()
@@ -161,70 +161,70 @@ struct SteddiNavOverlay: View {
             .padding(.top, 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            // Bottom-left: ETA + speedometer + End (floating)
-            HStack(spacing: 10) {
-                speedometer(size: 38)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 3) {
-                        Text("\(engine.etaMinutes)")
-                            .font(SteddiTheme.mono(20))
-                            .foregroundStyle(SteddiTheme.textPrimary)
-                        Text("min")
-                            .font(SteddiTheme.body(11))
-                            .foregroundStyle(SteddiTheme.textSecondary)
+            // Bottom-left: buttons row + ETA + speedometer + End
+            VStack(spacing: 6) {
+                // Buttons — horizontal row above the ETA bar
+                HStack(spacing: 8) {
+                    landscapeCompassIndicator
+                    landscapeButton(isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") {
+                        isVoiceOn.toggle()
+                        if isVoiceOn {
+                            try? AVAudioSession.sharedInstance().setActive(true)
+                        } else {
+                            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                        }
                     }
-                    HStack(spacing: 6) {
-                        Text(engine.distanceRemaining)
-                            .font(SteddiTheme.mono(11))
-                            .foregroundStyle(SteddiTheme.textMuted)
-                        Text(engine.arrivalTime)
-                            .font(SteddiTheme.mono(11))
-                            .foregroundStyle(SteddiTheme.textMuted)
-                    }
+                    landscapeButton(is3DView ? "cube" : "square") { is3DView.toggle(); onToggleView(is3DView) }
+                    landscapeButton("exclamationmark.bubble.fill") { showReportSheet = true }
                 }
 
-                Button(action: onEndNavigation) {
-                    Text("End")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(SteddiTheme.warmRed, in: Capsule())
+                // ETA bar
+                HStack(spacing: 12) {
+                    speedometer(size: 44)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 3) {
+                            Text("\(engine.etaMinutes)")
+                                .font(SteddiTheme.mono(22))
+                                .foregroundStyle(SteddiTheme.textPrimary)
+                            Text("min")
+                                .font(SteddiTheme.body(13))
+                                .foregroundStyle(SteddiTheme.textSecondary)
+                        }
+                        HStack(spacing: 6) {
+                            Text(engine.distanceRemaining)
+                                .font(SteddiTheme.mono(12))
+                                .foregroundStyle(SteddiTheme.textMuted)
+                            Text(engine.arrivalTime)
+                                .font(SteddiTheme.mono(12))
+                                .foregroundStyle(SteddiTheme.textMuted)
+                        }
+                    }
+
+                    Button(action: onEndNavigation) {
+                        Text("End")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(SteddiTheme.warmRed, in: Capsule())
+                    }
                 }
+                .padding(12)
+                .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
+                .shadow(color: .black.opacity(0.3), radius: 8, y: -2)
             }
-            .padding(10)
-            .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
-            .shadow(color: .black.opacity(0.3), radius: 8, y: -2)
             .padding(.leading, 50) // clear notch
-            .padding(.bottom, 4)
+            .padding(.bottom, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-
-            // Left side: buttons vertically between the two cards
-            VStack(spacing: 4) {
-                landscapeCompassIndicator
-                landscapeButton(isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") {
-                    isVoiceOn.toggle()
-                    if isVoiceOn {
-                        try? AVAudioSession.sharedInstance().setActive(true)
-                    } else {
-                        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-                    }
-                }
-                landscapeButton(is3DView ? "cube" : "square") { is3DView.toggle(); onToggleView(is3DView) }
-                landscapeButton("exclamationmark.bubble.fill") { showReportSheet = true }
-            }
-            .padding(.leading, 50)
-            .padding(.top, 30)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
             // Street name: centered bottom
             if !engine.roadName.isEmpty {
                 Text(engine.roadName)
-                    .font(SteddiTheme.body(11))
+                    .font(SteddiTheme.body(13))
                     .foregroundStyle(SteddiTheme.textSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
                     .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 8)
