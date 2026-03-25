@@ -31,7 +31,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         didConnect interfaceController: CPInterfaceController,
         to window: CPWindow
     ) {
-        NSLog("[CarPlay] didConnect (3-param)")
         connectCarPlay(interfaceController: interfaceController, window: window)
     }
 
@@ -39,9 +38,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         _ templateApplicationScene: CPTemplateApplicationScene,
         didConnect interfaceController: CPInterfaceController
     ) {
-        NSLog("[CarPlay] didConnect (2-param), trying to get carWindow from scene")
         let window = templateApplicationScene.carWindow
-        NSLog("[CarPlay] carWindow: %@", window.debugDescription)
         connectCarPlay(interfaceController: interfaceController, window: window)
     }
 
@@ -129,14 +126,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         guard let interfaceController, !isShowingNavigation else { return }
         isShowingNavigation = true
 
-        NSLog("[CarPlay] Showing navigation UI")
-
         // Build the live TBT list
         let navTemplate = buildNavTemplate()
 
         // Replace root with navigation template
         interfaceController.setRootTemplate(navTemplate, animated: true, completion: nil)
-        NSLog("[CarPlay] Navigation template set as root")
 
         // Start polling for live updates
         subscribeLiveUpdates()

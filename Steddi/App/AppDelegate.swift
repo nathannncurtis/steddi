@@ -24,8 +24,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        NSLog("[AppDelegate] didFinishLaunchingWithOptions")
-
         ArrivalNotificationService.shared.requestPermissionIfNeeded()
         ArrivalNotificationService.shared.registerCategory()
         ArrivalNotificationService.shared.setupDelegate()
@@ -40,18 +38,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
-        NSLog("[AppDelegate] configurationForConnecting role: %@", connectingSceneSession.role.rawValue)
-
         if connectingSceneSession.role == .carTemplateApplication {
             let config = UISceneConfiguration(name: "CarPlay", sessionRole: connectingSceneSession.role)
             config.delegateClass = CarPlaySceneDelegate.self
-            NSLog("[AppDelegate] → CarPlay config with delegate: CarPlaySceneDelegate")
             return config
         }
 
         let config = UISceneConfiguration(name: "Default", sessionRole: connectingSceneSession.role)
         config.delegateClass = PhoneSceneDelegate.self
-        NSLog("[AppDelegate] → Phone config with delegate: PhoneSceneDelegate")
         return config
     }
 }

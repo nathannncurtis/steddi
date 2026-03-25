@@ -18,9 +18,6 @@ struct SettingsView: View {
     @State private var showThresholdExplainer = false
     @State private var showDonation = false
     @State private var showDeleteAllConfirmation = false
-    #if DEBUG
-    @State private var iconGenMessage: String?
-    #endif
 
     private static var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -186,31 +183,6 @@ struct SettingsView: View {
                 } header: {
                     Text("About")
                 }
-
-                // MARK: - Developer
-                #if DEBUG
-                Section("Developer") {
-                    NavigationLink("CarPlay Preview") {
-                        CarPlayPreviewView()
-                    }
-
-                    Button {
-                        if let url = IconGenerator.generateAndSave() {
-                            iconGenMessage = "Saved to:\n\(url.path)"
-                        } else {
-                            iconGenMessage = "Failed to generate icon."
-                        }
-                    } label: {
-                        Label("Generate App Icon", systemImage: "app.dashed")
-                    }
-
-                    if let iconGenMessage {
-                        Text(iconGenMessage)
-                            .font(.caption)
-                            .foregroundStyle(SteddiTheme.textSecondary)
-                    }
-                }
-                #endif
 
                 // MARK: - Danger Zone
                 Section {
