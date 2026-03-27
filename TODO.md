@@ -85,7 +85,7 @@
 - Deep iOS integration — Siri proactively suggesting commute start ties into smart notifications story
 
 ## Music & Podcast Integration
-- Now Playing mini-bar in phone nav UI — album art, song title, play/pause/skip/back buttons
+- Now Playing mini-bar in phone nav UI — album art, song title, play/pause/skip/back buttons. Toggleable in settings (some users won't want it cluttering the nav view).
 - Full-screen CarPlay nav: Steddi owns media remote commands (play/pause/skip/back/long-press-seek via steering wheel)
 - CarPlay widget view: native music app handles its own controls
 - Long-press skip to seek through track (à la Spotify)
