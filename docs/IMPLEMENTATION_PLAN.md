@@ -21,6 +21,9 @@ No subscription, no paid tier, no recurring costs to the user. The app has a "bu
 ### MapKit is a hard line.
 No third-party map SDKs. The Mapbox migration already happened — zero third-party map branding, no SDK licensing. MapKit for routing and display, OSM/OSRM for specialized tasks (map matching, road data). If a MapKit wall is hit, find a creative workaround before considering alternatives.
 
+### Settings should not confuse.
+The Settings screen surfaces things users reasonably want to tweak: appearance, themes, voice, haptics, display modes, nav UI preferences (mini-player toggle, etc.). Routing-level configuration — no-go zones, route preferences, reroute thresholds, avoid highways/tolls — lives within the context it applies to (the specific commute or trip). Global defaults for routing config exist but are not on the main Settings surface. They're accessible but tucked away. The principle: if a setting only makes sense in the context of a specific route, it belongs with that route, not in a global list where it could confuse someone who just wants to change their accent color.
+
 ---
 
 ## Technical Foundation
