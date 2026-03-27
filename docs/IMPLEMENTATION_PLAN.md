@@ -1,6 +1,6 @@
-# Steddi Implementation Plan & Design Bible
+# Steddi Implementation Plan & Constitution
 
-This document captures every design decision, implementation approach, core philosophy, and technical constraint discussed during planning. It is the authoritative reference for how Steddi should be built and why.
+This is a living document. It captures every design decision, implementation approach, core philosophy, and technical constraint — and evolves as the project does. When decisions change, this document changes with them. It and the TODO should always reflect the current, exhaustive state of the project's direction. If it's not written here, it hasn't been decided.
 
 ---
 
