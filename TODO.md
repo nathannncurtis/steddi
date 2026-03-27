@@ -3,6 +3,10 @@
 ## Priority 1 — Bugs & Fixes
 - Location is being tracked when no route is active — if intentional, needs to be toggleable and justified to the user
 - Route preview before nav starts (needed for CarPlay compliance, should also be in phone version)
+  - Commutes: tap → "Go" (skip preview) or "Preview" (full route on map with ranked route tiers)
+  - Dumb nav: always shows preview, not skippable
+  - Per-commute setting to disable preview for power users
+- App Group setup — shared container for extensions (Live Activities, widgets, Watch). Do this before any extension work.
 
 ## Priority 2 — CarPlay
 - Waiting on CarPlay navigation entitlement approval
@@ -13,10 +17,20 @@
 - Live Activity for active navigation (ETA, next turn, distance remaining)
 - Dynamic Island compact/expanded views
 - Lock Screen widget
+- Aggressive lifecycle cleanup: end activity on nav end, app terminate, scene disconnect. Stale date rolling 5-10 min ahead so zombie activities auto-dim if app dies. On launch, always sweep for orphaned activities.
+
+## Trips
+- Third category alongside pins and commutes — saved routes to non-recurring or one-off destinations
+- Full-featured: multi-stop waypoints, reroute thresholds, avoids, route hierarchy (available but not front-and-center)
+- OCD planner's dream: plan scenic stops, lunch spots, gas stations in advance for long drives
+- Nav flow between stops: configurable per trip — continuous (auto-queue next leg on arrival) or manual (end nav, start next leg when ready)
 
 ## Theming & Appearance
-- Weather-based theming (adapt UI to current weather conditions)
-- "Grey mode" — both a standalone theme option between light and dark, AND part of weather-based dynamic theming (e.g. auto-applies when rainy/overcast)
+- Weather-based theming (WeatherKit — adapt UI to current conditions)
+- "Grey mode" — both a standalone theme option between light and dark, AND part of weather-based dynamic theming (auto-applies when rainy/overcast)
+- Temperature-based tinting — warmer tones when hot, cooler tones when cold. Relative to local historical norms (65°F in SoCal ≠ 65°F in Alaska). Subtle even at extremes.
+- Sunset/sunrise mode — warm palette during golden hour, full 45-min gradual transition so the shift is imperceptible. Uses existing solar calculation infrastructure.
+- Full dynamic theme layers: solar position × weather × temperature, all blending in real-time
 
 ## Voice & Offline
 - Download voice packs for offline use (support offline mapping end-to-end)
@@ -27,7 +41,8 @@
 - Yelp and/or Google Reviews for POI — link out to browser rather than embed (keeps it lightweight, avoids API cost/ToS issues). Steddi should feel like a full nav app when driving somewhere unfamiliar, not just a commute tool.
 
 ## No-Go Zones v2
-- Support road/street segment selection — tap or trace a stretch of road to avoid, not just circular areas
+- Freehand draw with road snapping — trace a stretch of road to avoid
+- Dot-to-dot waypoint mode — tap points, app connects them along the road network
 - Polygon drawing — let users define arbitrary shapes on the map
 - Named road avoidance — e.g. "always avoid the 91 between Main and the 15"
 - Time-based no-go zones — avoid certain areas only during specific hours (school zones, construction)
@@ -35,66 +50,62 @@
 ## Smart Notifications
 - Precheck for frequent commutes based on time of day — e.g., if user usually commutes to work around 7am but there's an hour delay, notify them to leave earlier
 - Harsh weather event warnings that would affect traffic on their commute
-- Will need a lightweight backend for traffic polling + push notifications — keep cheap initially
+- Fully on-device: background app refresh + MapKit ETA check + WeatherKit (500k free calls/mo) + local notifications. No backend needed for v1.
 
 ## Widgets & Wearables
-- Home screen widgets
-- Apple Watch support — vibration-based turn alerts for accessibility
+- Home screen widgets ("next commute ETA" — WidgetKit with timeline provider, smart refresh intervals)
+- Apple Watch support — vibration-based turn alerts for accessibility (post-launch)
 
 ## Animations & Micro-interactions
+- Route draw-on animation via custom MKOverlayRenderer — route traces from your location to destination on preview
+- Active nav: route line subtly extends ahead, fades behind you as you pass
 - Nav overlay entrance/exit transitions
-- Route draw-on animation when navigation starts
 - Card animations (commute cards, reroute suggestions, arrival)
 - Smooth state transitions throughout the app — every screen change should feel intentional
 
 ## Haptics
-- Subtle tap approaching a turn
-- Distinct pattern for reroute suggestions
-- Arrival confirmation haptic
-- Haptic feedback on key UI interactions (toggle mute, end nav, report)
-- Different intensity/patterns so the user can feel what's happening without looking
+- Five-level setting: Off / Subtle / Standard / Dynamic / Advanced
+- Dynamic: intensity varies by event type (turns light, reroute medium, arrival strong, UI minimal)
+- Advanced: Dynamic but user can fine-tune intensity per event category
+- Events: approaching turn, reroute suggestion, arrival, UI interactions (toggle mute, end nav, report), alerts
 
 ## Speed Traps & Red Light Cameras
-- Database of speed traps and red light camera locations (crowdsourced or third-party dataset)
+- OSM speed camera data + crowdsourced user reports (free, grows organically)
 - Clean, minimal alert — subtle audio or haptic when approaching, not noisy like Waze
 
 ## Commute Analytics
 - Surface drive history data: average commute time by day of week, trends over time
 - Detailed analytical view for power users — time spent sitting in traffic, total time spent commuting to/from work over weeks/months
 - Trend insights like "your Tuesday commute has gotten 8 minutes worse since January"
+- Record speed data over time during drives (speedometer data already exists, just needs to be persisted)
 
 ## Siri Shortcuts / App Intents
 - "Hey Siri, start my commute" / "Hey Siri, how's my drive to work looking?"
 - Deep iOS integration — Siri proactively suggesting commute start ties into smart notifications story
 
 ## Music & Podcast Integration
-- Now Playing mini-bar in nav UI — skip/pause without leaving the app
-- Especially important for full-screen CarPlay where you want to avoid switching to widget view
-- Audio ducking on voice guidance already exists, this extends the experience
+- Now Playing mini-bar in phone nav UI — album art, song title, play/pause/skip/back buttons
+- Full-screen CarPlay nav: Steddi owns media remote commands (play/pause/skip/back/long-press-seek via steering wheel)
+- CarPlay widget view: native music app handles its own controls
+- Long-press skip to seek through track (à la Spotify)
 
 ## Road Surface & Construction Memory
 - Remember reported potholes, construction, road conditions on specific routes
-- Arrival notification prompt should ask about road conditions encountered during the drive
-- Over time Steddi learns actual conditions on your routes — very on-brand for "your route"
-
-## Theming — Sunset/Sunrise Mode
-- A warm in-between theme for golden hour transitions — sits between light and grey
-- Super gradual color shift where you barely notice the change happening
-- Complements the existing solar-based dynamic theming
+- Post-arrival prompt: "anything to report about this drive?"
+- Data decay: report lives until you drive past again after 14+ days → "is this still here?" prompt. If not driven within 90 days, silently expires. Confirmed reports reset the 14-day timer.
 
 ## Emergency / Breakdown Mode
 - One tap: share exact location with a contact, pull up nearby services, call roadside assistance
-- Should be part of onboarding — set up emergency contact during first run
-- Hopefully never used, but when you need it, you really need it
+- Onboarding offers emergency contact setup (skippable, always available in settings later)
+- If user hits emergency button without setup, prompt then
 
 ## Passenger Mode & Accessibility
-- Passenger mode: bigger text, simplified UI, passenger handles reroute decisions and reports so driver doesn't touch the phone
-- Accessibility view: even clearer directions for users who need it — larger maneuver icons, higher contrast, simplified instruction language
-- These two share DNA — both are about making nav usable for someone who isn't the default "driver glancing at phone" case
-- Could be a single "display mode" setting: Standard / Passenger / Accessibility
+- Passenger mode: separate toggle. Bigger text, simplified UI, passenger handles reroute decisions and reports so driver doesn't touch the phone
+- Accessibility mode: separate toggle. Larger maneuver icons, higher contrast, simplified instruction language
+- Both can be active simultaneously (visually impaired passenger)
 
 ## Route Preferences
-- Toll avoidance with cost estimates — show "this route has $4.50 in tolls, this one adds 12 min but is free" and let user decide
+- Toll avoidance — "this route has tolls" indicator (MKDirections tollPreference). Cost estimates deferred until a free data source exists.
 - Avoid highways toggle — for elderly/student drivers or anyone who doesn't like freeways
 - Both global and per-commute toggles
 - Active indicators during nav so user knows when a preference is affecting their route
@@ -103,18 +114,20 @@
 - First-run experience that communicates quality immediately — not a tutorial, more of a "feel"
 - Should convey core value prop (your route, your rules) without walls of text
 - Let users experience the polish within seconds of opening
+- Emergency contact setup offered here (skippable)
 
 ## AI Route Planner
-- Natural language route planning — user types street names or describes route in plain language instead of manual GUI planning
-- Must run on-device, so likely iPhone 15 Pro+ exclusive (Apple Intelligence / Core ML)
+- Fuzzy parser for now — handles highway names, street names, connectors ("to," "via," "exit at") with string parsing + geocoding. No ML model required.
+- Full natural language version deferred until Apple Intelligence / on-device models mature. No forced large ML downloads.
 
-## Priority 5 — App Store Prep
+## App Store Prep
 - TestFlight beta testing
 - App Store submission
 
-## Priority 5 — Requires Physical Device
+## Requires Physical Device
 - On-device GPS testing (arrival detection, map matching, route recording)
 - NavigationEngine real-world validation
+- Daily 70-mile round trip commute (streets + highways, multiple route options) as primary test bed
 
 ## Done ✅
 - MapKit migration (removed Mapbox entirely — zero logos)
@@ -146,7 +159,6 @@
 - Applied for CarPlay navigation entitlement
 - Landscape nav UI: bigger elements, horizontal button row
 - Landscape home: cards no longer clipped
-- Website: video hero, slide-in showcase, privacy section, waitlist CTA
 - Navigation voice guidance (AVSpeechSynthesizer)
 - Voice mute bug fix (settings toggle now syncs with nav overlay)
 - Premium voice options with voice picker in settings
