@@ -30,7 +30,8 @@
 - "Grey mode" — both a standalone theme option between light and dark, AND part of weather-based dynamic theming (auto-applies when rainy/overcast)
 - Temperature-based tinting — warmer tones when hot, cooler tones when cold. Relative to local historical norms (65°F in SoCal ≠ 65°F in Alaska). Subtle even at extremes.
 - Sunset/sunrise mode — warm palette during golden hour, full 45-min gradual transition so the shift is imperceptible. Uses existing solar calculation infrastructure.
-- Full dynamic theme layers: solar position × weather × temperature, all blending in real-time
+- Tunnel detection — quick fade to dark mode on tunnel entry (GPS signal drop + OSM tunnel data), fade back on exit. Timing doesn't need to be perfect — slight delay on entry and early on exit feels natural.
+- Full dynamic theme layers: solar position × weather × temperature × tunnel, all blending in real-time
 
 ## Voice & Offline
 - Download voice packs for offline use (support offline mapping end-to-end)
