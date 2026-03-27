@@ -1,9 +1,8 @@
 # Steddi TODO
 
-## Priority 1 — Website (steddi.io)
-- Waitlist form / email capture (currently button goes nowhere)
-- Deploy to GitHub Pages or Vercel
-- Custom domain (steddi.io)
+## Priority 1 — Bugs & Fixes
+- Location is being tracked when no route is active — if intentional, needs to be toggleable and justified to the user
+- Route preview before nav starts (needed for CarPlay compliance, should also be in phone version)
 
 ## Priority 2 — CarPlay
 - Waiting on CarPlay navigation entitlement approval
@@ -18,10 +17,6 @@
 ## Theming & Appearance
 - Weather-based theming (adapt UI to current weather conditions)
 - "Grey mode" — a mid-tone theme between light and dark (potential use case: rainy/overcast weather)
-
-## Bugs & Fixes
-- Location is being tracked when no route is active — if intentional, needs to be toggleable and justified to the user
-- Route preview before nav starts (needed for CarPlay compliance, should also be in phone version)
 
 ## Voice & Offline
 - Download voice packs for offline use (support offline mapping end-to-end)
@@ -86,3 +81,4 @@
 - Premium voice options with voice picker in settings
 - Fixed interface orientations warning
 - Removed CarPlay entitlements (pending Apple approval)
+- Website live at steddi.io (video hero, slide-in showcase, privacy section, waitlist CTA, EmailJS, GitHub Pages, custom domain)
