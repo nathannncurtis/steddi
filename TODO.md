@@ -26,6 +26,12 @@
 - Categories for pinned locations with icons (home, gym, work, etc. + various other icons)
 - Yelp and/or Google Reviews for POI — link out to browser rather than embed (keeps it lightweight, avoids API cost/ToS issues). Steddi should feel like a full nav app when driving somewhere unfamiliar, not just a commute tool.
 
+## No-Go Zones v2
+- Support road/street segment selection — tap or trace a stretch of road to avoid, not just circular areas
+- Polygon drawing — let users define arbitrary shapes on the map
+- Named road avoidance — e.g. "always avoid the 91 between Main and the 15"
+- Time-based no-go zones — avoid certain areas only during specific hours (school zones, construction)
+
 ## Smart Notifications
 - Precheck for frequent commutes based on time of day — e.g., if user usually commutes to work around 7am but there's an hour delay, notify them to leave earlier
 - Harsh weather event warnings that would affect traffic on their commute
