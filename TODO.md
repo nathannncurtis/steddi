@@ -35,6 +35,24 @@
 - Home screen widgets
 - Apple Watch support — vibration-based turn alerts for accessibility
 
+## Animations & Micro-interactions
+- Nav overlay entrance/exit transitions
+- Route draw-on animation when navigation starts
+- Card animations (commute cards, reroute suggestions, arrival)
+- Smooth state transitions throughout the app — every screen change should feel intentional
+
+## Haptics
+- Subtle tap approaching a turn
+- Distinct pattern for reroute suggestions
+- Arrival confirmation haptic
+- Haptic feedback on key UI interactions (toggle mute, end nav, report)
+- Different intensity/patterns so the user can feel what's happening without looking
+
+## Onboarding
+- First-run experience that communicates quality immediately — not a tutorial, more of a "feel"
+- Should convey core value prop (your route, your rules) without walls of text
+- Let users experience the polish within seconds of opening
+
 ## AI Route Planner
 - Natural language route planning — user types street names or describes route in plain language instead of manual GUI planning
 - Must run on-device, so likely iPhone 15 Pro+ exclusive (Apple Intelligence / Core ML)
