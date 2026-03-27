@@ -112,6 +112,10 @@ struct SettingsView: View {
                     }
 
                     Toggle("Voice guidance", isOn: $voiceGuidanceEnabled)
+
+                    if voiceGuidanceEnabled {
+                        VoicePicker()
+                    }
                 } header: {
                     Text("Navigation Defaults")
                 }

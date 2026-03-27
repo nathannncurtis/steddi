@@ -10,11 +10,16 @@
 - Once approved: swap CPListTemplate → CPMapTemplate for full map view
 - CarPlayMapController already written and ready
 
-## Priority 3 — App Store Prep
+## Priority 3 — Live Activities
+- Live Activity for active navigation (ETA, next turn, distance remaining)
+- Dynamic Island compact/expanded views
+- Lock Screen widget
+
+## Priority 5 — App Store Prep
 - TestFlight beta testing
 - App Store submission
 
-## Priority 4 — Requires Physical Device
+## Priority 5 — Requires Physical Device
 - On-device GPS testing (arrival detection, map matching, route recording)
 - NavigationEngine real-world validation
 
@@ -50,3 +55,7 @@
 - Landscape home: cards no longer clipped
 - Website: video hero, slide-in showcase, privacy section, waitlist CTA
 - Navigation voice guidance (AVSpeechSynthesizer)
+- Voice mute bug fix (settings toggle now syncs with nav overlay)
+- Premium voice options with voice picker in settings
+- Fixed interface orientations warning
+- Removed CarPlay entitlements (pending Apple approval)

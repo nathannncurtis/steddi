@@ -20,7 +20,7 @@ struct SteddiNavOverlay: View {
     @State private var currentRemainingETA: TimeInterval = 0
 
     // Toggles
-    @State var isVoiceOn: Bool = true
+    @AppStorage("steddi.voiceGuidanceEnabled") var isVoiceOn: Bool = true
     @State var is3DView: Bool = true
 
     // Report
@@ -52,6 +52,9 @@ struct SteddiNavOverlay: View {
             reportSheet
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
+        }
+        .onAppear {
+            VoiceGuidanceService.shared.enabled = isVoiceOn
         }
         .task {
             startRerouteLoop()

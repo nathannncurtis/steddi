@@ -14,8 +14,8 @@ final class DirectionsService {
         profile: String = "driving"
     ) async throws -> DirectionsRoute {
         let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
-        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
+        request.source = MKMapItem(location: CLLocation(latitude: origin.latitude, longitude: origin.longitude), address: nil)
+        request.destination = MKMapItem(location: CLLocation(latitude: destination.latitude, longitude: destination.longitude), address: nil)
         request.transportType = .automobile
 
         let directions = MKDirections(request: request)
@@ -42,8 +42,8 @@ final class DirectionsService {
         }
 
         let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
-        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destinationCoord))
+        request.source = MKMapItem(location: CLLocation(latitude: origin.latitude, longitude: origin.longitude), address: nil)
+        request.destination = MKMapItem(location: CLLocation(latitude: destinationCoord.latitude, longitude: destinationCoord.longitude), address: nil)
         request.transportType = .automobile
 
         let directions = MKDirections(request: request)

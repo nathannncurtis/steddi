@@ -49,8 +49,8 @@ final class NavigationStateManager {
 
     // MARK: - Task Storage
 
-    private nonisolated(unsafe) var pollingTask: Task<Void, Never>?
-    private nonisolated(unsafe) var rerouteTask: Task<Void, Never>?
+    private var pollingTask: Task<Void, Never>?
+    private var rerouteTask: Task<Void, Never>?
 
     // MARK: - Observation
 

@@ -21,6 +21,11 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - steddi
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+          - UIInterfaceOrientationPortraitUpsideDown
         UIBackgroundModes:
           - audio
           - location

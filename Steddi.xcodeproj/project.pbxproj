@@ -42,6 +42,7 @@
 		BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */; };
 		C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */; };
 		CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */; };
+		CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE4512ED735A6D3CD409755 /* VoicePicker.swift */; };
 		CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B385FB734BECC176514917FB /* RoutePlannerView.swift */; };
 		D5D2CC709306B626B120D222 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4892145CE55DFF9FF13FC7 /* DonationView.swift */; };
 		D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */; };
@@ -78,6 +79,7 @@
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
 		335291BA198DC1134B9072E8 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiTheme.swift; sourceTree = "<group>"; };
+		3AE4512ED735A6D3CD409755 /* VoicePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePicker.swift; sourceTree = "<group>"; };
 		3B4F33590D3CEB7AA217E684 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoderTests.swift; sourceTree = "<group>"; };
 		4CDEFFA656C308FF61D985BF /* NoGoZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZone.swift; sourceTree = "<group>"; };
@@ -212,6 +214,7 @@
 				8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */,
 				F7111C46770386A928275F35 /* SettingsView.swift */,
 				F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */,
+				3AE4512ED735A6D3CD409755 /* VoicePicker.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -460,6 +463,7 @@
 				C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */,
 				8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */,
 				62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */,
+				CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

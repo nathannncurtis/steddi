@@ -31,8 +31,8 @@ final class GeocodingService {
 
         let parsed = response.mapItems.prefix(limit).enumerated().map { (index, mapItem) -> (result: GeocodingResult, apiRank: Int) in
             let name = mapItem.name ?? "Unknown"
-            let address = mapItem.placemark.title ?? formatAddress(mapItem.placemark)
-            let coordinate = mapItem.placemark.coordinate
+            let coordinate = mapItem.location.coordinate
+            let address = mapItem.addressRepresentations?.fullAddress(includingRegion: false, singleLine: true) ?? name
 
             let geocodingResult = GeocodingResult(
                 name: name,
@@ -70,17 +70,6 @@ final class GeocodingService {
         }.map(\.result)
     }
 
-    // MARK: - Helpers
-
-    private func formatAddress(_ placemark: MKPlacemark) -> String {
-        let parts = [
-            [placemark.subThoroughfare, placemark.thoroughfare].compactMap { $0 }.joined(separator: " "),
-            placemark.locality,
-            placemark.administrativeArea,
-            placemark.postalCode
-        ].compactMap { $0 }.filter { !$0.isEmpty }
-        return parts.joined(separator: ", ")
-    }
 }
 
 struct GeocodingResult: Identifiable, Hashable {

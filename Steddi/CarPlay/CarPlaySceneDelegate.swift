@@ -254,8 +254,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
 
         let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: MKPlacemark(coordinate: currentLoc.coordinate))
-        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        request.source = MKMapItem(location: CLLocation(latitude: currentLoc.coordinate.latitude, longitude: currentLoc.coordinate.longitude), address: nil)
+        request.destination = MKMapItem(location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude), address: nil)
         request.transportType = .automobile
 
         guard let response = try? await MKDirections(request: request).calculate(),
