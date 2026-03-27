@@ -252,6 +252,12 @@ Steddi has three types of navigation content:
 - **Offline voices:** AVSpeechSynthesizer voices are OS-managed. Cannot bundle or download programmatically. Can prompt users to download enhanced voices via iOS Settings. May explore pre-generating audio for common instructions as alternative.
 - **Audio session:** Playback mode, voice prompt, ducks other audio, interrupts spoken audio.
 
+### Audio Ducking Policy
+- **Rule:** Any Steddi audio (voice guidance, alerts, speed trap tones) ducks media playback — never pauses it. Music volume lowers, Steddi audio plays over it, music volume restores. This is the `.duckOthers` AVAudioSession option.
+- **Scope:** Applies to all audio events — voice nav instructions, reroute alerts, speed trap/camera alerts, arrival announcements, hazard warnings.
+- **Settings:** Voice nav ducking and alert ducking should be combined by default (one "duck media" behavior) but also independently configurable in settings for users who want voice nav to duck but alerts to play at full mix, or vice versa.
+- **Already partially implemented:** VoiceGuidanceService uses `.duckOthers`. Needs to be extended to all future alert audio paths.
+
 ### Reroute Engine
 Sigmoid-scaled threshold based on remaining ETA. Base percentage (user-configurable, default 20%) scaled by a sigmoid curve centered at 30 minutes remaining. Hard minute floor as secondary gate. Re-evaluated continuously. Full algorithm documented in ARCHITECTURE.md.
 

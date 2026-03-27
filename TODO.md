@@ -89,6 +89,7 @@
 - Full-screen CarPlay nav: Steddi owns media remote commands (play/pause/skip/back/long-press-seek via steering wheel)
 - CarPlay widget view: native music app handles its own controls
 - Long-press skip to seek through track (à la Spotify)
+- Audio ducking for ALL Steddi sounds (voice nav, alerts, speed trap tones) — always duck media, never pause. Combined by default but voice nav ducking and alert ducking independently configurable in settings.
 
 ## Road Surface & Construction Memory
 - Remember reported potholes, construction, road conditions on specific routes
