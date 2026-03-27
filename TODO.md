@@ -54,6 +54,45 @@
 - Haptic feedback on key UI interactions (toggle mute, end nav, report)
 - Different intensity/patterns so the user can feel what's happening without looking
 
+## Speed Traps & Red Light Cameras
+- Database of speed traps and red light camera locations (crowdsourced or third-party dataset)
+- Clean, minimal alert — subtle audio or haptic when approaching, not noisy like Waze
+
+## Commute Analytics
+- Surface drive history data: average commute time by day of week, trends over time
+- Detailed analytical view for power users — time spent sitting in traffic, total time spent commuting to/from work over weeks/months
+- Trend insights like "your Tuesday commute has gotten 8 minutes worse since January"
+
+## Siri Shortcuts / App Intents
+- "Hey Siri, start my commute" / "Hey Siri, how's my drive to work looking?"
+- Deep iOS integration — Siri proactively suggesting commute start ties into smart notifications story
+
+## Music & Podcast Integration
+- Now Playing mini-bar in nav UI — skip/pause without leaving the app
+- Especially important for full-screen CarPlay where you want to avoid switching to widget view
+- Audio ducking on voice guidance already exists, this extends the experience
+
+## Road Surface & Construction Memory
+- Remember reported potholes, construction, road conditions on specific routes
+- Arrival notification prompt should ask about road conditions encountered during the drive
+- Over time Steddi learns actual conditions on your routes — very on-brand for "your route"
+
+## Theming — Sunset/Sunrise Mode
+- A warm in-between theme for golden hour transitions — sits between light and grey
+- Super gradual color shift where you barely notice the change happening
+- Complements the existing solar-based dynamic theming
+
+## Emergency / Breakdown Mode
+- One tap: share exact location with a contact, pull up nearby services, call roadside assistance
+- Should be part of onboarding — set up emergency contact during first run
+- Hopefully never used, but when you need it, you really need it
+
+## Route Preferences
+- Toll avoidance with cost estimates — show "this route has $4.50 in tolls, this one adds 12 min but is free" and let user decide
+- Avoid highways toggle — for elderly/student drivers or anyone who doesn't like freeways
+- Both global and per-commute toggles
+- Active indicators during nav so user knows when a preference is affecting their route
+
 ## Onboarding
 - First-run experience that communicates quality immediately — not a tutorial, more of a "feel"
 - Should convey core value prop (your route, your rules) without walls of text
