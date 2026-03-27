@@ -87,6 +87,12 @@
 - Should be part of onboarding — set up emergency contact during first run
 - Hopefully never used, but when you need it, you really need it
 
+## Passenger Mode & Accessibility
+- Passenger mode: bigger text, simplified UI, passenger handles reroute decisions and reports so driver doesn't touch the phone
+- Accessibility view: even clearer directions for users who need it — larger maneuver icons, higher contrast, simplified instruction language
+- These two share DNA — both are about making nav usable for someone who isn't the default "driver glancing at phone" case
+- Could be a single "display mode" setting: Standard / Passenger / Accessibility
+
 ## Route Preferences
 - Toll avoidance with cost estimates — show "this route has $4.50 in tolls, this one adds 12 min but is free" and let user decide
 - Avoid highways toggle — for elderly/student drivers or anyone who doesn't like freeways
