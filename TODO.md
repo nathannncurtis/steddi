@@ -16,18 +16,20 @@
 
 ## Theming & Appearance
 - Weather-based theming (adapt UI to current weather conditions)
-- "Grey mode" — a mid-tone theme between light and dark (potential use case: rainy/overcast weather)
+- "Grey mode" — both a standalone theme option between light and dark, AND part of weather-based dynamic theming (e.g. auto-applies when rainy/overcast)
 
 ## Voice & Offline
 - Download voice packs for offline use (support offline mapping end-to-end)
+- Note: AVSpeechSynthesizer voices are OS-managed — can prompt users to download enhanced voices in Settings but can't bundle them. May need to explore pre-generating audio for common instructions as alternative.
 
 ## Pinned Locations & POI
 - Categories for pinned locations with icons (home, gym, work, etc. + various other icons)
-- Consider pulling in Yelp and/or Google Reviews for POI context
+- Yelp and/or Google Reviews for POI — link out to browser rather than embed (keeps it lightweight, avoids API cost/ToS issues). Steddi should feel like a full nav app when driving somewhere unfamiliar, not just a commute tool.
 
 ## Smart Notifications
 - Precheck for frequent commutes based on time of day — e.g., if user usually commutes to work around 7am but there's an hour delay, notify them to leave earlier
 - Harsh weather event warnings that would affect traffic on their commute
+- Will need a lightweight backend for traffic polling + push notifications — keep cheap initially
 
 ## Widgets & Wearables
 - Home screen widgets
