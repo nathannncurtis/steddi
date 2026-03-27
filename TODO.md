@@ -15,6 +15,33 @@
 - Dynamic Island compact/expanded views
 - Lock Screen widget
 
+## Theming & Appearance
+- Weather-based theming (adapt UI to current weather conditions)
+- "Grey mode" — a mid-tone theme between light and dark (potential use case: rainy/overcast weather)
+
+## Bugs & Fixes
+- Location is being tracked when no route is active — if intentional, needs to be toggleable and justified to the user
+- Route preview before nav starts (needed for CarPlay compliance, should also be in phone version)
+
+## Voice & Offline
+- Download voice packs for offline use (support offline mapping end-to-end)
+
+## Pinned Locations & POI
+- Categories for pinned locations with icons (home, gym, work, etc. + various other icons)
+- Consider pulling in Yelp and/or Google Reviews for POI context
+
+## Smart Notifications
+- Precheck for frequent commutes based on time of day — e.g., if user usually commutes to work around 7am but there's an hour delay, notify them to leave earlier
+- Harsh weather event warnings that would affect traffic on their commute
+
+## Widgets & Wearables
+- Home screen widgets
+- Apple Watch support — vibration-based turn alerts for accessibility
+
+## AI Route Planner
+- Natural language route planning — user types street names or describes route in plain language instead of manual GUI planning
+- Must run on-device, so likely iPhone 15 Pro+ exclusive (Apple Intelligence / Core ML)
+
 ## Priority 5 — App Store Prep
 - TestFlight beta testing
 - App Store submission
