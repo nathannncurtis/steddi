@@ -30,6 +30,13 @@ struct HomeView: View {
     @State private var navigationDestination: PinnedLocation?
     @State private var locationFeedTask: Task<Void, Never>?
 
+    // Route preview state
+    @State private var showRoutePreview = false
+    @State private var previewRoute: MKRoute?
+    @State private var previewAlternates: [MKRoute] = []
+    @State private var previewDestinationName: String = ""
+    @State private var previewIsCommute = false
+
     // Camera state
     @State private var is3DNav = true
 
@@ -227,6 +234,24 @@ struct HomeView: View {
             }
         }
         // Distance is calculated locally — ETAs fetched async in background
+        .fullScreenCover(isPresented: $showRoutePreview) {
+            if let route = previewRoute {
+                RoutePreviewView(
+                    route: route,
+                    destinationName: previewDestinationName,
+                    alternateRoutes: previewAlternates,
+                    onStart: { selectedRoute in
+                        showRoutePreview = false
+                        beginNavigation(with: selectedRoute)
+                    },
+                    onCancel: {
+                        showRoutePreview = false
+                        previewRoute = nil
+                        previewAlternates = []
+                    }
+                )
+            }
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -375,39 +400,49 @@ struct HomeView: View {
                     return
                 }
 
-                locationService.enableNavigationMode()
-                locationService.startRecording()
+                request.requestsAlternateRoutes = true
+                let altResponse = try? await MKDirections(request: request).calculate()
+                let alternates = (altResponse?.routes ?? []).filter { $0 !== route }
 
-                self.navigationRoute = route
-                let engine = NavigationEngine()
-                engine.startNavigation(route: route)
-                self.navigationEngine = engine
-
-                // Handle off-route: reroute from current position to destination
-                engine.onOffRoute = { currentPos, destination in
-                    Task { @MainActor [self] in
-                        await self.handleOffRoute(from: currentPos, to: destination)
-                    }
-                }
-
-                // Share navigation state for CarPlay
-                navStateManager.activeRouteCoords = engine.routePolylineCoordinates
-                navStateManager.startObserving(
-                    engine: engine,
-                    commute: activeCommute,
-                    direction: activeDirection
-                )
-
-                // Start feeding location updates to the engine
-                startLocationFeed()
-
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    isCalculatingRoute = false
-                    isNavigating = true
-                }
+                isCalculatingRoute = false
+                previewRoute = route
+                previewAlternates = Array(alternates.prefix(2))
+                previewDestinationName = name
+                previewIsCommute = false
+                showRoutePreview = true
             } catch {
                 isCalculatingRoute = false
             }
+        }
+    }
+
+    /// Start navigation with a route (called from preview or directly for commutes).
+    private func beginNavigation(with route: MKRoute) {
+        locationService.enableNavigationMode()
+        locationService.startRecording()
+
+        self.navigationRoute = route
+        let engine = NavigationEngine()
+        engine.startNavigation(route: route)
+        self.navigationEngine = engine
+
+        engine.onOffRoute = { currentPos, destination in
+            Task { @MainActor [self] in
+                await self.handleOffRoute(from: currentPos, to: destination)
+            }
+        }
+
+        navStateManager.activeRouteCoords = engine.routePolylineCoordinates
+        navStateManager.startObserving(
+            engine: engine,
+            commute: activeCommute,
+            direction: activeDirection
+        )
+
+        startLocationFeed()
+
+        withAnimation(.easeInOut(duration: 0.4)) {
+            isNavigating = true
         }
     }
 
@@ -761,32 +796,8 @@ struct HomeView: View {
                     return
                 }
 
-                locationService.startRecording()
-                self.navigationRoute = route
-                let engine = NavigationEngine()
-                engine.startNavigation(route: route)
-                self.navigationEngine = engine
-
-                // Handle off-route: reroute from current position to destination
-                engine.onOffRoute = { currentPos, destination in
-                    Task { @MainActor [self] in
-                        await self.handleOffRoute(from: currentPos, to: destination)
-                    }
-                }
-
-                // Share navigation state for CarPlay
-                navStateManager.activeRouteCoords = engine.routePolylineCoordinates
-                navStateManager.startObserving(
-                    engine: engine,
-                    commute: activeCommute,
-                    direction: activeDirection
-                )
-
-                // Start feeding location updates to the engine
-                startLocationFeed()
-
                 isCalculatingRoute = false
-                isNavigating = true
+                beginNavigation(with: route)
             } catch {
                 isCalculatingRoute = false
             }

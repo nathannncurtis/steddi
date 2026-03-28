@@ -45,6 +45,7 @@
 		BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29048E65BF78AEB095A5D599 /* CommuteListView.swift */; };
 		BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */; };
 		C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */; };
+		C71246A6559A6AC5CE9A73C3 /* RoutePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */; };
 		CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */; };
 		CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE4512ED735A6D3CD409755 /* VoicePicker.swift */; };
 		CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B385FB734BECC176514917FB /* RoutePlannerView.swift */; };
@@ -97,6 +98,7 @@
 		598632F13EF2804C543D14D0 /* LocationCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationCardView.swift; sourceTree = "<group>"; };
 		64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveRecord.swift; sourceTree = "<group>"; };
 		671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
+		7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
 		7072F1B4A4ECF3043E6462BF /* SteddiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SteddiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiMapView.swift; sourceTree = "<group>"; };
@@ -262,6 +264,7 @@
 				53EB5BD45FD5C3961CFC647C /* PhoneCompanionView.swift */,
 				BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */,
 				F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */,
+				7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */,
 				03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */,
 			);
 			path = Navigation;
@@ -478,6 +481,7 @@
 				9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */,
 				E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */,
 				CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */,
+				C71246A6559A6AC5CE9A73C3 /* RoutePreviewView.swift in Sources */,
 				571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */,
 				0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */,
 				D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */,
