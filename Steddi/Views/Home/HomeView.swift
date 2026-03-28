@@ -786,10 +786,6 @@ struct HomeView: View {
             // Decode the saved polyline
             let savedCoords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
             print("[STEDDI-NAV] navigateWithSavedRoute: decoded \(savedCoords.count) coordinates from polyline")
-            if let first = savedCoords.first, let last = savedCoords.last {
-                print("[STEDDI-NAV]   First coord: \(first.latitude), \(first.longitude)")
-                print("[STEDDI-NAV]   Last coord: \(last.latitude), \(last.longitude)")
-            }
 
             guard savedCoords.count >= 2 else {
                 print("[STEDDI-NAV] ERROR: polyline has < 2 coords, falling back to Apple Maps")
@@ -798,16 +794,22 @@ struct HomeView: View {
                 return
             }
 
-            // Build custom turn-by-turn steps from the polyline geometry
-            let customSteps = CustomRouteBuilder.buildSteps(from: savedCoords)
-            print("[STEDDI-NAV] CustomRouteBuilder produced \(customSteps.count) steps:")
-            for (i, step) in customSteps.enumerated() {
-                print("[STEDDI-NAV]   Step \(i): \(step.instruction) (\(Int(step.distance))m) at \(step.coordinate.latitude), \(step.coordinate.longitude)")
+            // Use saved steps if available (from planning time), otherwise generate from polyline
+            let navSteps: [NavStep]
+            if let saved = savedRoute.savedNavSteps {
+                print("[STEDDI-NAV] Using \(saved.count) saved steps from planning time")
+                navSteps = saved
+            } else {
+                print("[STEDDI-NAV] No saved steps, generating from polyline geometry")
+                navSteps = CustomRouteBuilder.buildSteps(from: savedCoords)
+            }
+
+            for (i, step) in navSteps.enumerated() {
+                print("[STEDDI-NAV]   Step \(i): \(step.instruction) (\(Int(step.distance))m)")
             }
 
             isCalculatingRoute = false
-            print("[STEDDI-NAV] Calling beginCustomNavigation with \(savedCoords.count) coords and \(customSteps.count) steps")
-            beginCustomNavigation(polyline: savedCoords, steps: customSteps)
+            beginCustomNavigation(polyline: savedCoords, steps: navSteps)
         }
     }
 

@@ -16,6 +16,7 @@ struct RoutePlannerView: View {
     @State private var calculatedPolyline: String?
     @State private var calculatedDistance: Double?
     @State private var calculatedDuration: Double?
+    @State private var calculatedSteps: [DirectionsStep] = []
     @State private var saveAsPreferred = true
     @State private var showDetails = false
     @State private var waypoints: [CLLocationCoordinate2D] = []
@@ -262,21 +263,23 @@ struct RoutePlannerView: View {
                 calculatedPolyline = route.encodedPolyline
                 calculatedDistance = route.distance
                 calculatedDuration = route.duration
+                calculatedSteps = route.legs.flatMap { $0.steps }
             } else {
                 // Multi-waypoint: chain sequential MKDirections requests and stitch
                 var allCoords: [CLLocationCoordinate2D] = []
+                var allSteps: [DirectionsStep] = []
                 var totalDistance: Double = 0
                 var totalDuration: Double = 0
 
                 for i in 0..<(allPoints.count - 1) {
                     let segRoute = try await service.fetchRoute(from: allPoints[i], to: allPoints[i + 1])
                     let segCoords = PolylineEncoder.decode(segRoute.encodedPolyline, precision: 6)
-                    // Avoid duplicate junction points
                     if !allCoords.isEmpty && !segCoords.isEmpty {
                         allCoords.append(contentsOf: segCoords.dropFirst())
                     } else {
                         allCoords.append(contentsOf: segCoords)
                     }
+                    allSteps.append(contentsOf: segRoute.legs.flatMap { $0.steps })
                     totalDistance += segRoute.distance
                     totalDuration += segRoute.duration
                 }
@@ -284,6 +287,7 @@ struct RoutePlannerView: View {
                 calculatedPolyline = PolylineEncoder.encode(allCoords, precision: 6)
                 calculatedDistance = totalDistance
                 calculatedDuration = totalDuration
+                calculatedSteps = allSteps
             }
         } catch {}
 
@@ -314,6 +318,7 @@ struct RoutePlannerView: View {
             source: .planned,
             direction: direction
         )
+        route.encodedSteps = Route.encodeSteps(calculatedSteps)
         route.commute = commute
         if commute.routes == nil { commute.routes = [] }
         commute.routes?.append(route)
