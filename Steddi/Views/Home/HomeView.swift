@@ -213,6 +213,19 @@ struct HomeView: View {
                 showPostArrival = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .steddiStartCommuteFromSiri)) { _ in
+            // Start the first active commute when triggered via Siri
+            if let commute = commutes.first(where: { $0.isActive }), !isNavigating {
+                let result = resolveCardResult(commute)
+                switch result {
+                case .confident(let direction, _):
+                    startCommute(commute, direction: direction)
+                case .ambiguous(_, _):
+                    // Can't show dialog from Siri — use default direction
+                    startCommute(commute, direction: .originToDestination)
+                }
+            }
+        }
         // Distance is calculated locally — ETAs fetched async in background
         .sheet(isPresented: $showSettings) {
             SettingsView()

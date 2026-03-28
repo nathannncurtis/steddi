@@ -8,8 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */; };
+		0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */; };
 		10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */; };
 		13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4F33590D3CEB7AA217E684 /* LocationService.swift */; };
+		139B1E17264CCF63189264A6 /* SteddiShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */; };
 		1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50B3D1495689CE92E4ED80B /* GeocodingService.swift */; };
 		1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */; };
 		26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */; };
@@ -26,6 +28,7 @@
 		6C0862A6626424EBC6622731 /* Commute.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */; };
 		6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62156E1FDD078D989A2441A /* OfflineCacheService.swift */; };
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
+		755CA9609153C6BBD3833D97 /* CheckCommuteETAIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */; };
 		7AC6366691401A8DB28223A8 /* NavigationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */; };
 		8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */; };
 		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
@@ -75,6 +78,7 @@
 		06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSceneDelegate.swift; sourceTree = "<group>"; };
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
+		13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiShortcuts.swift; sourceTree = "<group>"; };
 		16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManagerTests.swift; sourceTree = "<group>"; };
 		262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceService.swift; sourceTree = "<group>"; };
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
@@ -84,6 +88,7 @@
 		3B4F33590D3CEB7AA217E684 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoderTests.swift; sourceTree = "<group>"; };
 		4CDEFFA656C308FF61D985BF /* NoGoZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZone.swift; sourceTree = "<group>"; };
+		4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckCommuteETAIntent.swift; sourceTree = "<group>"; };
 		4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationEngineTests.swift; sourceTree = "<group>"; };
 		536F40426EDB0B72A580D76E /* CarPlay.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = CarPlay.framework; sourceTree = "<group>"; };
 		5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngineTests.swift; sourceTree = "<group>"; };
@@ -122,6 +127,7 @@
 		EF4892145CE55DFF9FF13FC7 /* DonationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DonationView.swift; sourceTree = "<group>"; };
 		F2113E7A877B78A7BF8CF75C /* Route.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Route.swift; sourceTree = "<group>"; };
 		F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiApp.swift; sourceTree = "<group>"; };
+		F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartCommuteIntent.swift; sourceTree = "<group>"; };
 		F62156E1FDD078D989A2441A /* OfflineCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCacheService.swift; sourceTree = "<group>"; };
 		F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteCardView.swift; sourceTree = "<group>"; };
 		F7111C46770386A928275F35 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -172,6 +178,7 @@
 				8B17DD42334CC352C81C1B71 /* Steddi.entitlements */,
 				D742A2F1707D973EBE64708E /* App */,
 				0389C8F4D82362316402E174 /* CarPlay */,
+				9462E27A471F5CF593274977 /* Intents */,
 				1B08229D7455DAC8B35B5E17 /* Models */,
 				DBB5363525293A92F0312314 /* Services */,
 				FF31CEBB3E9CBFBF76A9DADA /* Utils */,
@@ -219,6 +226,16 @@
 				3AE4512ED735A6D3CD409755 /* VoicePicker.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		9462E27A471F5CF593274977 /* Intents */ = {
+			isa = PBXGroup;
+			children = (
+				4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */,
+				F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */,
+				13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */,
+			);
+			path = Intents;
 			sourceTree = "<group>";
 		};
 		9C6D36121E1F61E20EE34C4D /* Products */ = {
@@ -428,6 +445,7 @@
 				99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */,
 				60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */,
 				D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */,
+				755CA9609153C6BBD3833D97 /* CheckCommuteETAIntent.swift in Sources */,
 				6C0862A6626424EBC6622731 /* Commute.swift in Sources */,
 				8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */,
 				9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */,
@@ -461,9 +479,11 @@
 				E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */,
 				CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */,
 				571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */,
+				0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */,
 				D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */,
 				BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */,
 				E8518F81F0D9BA02AAEA282D /* SteddiNavOverlay.swift in Sources */,
+				139B1E17264CCF63189264A6 /* SteddiShortcuts.swift in Sources */,
 				C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */,
 				8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */,
 				62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */,
