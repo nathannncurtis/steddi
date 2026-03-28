@@ -87,19 +87,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
-    func templateApplicationScene(
-        _ templateApplicationScene: CPTemplateApplicationScene,
-        didDisconnect interfaceController: CPInterfaceController
-    ) {
-        dismissNavigation()
-        self.interfaceController = nil
-        self.carWindow = nil
-        self.rootTabBar = nil
-
-        Task { @MainActor in
-            stateManager.isCarPlayActive = false
-        }
-    }
 
     // MARK: - Watch Phone Navigation
 
@@ -298,7 +285,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let arrivalTime = Date().addingTimeInterval(route.expectedTravelTime)
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        let arrivalItem = CPListItem(text: "Arrive \(formatter.string(from: arrivalTime))", detailText: "via \(route.name ?? "fastest route")")
+        let arrivalItem = CPListItem(text: "Arrive \(formatter.string(from: arrivalTime))", detailText: "via \(route.name)")
         if let img = UIImage(systemName: "clock")?
             .withConfiguration(UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)) {
             arrivalItem.setImage(img)
