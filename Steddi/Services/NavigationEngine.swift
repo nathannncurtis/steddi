@@ -219,6 +219,7 @@ final class NavigationEngine {
         if distanceToNextStep < stepTransitionDistance {
             currentStepIndex = nextIndex
             updateCurrentStep()
+            HapticService.shared.fire(.turnApproaching)
         }
     }
 
@@ -252,6 +253,7 @@ final class NavigationEngine {
         let destination = CLLocation(latitude: lastCoord.latitude, longitude: lastCoord.longitude)
         if location.distance(from: destination) < arrivalDistance {
             hasArrived = true
+            HapticService.shared.fire(.arrival)
             VoiceGuidanceService.shared.speakArrival()
             instruction = "You have arrived"
             maneuverType = "flag.fill"

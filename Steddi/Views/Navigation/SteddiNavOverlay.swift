@@ -350,6 +350,7 @@ struct SteddiNavOverlay: View {
         Button {
             isVoiceOn.toggle()
             VoiceGuidanceService.shared.enabled = isVoiceOn
+            HapticService.shared.fire(.uiToggle)
         } label: {
             floatingButtonCircle(
                 symbol: isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill",

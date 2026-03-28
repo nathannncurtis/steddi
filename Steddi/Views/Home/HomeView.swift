@@ -1032,6 +1032,7 @@ struct HomeView: View {
                 navStateManager.activeRouteCoords = engine.routePolylineCoordinates
             }
 
+            HapticService.shared.fire(.rerouteSuggestion)
             VoiceGuidanceService.shared.speak("Rerouting")
         } catch {
             // Silently fail — user is still driving, next off-route check will retry

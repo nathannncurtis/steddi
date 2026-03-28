@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage("steddi.units") private var units: String = MeasurementUnit.miles.rawValue
     @AppStorage("steddi.defaultAvoidsTolls") private var avoidsTolls: Bool = false
     @AppStorage("steddi.defaultAvoidsHighways") private var avoidsHighways: Bool = false
+    @AppStorage("steddi.hapticLevel") private var hapticLevel: String = HapticLevel.dynamic.rawValue
     @AppStorage("accentColor") private var accentColor: String = SteddiTheme.AccentOption.lavender.rawValue
     @AppStorage("themeMode") private var themeMode: String = "dynamic"
 
@@ -121,6 +122,12 @@ struct SettingsView: View {
 
                     Toggle("Avoid tolls", isOn: $avoidsTolls)
                     Toggle("Avoid highways", isOn: $avoidsHighways)
+
+                    Picker("Haptic feedback", selection: $hapticLevel) {
+                        ForEach(HapticLevel.allCases) { level in
+                            Text(level.displayName).tag(level.rawValue)
+                        }
+                    }
                 } header: {
                     Text("Navigation Defaults")
                 }
