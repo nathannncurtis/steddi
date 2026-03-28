@@ -5,8 +5,8 @@
 - Route preview per-commute disable setting (preview UI is built, commute skip not yet wired)
 
 ## Priority 2 — CarPlay
-- Swap CPListTemplate → CPMapTemplate for full map view (entitlement approved)
-- CarPlayMapController already written and ready
+- Test CPMapTemplate on real CarPlay (map view implemented, needs real device verification)
+- Verify steering wheel media controls work with Now Playing integration (future)
 
 ## Priority 3 — Live Activities
 - Live Activity for active navigation (ETA, next turn, distance remaining)
@@ -176,3 +176,12 @@
 - Haptic feedback system (Off/Subtle/Standard/Dynamic/Advanced, per-event intensity, wired into nav engine)
 - Siri Shortcuts via App Intents ("Start my commute", "Check commute ETA")
 - App Group entitlement added (pending portal setup)
+- CarPlay swapped to CPMapTemplate with full map view, maneuver display, zoom controls
+- NavigationEngine rewritten from scratch: unified NavStep model, polyline-first architecture
+- CustomRouteBuilder: generates steps from polyline geometry (fallback for old routes)
+- Saved routes now store turn-by-turn steps from planning time (no more runtime inference)
+- Route planner saves Apple's real instructions alongside the polyline
+- ETA uses saved travel time from planning, not 30mph assumption
+- Compass shows device magnetometer heading (direction phone faces)
+- Free-look mode during nav (pan/pinch pauses camera, recenter button to resume)
+- Removed .claude/skills from repo
