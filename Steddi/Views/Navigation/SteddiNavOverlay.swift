@@ -330,20 +330,26 @@ struct SteddiNavOverlay: View {
                 .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1))
                 .frame(width: 44, height: 44)
 
-            Text("N")
+            Text(cardinalLabel(for: engine.headingDegrees))
                 .font(.system(size: 15, weight: .heavy, design: .rounded))
-                .foregroundStyle(SteddiTheme.warmRed)
-                .rotationEffect(.degrees(-engine.headingDegrees))
-                .offset(y: -6)
-
-            // Small triangle pointer
-            Triangle()
-                .fill(SteddiTheme.warmRed)
-                .frame(width: 6, height: 5)
-                .rotationEffect(.degrees(-engine.headingDegrees))
-                .offset(y: 4)
+                .foregroundStyle(SteddiTheme.accent)
         }
         .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+    }
+
+    private func cardinalLabel(for degrees: Double) -> String {
+        let normalized = ((degrees.truncatingRemainder(dividingBy: 360)) + 360).truncatingRemainder(dividingBy: 360)
+        switch normalized {
+        case 337.5..<360, 0..<22.5: return "N"
+        case 22.5..<67.5: return "NE"
+        case 67.5..<112.5: return "E"
+        case 112.5..<157.5: return "SE"
+        case 157.5..<202.5: return "S"
+        case 202.5..<247.5: return "SW"
+        case 247.5..<292.5: return "W"
+        case 292.5..<337.5: return "NW"
+        default: return "N"
+        }
     }
 
     private var voiceButton: some View {
@@ -389,17 +395,9 @@ struct SteddiNavOverlay: View {
                 .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
                 .frame(width: 50, height: 50)
 
-            Text("N")
+            Text(cardinalLabel(for: engine.headingDegrees))
                 .font(.system(size: 16, weight: .heavy, design: .rounded))
-                .foregroundStyle(SteddiTheme.warmRed)
-                .rotationEffect(.degrees(-engine.headingDegrees))
-                .offset(y: -6)
-
-            Triangle()
-                .fill(SteddiTheme.warmRed)
-                .frame(width: 6, height: 5)
-                .rotationEffect(.degrees(-engine.headingDegrees))
-                .offset(y: 4)
+                .foregroundStyle(SteddiTheme.accent)
         }
         .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
     }
