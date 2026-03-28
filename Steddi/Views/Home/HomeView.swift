@@ -351,6 +351,7 @@ struct HomeView: View {
             request.source = MKMapItem(location: CLLocation(latitude: currentLocation.coordinate.latitude, longitude: currentLocation.coordinate.longitude), address: nil)
             request.destination = MKMapItem(location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude), address: nil)
             request.transportType = .automobile
+            RoutePreferences.resolve(commute: activeCommute).apply(to: request)
 
             let directions = MKDirections(request: request)
 
@@ -736,6 +737,7 @@ struct HomeView: View {
             request.source = MKMapItem(location: CLLocation(latitude: currentLocation.coordinate.latitude, longitude: currentLocation.coordinate.longitude), address: nil)
             request.destination = MKMapItem(location: CLLocation(latitude: target.coordinate.latitude, longitude: target.coordinate.longitude), address: nil)
             request.transportType = .automobile
+            RoutePreferences.resolve(commute: activeCommute).apply(to: request)
 
             let directions = MKDirections(request: request)
 
@@ -996,6 +998,7 @@ struct HomeView: View {
         request.destination = MKMapItem(location: CLLocation(latitude: destination.latitude, longitude: destination.longitude), address: nil)
         request.transportType = .automobile
         request.requestsAlternateRoutes = true
+        RoutePreferences.resolve(commute: activeCommute).apply(to: request)
 
         do {
             let response = try await MKDirections(request: request).calculate()

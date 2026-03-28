@@ -12,6 +12,10 @@ final class Commute {
     var isActive: Bool
     var createdAt: Date
 
+    // Route preferences (nil = use global defaults from Settings)
+    var avoidsTolls: Bool?
+    var avoidsHighways: Bool?
+
     // Schedule-based direction rules
     var scheduleToDestDays: String?      // e.g. "2,3,4,5,6" (weekday components, Sun=1..Sat=7)
     var scheduleToDestStartHour: Int?    // e.g. 6

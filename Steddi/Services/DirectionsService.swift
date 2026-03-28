@@ -2,6 +2,27 @@ import Foundation
 import CoreLocation
 import MapKit
 
+/// Route preference overrides for toll/highway avoidance.
+struct RoutePreferences {
+    var avoidsTolls: Bool
+    var avoidsHighways: Bool
+
+    /// Resolve preferences: per-commute overrides > global defaults.
+    static func resolve(commute: Commute? = nil) -> RoutePreferences {
+        let globalTolls = UserDefaults.standard.bool(forKey: "steddi.defaultAvoidsTolls")
+        let globalHighways = UserDefaults.standard.bool(forKey: "steddi.defaultAvoidsHighways")
+        return RoutePreferences(
+            avoidsTolls: commute?.avoidsTolls ?? globalTolls,
+            avoidsHighways: commute?.avoidsHighways ?? globalHighways
+        )
+    }
+
+    func apply(to request: MKDirections.Request) {
+        request.tollPreference = avoidsTolls ? .avoid : .any
+        request.highwayPreference = avoidsHighways ? .avoid : .any
+    }
+}
+
 /// Wraps Apple MapKit MKDirections for route fetching and ETA estimation.
 final class DirectionsService {
 
@@ -11,12 +32,14 @@ final class DirectionsService {
     func fetchRoute(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D,
-        profile: String = "driving"
+        profile: String = "driving",
+        preferences: RoutePreferences = .resolve()
     ) async throws -> DirectionsRoute {
         let request = MKDirections.Request()
         request.source = MKMapItem(location: CLLocation(latitude: origin.latitude, longitude: origin.longitude), address: nil)
         request.destination = MKMapItem(location: CLLocation(latitude: destination.latitude, longitude: destination.longitude), address: nil)
         request.transportType = .automobile
+        preferences.apply(to: request)
 
         let directions = MKDirections(request: request)
         let response = try await directions.calculate()

@@ -11,6 +11,8 @@ struct SettingsView: View {
     @AppStorage("steddi.defaultHardMinuteFloor") private var hardMinuteFloor: Int = 10
     @AppStorage("steddi.voiceGuidanceEnabled") private var voiceGuidanceEnabled: Bool = true
     @AppStorage("steddi.units") private var units: String = MeasurementUnit.miles.rawValue
+    @AppStorage("steddi.defaultAvoidsTolls") private var avoidsTolls: Bool = false
+    @AppStorage("steddi.defaultAvoidsHighways") private var avoidsHighways: Bool = false
     @AppStorage("accentColor") private var accentColor: String = SteddiTheme.AccentOption.lavender.rawValue
     @AppStorage("themeMode") private var themeMode: String = "dynamic"
 
@@ -116,6 +118,9 @@ struct SettingsView: View {
                     if voiceGuidanceEnabled {
                         VoicePicker()
                     }
+
+                    Toggle("Avoid tolls", isOn: $avoidsTolls)
+                    Toggle("Avoid highways", isOn: $avoidsHighways)
                 } header: {
                     Text("Navigation Defaults")
                 }
