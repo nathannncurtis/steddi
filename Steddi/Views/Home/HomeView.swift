@@ -369,6 +369,14 @@ struct HomeView: View {
                 engine.startNavigation(route: route)
                 self.navigationEngine = engine
 
+                // Handle off-route: reroute from current position to destination
+                engine.onOffRoute = { [weak self] currentPos, destination in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        await self.handleOffRoute(from: currentPos, to: destination)
+                    }
+                }
+
                 // Share navigation state for CarPlay
                 navStateManager.activeRouteCoords = engine.routePolylineCoordinates
                 navStateManager.startObserving(
@@ -745,6 +753,14 @@ struct HomeView: View {
                 engine.startNavigation(route: route)
                 self.navigationEngine = engine
 
+                // Handle off-route: reroute from current position to destination
+                engine.onOffRoute = { [weak self] currentPos, destination in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        await self.handleOffRoute(from: currentPos, to: destination)
+                    }
+                }
+
                 // Share navigation state for CarPlay
                 navStateManager.activeRouteCoords = engine.routePolylineCoordinates
                 navStateManager.startObserving(
@@ -971,6 +987,54 @@ struct HomeView: View {
                     commuteETAs[key] = eta
                 }
             }
+        }
+    }
+
+    /// Reroute when user deviates from the predefined route.
+    /// Prioritizes forward momentum over U-turns and tries to get back on the preferred route.
+    private func handleOffRoute(from currentPos: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) async {
+        let request = MKDirections.Request()
+        request.source = MKMapItem(location: CLLocation(latitude: currentPos.latitude, longitude: currentPos.longitude), address: nil)
+        request.destination = MKMapItem(location: CLLocation(latitude: destination.latitude, longitude: destination.longitude), address: nil)
+        request.transportType = .automobile
+        request.requestsAlternateRoutes = true
+
+        do {
+            let response = try await MKDirections(request: request).calculate()
+            guard !response.routes.isEmpty else { return }
+
+            // Pick the route that best avoids U-turns: prefer shortest distance
+            // among routes that don't start with a U-turn instruction
+            let bestRoute = response.routes
+                .sorted { a, b in
+                    let aHasUTurn = a.steps.prefix(2).contains { $0.instructions.lowercased().contains("u-turn") }
+                    let bHasUTurn = b.steps.prefix(2).contains { $0.instructions.lowercased().contains("u-turn") }
+                    if aHasUTurn != bHasUTurn { return !aHasUTurn }
+                    return a.expectedTravelTime < b.expectedTravelTime
+                }
+                .first ?? response.routes[0]
+
+            // Restart navigation with new route
+            navigationEngine?.stopNavigation()
+            navigationEngine?.startNavigation(route: bestRoute)
+            navigationRoute = bestRoute
+
+            // Re-wire off-route handler
+            navigationEngine?.onOffRoute = { [weak self] currentPos, destination in
+                guard let self else { return }
+                Task { @MainActor in
+                    await self.handleOffRoute(from: currentPos, to: destination)
+                }
+            }
+
+            // Update shared state
+            if let engine = navigationEngine {
+                navStateManager.activeRouteCoords = engine.routePolylineCoordinates
+            }
+
+            VoiceGuidanceService.shared.speak("Rerouting")
+        } catch {
+            // Silently fail — user is still driving, next off-route check will retry
         }
     }
 

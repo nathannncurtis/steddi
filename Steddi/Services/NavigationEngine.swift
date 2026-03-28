@@ -55,6 +55,12 @@ final class NavigationEngine {
     // Thresholds
     private let stepTransitionDistance: CLLocationDistance = 30 // meters
     private let arrivalDistance: CLLocationDistance = 50 // meters
+    private let offRouteDistance: CLLocationDistance = 50 // meters from route to trigger off-route
+    private var offRouteCount: Int = 0 // consecutive off-route GPS updates
+    private let offRouteThreshold: Int = 3 // require 3 consecutive off-route readings
+
+    /// Callback for when the user goes off-route and needs rerouting.
+    var onOffRoute: ((CLLocationCoordinate2D, CLLocationCoordinate2D) -> Void)? // (currentPosition, destination)
 
     // MARK: - Start / Stop
 
@@ -70,6 +76,7 @@ final class NavigationEngine {
         originalExpectedTravelTime = route.expectedTravelTime
         averageSpeedMPS = 0
         speedSampleCount = 0
+        offRouteCount = 0
         routePolylineCoordinates = Self.extractCoordinates(from: route.polyline)
 
         // Precompute cumulative distances to the start of each filtered step
@@ -142,6 +149,12 @@ final class NavigationEngine {
         // Check arrival at destination
         if checkArrival(location: location) { return }
 
+        // Check if user has gone off-route
+        if checkOffRoute(location: location) { return }
+
+        // Reset off-route counter when on-route
+        offRouteCount = 0
+
         // Detect step transitions
         advanceStepIfNeeded(location: location)
 
@@ -207,6 +220,31 @@ final class NavigationEngine {
             currentStepIndex = nextIndex
             updateCurrentStep()
         }
+    }
+
+    private func checkOffRoute(location: CLLocation) -> Bool {
+        guard !routePolylineCoordinates.isEmpty else { return false }
+
+        // Find perpendicular distance from user to nearest point on route
+        let projection = Self.distanceFromPointToNearestSegment(
+            point: location.coordinate,
+            polyline: routePolylineCoordinates
+        )
+
+        if projection.perpendicularDistance > offRouteDistance {
+            offRouteCount += 1
+            if offRouteCount >= offRouteThreshold {
+                // User is confirmed off-route
+                guard let destination = routePolylineCoordinates.last else { return false }
+                onOffRoute?(location.coordinate, destination)
+                offRouteCount = 0
+                return true
+            }
+        } else {
+            offRouteCount = 0
+        }
+
+        return false
     }
 
     private func checkArrival(location: CLLocation) -> Bool {
