@@ -65,7 +65,7 @@ final class NavigationEngine {
 
     /// Start navigation from a polyline with custom steps.
     /// This is the core path — everything flows through here.
-    func startNavigation(polyline: [CLLocationCoordinate2D], steps: [NavStep]) {
+    func startNavigation(polyline: [CLLocationCoordinate2D], steps: [NavStep], expectedTravelTime: TimeInterval? = nil) {
         self.steps = steps
         currentStepIndex = 0
         isNavigating = true
@@ -77,8 +77,7 @@ final class NavigationEngine {
         routePolylineCoordinates = polyline
 
         totalRouteDistance = Self.polylineDistance(polyline)
-        // Seed ETA: assume ~30 mph average
-        originalExpectedTravelTime = totalRouteDistance / 13.4
+        originalExpectedTravelTime = expectedTravelTime ?? (totalRouteDistance / 13.4)
 
         if !steps.isEmpty {
             applyStep(at: 0)

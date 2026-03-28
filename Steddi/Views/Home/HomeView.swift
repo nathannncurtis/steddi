@@ -809,22 +809,21 @@ struct HomeView: View {
             }
 
             isCalculatingRoute = false
-            beginCustomNavigation(polyline: savedCoords, steps: navSteps)
+            beginCustomNavigation(polyline: savedCoords, steps: navSteps, expectedTravelTime: savedRoute.typicalDurationSeconds)
         }
     }
 
     /// Start navigation with custom polyline and steps (no MKRoute).
-    private func beginCustomNavigation(polyline: [CLLocationCoordinate2D], steps: [NavStep]) {
-        print("[STEDDI-NAV] beginCustomNavigation: polyline=\(polyline.count) coords, steps=\(steps.count)")
+    private func beginCustomNavigation(polyline: [CLLocationCoordinate2D], steps: [NavStep], expectedTravelTime: TimeInterval? = nil) {
+        print("[STEDDI-NAV] beginCustomNavigation: polyline=\(polyline.count) coords, steps=\(steps.count), eta=\(expectedTravelTime ?? 0)s")
         locationService.enableNavigationMode()
         locationService.startRecording()
 
         self.activeSavedPolyline = polyline
         self.navigationRoute = nil
-        print("[STEDDI-NAV] Set navigationRoute = nil, activeSavedPolyline = \(polyline.count) coords")
 
         let engine = NavigationEngine()
-        engine.startNavigation(polyline: polyline, steps: steps)
+        engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
         self.navigationEngine = engine
 
         engine.onOffRoute = { currentPos, destination in
