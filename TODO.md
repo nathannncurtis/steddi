@@ -1,6 +1,12 @@
 # Steddi TODO
 
-## Priority 1 — Bugs & Fixes
+## Priority 1 — Bugs & Fixes (from on-device testing 2026-03-27)
+- Compass just rotates rather than showing actual cardinal direction on predefined routes
+- Route line not centered with puck (location indicator)
+- Puck jitters when driving — needs smooth interpolation, not raw GPS jumps
+- Speedometer color not changing when exceeding speed limit
+- Off-route handling: if user deviates from predefined route, should immediately and smartly rebalance between getting back on track vs. getting to destination. U-turn should not be the default. Needs weighted logic.
+- Needs to show current traffic conditions on the map
 - Location is being tracked when no route is active — if intentional, needs to be toggleable and justified to the user
 - Route preview before nav starts (needed for CarPlay compliance, should also be in phone version)
   - Commutes: tap → "Go" (skip preview) or "Preview" (full route on map with ranked route tiers)
