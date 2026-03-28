@@ -1081,8 +1081,21 @@ struct HomeView: View {
     }
 
     /// Reroute when user deviates from the predefined route.
-    /// Prioritizes forward momentum over U-turns and tries to get back on the preferred route.
+    /// For custom routes: find nearest point AHEAD on saved polyline, route to rejoin it.
+    /// For Apple routes: request fresh directions avoiding U-turns.
     private func handleOffRoute(from currentPos: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) async {
+        // If we're on a custom saved route, just reset the off-route counter
+        // and let the engine keep tracking. The user will naturally rejoin
+        // the saved polyline or the step will advance when they get close.
+        // Don't fight them — the saved polyline is the guide, not a prison.
+        if activeSavedPolyline != nil {
+            // Simply announce and let them continue — they know their route
+            HapticService.shared.fire(.rerouteSuggestion)
+            VoiceGuidanceService.shared.speak("Off route. Continue to rejoin your route.")
+            return
+        }
+
+        // Apple Maps routing (dumb nav) — request fresh directions
         let request = MKDirections.Request()
         request.source = MKMapItem(location: CLLocation(latitude: currentPos.latitude, longitude: currentPos.longitude), address: nil)
         request.destination = MKMapItem(location: CLLocation(latitude: destination.latitude, longitude: destination.longitude), address: nil)
@@ -1094,8 +1107,6 @@ struct HomeView: View {
             let response = try await MKDirections(request: request).calculate()
             guard !response.routes.isEmpty else { return }
 
-            // Pick the route that best avoids U-turns: prefer shortest distance
-            // among routes that don't start with a U-turn instruction
             let bestRoute = response.routes
                 .sorted { a, b in
                     let aHasUTurn = a.steps.prefix(2).contains { $0.instructions.lowercased().contains("u-turn") }
@@ -1105,19 +1116,16 @@ struct HomeView: View {
                 }
                 .first ?? response.routes[0]
 
-            // Restart navigation with new route
             navigationEngine?.stopNavigation()
             navigationEngine?.startNavigation(route: bestRoute)
             navigationRoute = bestRoute
 
-            // Re-wire off-route handler
             navigationEngine?.onOffRoute = { currentPos, destination in
                 Task { @MainActor [self] in
                     await self.handleOffRoute(from: currentPos, to: destination)
                 }
             }
 
-            // Update shared state
             if let engine = navigationEngine {
                 navStateManager.activeRouteCoords = engine.routePolylineCoordinates
             }

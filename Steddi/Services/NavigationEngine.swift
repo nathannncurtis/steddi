@@ -57,9 +57,11 @@ final class NavigationEngine {
     // Thresholds
     private let stepTransitionDistance: CLLocationDistance = 30 // meters
     private let arrivalDistance: CLLocationDistance = 50 // meters
-    private let offRouteDistance: CLLocationDistance = 50 // meters from route to trigger off-route
+    private let offRouteDistance: CLLocationDistance = 80 // meters from route to trigger off-route
     private var offRouteCount: Int = 0 // consecutive off-route GPS updates
-    private let offRouteThreshold: Int = 3 // require 3 consecutive off-route readings
+    private let offRouteThreshold: Int = 5 // require 5 consecutive off-route readings
+    private var locationUpdateCount: Int = 0 // total updates since nav start
+    private let offRouteGracePeriod: Int = 10 // ignore off-route for first 10 updates (~5 seconds)
 
     /// Callback for when the user goes off-route and needs rerouting.
     var onOffRoute: ((CLLocationCoordinate2D, CLLocationCoordinate2D) -> Void)? // (currentPosition, destination)
@@ -79,6 +81,7 @@ final class NavigationEngine {
         averageSpeedMPS = 0
         speedSampleCount = 0
         offRouteCount = 0
+        locationUpdateCount = 0
         routePolylineCoordinates = Self.extractCoordinates(from: route.polyline)
 
         // Precompute cumulative distances to the start of each filtered step
@@ -99,6 +102,7 @@ final class NavigationEngine {
         averageSpeedMPS = 0
         speedSampleCount = 0
         offRouteCount = 0
+        locationUpdateCount = 0
         routePolylineCoordinates = polyline
 
         // Calculate total distance from polyline
@@ -151,6 +155,7 @@ final class NavigationEngine {
         guard activeRoute != nil || isCustomRoute else { return }
 
         currentCoordinate = location.coordinate
+        locationUpdateCount += 1
 
         // Snap position to route polyline for puck alignment
         if !routePolylineCoordinates.isEmpty {
@@ -258,6 +263,9 @@ final class NavigationEngine {
 
     private func checkOffRoute(location: CLLocation) -> Bool {
         guard !routePolylineCoordinates.isEmpty else { return false }
+
+        // Grace period: don't check off-route during initial GPS settling
+        guard locationUpdateCount > offRouteGracePeriod else { return false }
 
         // Find perpendicular distance from user to nearest point on route
         let projection = Self.distanceFromPointToNearestSegment(
