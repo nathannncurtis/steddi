@@ -13,6 +13,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     // Navigation state
     private var isShowingNavigation = false
+    private var mapController: CarPlayMapController?
+    private var navigationSession: CPNavigationSession?
 
     // Root template (commutes/recents)
     private var rootTabBar: CPTabBarTemplate?
@@ -119,96 +121,63 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
-    // MARK: - Show Navigation
+    // MARK: - Show Navigation with Map
 
     @MainActor
     private func showNavigationUI() {
         guard let interfaceController, !isShowingNavigation else { return }
         isShowingNavigation = true
 
-        // Build the live TBT list
-        let navTemplate = buildNavTemplate()
+        // Create the map controller and set it as the CarPlay window's root
+        let mapVC = CarPlayMapController()
+        self.mapController = mapVC
 
-        // Replace root with navigation template
-        interfaceController.setRootTemplate(navTemplate, animated: true, completion: nil)
+        if let window = carWindow {
+            window.rootViewController = mapVC
+        }
 
-        // Start polling for live updates
+        // Start the map navigation with route coordinates
+        let routeCoords = stateManager.activeRouteCoords
+        if !routeCoords.isEmpty {
+            mapVC.startNavigation(routeCoords: routeCoords)
+        }
+
+        // Build CPMapTemplate with navigation buttons
+        let mapTemplate = CPMapTemplate()
+        mapTemplate.automaticallyHidesNavigationBar = true
+        mapTemplate.hidesButtonsWithNavigationBar = false
+
+        // Add zoom and recenter buttons
+        let zoomInButton = CPMapButton { [weak self] _ in
+            self?.mapController?.zoomIn()
+        }
+        zoomInButton.image = UIImage(systemName: "plus.magnifyingglass")
+
+        let zoomOutButton = CPMapButton { [weak self] _ in
+            self?.mapController?.zoomOut()
+        }
+        zoomOutButton.image = UIImage(systemName: "minus.magnifyingglass")
+
+        let recenterButton = CPMapButton { [weak self] _ in
+            self?.mapController?.recenter()
+        }
+        recenterButton.image = UIImage(systemName: "location.fill")
+
+        mapTemplate.mapButtons = [recenterButton, zoomInButton, zoomOutButton]
+
+        // Set as root template
+        interfaceController.setRootTemplate(mapTemplate, animated: true, completion: nil)
+
+        // Start a navigation session for maneuver display
+        let trip = CPTrip(
+            origin: MKMapItem.forCurrentLocation(),
+            destination: MKMapItem.forCurrentLocation(),
+            routeChoices: []
+        )
+        navigationSession = mapTemplate.startNavigationSession(for: trip)
+
+        // Start live updates
         subscribeLiveUpdates()
-    }
-
-    /// Build a CPListTemplate with live TBT information
-    private func buildNavTemplate() -> CPListTemplate {
-        let instruction = stateManager.instruction.isEmpty ? "Navigating..." : stateManager.instruction
-        let distance = stateManager.stepDistance.isEmpty ? "Calculating..." : stateManager.stepDistance
-
-        // Current maneuver — primary item
-        let currentItem = CPListItem(text: distance, detailText: instruction)
-        if let img = UIImage(systemName: stateManager.maneuverType)?
-            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 28, weight: .bold))
-            .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
-            currentItem.setImage(img)
-        }
-
-        var nextItems: [CPListItem] = []
-
-        // Follow-on maneuver
-        if !stateManager.followOnInstruction.isEmpty {
-            let followItem = CPListItem(text: "Then", detailText: stateManager.followOnInstruction)
-            if let img = UIImage(systemName: stateManager.followOnManeuverSymbol)?
-                .withConfiguration(UIImage.SymbolConfiguration(pointSize: 22, weight: .medium))
-                .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
-                followItem.setImage(img)
-            }
-            nextItems.append(followItem)
-        }
-
-        // Upcoming steps
-        for step in stateManager.upcomingSteps.prefix(3) {
-            let item = CPListItem(text: step.distance, detailText: step.instruction)
-            if let img = UIImage(systemName: step.maneuverSymbol)?
-                .withConfiguration(UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)) {
-                item.setImage(img)
-            }
-            nextItems.append(item)
-        }
-
-        var infoItems: [CPListItem] = []
-
-        // ETA
-        let etaText = "\(stateManager.etaMinutes) min \u{00B7} \(stateManager.distanceRemaining)"
-        let etaItem = CPListItem(text: etaText, detailText: "Arrive \(stateManager.arrivalTime)")
-        if let img = UIImage(systemName: "clock.fill")?
-            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 20, weight: .medium))
-            .withTintColor(.systemGreen, renderingMode: .alwaysOriginal) {
-            etaItem.setImage(img)
-        }
-        infoItems.append(etaItem)
-
-        // Speed
-        let speedText = "\(Int(stateManager.currentSpeedMph)) mph"
-        var speedDetail = stateManager.roadName
-        if let limit = stateManager.speedLimitMph {
-            speedDetail = "Limit \(Int(limit)) mph" + (speedDetail.isEmpty ? "" : " \u{00B7} \(speedDetail)")
-        }
-        let speedItem = CPListItem(text: speedText, detailText: speedDetail)
-        let isOverLimit = stateManager.speedLimitMph != nil && stateManager.currentSpeedMph > (stateManager.speedLimitMph! + 5)
-        let speedColor: UIColor = isOverLimit ? .systemRed : .white
-        if let img = UIImage(systemName: "speedometer")?
-            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 20, weight: .medium))
-            .withTintColor(speedColor, renderingMode: .alwaysOriginal) {
-            speedItem.setImage(img)
-        }
-        infoItems.append(speedItem)
-
-        var sections: [CPListSection] = []
-        sections.append(CPListSection(items: [currentItem], header: "Next Turn", sectionIndexTitle: nil))
-        if !nextItems.isEmpty {
-            sections.append(CPListSection(items: nextItems, header: "Upcoming", sectionIndexTitle: nil))
-        }
-        sections.append(CPListSection(items: infoItems, header: "Trip", sectionIndexTitle: nil))
-
-        let template = CPListTemplate(title: "Steddi", sections: sections)
-        return template
     }
 
     // MARK: - Live Updates
@@ -219,17 +188,26 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
         liveUpdateTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                guard let self, let interfaceController = self.interfaceController else { break }
-                guard self.isShowingNavigation else { break }
+                try? await Task.sleep(for: .milliseconds(500))
+                guard let self, self.isShowingNavigation else { break }
 
-                // Rebuild the nav template with fresh data from NavigationStateManager
-                let updatedTemplate = self.buildNavTemplate()
-
-                // Update the current template's sections
-                if let topTemplate = interfaceController.rootTemplate as? CPListTemplate {
-                    topTemplate.updateSections(updatedTemplate.sections)
+                // Update map camera
+                if let coord = self.stateManager.currentCoordinate {
+                    self.mapController?.updateCamera(
+                        coordinate: coord,
+                        bearing: self.stateManager.headingDegrees
+                    )
                 }
+
+                // Update maneuver display
+                self.updateManeuvers()
+
+                // Update travel estimates
+                let estimates = CPTravelEstimates(
+                    distanceRemaining: Measurement(value: self.parseDistanceMeters(), unit: UnitLength.meters),
+                    timeRemaining: TimeInterval(self.stateManager.etaMinutes * 60)
+                )
+                self.navigationSession?.updateEstimates(estimates, for: self.navigationSession?.upcomingManeuvers.first ?? CPManeuver())
 
                 // Check for arrival
                 if self.stateManager.hasArrived {
@@ -240,14 +218,54 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
+    private func updateManeuvers() {
+        guard let session = navigationSession else { return }
+
+        // Current maneuver
+        let currentManeuver = CPManeuver()
+        currentManeuver.instructionVariants = [stateManager.instruction]
+        if let img = UIImage(systemName: stateManager.maneuverType)?
+            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 28, weight: .bold))
+            .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
+            currentManeuver.symbolImage = img
+        }
+
+        var maneuvers = [currentManeuver]
+
+        // Follow-on maneuver
+        if !stateManager.followOnInstruction.isEmpty {
+            let followOn = CPManeuver()
+            followOn.instructionVariants = [stateManager.followOnInstruction]
+            if let img = UIImage(systemName: stateManager.followOnManeuverSymbol)?
+                .withConfiguration(UIImage.SymbolConfiguration(pointSize: 22, weight: .medium))
+                .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
+                followOn.symbolImage = img
+            }
+            maneuvers.append(followOn)
+        }
+
+        session.upcomingManeuvers = maneuvers
+    }
+
+    /// Parse distance remaining string back to meters for CPTravelEstimates
+    private func parseDistanceMeters() -> Double {
+        let remaining = stateManager.distanceRemaining
+        if remaining.hasSuffix("ft") {
+            let num = Double(remaining.replacingOccurrences(of: " ft", with: "").replacingOccurrences(of: ",", with: "")) ?? 0
+            return num / 3.281
+        } else if remaining.hasSuffix("mi") {
+            let num = Double(remaining.replacingOccurrences(of: " mi", with: "").replacingOccurrences(of: ",", with: "")) ?? 0
+            return num * 1609.34
+        }
+        return 0
+    }
+
     // MARK: - Route Preview
 
-    /// Show a route preview before starting navigation (Apple's required flow)
     @MainActor
     private func showRoutePreview(name: String, coordinate: CLLocationCoordinate2D) async {
         guard let interfaceController else { return }
 
-        // Calculate the route
         guard let currentLoc = CLLocationManager().location else {
             showError("Unable to determine your location.")
             return
@@ -264,7 +282,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             return
         }
 
-        // Build preview template
         let distanceMiles = route.distance / 1609.34
         let distanceText = distanceMiles < 10
             ? String(format: "%.1f mi", distanceMiles)
@@ -290,11 +307,9 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let section = CPListSection(items: [routeInfo, arrivalItem])
         let previewTemplate = CPListTemplate(title: "Route to \(name)", sections: [section])
 
-        // Add "Start" and "Cancel" buttons via alert after pushing preview
         let startAction = CPAlertAction(title: "Start Navigation", style: .default) { [weak self] _ in
             self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
             self?.interfaceController?.popToRootTemplate(animated: false, completion: nil)
-            // Trigger navigation on the phone via notification
             NotificationCenter.default.post(
                 name: .steddiNavigateToLocation,
                 object: nil,
@@ -307,7 +322,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
         }
 
-        // Push preview, then show start/cancel alert
         interfaceController.pushTemplate(previewTemplate, animated: true) { _, _ in
             let alert = CPAlertTemplate(
                 titleVariants: ["\(etaMinutes) min to \(name) (\(distanceText))"],
@@ -317,7 +331,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
-    /// Show an error alert on CarPlay
     @MainActor
     private func showError(_ message: String) {
         guard let interfaceController else { return }
@@ -335,6 +348,10 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         liveUpdateTask?.cancel()
         liveUpdateTask = nil
         isShowingNavigation = false
+
+        navigationSession = nil
+        mapController?.stopNavigation()
+        mapController = nil
 
         // Restore commutes/recents root
         if let interfaceController, let rootTabBar {
@@ -367,7 +384,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
                     let item = CPListItem(text: commute.name, detailText: detail)
                     item.handler = { [weak self] _, completion in
-                        // Default to destination — user can pick direction on phone
                         let dest = commute.destination
                         if let dest {
                             Task { @MainActor in
