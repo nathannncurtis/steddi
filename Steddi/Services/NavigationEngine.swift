@@ -38,6 +38,8 @@ final class NavigationEngine {
 
     private var activeRoute: MKRoute?
     private var steps: [MKRoute.Step] = []
+    private var customNavigationSteps: [CustomRouteBuilder.CustomStep] = []
+    private var isCustomRoute: Bool { !customNavigationSteps.isEmpty }
 
     /// Cumulative distance from route start to the beginning of each step (indexed by step index).
     private var stepStartDistances: [Double] = []
@@ -84,22 +86,31 @@ final class NavigationEngine {
         updateCurrentStep()
     }
 
-    /// Start navigation using Apple's MKRoute for instructions but a saved polyline for the actual path.
-    /// This ensures the engine tracks the user along their preferred route, not Apple's suggested one.
-    func startNavigation(route: MKRoute, savedPolyline: [CLLocationCoordinate2D]) {
-        startNavigation(route: route)
+    /// Start navigation from a saved polyline with custom-generated turn-by-turn steps.
+    /// Bypasses Apple Maps routing entirely for saved/preferred routes.
+    func startNavigation(polyline: [CLLocationCoordinate2D], customSteps: [CustomRouteBuilder.CustomStep]) {
+        activeRoute = nil
+        let filtered = customSteps.filter { !$0.instruction.isEmpty }
+        customNavigationSteps = filtered
+        steps = [] // not using MKRoute.Step
+        currentStepIndex = 0
+        isNavigating = true
+        hasArrived = false
+        averageSpeedMPS = 0
+        speedSampleCount = 0
+        offRouteCount = 0
+        routePolylineCoordinates = polyline
 
-        // Override the route polyline with the saved one
-        if savedPolyline.count >= 2 {
-            routePolylineCoordinates = savedPolyline
-
-            // Recalculate total distance based on saved polyline
-            var dist: Double = 0
-            for i in 0..<(savedPolyline.count - 1) {
-                dist += Self.haversineDistance(from: savedPolyline[i], to: savedPolyline[i + 1])
-            }
-            totalRouteDistance = dist
+        // Calculate total distance from polyline
+        var dist: Double = 0
+        for i in 0..<(polyline.count - 1) {
+            dist += Self.haversineDistance(from: polyline[i], to: polyline[i + 1])
         }
+        totalRouteDistance = dist
+        originalExpectedTravelTime = dist / 13.4 // assume ~30mph average for ETA seed
+
+        precomputeCustomStepDistances()
+        updateCurrentCustomStep()
     }
 
     func stopNavigation() {
@@ -107,6 +118,7 @@ final class NavigationEngine {
         isNavigating = false
         activeRoute = nil
         steps = []
+        customNavigationSteps = []
         stepStartDistances = []
         currentStepIndex = 0
         instruction = ""
@@ -135,7 +147,8 @@ final class NavigationEngine {
 
     /// Called on each GPS update from LocationService.
     func updateLocation(_ location: CLLocation) {
-        guard isNavigating, activeRoute != nil, !steps.isEmpty else { return }
+        guard isNavigating else { return }
+        guard activeRoute != nil || isCustomRoute else { return }
 
         currentCoordinate = location.coordinate
 
@@ -173,11 +186,13 @@ final class NavigationEngine {
         // Reset off-route counter when on-route
         offRouteCount = 0
 
-        // Detect step transitions
-        advanceStepIfNeeded(location: location)
-
-        // Calculate distances and ETA
-        updateDistancesAndETA(location: location)
+        if isCustomRoute {
+            advanceCustomStepIfNeeded(location: location)
+            updateCustomDistancesAndETA(location: location)
+        } else {
+            advanceStepIfNeeded(location: location)
+            updateDistancesAndETA(location: location)
+        }
     }
 
     // MARK: - Step Management
@@ -285,6 +300,98 @@ final class NavigationEngine {
             return true
         }
         return false
+    }
+
+    // MARK: - Custom Step Management
+
+    private func precomputeCustomStepDistances() {
+        stepStartDistances = []
+        var cumulative: Double = 0
+        for (index, step) in customNavigationSteps.enumerated() {
+            stepStartDistances.append(cumulative)
+            if index < customNavigationSteps.count - 1 {
+                cumulative += step.distance
+            }
+        }
+    }
+
+    private func updateCurrentCustomStep() {
+        guard currentStepIndex < customNavigationSteps.count else { return }
+
+        let step = customNavigationSteps[currentStepIndex]
+        instruction = step.instruction
+        stepDistanceRaw = step.distance
+        stepDistance = Self.formatDistance(step.distance)
+        maneuverType = Self.sfSymbolFromInstruction(step.instruction)
+        roadName = ""
+
+        if !step.instruction.isEmpty {
+            VoiceGuidanceService.shared.speakWithDistance(step.instruction, distance: step.distance)
+        }
+
+        speedLimitMph = Self.estimateSpeedLimit(from: step.instruction)
+
+        let nextIndex = currentStepIndex + 1
+        if nextIndex < customNavigationSteps.count {
+            let nextStep = customNavigationSteps[nextIndex]
+            followOnInstruction = nextStep.instruction
+            followOnManeuverSymbol = Self.sfSymbolFromInstruction(nextStep.instruction)
+        } else {
+            followOnInstruction = ""
+            followOnManeuverSymbol = ""
+        }
+    }
+
+    private func advanceCustomStepIfNeeded(location: CLLocation) {
+        let nextIndex = currentStepIndex + 1
+        guard nextIndex < customNavigationSteps.count else { return }
+
+        let nextStep = customNavigationSteps[nextIndex]
+        let distToNext = Self.haversineDistance(from: location.coordinate, to: nextStep.coordinate)
+
+        if distToNext < stepTransitionDistance {
+            currentStepIndex = nextIndex
+            updateCurrentCustomStep()
+            HapticService.shared.fire(.turnApproaching)
+        }
+    }
+
+    private func updateCustomDistancesAndETA(location: CLLocation) {
+        guard currentStepIndex < customNavigationSteps.count else { return }
+
+        let currentStep = customNavigationSteps[currentStepIndex]
+
+        // Distance from user to the step's end coordinate
+        let distToStepEnd: Double
+        if let lastCoord = currentStep.polylineCoords.last {
+            distToStepEnd = Self.haversineDistance(from: location.coordinate, to: lastCoord)
+        } else {
+            distToStepEnd = currentStep.distance
+        }
+
+        let remainingInCurrentStep = max(0, distToStepEnd)
+
+        var totalRemaining = remainingInCurrentStep
+        for i in (currentStepIndex + 1)..<customNavigationSteps.count {
+            totalRemaining += customNavigationSteps[i].distance
+        }
+
+        stepDistanceRaw = remainingInCurrentStep
+        stepDistance = Self.formatDistance(remainingInCurrentStep)
+        distanceRemaining = Self.formatDistance(totalRemaining)
+
+        let etaSeconds: TimeInterval
+        if averageSpeedMPS > 2.0 {
+            etaSeconds = totalRemaining / averageSpeedMPS
+        } else if totalRouteDistance > 0 {
+            let fraction = totalRemaining / totalRouteDistance
+            etaSeconds = originalExpectedTravelTime * fraction
+        } else {
+            etaSeconds = 0
+        }
+
+        etaMinutes = max(1, Int(ceil(etaSeconds / 60)))
+        arrivalTime = Self.formatArrivalTime(etaSeconds)
     }
 
     // MARK: - Distance & ETA

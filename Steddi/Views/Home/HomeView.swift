@@ -422,18 +422,14 @@ struct HomeView: View {
     }
 
     /// Start navigation with a route (called from preview or directly for commutes).
-    private func beginNavigation(with route: MKRoute, savedPolyline: [CLLocationCoordinate2D]? = nil) {
+    private func beginNavigation(with route: MKRoute) {
         locationService.enableNavigationMode()
         locationService.startRecording()
 
-        self.activeSavedPolyline = savedPolyline
+        self.activeSavedPolyline = nil
         self.navigationRoute = route
         let engine = NavigationEngine()
-        if let savedPolyline, savedPolyline.count >= 2 {
-            engine.startNavigation(route: route, savedPolyline: savedPolyline)
-        } else {
-            engine.startNavigation(route: route)
-        }
+        engine.startNavigation(route: route)
         self.navigationEngine = engine
 
         engine.onOffRoute = { currentPos, destination in
@@ -772,59 +768,59 @@ struct HomeView: View {
         }
     }
 
-    /// Navigate using a saved route's polyline as waypoints
+    /// Navigate using a saved route's polyline with custom turn-by-turn logic.
+    /// Bypasses Apple Maps routing entirely — generates steps from the polyline geometry.
     private func navigateWithSavedRoute(_ savedRoute: Route, to target: PinnedLocation) {
         navigationDestination = target
         isCalculatingRoute = true
 
         Task {
-            locationService.startUpdating()
-            var currentLocation = locationService.currentLocation
-            for _ in 0..<20 {
-                if currentLocation != nil { break }
-                try? await Task.sleep(for: .milliseconds(500))
-                currentLocation = locationService.currentLocation
-            }
-
-            guard let currentLocation else {
+            // Decode the saved polyline
+            let savedCoords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
+            guard savedCoords.count >= 2 else {
+                // Fallback to standard routing if polyline is invalid
                 isCalculatingRoute = false
+                navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
                 return
             }
 
-            // Decode the saved route polyline into waypoints so Apple Maps
-            // routes through the user's preferred path
-            let savedCoords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
+            // Build custom turn-by-turn steps from the polyline geometry
+            let customSteps = CustomRouteBuilder.buildSteps(from: savedCoords)
 
-            // Route through waypoints by chaining segment requests.
-            // MKDirections doesn't support waypoints natively, so we request
-            // multiple segments and pick the route that best matches our saved path.
-            let source = MKMapItem(location: CLLocation(latitude: currentLocation.coordinate.latitude, longitude: currentLocation.coordinate.longitude), address: nil)
-            let destination = MKMapItem(location: CLLocation(latitude: target.coordinate.latitude, longitude: target.coordinate.longitude), address: nil)
+            isCalculatingRoute = false
+            beginCustomNavigation(polyline: savedCoords, steps: customSteps)
+        }
+    }
 
-            // Request multiple alternate routes and pick the one closest to saved polyline
-            let request = MKDirections.Request()
-            request.source = source
-            request.destination = destination
-            request.transportType = .automobile
-            request.requestsAlternateRoutes = true
-            RoutePreferences.resolve(commute: activeCommute).apply(to: request)
+    /// Start navigation with custom polyline and steps (no MKRoute).
+    private func beginCustomNavigation(polyline: [CLLocationCoordinate2D], steps: [CustomRouteBuilder.CustomStep]) {
+        locationService.enableNavigationMode()
+        locationService.startRecording()
 
-            do {
-                let response = try await MKDirections(request: request).calculate()
-                guard !response.routes.isEmpty else {
-                    isCalculatingRoute = false
-                    return
-                }
+        self.activeSavedPolyline = polyline
+        self.navigationRoute = nil // no MKRoute for custom routing
 
-                // Use Apple's route for turn-by-turn instructions, but override
-                // the polyline with the saved one so we track the user's preferred path
-                let bestRoute = Self.closestRoute(to: savedCoords, from: response.routes)
+        let engine = NavigationEngine()
+        engine.startNavigation(polyline: polyline, customSteps: steps)
+        self.navigationEngine = engine
 
-                isCalculatingRoute = false
-                beginNavigation(with: bestRoute, savedPolyline: savedCoords)
-            } catch {
-                isCalculatingRoute = false
+        engine.onOffRoute = { currentPos, destination in
+            Task { @MainActor [self] in
+                await self.handleOffRoute(from: currentPos, to: destination)
             }
+        }
+
+        navStateManager.activeRouteCoords = engine.routePolylineCoordinates
+        navStateManager.startObserving(
+            engine: engine,
+            commute: activeCommute,
+            direction: activeDirection
+        )
+
+        startLocationFeed()
+
+        withAnimation(.easeInOut(duration: 0.4)) {
+            isNavigating = true
         }
     }
 

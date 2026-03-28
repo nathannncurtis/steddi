@@ -28,6 +28,11 @@ struct SteddiMapView: UIViewControllerRepresentable {
                 vc.savedPolylineOverride = savedRoutePolyline
                 vc.startNavigation(route: route)
             }
+        } else if isNavigating, navigationRoute == nil, let savedCoords = savedRoutePolyline, !savedCoords.isEmpty {
+            // Custom route navigation (no MKRoute, just saved polyline)
+            if !vc.isInNavigation {
+                vc.startCustomNavigation(polyline: savedCoords)
+            }
             vc.set3DView(is3DView)
         } else if !isNavigating && vc.isInNavigation {
             vc.stopNavigation()
@@ -355,6 +360,24 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         mapView.setUserTrackingMode(.none, animated: false)
 
         // Set initial nav camera immediately so it doesn't stay zoomed out
+        let userCoord = mapView.userLocation.coordinate
+        if CLLocationCoordinate2DIsValid(userCoord) {
+            applyCameraForNav(at: userCoord, course: mapView.userLocation.location?.course ?? 0, animated: true)
+        }
+    }
+
+    /// Start navigation with just a polyline (no MKRoute). Used for saved/custom routes.
+    func startCustomNavigation(polyline: [CLLocationCoordinate2D]) {
+        guard !isInNavigation, polyline.count >= 2 else { return }
+        isInNavigation = true
+        navRouteCoords = polyline
+
+        let mkPolyline = MKPolyline(coordinates: polyline, count: polyline.count)
+        routeOverlay = mkPolyline
+        mapView.addOverlay(mkPolyline, level: .aboveRoads)
+
+        mapView.setUserTrackingMode(.none, animated: false)
+
         let userCoord = mapView.userLocation.coordinate
         if CLLocationCoordinate2DIsValid(userCoord) {
             applyCameraForNav(at: userCoord, course: mapView.userLocation.location?.course ?? 0, animated: true)
