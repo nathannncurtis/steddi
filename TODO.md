@@ -1,13 +1,6 @@
 # Steddi TODO
 
-## Priority 1 — Bugs & Fixes (from on-device testing 2026-03-27)
-- Compass just rotates rather than showing actual cardinal direction on predefined routes
-- Route line not centered with puck (location indicator)
-- Puck jitters when driving — needs smooth interpolation, not raw GPS jumps
-- Speedometer color not changing when exceeding speed limit
-- Off-route handling: if user deviates from predefined route, should immediately and smartly rebalance between getting back on track vs. getting to destination. U-turn should not be the default. Needs weighted logic.
-- Needs to show current traffic conditions on the map
-- Location is being tracked when no route is active — if intentional, needs to be toggleable and justified to the user
+## Priority 1 — Bugs & Fixes
 - Route preview before nav starts (needed for CarPlay compliance, should also be in phone version)
   - Commutes: tap → "Go" (skip preview) or "Preview" (full route on map with ranked route tiers)
   - Dumb nav: always shows preview, not skippable
@@ -173,3 +166,12 @@
 - Fixed interface orientations warning
 - Removed CarPlay entitlements (pending Apple approval)
 - Website live at steddi.io (video hero, slide-in showcase, privacy section, waitlist CTA, EmailJS, GitHub Pages, custom domain)
+- CarPlay navigation entitlement approved and re-enabled (key: carplay-maps)
+- Website rebuilt: personal tone, expanded features, craft section, philosophy, animations, auto-deploy via GitHub Actions
+- Fix: compass uses route-based bearing for stable cardinal direction
+- Fix: puck snapped to route polyline (centered on route line)
+- Fix: smooth puck movement with 0.8s easeOut animation (no jitter)
+- Fix: speedometer color changes when exceeding estimated speed limit
+- Fix: traffic conditions now shown on map
+- Fix: location tracking downgraded when not navigating (no background tracking without active route)
+- Fix: off-route detection with smart rerouting (avoids U-turns, prioritizes forward momentum)
