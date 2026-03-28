@@ -389,7 +389,7 @@ final class NavigationEngine {
     }
 
     /// Haversine distance between two coordinates in meters.
-    private nonisolated static func haversineDistance(
+    nonisolated static func haversineDistance(
         from a: CLLocationCoordinate2D,
         to b: CLLocationCoordinate2D
     ) -> Double {
