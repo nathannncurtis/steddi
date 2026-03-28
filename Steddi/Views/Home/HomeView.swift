@@ -793,15 +793,15 @@ struct HomeView: View {
     }
 
     /// Start navigation with custom polyline and steps (no MKRoute).
-    private func beginCustomNavigation(polyline: [CLLocationCoordinate2D], steps: [CustomRouteBuilder.CustomStep]) {
+    private func beginCustomNavigation(polyline: [CLLocationCoordinate2D], steps: [NavStep]) {
         locationService.enableNavigationMode()
         locationService.startRecording()
 
         self.activeSavedPolyline = polyline
-        self.navigationRoute = nil // no MKRoute for custom routing
+        self.navigationRoute = nil
 
         let engine = NavigationEngine()
-        engine.startNavigation(polyline: polyline, customSteps: steps)
+        engine.startNavigation(polyline: polyline, steps: steps)
         self.navigationEngine = engine
 
         engine.onOffRoute = { currentPos, destination in
@@ -822,52 +822,6 @@ struct HomeView: View {
         withAnimation(.easeInOut(duration: 0.4)) {
             isNavigating = true
         }
-    }
-
-    /// Pick the MKRoute that most closely follows a saved polyline.
-    /// Scores by sampling points along each candidate route and measuring
-    /// average distance to the nearest point on the saved polyline.
-    private static func closestRoute(to savedCoords: [CLLocationCoordinate2D], from routes: [MKRoute]) -> MKRoute {
-        guard routes.count > 1, savedCoords.count >= 2 else {
-            return routes[0]
-        }
-
-        var bestRoute = routes[0]
-        var bestScore = Double.greatestFiniteMagnitude
-
-        for route in routes {
-            let routeCoords = NavigationEngine.extractCoordinates(from: route.polyline)
-            let score = averageDeviation(routeCoords: routeCoords, savedCoords: savedCoords)
-            if score < bestScore {
-                bestScore = score
-                bestRoute = route
-            }
-        }
-
-        return bestRoute
-    }
-
-    /// Average distance (meters) from sampled points on the candidate route
-    /// to their nearest point on the saved polyline.
-    private static func averageDeviation(routeCoords: [CLLocationCoordinate2D], savedCoords: [CLLocationCoordinate2D]) -> Double {
-        // Sample up to 20 points along the candidate route
-        let sampleCount = min(20, routeCoords.count)
-        guard sampleCount > 0 else { return .greatestFiniteMagnitude }
-
-        let step = max(1, routeCoords.count / sampleCount)
-        var totalDistance: Double = 0
-
-        for i in stride(from: 0, to: routeCoords.count, by: step) {
-            let point = routeCoords[i]
-            var minDist = Double.greatestFiniteMagnitude
-            for saved in savedCoords {
-                let d = NavigationEngine.haversineDistance(from: point, to: saved)
-                if d < minDist { minDist = d }
-            }
-            totalDistance += minDist
-        }
-
-        return totalDistance / Double(sampleCount)
     }
 
     /// Produces one or two rows for a commute depending on direction resolution.
