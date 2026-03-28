@@ -370,9 +370,8 @@ struct HomeView: View {
                 self.navigationEngine = engine
 
                 // Handle off-route: reroute from current position to destination
-                engine.onOffRoute = { [weak self] currentPos, destination in
-                    guard let self else { return }
-                    Task { @MainActor in
+                engine.onOffRoute = { currentPos, destination in
+                    Task { @MainActor [self] in
                         await self.handleOffRoute(from: currentPos, to: destination)
                     }
                 }
@@ -754,9 +753,8 @@ struct HomeView: View {
                 self.navigationEngine = engine
 
                 // Handle off-route: reroute from current position to destination
-                engine.onOffRoute = { [weak self] currentPos, destination in
-                    guard let self else { return }
-                    Task { @MainActor in
+                engine.onOffRoute = { currentPos, destination in
+                    Task { @MainActor [self] in
                         await self.handleOffRoute(from: currentPos, to: destination)
                     }
                 }
@@ -1020,9 +1018,8 @@ struct HomeView: View {
             navigationRoute = bestRoute
 
             // Re-wire off-route handler
-            navigationEngine?.onOffRoute = { [weak self] currentPos, destination in
-                guard let self else { return }
-                Task { @MainActor in
+            navigationEngine?.onOffRoute = { currentPos, destination in
+                Task { @MainActor [self] in
                     await self.handleOffRoute(from: currentPos, to: destination)
                 }
             }
