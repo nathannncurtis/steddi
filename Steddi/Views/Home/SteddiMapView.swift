@@ -40,6 +40,7 @@ class SteddiMapContainer: UIViewController {
     private var navRouteCoords: [CLLocationCoordinate2D] = []
     private var smoothedBearing: Double = 0
     private var routeOverlay: MKPolyline?
+    private var puckAnnotation: MKPointAnnotation?
 
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
 
@@ -280,6 +281,12 @@ class SteddiMapContainer: UIViewController {
         // Don't use userTrackingMode — we manage the camera manually like Apple Maps does
         mapView.setUserTrackingMode(.none, animated: false)
 
+        // Add snapped puck annotation
+        let puck = MKPointAnnotation()
+        puck.coordinate = mapView.userLocation.coordinate
+        puckAnnotation = puck
+        mapView.addAnnotation(puck)
+
         // Set initial nav camera immediately so it doesn't stay zoomed out
         let userCoord = mapView.userLocation.coordinate
         if CLLocationCoordinate2DIsValid(userCoord) {
@@ -296,6 +303,13 @@ class SteddiMapContainer: UIViewController {
             mapView.removeOverlay(overlay)
             routeOverlay = nil
         }
+
+        // Remove snapped puck
+        if let puck = puckAnnotation {
+            mapView.removeAnnotation(puck)
+            puckAnnotation = nil
+        }
+
         navRouteCoords = []
 
         // Reset to follow mode (no heading) for home screen
@@ -308,17 +322,36 @@ class SteddiMapContainer: UIViewController {
 extension SteddiMapContainer: MKMapViewDelegate {
 
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-        // Custom puck for user location
-        guard annotation is MKUserLocation else { return nil }
+        if annotation is MKUserLocation {
+            // During navigation, hide default user location (we use snapped puck instead)
+            if isInNavigation {
+                let view = MKAnnotationView(annotation: annotation, reuseIdentifier: "HiddenUser")
+                view.isHidden = true
+                return view
+            }
+            // Non-nav: show custom puck at raw GPS position
+            let identifier = "SteddiPuck"
+            let annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+            annotationView.image = Self.makePuckImage()
+            annotationView.canShowCallout = false
+            annotationView.centerOffset = .zero
+            annotationView.isHidden = false
+            return annotationView
+        }
 
-        let identifier = "SteddiPuck"
-        let annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-            ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+        // Snapped navigation puck
+        if annotation is MKPointAnnotation {
+            let identifier = "NavPuck"
+            let annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+            annotationView.image = Self.makePuckImage()
+            annotationView.canShowCallout = false
+            annotationView.centerOffset = .zero
+            return annotationView
+        }
 
-        annotationView.image = Self.makePuckImage()
-        annotationView.canShowCallout = false
-        annotationView.centerOffset = .zero
-        return annotationView
+        return nil
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -337,10 +370,23 @@ extension SteddiMapContainer: MKMapViewDelegate {
         guard isInNavigation else { return }
         guard let location = userLocation.location else { return }
 
-        let course = location.course >= 0 ? location.course : smoothedBearing
+        // Snap position to route polyline
+        let displayCoord: CLLocationCoordinate2D
+        if !navRouteCoords.isEmpty {
+            displayCoord = NavigationEngine.snapToPolyline(point: location.coordinate, polyline: navRouteCoords)
+        } else {
+            displayCoord = location.coordinate
+        }
+
+        // Move snapped puck
+        puckAnnotation?.coordinate = displayCoord
+
+        // Use route-based bearing for stable camera
+        let routeBearing = Self.bearingAlongRoute(from: location.coordinate, routeCoords: navRouteCoords)
+        let course = routeBearing > 0 ? routeBearing : (location.course >= 0 ? location.course : smoothedBearing)
         smoothedBearing = Self.smoothBearing(current: smoothedBearing, target: course, factor: 0.2)
 
-        applyCameraForNav(at: location.coordinate, course: smoothedBearing, animated: true)
+        applyCameraForNav(at: displayCoord, course: smoothedBearing, animated: true)
     }
 
     /// Apply the navigation camera — matches Apple Maps driving view behavior

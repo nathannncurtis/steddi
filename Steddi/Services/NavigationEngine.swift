@@ -27,6 +27,8 @@ final class NavigationEngine {
     var speedLimitMph: Double? = nil
     var headingDegrees: Double = 0
     var currentCoordinate: CLLocationCoordinate2D?
+    /// Position snapped to the route polyline for display (puck alignment).
+    var snappedCoordinate: CLLocationCoordinate2D?
     var hasArrived: Bool = false
 
     /// Full route polyline coordinates for map rendering.
@@ -111,6 +113,13 @@ final class NavigationEngine {
         guard isNavigating, activeRoute != nil, !steps.isEmpty else { return }
 
         currentCoordinate = location.coordinate
+
+        // Snap position to route polyline for puck alignment
+        if !routePolylineCoordinates.isEmpty {
+            snappedCoordinate = Self.snapToPolyline(point: location.coordinate, polyline: routePolylineCoordinates)
+        } else {
+            snappedCoordinate = location.coordinate
+        }
 
         // Use route-based bearing when available for stability, GPS course as fallback
         if !routePolylineCoordinates.isEmpty {
@@ -431,6 +440,47 @@ final class NavigationEngine {
         }
 
         return "arrow.up" // continue straight
+    }
+
+    // MARK: - Route Snapping
+
+    /// Project a point onto the nearest segment of a polyline, returning the snapped coordinate.
+    nonisolated static func snapToPolyline(point: CLLocationCoordinate2D, polyline: [CLLocationCoordinate2D]) -> CLLocationCoordinate2D {
+        guard polyline.count >= 2 else { return polyline.first ?? point }
+
+        var bestDist = Double.greatestFiniteMagnitude
+        var bestCoord = point
+
+        let cosLat = cos(point.latitude * .pi / 180)
+
+        for i in 0..<(polyline.count - 1) {
+            let segStart = polyline[i]
+            let segEnd = polyline[i + 1]
+
+            let px = (point.longitude - segStart.longitude) * cosLat
+            let py = point.latitude - segStart.latitude
+            let dx = (segEnd.longitude - segStart.longitude) * cosLat
+            let dy = segEnd.latitude - segStart.latitude
+
+            let segLenSq = dx * dx + dy * dy
+            var t: Double = 0
+            if segLenSq > 0 {
+                t = ((px * dx) + (py * dy)) / segLenSq
+                t = max(0, min(1, t))
+            }
+
+            let projLat = segStart.latitude + t * (segEnd.latitude - segStart.latitude)
+            let projLon = segStart.longitude + t * (segEnd.longitude - segStart.longitude)
+            let projCoord = CLLocationCoordinate2D(latitude: projLat, longitude: projLon)
+
+            let dist = haversineDistance(from: point, to: projCoord)
+            if dist < bestDist {
+                bestDist = dist
+                bestCoord = projCoord
+            }
+        }
+
+        return bestCoord
     }
 
     // MARK: - Route Bearing
