@@ -116,7 +116,7 @@ class SteddiMapContainer: UIViewController {
 
         // Clean muted dark map style
         let config = MKStandardMapConfiguration(emphasisStyle: .muted)
-        config.showsTraffic = false
+        config.showsTraffic = true
         mapView.preferredConfiguration = config
         applyThemeStyle()
 
