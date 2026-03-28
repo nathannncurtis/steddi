@@ -378,13 +378,26 @@ extension SteddiMapContainer: MKMapViewDelegate {
             displayCoord = location.coordinate
         }
 
-        // Move snapped puck
-        puckAnnotation?.coordinate = displayCoord
+        // Move snapped puck with smooth animation
+        if let puck = puckAnnotation {
+            UIView.animate(withDuration: 0.8, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+                puck.coordinate = displayCoord
+            }
+        }
 
         // Use route-based bearing for stable camera
         let routeBearing = Self.bearingAlongRoute(from: location.coordinate, routeCoords: navRouteCoords)
         let course = routeBearing > 0 ? routeBearing : (location.course >= 0 ? location.course : smoothedBearing)
         smoothedBearing = Self.smoothBearing(current: smoothedBearing, target: course, factor: 0.2)
+
+        // Rotate puck to match heading (relative to map heading)
+        if let puck = puckAnnotation, let puckView = mapView.view(for: puck) {
+            let mapHeading = mapView.camera.heading
+            let puckRotation = (smoothedBearing - mapHeading) * .pi / 180
+            UIView.animate(withDuration: 0.8, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+                puckView.transform = CGAffineTransform(rotationAngle: puckRotation)
+            }
+        }
 
         applyCameraForNav(at: displayCoord, course: smoothedBearing, animated: true)
     }
