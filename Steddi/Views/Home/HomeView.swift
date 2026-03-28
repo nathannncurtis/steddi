@@ -760,10 +760,18 @@ struct HomeView: View {
         modelContext.insert(trip)
 
         // Check for a saved preferred route in this direction
+        let allRoutes = commute.routes ?? []
+        print("[STEDDI-NAV] startCommute: \(commute.name), direction: \(direction.rawValue)")
+        print("[STEDDI-NAV] Total routes on commute: \(allRoutes.count)")
+        for r in allRoutes {
+            print("[STEDDI-NAV]   Route: rank=\(r.rank), direction=\(r.direction.rawValue), polyline length=\(r.encodedPolyline.count) chars, source=\(r.source.rawValue)")
+        }
+
         if let preferredRoute = commute.preferredRoute(for: direction) {
+            print("[STEDDI-NAV] Found preferred route for direction \(direction.rawValue): polyline \(preferredRoute.encodedPolyline.count) chars")
             navigateWithSavedRoute(preferredRoute, to: target)
         } else {
-            // No saved route — use standard routing
+            print("[STEDDI-NAV] NO preferred route found for direction \(direction.rawValue) — falling back to Apple Maps")
             navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
         }
     }
@@ -777,8 +785,14 @@ struct HomeView: View {
         Task {
             // Decode the saved polyline
             let savedCoords = PolylineEncoder.decode(savedRoute.encodedPolyline, precision: 6)
+            print("[STEDDI-NAV] navigateWithSavedRoute: decoded \(savedCoords.count) coordinates from polyline")
+            if let first = savedCoords.first, let last = savedCoords.last {
+                print("[STEDDI-NAV]   First coord: \(first.latitude), \(first.longitude)")
+                print("[STEDDI-NAV]   Last coord: \(last.latitude), \(last.longitude)")
+            }
+
             guard savedCoords.count >= 2 else {
-                // Fallback to standard routing if polyline is invalid
+                print("[STEDDI-NAV] ERROR: polyline has < 2 coords, falling back to Apple Maps")
                 isCalculatingRoute = false
                 navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
                 return
@@ -786,19 +800,26 @@ struct HomeView: View {
 
             // Build custom turn-by-turn steps from the polyline geometry
             let customSteps = CustomRouteBuilder.buildSteps(from: savedCoords)
+            print("[STEDDI-NAV] CustomRouteBuilder produced \(customSteps.count) steps:")
+            for (i, step) in customSteps.enumerated() {
+                print("[STEDDI-NAV]   Step \(i): \(step.instruction) (\(Int(step.distance))m) at \(step.coordinate.latitude), \(step.coordinate.longitude)")
+            }
 
             isCalculatingRoute = false
+            print("[STEDDI-NAV] Calling beginCustomNavigation with \(savedCoords.count) coords and \(customSteps.count) steps")
             beginCustomNavigation(polyline: savedCoords, steps: customSteps)
         }
     }
 
     /// Start navigation with custom polyline and steps (no MKRoute).
     private func beginCustomNavigation(polyline: [CLLocationCoordinate2D], steps: [NavStep]) {
+        print("[STEDDI-NAV] beginCustomNavigation: polyline=\(polyline.count) coords, steps=\(steps.count)")
         locationService.enableNavigationMode()
         locationService.startRecording()
 
         self.activeSavedPolyline = polyline
         self.navigationRoute = nil
+        print("[STEDDI-NAV] Set navigationRoute = nil, activeSavedPolyline = \(polyline.count) coords")
 
         let engine = NavigationEngine()
         engine.startNavigation(polyline: polyline, steps: steps)

@@ -24,17 +24,25 @@ struct SteddiMapView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: SteddiMapContainer, context: Context) {
         if isNavigating, let route = navigationRoute {
+            // MKRoute path (dumb nav / search)
+            print("[STEDDI-MAP] updateUI: MKRoute path, isInNav=\(vc.isInNavigation)")
             if !vc.isInNavigation {
                 vc.savedPolylineOverride = savedRoutePolyline
                 vc.startNavigation(route: route)
             }
+            vc.set3DView(is3DView)
         } else if isNavigating, navigationRoute == nil, let savedCoords = savedRoutePolyline, !savedCoords.isEmpty {
             // Custom route navigation (no MKRoute, just saved polyline)
+            print("[STEDDI-MAP] updateUI: Custom polyline path, \(savedCoords.count) coords, isInNav=\(vc.isInNavigation)")
             if !vc.isInNavigation {
                 vc.startCustomNavigation(polyline: savedCoords)
             }
             vc.set3DView(is3DView)
+        } else if isNavigating {
+            // isNavigating is true but no route data yet — waiting
+            print("[STEDDI-MAP] updateUI: isNavigating=true but no route data. navigationRoute=\(navigationRoute != nil), savedRoutePolyline=\(savedRoutePolyline?.count ?? 0)")
         } else if !isNavigating && vc.isInNavigation {
+            print("[STEDDI-MAP] updateUI: stopping navigation")
             vc.stopNavigation()
         }
     }
