@@ -4,27 +4,18 @@ import MapKit
 import SwiftData
 import CoreLocation
 
-// MARK: - CarPlaySceneDelegate
-
 class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     private var interfaceController: CPInterfaceController?
     private var carWindow: CPWindow?
-
-    // Navigation state
-    private var isShowingNavigation = false
     private var mapController: CarPlayMapController?
     private var navigationSession: CPNavigationSession?
-
-    // Root template (commutes/recents)
+    private var isShowingNavigation = false
     private var rootTabBar: CPTabBarTemplate?
-
     private var modelContainer: ModelContainer?
+    private var liveUpdateTask: Task<Void, Never>?
 
     private var stateManager: NavigationStateManager { NavigationStateManager.shared }
-
-    // Live update polling task
-    private var liveUpdateTask: Task<Void, Never>?
 
     // MARK: - Scene Connection
 
@@ -52,7 +43,17 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             modelContainer = appDelegate.modelContainer
         }
 
-        // Build commutes/recents tabs as default root
+        // Step 1: Create the map view controller and set it as the window's root.
+        // Per Apple's docs: "Your app should create its view controller and assign it
+        // to the rootViewController property of this window."
+        // The map is ALWAYS the content. Templates overlay on top.
+        let mapVC = CarPlayMapController()
+        self.mapController = mapVC
+        if let window {
+            window.rootViewController = mapVC
+        }
+
+        // Step 2: Set the initial template (commutes/recents tabs)
         let commutesTab = buildCommutesTab()
         let recentsTab = buildRecentsTab()
         let tabBar = CPTabBarTemplate(templates: [commutesTab, recentsTab])
@@ -62,12 +63,10 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         Task { @MainActor in
             stateManager.isCarPlayActive = true
 
-            // If phone is already navigating, show map immediately
             if stateManager.isNavigating {
                 self.showNavigationUI()
             }
 
-            // Watch for navigation state changes
             self.watchPhoneNavigation()
         }
     }
@@ -78,6 +77,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         from window: CPWindow
     ) {
         dismissNavigation()
+        mapController = nil
         self.interfaceController = nil
         self.carWindow = nil
         self.rootTabBar = nil
@@ -86,7 +86,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             stateManager.isCarPlayActive = false
         }
     }
-
 
     // MARK: - Watch Phone Navigation
 
@@ -108,33 +107,24 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
-    // MARK: - Show Navigation with Map
+    // MARK: - Show Navigation
 
     @MainActor
     private func showNavigationUI() {
         guard let interfaceController, !isShowingNavigation else { return }
         isShowingNavigation = true
 
-        // Create the map controller and set it as the CarPlay window's root
-        let mapVC = CarPlayMapController()
-        self.mapController = mapVC
-
-        if let window = carWindow {
-            window.rootViewController = mapVC
-        }
-
         // Start the map navigation with route coordinates
         let routeCoords = stateManager.activeRouteCoords
         if !routeCoords.isEmpty {
-            mapVC.startNavigation(routeCoords: routeCoords)
+            mapController?.startNavigation(routeCoords: routeCoords)
         }
 
-        // Build CPMapTemplate with navigation buttons
+        // Build CPMapTemplate — this overlays navigation chrome on top of the map
         let mapTemplate = CPMapTemplate()
         mapTemplate.automaticallyHidesNavigationBar = true
         mapTemplate.hidesButtonsWithNavigationBar = false
 
-        // Add zoom and recenter buttons
         let zoomInButton = CPMapButton { [weak self] _ in
             self?.mapController?.zoomIn()
         }
@@ -152,7 +142,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
         mapTemplate.mapButtons = [recenterButton, zoomInButton, zoomOutButton]
 
-        // Set as root template
+        // Replace root template with the map template
         interfaceController.setRootTemplate(mapTemplate, animated: true, completion: nil)
 
         // Start a navigation session for maneuver display
@@ -163,7 +153,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         )
         navigationSession = mapTemplate.startNavigationSession(for: trip)
 
-        // Start live updates
         subscribeLiveUpdates()
     }
 
@@ -178,7 +167,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard let self, self.isShowingNavigation else { break }
 
-                // Update map camera
                 if let coord = self.stateManager.currentCoordinate {
                     self.mapController?.updateCamera(
                         coordinate: coord,
@@ -186,17 +174,17 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                     )
                 }
 
-                // Update maneuver display
                 self.updateManeuvers()
 
-                // Update travel estimates
+                let distanceMeters = self.parseDistanceMeters()
                 let estimates = CPTravelEstimates(
-                    distanceRemaining: Measurement(value: self.parseDistanceMeters(), unit: UnitLength.meters),
+                    distanceRemaining: Measurement(value: distanceMeters, unit: UnitLength.meters),
                     timeRemaining: TimeInterval(self.stateManager.etaMinutes * 60)
                 )
-                self.navigationSession?.updateEstimates(estimates, for: self.navigationSession?.upcomingManeuvers.first ?? CPManeuver())
+                if let firstManeuver = self.navigationSession?.upcomingManeuvers.first {
+                    self.navigationSession?.updateEstimates(estimates, for: firstManeuver)
+                }
 
-                // Check for arrival
                 if self.stateManager.hasArrived {
                     self.dismissNavigation()
                     break
@@ -208,7 +196,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private func updateManeuvers() {
         guard let session = navigationSession else { return }
 
-        // Current maneuver
         let currentManeuver = CPManeuver()
         currentManeuver.instructionVariants = [stateManager.instruction]
         if let img = UIImage(systemName: stateManager.maneuverType)?
@@ -219,7 +206,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
         var maneuvers = [currentManeuver]
 
-        // Follow-on maneuver
         if !stateManager.followOnInstruction.isEmpty {
             let followOn = CPManeuver()
             followOn.instructionVariants = [stateManager.followOnInstruction]
@@ -234,7 +220,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         session.upcomingManeuvers = maneuvers
     }
 
-    /// Parse distance remaining string back to meters for CPTravelEstimates
     private func parseDistanceMeters() -> Double {
         let remaining = stateManager.distanceRemaining
         if remaining.hasSuffix("ft") {
@@ -335,12 +320,10 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         liveUpdateTask?.cancel()
         liveUpdateTask = nil
         isShowingNavigation = false
-
         navigationSession = nil
-        mapController?.stopNavigation()
-        mapController = nil
 
-        // Restore commutes/recents root
+        mapController?.stopNavigation()
+
         if let interfaceController, let rootTabBar {
             interfaceController.setRootTemplate(rootTabBar, animated: true, completion: nil)
         }
