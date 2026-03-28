@@ -35,13 +35,22 @@ struct SteddiMapView: UIViewControllerRepresentable {
     }
 }
 
-class SteddiMapContainer: UIViewController {
+class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        true
+    }
+
     private var mapView: MKMapView!
     var isInNavigation = false
     private var currentIs3D = true
     private var navRouteCoords: [CLLocationCoordinate2D] = []
     private var smoothedBearing: Double = 0
     private var routeOverlay: MKPolyline?
+
+    /// When true, camera auto-follow is paused (user is panning/exploring the map)
+    private var isFreeLook = false
+    private var recenterButton: UIButton?
 
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
 
@@ -106,6 +115,13 @@ class SteddiMapContainer: UIViewController {
             width: view.bounds.width + insets.left + insets.right,
             height: view.bounds.height + insets.top // no bottom extension
         )
+        // Position recenter button bottom-right above the nav bar
+        recenterButton?.frame = CGRect(
+            x: view.bounds.width - 60,
+            y: view.bounds.height - 200,
+            width: 44,
+            height: 44
+        )
     }
 
     override func viewDidLoad() {
@@ -149,6 +165,31 @@ class SteddiMapContainer: UIViewController {
         let lp = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
         mapView.addGestureRecognizer(lp)
 
+        // Detect user pan/pinch to pause auto-follow
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleUserMapInteraction(_:)))
+        pan.delegate = self
+        mapView.addGestureRecognizer(pan)
+
+        let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handleUserMapInteraction(_:)))
+        pinch.delegate = self
+        mapView.addGestureRecognizer(pinch)
+
+        let rotate = UIRotationGestureRecognizer(target: self, action: #selector(handleUserMapInteraction(_:)))
+        rotate.delegate = self
+        mapView.addGestureRecognizer(rotate)
+
+        // Recenter button (hidden until free-look)
+        let btn = UIButton(type: .system)
+        btn.setImage(UIImage(systemName: "location.fill"), for: .normal)
+        btn.tintColor = SteddiTheme.accentUIColor
+        btn.backgroundColor = UIColor(white: 0.1, alpha: 0.9)
+        btn.layer.cornerRadius = 22
+        btn.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        btn.addTarget(self, action: #selector(recenterTapped), for: .touchUpInside)
+        btn.isHidden = true
+        view.addSubview(btn)
+        recenterButton = btn
+
         // Observe accent color changes
         NotificationCenter.default.addObserver(self, selector: #selector(accentColorChanged), name: .steddiAccentColorChanged, object: nil)
 
@@ -180,6 +221,29 @@ class SteddiMapContainer: UIViewController {
                 renderer.strokeColor = SteddiTheme.accentUIColor
                 renderer.setNeedsDisplay()
             }
+        }
+    }
+
+    @objc private func handleUserMapInteraction(_ gesture: UIGestureRecognizer) {
+        guard isInNavigation else { return }
+        if gesture.state == .began {
+            isFreeLook = true
+            recenterButton?.isHidden = false
+        }
+    }
+
+    @objc private func recenterTapped() {
+        isFreeLook = false
+        recenterButton?.isHidden = true
+        // Snap back to current position
+        if let location = mapView.userLocation.location {
+            let displayCoord: CLLocationCoordinate2D
+            if !navRouteCoords.isEmpty {
+                displayCoord = NavigationEngine.snapToPolyline(point: location.coordinate, polyline: navRouteCoords)
+            } else {
+                displayCoord = location.coordinate
+            }
+            applyCameraForNav(at: displayCoord, course: smoothedBearing, animated: true)
         }
     }
 
@@ -300,6 +364,8 @@ class SteddiMapContainer: UIViewController {
     func stopNavigation() {
         guard isInNavigation else { return }
         isInNavigation = false
+        isFreeLook = false
+        recenterButton?.isHidden = true
 
         // Remove route overlay
         if let overlay = routeOverlay {
@@ -343,7 +409,7 @@ extension SteddiMapContainer: MKMapViewDelegate {
     }
 
     func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
-        guard isInNavigation else { return }
+        guard isInNavigation, !isFreeLook else { return }
         guard let location = userLocation.location else { return }
 
         // Snap camera position to route polyline for smooth following
