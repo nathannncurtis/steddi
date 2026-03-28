@@ -115,6 +115,7 @@ struct HomeView: View {
                     engine: engine,
                     onEndNavigation: {
                         let points = locationService.stopRecording()
+                        locationService.disableNavigationMode()
                         locationFeedTask?.cancel()
                         locationFeedTask = nil
                         navigationEngine?.stopNavigation()
@@ -360,6 +361,7 @@ struct HomeView: View {
                     return
                 }
 
+                locationService.enableNavigationMode()
                 locationService.startRecording()
 
                 self.navigationRoute = route

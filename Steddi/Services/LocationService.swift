@@ -17,8 +17,8 @@ final class LocationService {
     init() {
         delegate = LocationDelegate()
         locationManager.delegate = delegate
-        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.allowsBackgroundLocationUpdates = false
         locationManager.pausesLocationUpdatesAutomatically = false
 
         delegate.onLocationUpdate = { [weak self] location in
@@ -51,6 +51,19 @@ final class LocationService {
 
     func stopUpdating() {
         locationManager.stopUpdatingLocation()
+    }
+
+    /// Enable high-accuracy background location for active navigation.
+    func enableNavigationMode() {
+        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        locationManager.allowsBackgroundLocationUpdates = true
+    }
+
+    /// Downgrade to foreground-only, lower accuracy when not navigating.
+    /// Location still updates for the map dot but doesn't track in the background.
+    func disableNavigationMode() {
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.allowsBackgroundLocationUpdates = false
     }
 
     // MARK: - GPS Trace Recording
