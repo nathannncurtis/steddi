@@ -10,6 +10,7 @@ struct SteddiMapView: UIViewControllerRepresentable {
     @Binding var isNavigating: Bool
     @Binding var is3DView: Bool
     let navigationRoute: MKRoute?
+    var savedRoutePolyline: [CLLocationCoordinate2D]?
     let onLongPress: (CLLocationCoordinate2D) -> Void
     let onArrival: () -> Void
     let onCancelled: () -> Void
@@ -24,6 +25,7 @@ struct SteddiMapView: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: SteddiMapContainer, context: Context) {
         if isNavigating, let route = navigationRoute {
             if !vc.isInNavigation {
+                vc.savedPolylineOverride = savedRoutePolyline
                 vc.startNavigation(route: route)
             }
             vc.set3DView(is3DView)
@@ -262,20 +264,28 @@ class SteddiMapContainer: UIViewController {
         )
     }
 
+    /// Saved polyline override — when set, the map renders this instead of MKRoute's polyline.
+    var savedPolylineOverride: [CLLocationCoordinate2D]?
+
     func startNavigation(route: MKRoute) {
         guard !isInNavigation else { return }
         isInNavigation = true
 
-        // Store route coordinates for bearing calculation
-        let polyline = route.polyline
-        let pointCount = polyline.pointCount
-        var coords = [CLLocationCoordinate2D](repeating: CLLocationCoordinate2D(), count: pointCount)
-        polyline.getCoordinates(&coords, range: NSRange(location: 0, length: pointCount))
-        navRouteCoords = coords
-
-        // Add route overlay
-        routeOverlay = polyline
-        mapView.addOverlay(polyline, level: .aboveRoads)
+        // Use saved polyline if available, otherwise use the MKRoute polyline
+        if let savedCoords = savedPolylineOverride, savedCoords.count >= 2 {
+            navRouteCoords = savedCoords
+            let polyline = MKPolyline(coordinates: savedCoords, count: savedCoords.count)
+            routeOverlay = polyline
+            mapView.addOverlay(polyline, level: .aboveRoads)
+        } else {
+            let polyline = route.polyline
+            let pointCount = polyline.pointCount
+            var coords = [CLLocationCoordinate2D](repeating: CLLocationCoordinate2D(), count: pointCount)
+            polyline.getCoordinates(&coords, range: NSRange(location: 0, length: pointCount))
+            navRouteCoords = coords
+            routeOverlay = polyline
+            mapView.addOverlay(polyline, level: .aboveRoads)
+        }
 
         // Don't use userTrackingMode — we manage the camera manually like Apple Maps does
         mapView.setUserTrackingMode(.none, animated: false)

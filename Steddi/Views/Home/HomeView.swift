@@ -30,6 +30,9 @@ struct HomeView: View {
     @State private var navigationDestination: PinnedLocation?
     @State private var locationFeedTask: Task<Void, Never>?
 
+    // Saved route polyline for map rendering
+    @State private var activeSavedPolyline: [CLLocationCoordinate2D]?
+
     // Route preview state
     @State private var showRoutePreview = false
     @State private var previewRoute: MKRoute?
@@ -107,6 +110,7 @@ struct HomeView: View {
                 isNavigating: $isNavigating,
                 is3DView: $is3DNav,
                 navigationRoute: navigationRoute,
+                savedRoutePolyline: activeSavedPolyline,
                 onLongPress: { coord in
                     longPressCoordinate = coord
                     showAddLocation = true
@@ -130,6 +134,7 @@ struct HomeView: View {
                         is3DNav = true
                         isNavigating = false
                         navigationRoute = nil
+                        activeSavedPolyline = nil
 
                         // Save the raw drive record
                         if points.count >= 2 {
@@ -417,13 +422,18 @@ struct HomeView: View {
     }
 
     /// Start navigation with a route (called from preview or directly for commutes).
-    private func beginNavigation(with route: MKRoute) {
+    private func beginNavigation(with route: MKRoute, savedPolyline: [CLLocationCoordinate2D]? = nil) {
         locationService.enableNavigationMode()
         locationService.startRecording()
 
+        self.activeSavedPolyline = savedPolyline
         self.navigationRoute = route
         let engine = NavigationEngine()
-        engine.startNavigation(route: route)
+        if let savedPolyline, savedPolyline.count >= 2 {
+            engine.startNavigation(route: route, savedPolyline: savedPolyline)
+        } else {
+            engine.startNavigation(route: route)
+        }
         self.navigationEngine = engine
 
         engine.onOffRoute = { currentPos, destination in
@@ -806,11 +816,12 @@ struct HomeView: View {
                     return
                 }
 
-                // Score each route against the saved polyline — pick the closest match
+                // Use Apple's route for turn-by-turn instructions, but override
+                // the polyline with the saved one so we track the user's preferred path
                 let bestRoute = Self.closestRoute(to: savedCoords, from: response.routes)
 
                 isCalculatingRoute = false
-                beginNavigation(with: bestRoute)
+                beginNavigation(with: bestRoute, savedPolyline: savedCoords)
             } catch {
                 isCalculatingRoute = false
             }

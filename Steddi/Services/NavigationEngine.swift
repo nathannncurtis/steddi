@@ -84,6 +84,24 @@ final class NavigationEngine {
         updateCurrentStep()
     }
 
+    /// Start navigation using Apple's MKRoute for instructions but a saved polyline for the actual path.
+    /// This ensures the engine tracks the user along their preferred route, not Apple's suggested one.
+    func startNavigation(route: MKRoute, savedPolyline: [CLLocationCoordinate2D]) {
+        startNavigation(route: route)
+
+        // Override the route polyline with the saved one
+        if savedPolyline.count >= 2 {
+            routePolylineCoordinates = savedPolyline
+
+            // Recalculate total distance based on saved polyline
+            var dist: Double = 0
+            for i in 0..<(savedPolyline.count - 1) {
+                dist += Self.haversineDistance(from: savedPolyline[i], to: savedPolyline[i + 1])
+            }
+            totalRouteDistance = dist
+        }
+    }
+
     func stopNavigation() {
         VoiceGuidanceService.shared.stop()
         isNavigating = false
