@@ -111,7 +111,14 @@ final class NavigationEngine {
         guard isNavigating, activeRoute != nil, !steps.isEmpty else { return }
 
         currentCoordinate = location.coordinate
-        if location.course >= 0 {
+
+        // Use route-based bearing when available for stability, GPS course as fallback
+        if !routePolylineCoordinates.isEmpty {
+            let routeBearing = Self.bearingAlongRoute(from: location.coordinate, routeCoords: routePolylineCoordinates)
+            if routeBearing > 0 || routePolylineCoordinates.count >= 2 {
+                headingDegrees = routeBearing
+            }
+        } else if location.course >= 0 {
             headingDegrees = location.course
         }
         let speedMPS = max(0, location.speed)
@@ -424,6 +431,41 @@ final class NavigationEngine {
         }
 
         return "arrow.up" // continue straight
+    }
+
+    // MARK: - Route Bearing
+
+    /// Calculate bearing along the route at the closest point to the user's position.
+    /// Gives a stable, route-following heading instead of noisy GPS course.
+    nonisolated static func bearingAlongRoute(from position: CLLocationCoordinate2D, routeCoords: [CLLocationCoordinate2D]) -> Double {
+        guard routeCoords.count >= 2 else { return 0 }
+
+        var bestIndex = 0
+        var bestDist = Double.greatestFiniteMagnitude
+
+        for i in 0..<routeCoords.count {
+            let d = haversineDistance(from: position, to: routeCoords[i])
+            if d < bestDist {
+                bestDist = d
+                bestIndex = i
+            }
+        }
+
+        let lookAheadIndex = min(bestIndex + 3, routeCoords.count - 1)
+        guard lookAheadIndex > bestIndex else { return 0 }
+
+        let from = routeCoords[bestIndex]
+        let to = routeCoords[lookAheadIndex]
+
+        let dLon = (to.longitude - from.longitude) * .pi / 180
+        let lat1 = from.latitude * .pi / 180
+        let lat2 = to.latitude * .pi / 180
+
+        let y = sin(dLon) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+        var bearing = atan2(y, x) * 180 / .pi
+        if bearing < 0 { bearing += 360 }
+        return bearing
     }
 
     // MARK: - Speed Limit Estimation
