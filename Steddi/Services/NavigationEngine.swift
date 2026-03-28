@@ -25,7 +25,9 @@ final class NavigationEngine {
     var stepDistance: String = ""
     var stepDistanceRaw: Double = 0
     var etaMinutes: Int = 0
+    var etaSeconds: TimeInterval = 0
     var distanceRemaining: String = ""
+    var distanceRemainingMeters: Double = 0
     var arrivalTime: String = ""
     var roadName: String = ""
     var maneuverType: String = "arrow.up"
@@ -108,7 +110,9 @@ final class NavigationEngine {
         stepDistance = ""
         stepDistanceRaw = 0
         etaMinutes = 0
+        etaSeconds = 0
         distanceRemaining = ""
+        distanceRemainingMeters = 0
         arrivalTime = ""
         roadName = ""
         maneuverType = "arrow.up"
@@ -283,20 +287,22 @@ final class NavigationEngine {
             }
         }
 
+        distanceRemainingMeters = totalRemaining
         distanceRemaining = Self.formatDistance(totalRemaining)
 
-        let etaSeconds: TimeInterval
+        let calculatedETA: TimeInterval
         if averageSpeedMPS > 2.0 {
-            etaSeconds = totalRemaining / averageSpeedMPS
+            calculatedETA = totalRemaining / averageSpeedMPS
         } else if totalRouteDistance > 0 {
             let fraction = totalRemaining / totalRouteDistance
-            etaSeconds = originalExpectedTravelTime * fraction
+            calculatedETA = originalExpectedTravelTime * fraction
         } else {
-            etaSeconds = 0
+            calculatedETA = 0
         }
 
-        etaMinutes = max(1, Int(ceil(etaSeconds / 60)))
-        arrivalTime = Self.formatArrivalTime(etaSeconds)
+        etaSeconds = calculatedETA
+        etaMinutes = max(1, Int(ceil(calculatedETA / 60)))
+        arrivalTime = Self.formatArrivalTime(calculatedETA)
     }
 
     // MARK: - MKRoute Adapter

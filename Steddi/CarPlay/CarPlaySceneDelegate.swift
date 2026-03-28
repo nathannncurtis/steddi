@@ -158,15 +158,22 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     // MARK: - Live Updates
 
+    /// Tracks the last instruction to avoid redundant maneuver rebuilds
+    private var lastInstruction: String = ""
+    private var lastFollowOn: String = ""
+
     @MainActor
     private func subscribeLiveUpdates() {
         liveUpdateTask?.cancel()
+        lastInstruction = ""
+        lastFollowOn = ""
 
         liveUpdateTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await Task.sleep(for: .seconds(1))
                 guard let self, self.isShowingNavigation else { break }
 
+                // Update map camera
                 if let coord = self.stateManager.currentCoordinate {
                     self.mapController?.updateCamera(
                         coordinate: coord,
@@ -174,17 +181,19 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                     )
                 }
 
-                self.updateManeuvers()
-
-                let distanceMeters = self.parseDistanceMeters()
-                let estimates = CPTravelEstimates(
-                    distanceRemaining: Measurement(value: distanceMeters, unit: UnitLength.meters),
-                    timeRemaining: TimeInterval(self.stateManager.etaMinutes * 60)
-                )
-                if let firstManeuver = self.navigationSession?.upcomingManeuvers.first {
-                    self.navigationSession?.updateEstimates(estimates, for: firstManeuver)
+                // Only rebuild maneuvers when the instruction actually changes
+                let currentInstr = self.stateManager.instruction
+                let currentFollowOn = self.stateManager.followOnInstruction
+                if currentInstr != self.lastInstruction || currentFollowOn != self.lastFollowOn {
+                    self.lastInstruction = currentInstr
+                    self.lastFollowOn = currentFollowOn
+                    self.rebuildManeuvers()
                 }
 
+                // Update travel estimates with raw numeric values (no string parsing)
+                self.updateTravelEstimates()
+
+                // Check for arrival
                 if self.stateManager.hasArrived {
                     self.dismissNavigation()
                     break
@@ -193,7 +202,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
-    private func updateManeuvers() {
+    /// Rebuild CPManeuver objects. Only called when instructions change.
+    private func rebuildManeuvers() {
         guard let session = navigationSession else { return }
 
         let currentManeuver = CPManeuver()
@@ -220,16 +230,16 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         session.upcomingManeuvers = maneuvers
     }
 
-    private func parseDistanceMeters() -> Double {
-        let remaining = stateManager.distanceRemaining
-        if remaining.hasSuffix("ft") {
-            let num = Double(remaining.replacingOccurrences(of: " ft", with: "").replacingOccurrences(of: ",", with: "")) ?? 0
-            return num / 3.281
-        } else if remaining.hasSuffix("mi") {
-            let num = Double(remaining.replacingOccurrences(of: " mi", with: "").replacingOccurrences(of: ",", with: "")) ?? 0
-            return num * 1609.34
-        }
-        return 0
+    /// Update travel estimates using raw numeric values from the state manager.
+    private func updateTravelEstimates() {
+        guard let session = navigationSession,
+              let firstManeuver = session.upcomingManeuvers.first else { return }
+
+        let estimates = CPTravelEstimates(
+            distanceRemaining: Measurement(value: stateManager.distanceRemainingMeters, unit: UnitLength.meters),
+            timeRemaining: stateManager.etaSeconds
+        )
+        session.updateEstimates(estimates, for: firstManeuver)
     }
 
     // MARK: - Route Preview

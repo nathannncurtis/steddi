@@ -31,6 +31,8 @@ final class NavigationStateManager {
     var speedLimitMph: Double? = nil
     var headingDegrees: Double = 0
     var currentCoordinate: CLLocationCoordinate2D? = nil
+    var distanceRemainingMeters: Double = 0
+    var etaSeconds: TimeInterval = 0
 
     var hasArrived: Bool = false
 
@@ -86,8 +88,11 @@ final class NavigationStateManager {
                 self.followOnInstruction = engine.followOnInstruction
                 self.followOnManeuverSymbol = engine.followOnManeuverSymbol
                 self.currentSpeedMph = engine.currentSpeedMph
+                self.speedLimitMph = engine.speedLimitMph
                 self.headingDegrees = engine.headingDegrees
                 self.currentCoordinate = engine.currentCoordinate
+                self.distanceRemainingMeters = engine.distanceRemainingMeters
+                self.etaSeconds = engine.etaSeconds
 
                 // Build upcoming steps from engine
                 self.upcomingSteps = Self.buildUpcomingSteps(from: engine)
@@ -186,6 +191,8 @@ final class NavigationStateManager {
         speedLimitMph = nil
         headingDegrees = 0
         currentCoordinate = nil
+        distanceRemainingMeters = 0
+        etaSeconds = 0
         hasArrived = false
         activeCommute = nil
         activeDirection = nil
