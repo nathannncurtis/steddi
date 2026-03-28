@@ -1,19 +1,18 @@
 import UIKit
 import MapKit
 import CoreLocation
-import Combine
 
-/// Hosts an MKMapView sized to the CarPlay display.
-/// Same route styling and chase-cam as the phone, optimized for CarPlay screen.
+/// Hosts an MKMapView for the CarPlay display.
+/// Same route styling and chase-cam as the phone, optimized for CarPlay.
 class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
     private var mapView: MKMapView!
     private var isInNavigation = false
     private var navRouteCoords: [CLLocationCoordinate2D] = []
     private var smoothedBearing: Double = 0
-    private var cancellables: [AnyCancellable] = []
     private var currentZoom: Double = 17.5
     private var routeOverlay: MKPolyline?
+    private var hasReceivedLocation = false
 
     // MARK: - Lifecycle
 
@@ -26,34 +25,21 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         mapView.delegate = self
 
         let config = MKStandardMapConfiguration(emphasisStyle: .muted)
+        config.showsTraffic = true
         mapView.preferredConfiguration = config
 
         mapView.showsUserLocation = true
-
-        // Hide ornaments — CarPlay template provides its own chrome
         mapView.showsCompass = false
         mapView.showsScale = false
+        mapView.pointOfInterestFilter = .excludingAll
 
-        let region = MKCoordinateRegion(
-            center: mapView.userLocation.coordinate.latitude != 0
-                ? mapView.userLocation.coordinate
-                : CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
-            latitudinalMeters: 5000,
-            longitudinalMeters: 5000
-        )
-        mapView.setRegion(region, animated: false)
+        // Follow user location immediately — don't default to a fixed region
+        mapView.setUserTrackingMode(.follow, animated: false)
 
-        switch SteddiTheme.currentThemeMode {
-        case .dark: view.backgroundColor = .black
-        case .light: view.backgroundColor = .white
-        case .dynamic: view.backgroundColor = .systemBackground
-        }
+        view.backgroundColor = .black
         view.addSubview(mapView)
 
-        // Observe accent color changes
         NotificationCenter.default.addObserver(self, selector: #selector(accentColorChanged), name: .steddiAccentColorChanged, object: nil)
-
-        // Observe theme mode changes
         NotificationCenter.default.addObserver(self, selector: #selector(themeModeChanged), name: .steddiThemeModeChanged, object: nil)
     }
 
@@ -62,7 +48,6 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     }
 
     @objc private func accentColorChanged() {
-        // Refresh route line if showing
         if isInNavigation {
             removeRouteLine()
             showRouteLine(navRouteCoords)
@@ -85,7 +70,12 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
         showRouteLine(routeCoords)
 
-        if let userCoord = mapView.userLocation.location?.coordinate {
+        // Stop auto-follow — we manage the camera manually during nav
+        mapView.setUserTrackingMode(.none, animated: false)
+
+        // Set initial nav camera
+        if let userCoord = mapView.userLocation.location?.coordinate,
+           CLLocationCoordinate2DIsValid(userCoord) {
             let camera = MKMapCamera(
                 lookingAtCenter: userCoord,
                 fromDistance: zoomToDistance(currentZoom),
@@ -103,15 +93,8 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
         removeRouteLine()
 
-        if let userCoord = mapView.userLocation.location?.coordinate {
-            let camera = MKMapCamera(
-                lookingAtCenter: userCoord,
-                fromDistance: 5000,
-                pitch: 0,
-                heading: 0
-            )
-            mapView.setCamera(camera, animated: true)
-        }
+        // Return to follow mode
+        mapView.setUserTrackingMode(.follow, animated: true)
     }
 
     /// Chase-cam: follow user with route-based bearing, smoothed rotation, look-ahead offset
@@ -134,7 +117,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
             pitch: 60,
             heading: smoothedBearing
         )
-        UIView.animate(withDuration: 1.0, delay: 0, options: [.curveLinear]) {
+        UIView.animate(withDuration: 1.0, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
             self.mapView.setCamera(camera, animated: false)
         }
     }
@@ -143,24 +126,12 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
     func zoomIn() {
         currentZoom = min(currentZoom + 1, 20)
-        let camera = MKMapCamera(
-            lookingAtCenter: mapView.centerCoordinate,
-            fromDistance: zoomToDistance(currentZoom),
-            pitch: mapView.camera.pitch,
-            heading: mapView.camera.heading
-        )
-        mapView.setCamera(camera, animated: true)
+        applyCameraZoom()
     }
 
     func zoomOut() {
         currentZoom = max(currentZoom - 1, 12)
-        let camera = MKMapCamera(
-            lookingAtCenter: mapView.centerCoordinate,
-            fromDistance: zoomToDistance(currentZoom),
-            pitch: mapView.camera.pitch,
-            heading: mapView.camera.heading
-        )
-        mapView.setCamera(camera, animated: true)
+        applyCameraZoom()
     }
 
     func recenter() {
@@ -175,14 +146,18 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
             )
             mapView.setCamera(camera, animated: true)
         } else {
-            let camera = MKMapCamera(
-                lookingAtCenter: coord,
-                fromDistance: 5000,
-                pitch: 0,
-                heading: 0
-            )
-            mapView.setCamera(camera, animated: true)
+            mapView.setUserTrackingMode(.follow, animated: true)
         }
+    }
+
+    private func applyCameraZoom() {
+        let camera = MKMapCamera(
+            lookingAtCenter: mapView.centerCoordinate,
+            fromDistance: zoomToDistance(currentZoom),
+            pitch: mapView.camera.pitch,
+            heading: mapView.camera.heading
+        )
+        mapView.setCamera(camera, animated: true)
     }
 
     // MARK: - Route Line
@@ -215,9 +190,19 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         return MKOverlayRenderer(overlay: overlay)
     }
 
+    func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+        // On first location update, center the map if we haven't navigated yet
+        if !hasReceivedLocation && !isInNavigation {
+            hasReceivedLocation = true
+            if let coord = userLocation.location?.coordinate, CLLocationCoordinate2DIsValid(coord) {
+                let region = MKCoordinateRegion(center: coord, latitudinalMeters: 2000, longitudinalMeters: 2000)
+                mapView.setRegion(region, animated: true)
+            }
+        }
+    }
+
     // MARK: - Helpers
 
-    /// Convert a zoom level to MKMapCamera distance (approximate)
     private func zoomToDistance(_ zoom: Double) -> CLLocationDistance {
         let lat = mapView.centerCoordinate.latitude
         return 156543.03 * cos(lat * .pi / 180) / pow(2, zoom) * 256
