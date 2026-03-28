@@ -1,15 +1,11 @@
 # Steddi TODO
 
 ## Priority 1 — Bugs & Fixes
-- Route preview before nav starts (needed for CarPlay compliance, should also be in phone version)
-  - Commutes: tap → "Go" (skip preview) or "Preview" (full route on map with ranked route tiers)
-  - Dumb nav: always shows preview, not skippable
-  - Per-commute setting to disable preview for power users
-- App Group setup — shared container for extensions (Live Activities, widgets, Watch). Do this before any extension work.
+- App Group entitlement needs to be enabled in Apple Developer portal (code is ready, blocked on provisioning)
+- Route preview per-commute disable setting (preview UI is built, commute skip not yet wired)
 
 ## Priority 2 — CarPlay
-- Waiting on CarPlay navigation entitlement approval
-- Once approved: swap CPListTemplate → CPMapTemplate for full map view
+- Swap CPListTemplate → CPMapTemplate for full map view (entitlement approved)
 - CarPlayMapController already written and ready
 
 ## Priority 3 — Live Activities
@@ -175,3 +171,8 @@
 - Fix: traffic conditions now shown on map
 - Fix: location tracking downgraded when not navigating (no background tracking without active route)
 - Fix: off-route detection with smart rerouting (avoids U-turns, prioritizes forward momentum)
+- Route preview before nav starts (full-screen map, ETA, distance, alternate routes, toll/highway indicators)
+- Route preferences: toll and highway avoidance (global Settings toggles + per-commute overrides)
+- Haptic feedback system (Off/Subtle/Standard/Dynamic/Advanced, per-event intensity, wired into nav engine)
+- Siri Shortcuts via App Intents ("Start my commute", "Check commute ETA")
+- App Group entitlement added (pending portal setup)
