@@ -7,6 +7,7 @@ import Observation
 @MainActor
 final class LocationService {
     var currentLocation: CLLocation?
+    var deviceHeading: Double = 0 // magnetometer heading (direction phone is facing)
     var authorizationStatus: CLAuthorizationStatus = .notDetermined
     var isRecording: Bool = false
 
@@ -35,6 +36,11 @@ final class LocationService {
                 self?.authorizationStatus = status
             }
         }
+        delegate.onHeadingUpdate = { [weak self] heading in
+            Task { @MainActor [weak self] in
+                self?.deviceHeading = heading
+            }
+        }
     }
 
     func requestPermission() {
@@ -47,10 +53,12 @@ final class LocationService {
 
     func startUpdating() {
         locationManager.startUpdatingLocation()
+        locationManager.startUpdatingHeading()
     }
 
     func stopUpdating() {
         locationManager.stopUpdatingLocation()
+        locationManager.stopUpdatingHeading()
     }
 
     /// Enable high-accuracy background location for active navigation.
@@ -86,10 +94,17 @@ final class LocationService {
 private class LocationDelegate: NSObject, CLLocationManagerDelegate {
     var onLocationUpdate: ((CLLocation) -> Void)?
     var onAuthChange: ((CLAuthorizationStatus) -> Void)?
+    var onHeadingUpdate: ((Double) -> Void)?
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         onLocationUpdate?(location)
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        // trueHeading is relative to true north, -1 if unavailable
+        let heading = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        onHeadingUpdate?(heading)
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

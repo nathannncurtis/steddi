@@ -6,6 +6,7 @@ import AVFoundation
 /// Uses NavigationEngine for routing brain, renders its own SwiftUI interface.
 struct SteddiNavOverlay: View {
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @Environment(LocationService.self) private var locationService
     let engine: NavigationEngine
     let onEndNavigation: () -> Void
     var onToggleVoice: () -> Void = {}
@@ -330,7 +331,7 @@ struct SteddiNavOverlay: View {
                 .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1))
                 .frame(width: 44, height: 44)
 
-            Text(cardinalLabel(for: engine.headingDegrees))
+            Text(cardinalLabel(for: locationService.deviceHeading))
                 .font(.system(size: 15, weight: .heavy, design: .rounded))
                 .foregroundStyle(SteddiTheme.accent)
         }
@@ -395,7 +396,7 @@ struct SteddiNavOverlay: View {
                 .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
                 .frame(width: 50, height: 50)
 
-            Text(cardinalLabel(for: engine.headingDegrees))
+            Text(cardinalLabel(for: locationService.deviceHeading))
                 .font(.system(size: 16, weight: .heavy, design: .rounded))
                 .foregroundStyle(SteddiTheme.accent)
         }
