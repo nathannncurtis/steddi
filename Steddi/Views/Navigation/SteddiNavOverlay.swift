@@ -500,7 +500,7 @@ struct SteddiNavOverlay: View {
     // MARK: - Speedometer
 
     private func speedometer(size: CGFloat) -> some View {
-        let speedLimitMph: Double? = nil // NavigationEngine doesn't provide speed limits
+        let speedLimitMph: Double? = engine.speedLimitMph
         let overLimit: Double = {
             guard let limit = speedLimitMph else { return 0 }
             return engine.currentSpeedMph - limit

@@ -24,6 +24,7 @@ final class NavigationEngine {
     var followOnInstruction: String = ""
     var followOnManeuverSymbol: String = ""
     var currentSpeedMph: Double = 0
+    var speedLimitMph: Double? = nil
     var headingDegrees: Double = 0
     var currentCoordinate: CLLocationCoordinate2D?
     var hasArrived: Bool = false
@@ -92,6 +93,7 @@ final class NavigationEngine {
         followOnInstruction = ""
         followOnManeuverSymbol = ""
         currentSpeedMph = 0
+        speedLimitMph = nil
         headingDegrees = 0
         currentCoordinate = nil
         hasArrived = false
@@ -158,6 +160,9 @@ final class NavigationEngine {
         if !step.instructions.isEmpty {
             VoiceGuidanceService.shared.speakWithDistance(step.instructions, distance: step.distance)
         }
+
+        // Estimate speed limit from road type
+        speedLimitMph = Self.estimateSpeedLimit(from: step.instructions)
 
         // Follow-on step
         let nextIndex = currentStepIndex + 1
@@ -419,6 +424,47 @@ final class NavigationEngine {
         }
 
         return "arrow.up" // continue straight
+    }
+
+    // MARK: - Speed Limit Estimation
+
+    /// Estimate speed limit from instruction text and road name patterns.
+    /// Uses heuristics since MapKit doesn't provide speed limit data.
+    nonisolated static func estimateSpeedLimit(from instruction: String) -> Double {
+        let lower = instruction.lowercased()
+
+        // Freeway/highway indicators
+        if lower.contains("i-") || lower.contains("interstate") ||
+           lower.contains("freeway") || lower.contains("motorway") ||
+           lower.contains("us-") || lower.contains("highway") {
+            return 65
+        }
+
+        // State routes and expressways
+        if lower.contains("sr-") || lower.contains("state route") ||
+           lower.contains("expressway") || lower.contains("pkwy") ||
+           lower.contains("parkway") || lower.contains("blvd") ||
+           lower.contains("boulevard") {
+            return 45
+        }
+
+        // Ramps
+        if lower.contains("ramp") || lower.contains("merge") {
+            return 40
+        }
+
+        // Common residential/urban patterns
+        if lower.contains("ave") || lower.contains("avenue") ||
+           lower.contains("st ") || lower.contains("street") ||
+           lower.contains("rd ") || lower.contains("road") ||
+           lower.contains("dr ") || lower.contains("drive") ||
+           lower.contains("ln ") || lower.contains("lane") ||
+           lower.contains("ct ") || lower.contains("court") {
+            return 35
+        }
+
+        // Default for unknown roads
+        return 45
     }
 
     // MARK: - Road Name Extraction
