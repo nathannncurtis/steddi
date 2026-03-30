@@ -1,0 +1,43 @@
+name: Sync activity to website
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Generate activity JSON
+        run: |
+          mkdir -p output
+
+          # Recent commits (last 20, message + date only — no code, no files)
+          git log --pretty=format:'{"date":"%ad","message":"%s"}' --date=short -20 | \
+            python3 -c "
+          import sys, json
+          lines = [json.loads(l) for l in sys.stdin if l.strip()]
+          print(json.dumps(lines, indent=2))
+          " > output/commits.json
+
+          # Copy TODO.md
+          cp TODO.md output/TODO.md 2>/dev/null || echo "# No TODO" > output/TODO.md
+
+          # Copy constitution
+          cp docs/IMPLEMENTATION_PLAN.md output/CONSTITUTION.md 2>/dev/null || echo "# No constitution" > output/CONSTITUTION.md
+
+      - name: Push to website repo
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.WEBSITE_DEPLOY_TOKEN }}
+        with:
+          source_file: 'output/'
+          destination_repo: 'nathannncurtis/steddi-website'
+          destination_folder: 'public/data'
+          user_email: 'nathan@steddi.io'
+          user_name: 'Nathan Curtis'
+          commit_message: 'sync: update activity from steddi repo'
