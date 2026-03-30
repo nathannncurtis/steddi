@@ -18,7 +18,7 @@ jobs:
 
           # Recent commits (last 20, message + date only — no code, no files)
           # Filter out any mentions of internal tools
-          git log --pretty=format:'{"date":"%ad","message":"%s"}' --date=short -20 | \
+          git log --pretty=format:'{"date":"%ad","message":"%s"}' --date=short -50 | \
             python3 -c "
           import sys, json
           lines = [json.loads(l) for l in sys.stdin if l.strip()]
