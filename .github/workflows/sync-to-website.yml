@@ -40,4 +40,5 @@ jobs:
           destination_folder: 'public/data'
           user_email: 'nathan@steddi.io'
           user_name: 'Nathan Curtis'
+          destination_branch: 'master'
           commit_message: 'sync: update activity from steddi repo'
