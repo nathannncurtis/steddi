@@ -17,15 +17,17 @@ jobs:
           mkdir -p output
 
           # Recent commits (last 20, message + date only — no code, no files)
+          # Filter out any mentions of internal tools
           git log --pretty=format:'{"date":"%ad","message":"%s"}' --date=short -20 | \
             python3 -c "
           import sys, json
           lines = [json.loads(l) for l in sys.stdin if l.strip()]
-          print(json.dumps(lines, indent=2))
+          filtered = [c for c in lines if 'claude' not in c['message'].lower() and '.claude' not in c['message'].lower()]
+          print(json.dumps(filtered, indent=2))
           " > output/commits.json
 
-          # Copy TODO.md
-          cp TODO.md output/TODO.md 2>/dev/null || echo "# No TODO" > output/TODO.md
+          # Copy TODO.md, filter internal tool mentions
+          grep -vi 'claude' TODO.md > output/TODO.md 2>/dev/null || echo "# No TODO" > output/TODO.md
 
           # Copy constitution
           cp docs/IMPLEMENTATION_PLAN.md output/CONSTITUTION.md 2>/dev/null || echo "# No constitution" > output/CONSTITUTION.md
