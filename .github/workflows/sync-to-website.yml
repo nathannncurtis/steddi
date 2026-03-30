@@ -38,7 +38,7 @@ jobs:
           source_file: 'output/'
           destination_repo: 'nathannncurtis/steddi-website'
           destination_folder: 'public/data'
-          user_email: 'nathan@steddi.io'
+          user_email: 'nathancurtis951@gmail.com'
           user_name: 'Nathan Curtis'
           destination_branch: 'master'
           commit_message: 'sync: update activity from steddi repo'
