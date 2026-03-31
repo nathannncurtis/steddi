@@ -60,13 +60,17 @@ targets:
     platform: iOS
     sources:
       - SteddiWidget
+    info:
+      path: SteddiWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Steddi Widget
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: to.nathancurtis.steddi.widget
       DEVELOPMENT_TEAM: Z46423B3U9
       CODE_SIGN_STYLE: Automatic
-      GENERATE_INFOPLIST_FILE: YES
-      INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
-      INFOPLIST_KEY_CFBundleDisplayName: Steddi Widget
+      INFOPLIST_FILE: SteddiWidget/Info.plist
       SUPPORTS_MACCATALYST: NO
       CODE_SIGN_ENTITLEMENTS: SteddiWidget/SteddiWidget.entitlements
     dependencies:
@@ -78,13 +82,17 @@ targets:
     platform: iOS
     sources:
       - SteddiLiveActivity
+    info:
+      path: SteddiLiveActivity/Info.plist
+      properties:
+        CFBundleDisplayName: Steddi Navigation
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: to.nathancurtis.steddi.live-activity
       DEVELOPMENT_TEAM: Z46423B3U9
       CODE_SIGN_STYLE: Automatic
-      GENERATE_INFOPLIST_FILE: YES
-      INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
-      INFOPLIST_KEY_CFBundleDisplayName: Steddi Navigation
+      INFOPLIST_FILE: SteddiLiveActivity/Info.plist
       SUPPORTS_MACCATALYST: NO
       CODE_SIGN_ENTITLEMENTS: SteddiLiveActivity/SteddiLiveActivity.entitlements
     dependencies:

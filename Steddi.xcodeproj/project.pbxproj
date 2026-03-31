@@ -184,10 +184,12 @@
 		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
 		BF8849F63A69650A3821B776 /* SteddiLiveActivity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteddiLiveActivity.entitlements; sourceTree = "<group>"; };
 		C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteETAWidget.swift; sourceTree = "<group>"; };
+		C3B24C7F73BAB34A1C42E122 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
 		C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayMapController.swift; sourceTree = "<group>"; };
 		CADE3A03C008B4BD3D0FE2E6 /* Report.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report.swift; sourceTree = "<group>"; };
 		CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoder.swift; sourceTree = "<group>"; };
+		CE8C721636439033B457CA4E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalNotificationService.swift; sourceTree = "<group>"; };
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
 		D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomRouteBuilder.swift; sourceTree = "<group>"; };
@@ -293,6 +295,7 @@
 			isa = PBXGroup;
 			children = (
 				C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */,
+				CE8C721636439033B457CA4E /* Info.plist */,
 				5FD7FD0CA7EFBCBD7F77B96F /* SteddiWidget.entitlements */,
 				2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */,
 			);
@@ -393,6 +396,7 @@
 		CB28DCE5EA4CE1D184D7CB33 /* SteddiLiveActivity */ = {
 			isa = PBXGroup;
 			children = (
+				C3B24C7F73BAB34A1C42E122 /* Info.plist */,
 				6284ADAB45E23AF8893D2CC2 /* NavigationAttributes.swift */,
 				BF8849F63A69650A3821B776 /* SteddiLiveActivity.entitlements */,
 				E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */,
@@ -754,9 +758,7 @@
 				CODE_SIGN_ENTITLEMENTS = SteddiWidget/SteddiWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = Z46423B3U9;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Steddi Widget";
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				INFOPLIST_FILE = SteddiWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -903,9 +905,7 @@
 				CODE_SIGN_ENTITLEMENTS = SteddiLiveActivity/SteddiLiveActivity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = Z46423B3U9;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Steddi Navigation";
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				INFOPLIST_FILE = SteddiLiveActivity/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -943,9 +943,7 @@
 				CODE_SIGN_ENTITLEMENTS = SteddiWidget/SteddiWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = Z46423B3U9;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Steddi Widget";
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				INFOPLIST_FILE = SteddiWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1020,9 +1018,7 @@
 				CODE_SIGN_ENTITLEMENTS = SteddiLiveActivity/SteddiLiveActivity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = Z46423B3U9;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Steddi Navigation";
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				INFOPLIST_FILE = SteddiLiveActivity/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
