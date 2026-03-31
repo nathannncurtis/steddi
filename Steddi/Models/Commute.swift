@@ -15,6 +15,7 @@ final class Commute {
     // Route preferences (nil = use global defaults from Settings)
     var avoidsTolls: Bool?
     var avoidsHighways: Bool?
+    var skipRoutePreview: Bool?  // Skip the route preview screen for this commute
 
     // Schedule-based direction rules
     var scheduleToDestDays: String?      // e.g. "2,3,4,5,6" (weekday components, Sun=1..Sat=7)

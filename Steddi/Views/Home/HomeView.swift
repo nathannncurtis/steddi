@@ -364,7 +364,7 @@ struct HomeView: View {
 
     // MARK: - Navigation
 
-    private func navigateTo(name: String, coordinate: CLLocationCoordinate2D, address: String? = nil) {
+    private func navigateTo(name: String, coordinate: CLLocationCoordinate2D, address: String? = nil, skipPreview: Bool = false) {
         let dest = PinnedLocation(
             name: name,
             latitude: coordinate.latitude,
@@ -410,11 +410,15 @@ struct HomeView: View {
                 let alternates = (altResponse?.routes ?? []).filter { $0 !== route }
 
                 isCalculatingRoute = false
-                previewRoute = route
-                previewAlternates = Array(alternates.prefix(2))
-                previewDestinationName = name
-                previewIsCommute = false
-                showRoutePreview = true
+                if skipPreview {
+                    beginNavigation(with: route)
+                } else {
+                    previewRoute = route
+                    previewAlternates = Array(alternates.prefix(2))
+                    previewDestinationName = name
+                    previewIsCommute = false
+                    showRoutePreview = true
+                }
             } catch {
                 isCalculatingRoute = false
             }
@@ -770,8 +774,11 @@ struct HomeView: View {
         if let preferredRoute = commute.preferredRoute(for: direction) {
             print("[STEDDI-NAV] Found preferred route for direction \(direction.rawValue): polyline \(preferredRoute.encodedPolyline.count) chars")
             navigateWithSavedRoute(preferredRoute, to: target)
+        } else if commute.skipRoutePreview == true {
+            print("[STEDDI-NAV] No saved route, skipPreview=true — routing directly")
+            navigateTo(name: target.name, coordinate: target.coordinate, address: target.address, skipPreview: true)
         } else {
-            print("[STEDDI-NAV] NO preferred route found for direction \(direction.rawValue) — falling back to Apple Maps")
+            print("[STEDDI-NAV] NO preferred route found for direction \(direction.rawValue) — showing preview")
             navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
         }
     }
