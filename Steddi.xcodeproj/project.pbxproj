@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */; };
 		0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */; };
 		0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */; };
 		10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */; };
@@ -147,6 +148,7 @@
 		53EB5BD45FD5C3961CFC647C /* PhoneCompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneCompanionView.swift; sourceTree = "<group>"; };
 		57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionsService.swift; sourceTree = "<group>"; };
 		598632F13EF2804C543D14D0 /* LocationCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationCardView.swift; sourceTree = "<group>"; };
+		5FD7FD0CA7EFBCBD7F77B96F /* SteddiWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteddiWidget.entitlements; sourceTree = "<group>"; };
 		6284ADAB45E23AF8893D2CC2 /* NavigationAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationAttributes.swift; sourceTree = "<group>"; };
 		64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveRecord.swift; sourceTree = "<group>"; };
 		671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
@@ -163,6 +165,7 @@
 		8B17DD42334CC352C81C1B71 /* Steddi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Steddi.entitlements; sourceTree = "<group>"; };
 		8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedLocation.swift; sourceTree = "<group>"; };
 		8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneEditorView.swift; sourceTree = "<group>"; };
+		9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteAnalyticsView.swift; sourceTree = "<group>"; };
 		94C0D76787187AFA4D836876 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManager.swift; sourceTree = "<group>"; };
@@ -173,6 +176,7 @@
 		B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationEngine.swift; sourceTree = "<group>"; };
 		BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayDashboardDelegate.swift; sourceTree = "<group>"; };
 		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
+		BF8849F63A69650A3821B776 /* SteddiLiveActivity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteddiLiveActivity.entitlements; sourceTree = "<group>"; };
 		C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteETAWidget.swift; sourceTree = "<group>"; };
 		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
 		C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayMapController.swift; sourceTree = "<group>"; };
@@ -275,6 +279,7 @@
 			isa = PBXGroup;
 			children = (
 				C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */,
+				5FD7FD0CA7EFBCBD7F77B96F /* SteddiWidget.entitlements */,
 				2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */,
 			);
 			path = SteddiWidget;
@@ -331,6 +336,14 @@
 			path = Intents;
 			sourceTree = "<group>";
 		};
+		96382E8692A2C4588446DD21 /* Analytics */ = {
+			isa = PBXGroup;
+			children = (
+				9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */,
+			);
+			path = Analytics;
+			sourceTree = "<group>";
+		};
 		9C6D36121E1F61E20EE34C4D /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -367,6 +380,7 @@
 			isa = PBXGroup;
 			children = (
 				6284ADAB45E23AF8893D2CC2 /* NavigationAttributes.swift */,
+				BF8849F63A69650A3821B776 /* SteddiLiveActivity.entitlements */,
 				E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */,
 				EBD3684A653CCA35C0F4BAC7 /* SteddiNavigationActivity.swift */,
 			);
@@ -431,6 +445,7 @@
 		DE5E9CA7570793F43392E1B5 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				96382E8692A2C4588446DD21 /* Analytics */,
 				374BB011618D654579D2A114 /* Commute */,
 				42FAB8BA9A51A05F1BCB2276 /* Components */,
 				FE8829E93E4A8DE87270F444 /* Home */,
@@ -611,6 +626,7 @@
 				D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */,
 				755CA9609153C6BBD3833D97 /* CheckCommuteETAIntent.swift in Sources */,
 				6C0862A6626424EBC6622731 /* Commute.swift in Sources */,
+				080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */,
 				8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */,
 				9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */,
 				BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */,
@@ -715,7 +731,7 @@
 		0D3E8676408912C12EA8280F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SteddiWidget/SteddiWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = Z46423B3U9;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -864,7 +880,7 @@
 		7149D2AABB50889C5067A077 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SteddiLiveActivity/SteddiLiveActivity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = Z46423B3U9;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -904,7 +920,7 @@
 		8AB29198221FA52BCA899135 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SteddiWidget/SteddiWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = Z46423B3U9;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -981,7 +997,7 @@
 		FE23271806E52D1E040A16A5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SteddiLiveActivity/SteddiLiveActivity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = Z46423B3U9;
 				GENERATE_INFOPLIST_FILE = YES;

@@ -68,8 +68,7 @@ targets:
       INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
       INFOPLIST_KEY_CFBundleDisplayName: Steddi Widget
       SUPPORTS_MACCATALYST: NO
-    entitlements:
-      path: Steddi/Steddi.entitlements
+      CODE_SIGN_ENTITLEMENTS: SteddiWidget/SteddiWidget.entitlements
     dependencies:
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
@@ -87,8 +86,7 @@ targets:
       INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
       INFOPLIST_KEY_CFBundleDisplayName: Steddi Navigation
       SUPPORTS_MACCATALYST: NO
-    entitlements:
-      path: Steddi/Steddi.entitlements
+      CODE_SIGN_ENTITLEMENTS: SteddiLiveActivity/SteddiLiveActivity.entitlements
     dependencies:
       - sdk: ActivityKit.framework
       - sdk: WidgetKit.framework

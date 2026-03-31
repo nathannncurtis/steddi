@@ -139,6 +139,11 @@ struct SettingsView: View {
                     } label: {
                         Label("Manage Commutes", systemImage: "arrow.triangle.swap")
                     }
+                    NavigationLink {
+                        CommuteAnalyticsView()
+                    } label: {
+                        Label("Commute Analytics", systemImage: "chart.bar.fill")
+                    }
                 } header: {
                     Text("Commutes")
                 }
