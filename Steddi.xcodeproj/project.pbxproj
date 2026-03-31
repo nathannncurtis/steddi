@@ -60,6 +60,7 @@
 		C4A0314513C0EDA3FFC980BB /* CustomRouteBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */; };
 		C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */; };
 		C71246A6559A6AC5CE9A73C3 /* RoutePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */; };
+		C7C6B2714873506D611A112D /* FuzzyRouteParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F657EB3BAF59F5A88D66FA5 /* FuzzyRouteParser.swift */; };
 		C82ABB3F146D9326DAA1EA06 /* LiveActivityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4D0B9209F9F81F57E555407 /* LiveActivityService.swift */; };
 		CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */; };
 		CC48115D9666F0533B6CAEC7 /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 139001D61F9DF7A2C5C5060C /* ActivityKit.framework */; };
@@ -169,6 +170,7 @@
 		8B17DD42334CC352C81C1B71 /* Steddi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Steddi.entitlements; sourceTree = "<group>"; };
 		8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedLocation.swift; sourceTree = "<group>"; };
 		8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneEditorView.swift; sourceTree = "<group>"; };
+		8F657EB3BAF59F5A88D66FA5 /* FuzzyRouteParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzyRouteParser.swift; sourceTree = "<group>"; };
 		9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteAnalyticsView.swift; sourceTree = "<group>"; };
 		94C0D76787187AFA4D836876 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -440,6 +442,7 @@
 				D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */,
 				57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */,
 				5F1A30250323ADAE79B65516 /* DisplayModeService.swift */,
+				8F657EB3BAF59F5A88D66FA5 /* FuzzyRouteParser.swift */,
 				D50B3D1495689CE92E4ED80B /* GeocodingService.swift */,
 				DA765EC74CF76F5C912157D4 /* HapticService.swift */,
 				B4D0B9209F9F81F57E555407 /* LiveActivityService.swift */,
@@ -651,6 +654,7 @@
 				D5D2CC709306B626B120D222 /* DonationView.swift in Sources */,
 				943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */,
 				4A0898B3E04DFD141E0808AD /* EmergencyView.swift in Sources */,
+				C7C6B2714873506D611A112D /* FuzzyRouteParser.swift in Sources */,
 				1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */,
 				30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */,
 				84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */,
