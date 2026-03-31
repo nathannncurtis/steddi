@@ -60,6 +60,9 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         self.rootTabBar = tabBar
         interfaceController.setRootTemplate(tabBar, animated: false, completion: nil)
 
+        // Register for media remote commands (steering wheel controls)
+        NowPlayingService.shared.registerCommands()
+
         Task { @MainActor in
             stateManager.isCarPlayActive = true
 
@@ -77,6 +80,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         from window: CPWindow
     ) {
         dismissNavigation()
+        NowPlayingService.shared.unregisterCommands()
         mapController = nil
         self.interfaceController = nil
         self.carWindow = nil
@@ -140,7 +144,15 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
         recenterButton.image = UIImage(systemName: "location.fill")
 
-        mapTemplate.mapButtons = [recenterButton, zoomInButton, zoomOutButton]
+        // Now Playing button — opens music controls
+        let nowPlayingButton = CPMapButton { [weak self] _ in
+            guard let self, let interfaceController = self.interfaceController else { return }
+            let nowPlaying = CPNowPlayingTemplate.shared
+            interfaceController.pushTemplate(nowPlaying, animated: true, completion: nil)
+        }
+        nowPlayingButton.image = UIImage(systemName: "music.note")
+
+        mapTemplate.mapButtons = [recenterButton, zoomInButton, zoomOutButton, nowPlayingButton]
 
         // Replace root template with the map template
         interfaceController.setRootTemplate(mapTemplate, animated: true, completion: nil)

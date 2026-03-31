@@ -25,6 +25,7 @@
 		588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EB5BD45FD5C3961CFC647C /* PhoneCompanionView.swift */; };
 		60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */; };
 		62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */; };
+		64A4B0737C28DA81734CD449 /* CarPlayDashboardDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */; };
 		6C0862A6626424EBC6622731 /* Commute.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */; };
 		6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62156E1FDD078D989A2441A /* OfflineCacheService.swift */; };
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
@@ -50,6 +51,7 @@
 		CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */; };
 		CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE4512ED735A6D3CD409755 /* VoicePicker.swift */; };
 		CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B385FB734BECC176514917FB /* RoutePlannerView.swift */; };
+		D458D1FFCB26A8CB84EE42C6 /* NowPlayingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B614E4431FE25A25512707 /* NowPlayingService.swift */; };
 		D5D2CC709306B626B120D222 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4892145CE55DFF9FF13FC7 /* DonationView.swift */; };
 		D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */; };
 		D649B2DE89F3D939E458A826 /* MeasurementUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80E59AB1F96A5750EF1F970E /* MeasurementUnit.swift */; };
@@ -76,6 +78,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		03B614E4431FE25A25512707 /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiNavOverlay.swift; sourceTree = "<group>"; };
 		06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSceneDelegate.swift; sourceTree = "<group>"; };
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -116,6 +119,7 @@
 		AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteTrip.swift; sourceTree = "<group>"; };
 		B385FB734BECC176514917FB /* RoutePlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlannerView.swift; sourceTree = "<group>"; };
 		B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationEngine.swift; sourceTree = "<group>"; };
+		BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayDashboardDelegate.swift; sourceTree = "<group>"; };
 		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
 		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
 		C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayMapController.swift; sourceTree = "<group>"; };
@@ -153,6 +157,7 @@
 		0389C8F4D82362316402E174 /* CarPlay */ = {
 			isa = PBXGroup;
 			children = (
+				BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */,
 				C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */,
 				671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */,
 			);
@@ -313,6 +318,7 @@
 				AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */,
 				B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */,
 				A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */,
+				03B614E4431FE25A25512707 /* NowPlayingService.swift */,
 				F62156E1FDD078D989A2441A /* OfflineCacheService.swift */,
 				0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */,
 				262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */,
@@ -449,6 +455,7 @@
 			files = (
 				87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */,
 				99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */,
+				64A4B0737C28DA81734CD449 /* CarPlayDashboardDelegate.swift in Sources */,
 				60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */,
 				D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */,
 				755CA9609153C6BBD3833D97 /* CheckCommuteETAIntent.swift in Sources */,
@@ -473,6 +480,7 @@
 				F988967C38892DF7EE141166 /* NavigationStateManager.swift in Sources */,
 				967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */,
 				57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */,
+				D458D1FFCB26A8CB84EE42C6 /* NowPlayingService.swift in Sources */,
 				6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */,
 				87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */,
 				588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */,

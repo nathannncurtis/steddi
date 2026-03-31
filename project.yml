@@ -36,6 +36,10 @@ targets:
               - UISceneConfigurationName: "CarPlay"
                 UISceneClassName: "CPTemplateApplicationScene"
                 UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate"
+            CPTemplateApplicationDashboardSceneSessionRoleApplication:
+              - UISceneConfigurationName: "CarPlay Dashboard"
+                UISceneClassName: "CPTemplateApplicationDashboardScene"
+                UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).CarPlayDashboardDelegate"
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: "Default"
                 UISceneClassName: "UIWindowScene"
