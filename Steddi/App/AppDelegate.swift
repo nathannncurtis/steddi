@@ -1,6 +1,9 @@
 import UIKit
 import CarPlay
 import SwiftData
+import os
+
+private let appLog = Logger(subsystem: "to.nathancurtis.steddi", category: "App")
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -24,6 +27,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Catch uncaught exceptions so we can see what's crashing
+        NSSetUncaughtExceptionHandler { exception in
+            appLog.fault("UNCAUGHT EXCEPTION: \(exception.name.rawValue): \(exception.reason ?? "no reason")\n\(exception.callStackSymbols.joined(separator: "\n"))")
+        }
+
         ArrivalNotificationService.shared.requestPermissionIfNeeded()
         ArrivalNotificationService.shared.registerCategory()
         ArrivalNotificationService.shared.setupDelegate()
@@ -41,6 +49,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if connectingSceneSession.role == .carTemplateApplication {
             let config = UISceneConfiguration(name: "CarPlay", sessionRole: connectingSceneSession.role)
             config.delegateClass = CarPlaySceneDelegate.self
+            return config
+        }
+
+        if connectingSceneSession.role.rawValue == "CPTemplateApplicationDashboardSceneSessionRoleApplication" {
+            let config = UISceneConfiguration(name: "CarPlay Dashboard", sessionRole: connectingSceneSession.role)
+            config.delegateClass = CarPlayDashboardDelegate.self
             return config
         }
 

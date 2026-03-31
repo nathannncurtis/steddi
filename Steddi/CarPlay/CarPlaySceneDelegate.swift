@@ -3,15 +3,18 @@ import CarPlay
 import MapKit
 import SwiftData
 import CoreLocation
+import os
+
+private let carplayLog = Logger(subsystem: "to.nathancurtis.steddi", category: "CarPlay")
 
 class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     private var interfaceController: CPInterfaceController?
     private var carWindow: CPWindow?
     private var mapController: CarPlayMapController?
+    private var mapTemplate: CPMapTemplate?
     private var navigationSession: CPNavigationSession?
     private var isShowingNavigation = false
-    private var rootTabBar: CPTabBarTemplate?
     private var modelContainer: ModelContainer?
     private var liveUpdateTask: Task<Void, Never>?
 
@@ -36,31 +39,38 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     }
 
     private func connectCarPlay(interfaceController: CPInterfaceController, window: CPWindow?) {
+        carplayLog.info("CarPlay: connectCarPlay called, window=\(window != nil)")
         self.interfaceController = interfaceController
-        self.carWindow = window
 
         if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
             modelContainer = appDelegate.modelContainer
         }
 
-        // Step 1: Create the map view controller and set it as the window's root.
-        // Per Apple's docs: "Your app should create its view controller and assign it
-        // to the rootViewController property of this window."
-        // The map is ALWAYS the content. Templates overlay on top.
+        // Map view controller draws in the CPWindow behind all templates
         let mapVC = CarPlayMapController()
         self.mapController = mapVC
         if let window {
+            self.carWindow = window
             window.rootViewController = mapVC
         }
 
-        // Step 2: Set the initial template (commutes/recents tabs)
-        let commutesTab = buildCommutesTab()
-        let recentsTab = buildRecentsTab()
-        let tabBar = CPTabBarTemplate(templates: [commutesTab, recentsTab])
-        self.rootTabBar = tabBar
-        interfaceController.setRootTemplate(tabBar, animated: false, completion: nil)
+        // CPMapTemplate is transparent — the map shows through.
+        // Set it as root and NEVER replace it (replacing triggers an iOS 26 simulator crash
+        // in Apple's CPSMapTemplateViewController._updateShareButtonVisibility).
+        let template = CPMapTemplate()
+        template.automaticallyHidesNavigationBar = true
+        template.hidesButtonsWithNavigationBar = false
+        template.mapDelegate = self
+        self.mapTemplate = template
 
-        // Register for media remote commands (steering wheel controls)
+        // Idle state: map buttons + nav bar for browsing
+        configureIdleUI()
+
+        carplayLog.info("CarPlay: setting CPMapTemplate as root")
+        interfaceController.setRootTemplate(template, animated: false) { success, error in
+            carplayLog.info("CarPlay: setRootTemplate result: success=\(success), error=\(error?.localizedDescription ?? "none")")
+        }
+
         NowPlayingService.shared.registerCommands()
 
         Task { @MainActor in
@@ -82,13 +92,156 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         dismissNavigation()
         NowPlayingService.shared.unregisterCommands()
         mapController = nil
+        mapTemplate = nil
         self.interfaceController = nil
         self.carWindow = nil
-        self.rootTabBar = nil
 
         Task { @MainActor in
             stateManager.isCarPlayActive = false
         }
+    }
+
+    // MARK: - Idle / Nav UI Configuration
+
+    private func configureIdleUI() {
+        guard let mapTemplate else { return }
+
+        let zoomIn = CPMapButton { [weak self] _ in self?.mapController?.zoomIn() }
+        zoomIn.image = UIImage(systemName: "plus.magnifyingglass")
+
+        let zoomOut = CPMapButton { [weak self] _ in self?.mapController?.zoomOut() }
+        zoomOut.image = UIImage(systemName: "minus.magnifyingglass")
+
+        let recenter = CPMapButton { [weak self] _ in self?.mapController?.recenter() }
+        recenter.image = UIImage(systemName: "location.fill")
+
+        mapTemplate.mapButtons = [recenter, zoomIn, zoomOut]
+
+        let browseButton = CPBarButton(title: "Commutes") { [weak self] _ in
+            self?.showCommutesList()
+        }
+        let placesButton = CPBarButton(title: "Places") { [weak self] _ in
+            self?.showPlacesList()
+        }
+        mapTemplate.leadingNavigationBarButtons = [browseButton]
+        mapTemplate.trailingNavigationBarButtons = [placesButton]
+    }
+
+    private func configureNavUI() {
+        guard let mapTemplate else { return }
+
+        let zoomIn = CPMapButton { [weak self] _ in self?.mapController?.zoomIn() }
+        zoomIn.image = UIImage(systemName: "plus.magnifyingglass")
+
+        let zoomOut = CPMapButton { [weak self] _ in self?.mapController?.zoomOut() }
+        zoomOut.image = UIImage(systemName: "minus.magnifyingglass")
+
+        let recenter = CPMapButton { [weak self] _ in self?.mapController?.recenter() }
+        recenter.image = UIImage(systemName: "location.fill")
+
+        let nowPlaying = CPMapButton { [weak self] _ in
+            guard let self, let ic = self.interfaceController else { return }
+            ic.pushTemplate(CPNowPlayingTemplate.shared, animated: true) { _, _ in }
+        }
+        nowPlaying.image = UIImage(systemName: "music.note")
+
+        mapTemplate.mapButtons = [recenter, zoomIn, zoomOut, nowPlaying]
+
+        // Clear nav bar during navigation
+        mapTemplate.leadingNavigationBarButtons = []
+        mapTemplate.trailingNavigationBarButtons = []
+    }
+
+    // MARK: - Browse Lists
+
+    @MainActor
+    private func showCommutesList() {
+        guard let interfaceController else { return }
+
+        var items: [CPListItem] = []
+
+        if let container = modelContainer {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<Commute>(
+                predicate: #Predicate { $0.isActive },
+                sortBy: [SortDescriptor(\.createdAt)]
+            )
+
+            if let commutes = try? context.fetch(descriptor) {
+                for commute in commutes {
+                    let originName = commute.origin?.name ?? "?"
+                    let destName = commute.destination?.name ?? "?"
+                    var detail = "\(originName) \u{2192} \(destName)"
+
+                    if let duration = commute.preferredRoute?.typicalDurationSeconds {
+                        let mins = Int(ceil(duration / 60))
+                        detail += " \u{2014} ~\(mins) min"
+                    }
+
+                    let item = CPListItem(text: commute.name, detailText: detail)
+                    if let img = UIImage(systemName: "arrow.triangle.swap")?
+                        .withConfiguration(UIImage.SymbolConfiguration(pointSize: 24, weight: .medium))
+                        .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
+                        item.setImage(img)
+                    }
+                    item.handler = { [weak self] _, completion in
+                        if let dest = commute.destination {
+                            Task { @MainActor in
+                                await self?.showRoutePreview(name: dest.name, coordinate: dest.coordinate)
+                            }
+                        }
+                        completion()
+                    }
+                    items.append(item)
+                }
+            }
+        }
+
+        if items.isEmpty {
+            items.append(CPListItem(text: "No commutes", detailText: "Add commutes in the Steddi app"))
+        }
+
+        let template = CPListTemplate(title: "Commutes", sections: [CPListSection(items: items)])
+        interfaceController.pushTemplate(template, animated: true) { _, _ in }
+    }
+
+    @MainActor
+    private func showPlacesList() {
+        guard let interfaceController else { return }
+
+        var items: [CPListItem] = []
+
+        if let container = modelContainer {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<PinnedLocation>(
+                sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+            )
+
+            if let locations = try? context.fetch(descriptor) {
+                for location in locations.prefix(12) {
+                    let item = CPListItem(text: location.name, detailText: location.address ?? "")
+                    if let img = UIImage(systemName: "mappin.circle.fill")?
+                        .withConfiguration(UIImage.SymbolConfiguration(pointSize: 24, weight: .medium))
+                        .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
+                        item.setImage(img)
+                    }
+                    item.handler = { [weak self] _, completion in
+                        Task { @MainActor in
+                            await self?.showRoutePreview(name: location.name, coordinate: location.coordinate)
+                        }
+                        completion()
+                    }
+                    items.append(item)
+                }
+            }
+        }
+
+        if items.isEmpty {
+            items.append(CPListItem(text: "No places", detailText: "Add places in the Steddi app"))
+        }
+
+        let template = CPListTemplate(title: "Places", sections: [CPListSection(items: items)])
+        interfaceController.pushTemplate(template, animated: true) { _, _ in }
     }
 
     // MARK: - Watch Phone Navigation
@@ -115,62 +268,51 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     @MainActor
     private func showNavigationUI() {
-        guard let interfaceController, !isShowingNavigation else { return }
+        guard let mapTemplate, !isShowingNavigation else {
+            carplayLog.info("CarPlay: showNavigationUI skipped (mapTemplate=\(self.mapTemplate != nil), isShowing=\(self.isShowingNavigation))")
+            return
+        }
+        carplayLog.info("CarPlay: showNavigationUI starting")
         isShowingNavigation = true
 
-        // Start the map navigation with route coordinates
+        // Pop any pushed templates (commutes list, etc.) back to map root
+        // Must provide completion handler — CarPlay throws if there's nothing to pop and no handler is set
+        interfaceController?.popToRootTemplate(animated: false) { _, _ in }
+
+        // Start the map chase-cam with route overlay
         let routeCoords = stateManager.activeRouteCoords
+        carplayLog.info("CarPlay: route has \(routeCoords.count) coords")
         if !routeCoords.isEmpty {
             mapController?.startNavigation(routeCoords: routeCoords)
         }
 
-        // Build CPMapTemplate — this overlays navigation chrome on top of the map
-        let mapTemplate = CPMapTemplate()
-        mapTemplate.automaticallyHidesNavigationBar = true
-        mapTemplate.hidesButtonsWithNavigationBar = false
+        // Switch to navigation buttons
+        configureNavUI()
 
-        let zoomInButton = CPMapButton { [weak self] _ in
-            self?.mapController?.zoomIn()
+        // Create navigation session for maneuver display
+        carplayLog.info("CarPlay: creating CPTrip and navigation session")
+        let origin = MKMapItem.forCurrentLocation()
+        let destination: MKMapItem
+        if let destCoord = routeCoords.last {
+            destination = MKMapItem(location: CLLocation(latitude: destCoord.latitude, longitude: destCoord.longitude), address: nil)
+        } else {
+            destination = MKMapItem.forCurrentLocation()
         }
-        zoomInButton.image = UIImage(systemName: "plus.magnifyingglass")
 
-        let zoomOutButton = CPMapButton { [weak self] _ in
-            self?.mapController?.zoomOut()
-        }
-        zoomOutButton.image = UIImage(systemName: "minus.magnifyingglass")
-
-        let recenterButton = CPMapButton { [weak self] _ in
-            self?.mapController?.recenter()
-        }
-        recenterButton.image = UIImage(systemName: "location.fill")
-
-        // Now Playing button — opens music controls
-        let nowPlayingButton = CPMapButton { [weak self] _ in
-            guard let self, let interfaceController = self.interfaceController else { return }
-            let nowPlaying = CPNowPlayingTemplate.shared
-            interfaceController.pushTemplate(nowPlaying, animated: true, completion: nil)
-        }
-        nowPlayingButton.image = UIImage(systemName: "music.note")
-
-        mapTemplate.mapButtons = [recenterButton, zoomInButton, zoomOutButton, nowPlayingButton]
-
-        // Replace root template with the map template
-        interfaceController.setRootTemplate(mapTemplate, animated: true, completion: nil)
-
-        // Start a navigation session for maneuver display
-        let trip = CPTrip(
-            origin: MKMapItem.forCurrentLocation(),
-            destination: MKMapItem.forCurrentLocation(),
-            routeChoices: []
+        let routeChoice = CPRouteChoice(
+            summaryVariants: ["Steddi Route"],
+            additionalInformationVariants: [],
+            selectionSummaryVariants: ["Steddi Route"]
         )
+        let trip = CPTrip(origin: origin, destination: destination, routeChoices: [routeChoice])
         navigationSession = mapTemplate.startNavigationSession(for: trip)
+        carplayLog.info("CarPlay: navigation session started successfully")
 
         subscribeLiveUpdates()
     }
 
     // MARK: - Live Updates
 
-    /// Tracks the last instruction to avoid redundant maneuver rebuilds
     private var lastInstruction: String = ""
     private var lastFollowOn: String = ""
 
@@ -202,7 +344,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                     self.rebuildManeuvers()
                 }
 
-                // Update travel estimates with raw numeric values (no string parsing)
+                // Update travel estimates
                 self.updateTravelEstimates()
 
                 // Check for arrival
@@ -214,7 +356,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
-    /// Rebuild CPManeuver objects. Only called when instructions change.
     private func rebuildManeuvers() {
         guard let session = navigationSession else { return }
 
@@ -242,7 +383,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         session.upcomingManeuvers = maneuvers
     }
 
-    /// Update travel estimates using raw numeric values from the state manager.
     private func updateTravelEstimates() {
         guard let session = navigationSession,
               let firstManeuver = session.upcomingManeuvers.first else { return }
@@ -302,8 +442,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let previewTemplate = CPListTemplate(title: "Route to \(name)", sections: [section])
 
         let startAction = CPAlertAction(title: "Start Navigation", style: .default) { [weak self] _ in
-            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
-            self?.interfaceController?.popToRootTemplate(animated: false, completion: nil)
+            self?.interfaceController?.dismissTemplate(animated: true) { _, _ in }
+            self?.interfaceController?.popToRootTemplate(animated: false) { _, _ in }
             NotificationCenter.default.post(
                 name: .steddiNavigateToLocation,
                 object: nil,
@@ -312,8 +452,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
 
         let cancelAction = CPAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
-            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
-            self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
+            self?.interfaceController?.dismissTemplate(animated: true) { _, _ in }
+            self?.interfaceController?.popToRootTemplate(animated: true) { _, _ in }
         }
 
         interfaceController.pushTemplate(previewTemplate, animated: true) { _, _ in
@@ -321,7 +461,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 titleVariants: ["\(etaMinutes) min to \(name) (\(distanceText))"],
                 actions: [startAction, cancelAction]
             )
-            interfaceController.presentTemplate(alert, animated: true, completion: nil)
+            interfaceController.presentTemplate(alert, animated: true) { _, _ in }
         }
     }
 
@@ -329,10 +469,10 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private func showError(_ message: String) {
         guard let interfaceController else { return }
         let action = CPAlertAction(title: "OK", style: .default) { [weak self] _ in
-            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
+            self?.interfaceController?.dismissTemplate(animated: true) { _, _ in }
         }
         let alert = CPAlertTemplate(titleVariants: [message], actions: [action])
-        interfaceController.presentTemplate(alert, animated: true, completion: nil)
+        interfaceController.presentTemplate(alert, animated: true) { _, _ in }
     }
 
     // MARK: - Dismiss Navigation
@@ -342,103 +482,50 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         liveUpdateTask?.cancel()
         liveUpdateTask = nil
         isShowingNavigation = false
+        navigationSession?.finishTrip()
         navigationSession = nil
 
         mapController?.stopNavigation()
 
-        if let interfaceController, let rootTabBar {
-            interfaceController.setRootTemplate(rootTabBar, animated: true, completion: nil)
+        // Restore idle UI on the same map template (never swap root)
+        configureIdleUI()
+    }
+}
+
+// MARK: - CPMapTemplateDelegate
+
+extension CarPlaySceneDelegate: CPMapTemplateDelegate {
+
+    func mapTemplate(_ mapTemplate: CPMapTemplate, panBeganWith direction: CPMapTemplate.PanDirection) {
+        mapController?.setFreeLook(true)
+    }
+
+    func mapTemplate(_ mapTemplate: CPMapTemplate, panWith direction: CPMapTemplate.PanDirection) {
+        let scrollAmount: CLLocationDegrees = 0.002
+        var lat: CLLocationDegrees = 0
+        var lng: CLLocationDegrees = 0
+
+        if direction.contains(.up) { lat += scrollAmount }
+        if direction.contains(.down) { lat -= scrollAmount }
+        if direction.contains(.left) { lng -= scrollAmount }
+        if direction.contains(.right) { lng += scrollAmount }
+
+        mapController?.panMap(latDelta: lat, lngDelta: lng)
+    }
+
+    func mapTemplate(_ mapTemplate: CPMapTemplate, panEndedWith direction: CPMapTemplate.PanDirection) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            mapController?.setFreeLook(false)
+            mapController?.recenter()
         }
     }
 
-    // MARK: - Commutes Tab
-
-    private func buildCommutesTab() -> CPListTemplate {
-        var items: [CPListItem] = []
-
-        if let container = modelContainer {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<Commute>(
-                predicate: #Predicate { $0.isActive },
-                sortBy: [SortDescriptor(\.createdAt)]
-            )
-
-            if let commutes = try? context.fetch(descriptor) {
-                for commute in commutes {
-                    let originName = commute.origin?.name ?? "?"
-                    let destName = commute.destination?.name ?? "?"
-                    var detail = "\(originName) \u{2192} \(destName)"
-
-                    if let duration = commute.preferredRoute?.typicalDurationSeconds {
-                        let mins = Int(ceil(duration / 60))
-                        detail += " \u{2014} ~\(mins) min"
-                    }
-
-                    let item = CPListItem(text: commute.name, detailText: detail)
-                    item.handler = { [weak self] _, completion in
-                        let dest = commute.destination
-                        if let dest {
-                            Task { @MainActor in
-                                await self?.showRoutePreview(
-                                    name: dest.name,
-                                    coordinate: dest.coordinate
-                                )
-                            }
-                        }
-                        completion()
-                    }
-                    items.append(item)
-                }
-            }
-        }
-
-        if items.isEmpty {
-            items.append(CPListItem(text: "No commutes", detailText: "Add commutes in the Steddi app"))
-        }
-
-        let section = CPListSection(items: items)
-        let template = CPListTemplate(title: "Commutes", sections: [section])
-        template.tabTitle = "Commutes"
-        template.tabImage = UIImage(systemName: "arrow.triangle.swap")
-        return template
+    func mapTemplate(_ mapTemplate: CPMapTemplate, shouldShowNotificationFor maneuver: CPManeuver) -> Bool {
+        true
     }
 
-    // MARK: - Recents Tab
-
-    private func buildRecentsTab() -> CPListTemplate {
-        var items: [CPListItem] = []
-
-        if let container = modelContainer {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<PinnedLocation>(
-                sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
-            )
-
-            if let locations = try? context.fetch(descriptor) {
-                for location in locations.prefix(12) {
-                    let item = CPListItem(text: location.name, detailText: location.address ?? "")
-                    item.handler = { [weak self] _, completion in
-                        Task { @MainActor in
-                            await self?.showRoutePreview(
-                                name: location.name,
-                                coordinate: location.coordinate
-                            )
-                        }
-                        completion()
-                    }
-                    items.append(item)
-                }
-            }
-        }
-
-        if items.isEmpty {
-            items.append(CPListItem(text: "No places", detailText: "Add places in the Steddi app"))
-        }
-
-        let section = CPListSection(items: items)
-        let template = CPListTemplate(title: "Recents", sections: [section])
-        template.tabTitle = "Recents"
-        template.tabImage = UIImage(systemName: "clock")
-        return template
+    func mapTemplate(_ mapTemplate: CPMapTemplate, shouldUpdateNotificationFor maneuver: CPManeuver, with travelEstimates: CPTravelEstimates) -> Bool {
+        true
     }
 }

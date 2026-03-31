@@ -8,6 +8,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
     private var mapView: MKMapView!
     private var isInNavigation = false
+    private var isFreeLook = false
     private var navRouteCoords: [CLLocationCoordinate2D] = []
     private var smoothedBearing: Double = 0
     private var currentZoom: Double = 17.5
@@ -97,9 +98,30 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         mapView.setUserTrackingMode(.follow, animated: true)
     }
 
+    // MARK: - Free Look & Pan (for CPMapTemplateDelegate)
+
+    func setFreeLook(_ enabled: Bool) {
+        isFreeLook = enabled
+    }
+
+    func panMap(latDelta: CLLocationDegrees, lngDelta: CLLocationDegrees) {
+        let center = mapView.centerCoordinate
+        let newCenter = CLLocationCoordinate2D(
+            latitude: center.latitude + latDelta,
+            longitude: center.longitude + lngDelta
+        )
+        let camera = MKMapCamera(
+            lookingAtCenter: newCenter,
+            fromDistance: mapView.camera.centerCoordinateDistance,
+            pitch: mapView.camera.pitch,
+            heading: mapView.camera.heading
+        )
+        mapView.setCamera(camera, animated: true)
+    }
+
     /// Chase-cam: follow user with route-based bearing, smoothed rotation, look-ahead offset
     func updateCamera(coordinate: CLLocationCoordinate2D, bearing: Double) {
-        guard isInNavigation else { return }
+        guard isInNavigation, !isFreeLook else { return }
 
         let routeBearing = SteddiMapContainer.bearingAlongRoute(
             from: coordinate, routeCoords: navRouteCoords
@@ -136,6 +158,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
     func recenter() {
         guard let coord = mapView.userLocation.location?.coordinate else { return }
+        isFreeLook = false
         currentZoom = 17.5
         if isInNavigation {
             let camera = MKMapCamera(

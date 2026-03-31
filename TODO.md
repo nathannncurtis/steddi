@@ -33,6 +33,7 @@
 - Note: AVSpeechSynthesizer voices are OS-managed — can prompt users to download enhanced voices in Settings but can't bundle them. May need to explore pre-generating audio for common instructions as alternative.
 
 ## Pinned Locations & POI
+- Make saving places more discoverable — tapping a search result should offer "Navigate" vs "Save Place" instead of immediately navigating. Places tab needs a visible "Add Place" button like Commutes has "New Commute". Current pin icon in search and long-press-map are too hidden.
 - Categories for pinned locations with icons (home, gym, work, etc. + various other icons)
 - Yelp and/or Google Reviews for POI — link out to browser rather than embed (keeps it lightweight, avoids API cost/ToS issues). Steddi should feel like a full nav app when driving somewhere unfamiliar, not just a commute tool.
 

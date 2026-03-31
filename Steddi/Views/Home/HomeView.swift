@@ -321,21 +321,19 @@ struct HomeView: View {
             PhoneCompanionView()
                 .environment(navStateManager)
         }
-        .onOpenURL { url in
-            // steddi://test-arrival — trigger post-arrival flow for testing
-            if url.host == "test-arrival" {
-                let polyline = "gipx_Appax~Exr@GzBu@p@iBGqKAgI?uBjCAz{@?dNFzPPfAClKA`VGnS?vA?dGBtLKrAQ|DmArCwA|FnOjCvHhAvGTnE?jEe@xEkBfJsDbMuHdT{GvPeC`IeAnGoA~Vy@xXU~^LvM`@hFzAvI`F|NnChHnBvG~ArHlAvL`@dHInLqBxYoBl[cAhL{AnJoCpLoClJkGfPqEhIoFxH}GpHkCfC}FpEuFfDeIfDqKrCkIlA{]nC{Db@sFhAoEjBkEzCuD~CyCdDkDzF}ClHcBnH_AdIWjJJjJr@tI|ArHnCnJ|BdGjDxGbGnIlDtD"
-                arrivalCommute = commutes.first
-                arrivalDirection = .originToDestination
-                testPolyline = polyline
+        .onReceive(NotificationCenter.default.publisher(for: .steddiTestArrival)) { _ in
+            // steddi://arrive — trigger post-arrival flow for testing
+            let polyline = "gipx_Appax~Exr@GzBu@p@iBGqKAgI?uBjCAz{@?dNFzPPfAClKA`VGnS?vA?dGBtLKrAQ|DmArCwA|FnOjCvHhAvGTnE?jEe@xEkBfJsDbMuHdT{GvPeC`IeAnGoA~Vy@xXU~^LvM`@hFzAvI`F|NnChHnBvG~ArHlAvL`@dHInLqBxYoBl[cAhL{AnJoCpLoClJkGfPqEhIoFxH}GpHkCfC}FpEuFfDeIfDqKrCkIlA{]nC{Db@sFhAoEjBkEzCuD~CyCdDkDzF}ClHcBnH_AdIWjJJjJr@tI|ArHnCnJ|BdGjDxGbGnIlDtD"
+            arrivalCommute = commutes.first
+            arrivalDirection = .originToDestination
+            testPolyline = polyline
 
-                // Create minimal GPS points (won't be used for matching since preMatchedPolyline is set)
-                let coords = PolylineEncoder.decode(polyline, precision: 6)
-                recordedPoints = coords.prefix(10).map { coord in
-                    GPSPoint(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
-                }
-                showPostArrival = true
+            // Create minimal GPS points (won't be used for matching since preMatchedPolyline is set)
+            let coords = PolylineEncoder.decode(polyline, precision: 6)
+            recordedPoints = coords.prefix(10).map { coord in
+                GPSPoint(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
             }
+            showPostArrival = true
         }
     }
 
