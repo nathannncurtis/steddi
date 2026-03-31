@@ -52,6 +52,27 @@ targets:
     dependencies:
       - framework: CarPlay.framework
         embed: false
+      - target: SteddiLiveActivity
+
+  SteddiLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - SteddiLiveActivity
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: to.nathancurtis.steddi.live-activity
+      DEVELOPMENT_TEAM: Z46423B3U9
+      CODE_SIGN_STYLE: Automatic
+      GENERATE_INFOPLIST_FILE: YES
+      INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+      INFOPLIST_KEY_CFBundleDisplayName: Steddi Navigation
+      SUPPORTS_MACCATALYST: NO
+    entitlements:
+      path: Steddi/Steddi.entitlements
+    dependencies:
+      - sdk: ActivityKit.framework
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
 
   SteddiTests:
     type: bundle.unit-test

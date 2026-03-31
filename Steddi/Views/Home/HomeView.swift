@@ -131,6 +131,7 @@ struct HomeView: View {
                         locationFeedTask = nil
                         navigationEngine?.stopNavigation()
                         navStateManager.stopObserving()
+                        LiveActivityService.shared.endActivity()
                         is3DNav = true
                         isNavigating = false
                         navigationRoute = nil
@@ -211,6 +212,7 @@ struct HomeView: View {
             locationService.requestPermission()
             locationService.startUpdating()
             checkMilestoneDonation()
+            LiveActivityService.shared.cleanupOrphanedActivities()
         }
         .task {
             // TEST FLAG: set to true to jump straight into turn-by-turn on launch
@@ -450,6 +452,10 @@ struct HomeView: View {
         )
 
         startLocationFeed()
+
+        // Start Live Activity
+        let destName = navigationDestination?.name ?? "Destination"
+        LiveActivityService.shared.startActivity(destinationName: destName)
 
         withAnimation(.easeInOut(duration: 0.4)) {
             isNavigating = true
@@ -848,6 +854,10 @@ struct HomeView: View {
 
         startLocationFeed()
 
+        // Start Live Activity
+        let destName = navigationDestination?.name ?? "Destination"
+        LiveActivityService.shared.startActivity(destinationName: destName)
+
         withAnimation(.easeInOut(duration: 0.4)) {
             isNavigating = true
         }
@@ -1137,11 +1147,19 @@ struct HomeView: View {
     /// Feed GPS location updates to the NavigationEngine while navigation is active.
     private func startLocationFeed() {
         locationFeedTask?.cancel()
+        var updateCount = 0
         locationFeedTask = Task { @MainActor in
             while navigationEngine?.isNavigating == true, !Task.isCancelled {
                 if let location = locationService.currentLocation {
                     navigationEngine?.updateLocation(location)
                 }
+
+                // Update Live Activity every 3 seconds (every 6th tick)
+                updateCount += 1
+                if updateCount % 6 == 0, let engine = navigationEngine {
+                    LiveActivityService.shared.updateActivity(engine: engine)
+                }
+
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
