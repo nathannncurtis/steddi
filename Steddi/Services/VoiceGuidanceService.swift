@@ -38,7 +38,10 @@ enum VoiceOption: String, CaseIterable, Identifiable {
             .replacingOccurrences(of: ".enhanced.", with: ".compact.")
         if let voice = AVSpeechSynthesisVoice(identifier: compact) { return voice }
 
-        return AVSpeechSynthesisVoice(language: "en-US")!
+        if let voice = AVSpeechSynthesisVoice(language: "en-US") { return voice }
+        if let voice = AVSpeechSynthesisVoice(language: "en") { return voice }
+        // Every iOS device has at least one speech voice; this is a last resort
+        return AVSpeechSynthesisVoice.speechVoices().first!
     }
 }
 

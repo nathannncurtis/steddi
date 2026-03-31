@@ -9,15 +9,20 @@ private let appLog = Logger(subsystem: "to.nathancurtis.steddi", category: "App"
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     lazy var modelContainer: ModelContainer = {
-        try! ModelContainer(for:
-            PinnedLocation.self,
-            Commute.self,
-            Route.self,
-            DriveRecord.self,
-            NoGoZone.self,
-            CommuteTrip.self,
-            Report.self
-        )
+        do {
+            return try ModelContainer(for:
+                PinnedLocation.self,
+                Commute.self,
+                Route.self,
+                DriveRecord.self,
+                NoGoZone.self,
+                CommuteTrip.self,
+                Report.self
+            )
+        } catch {
+            appLog.fault("Failed to create ModelContainer: \(error.localizedDescription)")
+            fatalError("Failed to create ModelContainer: \(error)")
+        }
     }()
 
     let locationService = LocationService()

@@ -36,6 +36,7 @@ enum PolylineEncoder {
 
         while index < encoded.endIndex {
             lat += decodeValue(encoded, index: &index)
+            guard index < encoded.endIndex else { break }
             lng += decodeValue(encoded, index: &index)
 
             coordinates.append(CLLocationCoordinate2D(
@@ -67,7 +68,10 @@ enum PolylineEncoder {
         var shift = 0
 
         while index < encoded.endIndex {
-            let byte = Int(encoded[index].asciiValue!) - 63
+            guard let ascii = encoded[index].asciiValue else {
+                break
+            }
+            let byte = Int(ascii) - 63
             index = encoded.index(after: index)
             result |= (byte & 0x1F) << shift
             shift += 5

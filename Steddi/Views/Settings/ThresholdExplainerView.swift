@@ -101,7 +101,7 @@ struct ThresholdExplainerView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(remaining) min remaining")
                     .font(.subheadline.weight(.medium))
-                Text("Faster route saves \(savings) min (\(Int(Double(savings) / Double(remaining) * 100))%)")
+                Text("Faster route saves \(savings) min (\(remaining > 0 ? Int(Double(savings) / Double(remaining) * 100) : 0)%)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -121,6 +121,7 @@ struct ThresholdExplainerView: View {
     }
 
     private func wouldNotify(remainingMinutes: Int, savingsMinutes: Int) -> Bool {
+        guard remainingMinutes > 0 else { return false }
         let percentSaved = Double(savingsMinutes) / Double(remainingMinutes)
         return percentSaved >= thresholdPercentage && savingsMinutes >= hardMinuteFloor
     }

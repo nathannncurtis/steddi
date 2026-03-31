@@ -169,7 +169,6 @@ final class NavigationEngine {
         if checkArrival(location: location) { return }
 
         if checkOffRoute(location: location) { return }
-        offRouteCount = 0
 
         advanceStepIfNeeded(location: location)
         updateDistancesAndETA(location: location)
@@ -449,6 +448,7 @@ final class NavigationEngine {
     }
 
     nonisolated static func polylineDistance(_ coords: [CLLocationCoordinate2D]) -> Double {
+        guard coords.count >= 2 else { return 0 }
         var dist: Double = 0
         for i in 0..<(coords.count - 1) {
             dist += haversineDistance(from: coords[i], to: coords[i + 1])

@@ -265,7 +265,8 @@ enum ThemeMode: String, CaseIterable {
 
         // Local solar time from UTC + longitude (15° per hour)
         let utcHour = Double(utcCal.component(.hour, from: date)) + Double(utcCal.component(.minute, from: date)) / 60.0
-        let localSolarHour = (utcHour + lon / 15.0).truncatingRemainder(dividingBy: 24.0) + (lon >= 0 ? 0 : 24)
+        var localSolarHour = (utcHour + lon / 15.0).truncatingRemainder(dividingBy: 24.0)
+        if localSolarHour < 0 { localSolarHour += 24.0 }
 
         let sunrise = 12.0 - sunriseOffset
         let sunset = 12.0 + sunriseOffset

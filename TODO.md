@@ -197,3 +197,9 @@
 - Passenger mode + Accessibility mode (display toggles, text/icon scaling)
 - Fuzzy route parser for natural language route input
 - Website rebuilt: hero map animation, 3D mockups, animated icons, roadmap page, live repo sync
+- Fix: CarPlay crash — completion handlers on all template operations (nil completion crashes on error)
+- Fix: CarPlay dashboard scene now routed in AppDelegate (was falling through to PhoneSceneDelegate)
+- Fix: .onOpenURL replaced with NotificationCenter (incompatible with UIKit lifecycle, crashed on CarPlay connect)
+- CarPlay: CPMapTemplate as permanent root, CPMapTemplateDelegate for pan/banners, free-look mode
+- Note: CPMapTemplate crashes on iOS 26.4 simulator (Apple bug in CPSMapTemplateViewController._updateShareButtonVisibility) — works on 26.3
+- Website rebuilt: hero map animation, 3D mockups, animated icons, roadmap page, live repo sync

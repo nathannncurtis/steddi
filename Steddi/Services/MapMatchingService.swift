@@ -60,14 +60,20 @@ final class MapMatchingService {
         let coordinates = points.map { "\($0.longitude),\($0.latitude)" }.joined(separator: ";")
         let timestamps = points.map { String(Int($0.timestamp.timeIntervalSince1970)) }.joined(separator: ";")
 
-        var components = URLComponents(string: "https://router.project-osrm.org/match/v1/driving/\(coordinates)")!
+        guard var components = URLComponents(string: "https://router.project-osrm.org/match/v1/driving/\(coordinates)") else {
+            throw MapMatchingError.apiError
+        }
         components.queryItems = [
             URLQueryItem(name: "overview", value: "full"),
             URLQueryItem(name: "geometries", value: "polyline6"),
             URLQueryItem(name: "timestamps", value: timestamps),
         ]
 
-        let (data, response) = try await session.data(for: URLRequest(url: components.url!))
+        guard let url = components.url else {
+            throw MapMatchingError.apiError
+        }
+
+        let (data, response) = try await session.data(for: URLRequest(url: url))
 
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw MapMatchingError.apiError

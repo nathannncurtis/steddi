@@ -158,7 +158,7 @@ final class NavigationStateManager {
                                 bestSuggestion = (
                                     route: fallback,
                                     savingsMinutes: decision.savingsMinutes,
-                                    savingsPercentage: decision.savingsSeconds / remainingETA
+                                    savingsPercentage: remainingETA > 0 ? decision.savingsSeconds / remainingETA : 0
                                 )
                             }
                         } catch {

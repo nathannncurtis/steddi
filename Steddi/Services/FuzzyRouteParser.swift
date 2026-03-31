@@ -56,8 +56,9 @@ final class FuzzyRouteParser {
         }
 
         // "91 freeway" or "91 fwy"
-        if let match = s.range(of: #"^(\d+)\s*(freeway|fwy|highway|hwy)$"#, options: .regularExpression) {
-            let num = s[s.startIndex..<s.firstIndex(of: " ")!]
+        if let match = s.range(of: #"^(\d+)\s*(freeway|fwy|highway|hwy)$"#, options: .regularExpression),
+           let spaceIndex = s.firstIndex(of: " ") {
+            let num = s[s.startIndex..<spaceIndex]
             return "CA-\(num) freeway"
         }
 

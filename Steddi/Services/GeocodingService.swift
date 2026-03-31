@@ -29,7 +29,7 @@ final class GeocodingService {
         let localSearch = MKLocalSearch(request: request)
         let response = try await localSearch.start()
 
-        let parsed = response.mapItems.prefix(limit).enumerated().map { (index, mapItem) -> (result: GeocodingResult, apiRank: Int) in
+        let parsed = response.mapItems.prefix(limit).enumerated().compactMap { (index, mapItem) -> (result: GeocodingResult, apiRank: Int)? in
             let name = mapItem.name ?? "Unknown"
             let coordinate = mapItem.location.coordinate
             let address = mapItem.addressRepresentations?.fullAddress(includingRegion: false, singleLine: true) ?? name

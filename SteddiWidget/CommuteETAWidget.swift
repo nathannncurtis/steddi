@@ -26,7 +26,7 @@ struct CommuteETAProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<CommuteETAEntry>) -> Void) {
         let entry = currentEntry()
         // Refresh every 15 minutes
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: .now)!
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: .now) ?? .now.addingTimeInterval(900)
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)
     }

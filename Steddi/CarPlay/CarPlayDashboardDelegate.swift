@@ -21,8 +21,8 @@ class CarPlayDashboardDelegate: UIResponder, CPTemplateApplicationDashboardScene
         updateDashboardButtons()
 
         // Poll for navigation state changes to update buttons
-        Task { @MainActor in
-            while self.dashboardController != nil {
+        Task { @MainActor [weak self] in
+            while let self, self.dashboardController != nil {
                 try? await Task.sleep(for: .seconds(2))
                 self.updateDashboardButtons()
             }
@@ -47,38 +47,44 @@ class CarPlayDashboardDelegate: UIResponder, CPTemplateApplicationDashboardScene
         if stateManager.isNavigating {
             // Show navigation status
             let etaText = "\(stateManager.etaMinutes) min"
-            let navButton = CPDashboardButton(
-                titleVariants: [stateManager.instruction, "Navigating"],
-                subtitleVariants: [etaText, stateManager.distanceRemaining],
-                image: UIImage(systemName: "location.fill")!
-                    .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal)
-            ) { _ in
-                // Tapping opens the full Steddi CarPlay app
+            if let img = UIImage(systemName: "location.fill")?
+                .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
+                let navButton = CPDashboardButton(
+                    titleVariants: [stateManager.instruction, "Navigating"],
+                    subtitleVariants: [etaText, stateManager.distanceRemaining],
+                    image: img
+                ) { _ in
+                    // Tapping opens the full Steddi CarPlay app
+                }
+                buttons.append(navButton)
             }
-            buttons.append(navButton)
         } else {
             // Show "Start Commute" shortcut
-            let commuteButton = CPDashboardButton(
-                titleVariants: ["Start Commute", "Commute"],
-                subtitleVariants: ["Tap to navigate", "Go"],
-                image: UIImage(systemName: "car.fill")!
-                    .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal)
-            ) { _ in
-                // Trigger commute start on the phone
-                NotificationCenter.default.post(name: .steddiStartCommuteFromSiri, object: nil)
+            if let img = UIImage(systemName: "car.fill")?
+                .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
+                let commuteButton = CPDashboardButton(
+                    titleVariants: ["Start Commute", "Commute"],
+                    subtitleVariants: ["Tap to navigate", "Go"],
+                    image: img
+                ) { _ in
+                    // Trigger commute start on the phone
+                    NotificationCenter.default.post(name: .steddiStartCommuteFromSiri, object: nil)
+                }
+                buttons.append(commuteButton)
             }
-            buttons.append(commuteButton)
 
             // Show "Recent" shortcut
-            let recentButton = CPDashboardButton(
-                titleVariants: ["Recent Places", "Recents"],
-                subtitleVariants: ["Navigate somewhere", "Places"],
-                image: UIImage(systemName: "clock.fill")!
-                    .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal)
-            ) { _ in
-                // Opens the full app
+            if let img = UIImage(systemName: "clock.fill")?
+                .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
+                let recentButton = CPDashboardButton(
+                    titleVariants: ["Recent Places", "Recents"],
+                    subtitleVariants: ["Navigate somewhere", "Places"],
+                    image: img
+                ) { _ in
+                    // Opens the full app
+                }
+                buttons.append(recentButton)
             }
-            buttons.append(recentButton)
         }
 
         dashboardController.shortcutButtons = buttons
