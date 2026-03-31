@@ -20,6 +20,7 @@
 		3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335291BA198DC1134B9072E8 /* LocationPickerView.swift */; };
 		441AC263D0497D1AA6E95964 /* SteddiLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */; };
+		4BD69219F4033B5D7DD61286 /* SteddiWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */; };
 		516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */; };
 		571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7111C46770386A928275F35 /* SettingsView.swift */; };
 		57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */; };
@@ -37,8 +38,10 @@
 		7AC6366691401A8DB28223A8 /* NavigationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */; };
 		8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */; };
 		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
+		85A049022E0338B7E5E8B084 /* CommuteETAWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */; };
 		87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64DED98F409553C18FBECB6 /* AppDelegate.swift */; };
 		87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */; };
+		8A10CAD68217E7C75BC381C3 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */; };
 		8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82950853F7696A66EC5389FA /* CommuteDetailView.swift */; };
 		8C42BC8E8487C5F21A0D7EA4 /* NavigationAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B27E56129045AE269369A6 /* NavigationAttributes.swift */; };
 		8C6902233D467F3E4CC209D5 /* CarPlay.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 536F40426EDB0B72A580D76E /* CarPlay.framework */; };
@@ -47,6 +50,7 @@
 		99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */; };
 		9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */; };
 		9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */; };
+		9F54B7F94722C2EE69821F18 /* SteddiWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 534F293CE883ED26D52B0510 /* SteddiWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */; };
 		BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29048E65BF78AEB095A5D599 /* CommuteListView.swift */; };
 		BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */; };
@@ -65,6 +69,7 @@
 		D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */; };
 		E0EA434384C8E29419756D75 /* SteddiNavigationActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD3684A653CCA35C0F4BAC7 /* SteddiNavigationActivity.swift */; };
 		E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */; };
+		E60E5CF51F15E749FB8C9708 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94C0D76787187AFA4D836876 /* SwiftUI.framework */; };
 		E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2113E7A877B78A7BF8CF75C /* Route.swift */; };
 		E7FD013198226D25A6927A6B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 770C65D4283DB277ED143EA4 /* Assets.xcassets */; };
 		E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */; };
@@ -84,6 +89,13 @@
 			remoteGlobalIDString = 49639FACA6971E9D79146305;
 			remoteInfo = Steddi;
 		};
+		D16E1EC100C14A4563A32EBC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F39B8109425B1F676A7AE95D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B9DD5DA141931BA4414E702E;
+			remoteInfo = SteddiWidget;
+		};
 		D70B9AEC2A4FB35CA7D1774E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F39B8109425B1F676A7AE95D /* Project object */;
@@ -101,6 +113,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				441AC263D0497D1AA6E95964 /* SteddiLiveActivity.appex in Embed Foundation Extensions */,
+				9F54B7F94722C2EE69821F18 /* SteddiWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -118,6 +131,7 @@
 		16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManagerTests.swift; sourceTree = "<group>"; };
 		262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceService.swift; sourceTree = "<group>"; };
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
+		2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiWidgetBundle.swift; sourceTree = "<group>"; };
 		335291BA198DC1134B9072E8 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiTheme.swift; sourceTree = "<group>"; };
 		3AE4512ED735A6D3CD409755 /* VoicePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePicker.swift; sourceTree = "<group>"; };
@@ -127,6 +141,7 @@
 		4CDEFFA656C308FF61D985BF /* NoGoZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZone.swift; sourceTree = "<group>"; };
 		4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckCommuteETAIntent.swift; sourceTree = "<group>"; };
 		4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationEngineTests.swift; sourceTree = "<group>"; };
+		534F293CE883ED26D52B0510 /* SteddiWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SteddiWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		536F40426EDB0B72A580D76E /* CarPlay.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = CarPlay.framework; sourceTree = "<group>"; };
 		5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngineTests.swift; sourceTree = "<group>"; };
 		53EB5BD45FD5C3961CFC647C /* PhoneCompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneCompanionView.swift; sourceTree = "<group>"; };
@@ -158,6 +173,7 @@
 		B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationEngine.swift; sourceTree = "<group>"; };
 		BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayDashboardDelegate.swift; sourceTree = "<group>"; };
 		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
+		C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteETAWidget.swift; sourceTree = "<group>"; };
 		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
 		C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayMapController.swift; sourceTree = "<group>"; };
 		CADE3A03C008B4BD3D0FE2E6 /* Report.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report.swift; sourceTree = "<group>"; };
@@ -189,6 +205,15 @@
 				CC48115D9666F0533B6CAEC7 /* ActivityKit.framework in Frameworks */,
 				72DD5D3842C50C4BEA5B5D44 /* WidgetKit.framework in Frameworks */,
 				5FF7589B635F105A507DE8A6 /* SwiftUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		27BE99A96B0570584FA64968 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8A10CAD68217E7C75BC381C3 /* WidgetKit.framework in Frameworks */,
+				E60E5CF51F15E749FB8C9708 /* SwiftUI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -244,6 +269,15 @@
 				DE5E9CA7570793F43392E1B5 /* Views */,
 			);
 			path = Steddi;
+			sourceTree = "<group>";
+		};
+		343C8A1B297503B841711CC9 /* SteddiWidget */ = {
+			isa = PBXGroup;
+			children = (
+				C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */,
+				2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */,
+			);
+			path = SteddiWidget;
 			sourceTree = "<group>";
 		};
 		374BB011618D654579D2A114 /* Commute */ = {
@@ -303,6 +337,7 @@
 				EAA8B2837951D77986E1E11A /* Steddi.app */,
 				3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */,
 				7072F1B4A4ECF3043E6462BF /* SteddiTests.xctest */,
+				534F293CE883ED26D52B0510 /* SteddiWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -365,6 +400,7 @@
 				308F7C4E16BF500275E6733D /* Steddi */,
 				CB28DCE5EA4CE1D184D7CB33 /* SteddiLiveActivity */,
 				37C6378914C2EC30A12BFFE0 /* SteddiTests */,
+				343C8A1B297503B841711CC9 /* SteddiWidget */,
 				D37D0410CC9A26F04BF7651B /* Frameworks */,
 				9C6D36121E1F61E20EE34C4D /* Products */,
 			);
@@ -476,6 +512,7 @@
 			);
 			dependencies = (
 				BCF39B0B5FBBF95F6DB98398 /* PBXTargetDependency */,
+				1E0BDEF40871743DE778BFA3 /* PBXTargetDependency */,
 			);
 			name = Steddi;
 			packageProductDependencies = (
@@ -483,6 +520,24 @@
 			productName = Steddi;
 			productReference = EAA8B2837951D77986E1E11A /* Steddi.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B9DD5DA141931BA4414E702E /* SteddiWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1D2690DD0EEF795BC8763E73 /* Build configuration list for PBXNativeTarget "SteddiWidget" */;
+			buildPhases = (
+				93DF648D7BF1885F07DF3918 /* Sources */,
+				27BE99A96B0570584FA64968 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SteddiWidget;
+			packageProductDependencies = (
+			);
+			productName = SteddiWidget;
+			productReference = 534F293CE883ED26D52B0510 /* SteddiWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -505,6 +560,10 @@
 						DevelopmentTeam = Z46423B3U9;
 						ProvisioningStyle = Automatic;
 					};
+					B9DD5DA141931BA4414E702E = {
+						DevelopmentTeam = Z46423B3U9;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = C4E36FC7115D460BFF59D228 /* Build configuration list for PBXProject "Steddi" */;
@@ -524,6 +583,7 @@
 				49639FACA6971E9D79146305 /* Steddi */,
 				221B44356154BCFC86D01A18 /* SteddiLiveActivity */,
 				3664099A598646D462E4A556 /* SteddiTests */,
+				B9DD5DA141931BA4414E702E /* SteddiWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -622,6 +682,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		93DF648D7BF1885F07DF3918 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				85A049022E0338B7E5E8B084 /* CommuteETAWidget.swift in Sources */,
+				4BD69219F4033B5D7DD61286 /* SteddiWidgetBundle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -629,6 +698,11 @@
 			isa = PBXTargetDependency;
 			target = 49639FACA6971E9D79146305 /* Steddi */;
 			targetProxy = 63718100AA888F161EADF9D8 /* PBXContainerItemProxy */;
+		};
+		1E0BDEF40871743DE778BFA3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B9DD5DA141931BA4414E702E /* SteddiWidget */;
+			targetProxy = D16E1EC100C14A4563A32EBC /* PBXContainerItemProxy */;
 		};
 		BCF39B0B5FBBF95F6DB98398 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -638,6 +712,27 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0D3E8676408912C12EA8280F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = Z46423B3U9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Steddi Widget";
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = to.nathancurtis.steddi.widget;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		1729F5FEDC20B435634D18CC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -806,6 +901,27 @@
 			};
 			name = Debug;
 		};
+		8AB29198221FA52BCA899135 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Steddi/Steddi.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = Z46423B3U9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Steddi Widget";
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = to.nathancurtis.steddi.widget;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		F4F9553CE836FEA95D9881C6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -886,6 +1002,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		1D2690DD0EEF795BC8763E73 /* Build configuration list for PBXNativeTarget "SteddiWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8AB29198221FA52BCA899135 /* Debug */,
+				0D3E8676408912C12EA8280F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		A80352CD5CC34A89F1ED1AF0 /* Build configuration list for PBXNativeTarget "SteddiLiveActivity" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -97,6 +97,11 @@ final class NavigationStateManager {
                 // Build upcoming steps from engine
                 self.upcomingSteps = Self.buildUpcomingSteps(from: engine)
 
+                // Write to shared App Group for widget
+                let widgetDefaults = UserDefaults(suiteName: "group.to.nathancurtis.steddi")
+                widgetDefaults?.set(engine.etaMinutes, forKey: "widget.etaMinutes")
+                widgetDefaults?.set(engine.isNavigating, forKey: "widget.isNavigating")
+
                 if engine.hasArrived {
                     self.hasArrived = true
                     break
