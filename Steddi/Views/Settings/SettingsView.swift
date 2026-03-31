@@ -16,6 +16,8 @@ struct SettingsView: View {
     @AppStorage("steddi.hapticLevel") private var hapticLevel: String = HapticLevel.dynamic.rawValue
     @AppStorage("accentColor") private var accentColor: String = SteddiTheme.AccentOption.lavender.rawValue
     @AppStorage("themeMode") private var themeMode: String = "dynamic"
+    @AppStorage("steddi.passengerMode") private var passengerMode: Bool = false
+    @AppStorage("steddi.accessibilityMode") private var accessibilityMode: Bool = false
 
     @State private var showNoGoEditor = false
     @State private var showThresholdExplainer = false
@@ -130,6 +132,16 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Navigation Defaults")
+                }
+
+                // MARK: - Display Modes
+                Section {
+                    Toggle("Passenger mode", isOn: $passengerMode)
+                    Toggle("Accessibility mode", isOn: $accessibilityMode)
+                } header: {
+                    Text("Display")
+                } footer: {
+                    Text("Passenger mode enlarges text and simplifies controls. Accessibility mode adds high contrast and larger icons. Both can be active together.")
                 }
 
                 // MARK: - Commutes
