@@ -185,3 +185,14 @@
 - Compass shows device magnetometer heading (direction phone faces)
 - Free-look mode during nav (pan/pinch pauses camera, recenter button to resume)
 - Removed .claude/skills from repo
+- App Group entitlement enabled in developer portal and project
+- Per-commute route preview skip option
+- CarPlay dashboard widget with shortcut buttons
+- CarPlay Now Playing integration with steering wheel media controls
+- Live Activities: Dynamic Island compact/expanded, Lock Screen, activity lifecycle
+- Home screen widget: commute ETA (small + medium sizes, App Group shared data)
+- Commute Analytics view with Swift Charts (avg by day, time in traffic, recent drives)
+- Emergency / Breakdown mode (share location, nearby services, emergency contact, roadside)
+- Passenger mode + Accessibility mode (display toggles, text/icon scaling)
+- Fuzzy route parser for natural language route input
+- Website rebuilt: hero map animation, 3D mockups, animated icons, roadmap page, live repo sync
