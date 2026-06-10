@@ -471,7 +471,7 @@ struct NavigationEngineOffRouteTests {
 
         var updatesDelivered = 0
         var firstFireUpdate: Int?
-        engine.onOffRoute = { _, _ in
+        engine.onOffRoute = { _ in
             if firstFireUpdate == nil { firstFireUpdate = updatesDelivered }
         }
 

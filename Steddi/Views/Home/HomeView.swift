@@ -466,9 +466,9 @@ struct HomeView: View {
         self.navigationEngine = engine
         wireSpeedLimits(for: engine)
 
-        engine.onOffRoute = { currentPos, destination in
+        engine.onOffRoute = { event in
             Task { @MainActor [self] in
-                await self.handleOffRoute(from: currentPos, to: destination)
+                await self.handleOffRoute(event)
             }
         }
 
@@ -900,9 +900,9 @@ struct HomeView: View {
         self.navigationEngine = engine
         wireSpeedLimits(for: engine)
 
-        engine.onOffRoute = { currentPos, destination in
+        engine.onOffRoute = { event in
             Task { @MainActor [self] in
-                await self.handleOffRoute(from: currentPos, to: destination)
+                await self.handleOffRoute(event)
             }
         }
 
@@ -1138,6 +1138,11 @@ struct HomeView: View {
     /// Reroute when user deviates from the predefined route.
     /// For custom routes: find nearest point AHEAD on saved polyline, route to rejoin it.
     /// For Apple routes: request fresh directions avoiding U-turns.
+    private func handleOffRoute(_ event: OffRouteEvent) async {
+        guard let destination = navigationEngine?.routePolylineCoordinates.last else { return }
+        await handleOffRoute(from: event.coordinate, to: destination)
+    }
+
     private func handleOffRoute(from currentPos: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) async {
         // If we're on a custom saved route, just reset the off-route counter
         // and let the engine keep tracking. The user will naturally rejoin
@@ -1175,9 +1180,9 @@ struct HomeView: View {
             navigationEngine?.startNavigation(route: bestRoute)
             navigationRoute = bestRoute
 
-            navigationEngine?.onOffRoute = { currentPos, destination in
+            navigationEngine?.onOffRoute = { event in
                 Task { @MainActor [self] in
-                    await self.handleOffRoute(from: currentPos, to: destination)
+                    await self.handleOffRoute(event)
                 }
             }
 

@@ -11,6 +11,24 @@ struct NavStep {
     let maneuverSymbol: String
 }
 
+/// Snapshot of the moment a deviation is confirmed — everything the recovery
+/// pipeline needs to pick a forward rejoin target without re-deriving state.
+/// Fired once per deviation episode; cleared when the driver returns within
+/// the route corridor.
+struct OffRouteEvent {
+    /// Raw GPS coordinate of the confirming fix.
+    let coordinate: CLLocationCoordinate2D
+    /// Raw GPS course of the confirming fix, pre-smoothing — nil when the fix
+    /// reports an invalid course. Never the engine's low-passed bearing.
+    let courseDegrees: Double?
+    /// Ground speed of the confirming fix in meters per second (>= 0).
+    let speedMPS: Double
+    /// Arc-length position on the active route at the confirming fix.
+    let distanceAlongRoute: Double
+    /// Engine step index when the deviation was confirmed.
+    let currentStepIndex: Int
+}
+
 /// Pure custom navigation engine. Works entirely from coordinates and steps.
 /// MKRoute is just an input adapter — the engine never touches Apple routing internals.
 @Observable
@@ -56,10 +74,12 @@ final class NavigationEngine {
 
     // MARK: - Private State
 
-    private var steps: [NavStep] = []
+    /// Active steps — read-only outside so the recovery pipeline can classify
+    /// and splice them; only the engine mutates.
+    private(set) var steps: [NavStep] = []
     private var projector: RouteProjector?
-    private var totalRouteDistance: Double = 0
-    private var originalExpectedTravelTime: TimeInterval = 0
+    private(set) var totalRouteDistance: Double = 0
+    private(set) var originalExpectedTravelTime: TimeInterval = 0
     private var averageSpeedMPS: Double = 0
     private var speedSampleCount: Int = 0
     private var locationUpdateCount: Int = 0
@@ -77,13 +97,17 @@ final class NavigationEngine {
     /// Saved durations beyond this multiple of a direct estimate are treated
     /// as corrupted (legacy chained-leg planner inflation).
     nonisolated static let savedETAInflationBound: Double = 1.4
+    /// In-recovery latch: set when an off-route event fires, cleared when a
+    /// fix projects back within the corridor or navigation (re)starts. While
+    /// latched, no further events fire and guidance holds instead of churning.
+    private var isRecoveringOffRoute = false
     /// Low-pass factor per ~1Hz fix for the published bearing.
     private let headingSmoothingFactor: Double = 0.35
     /// GPS course is only trusted above this ground speed (m/s).
     private let courseMinimumSpeedMPS: Double = 2.5
 
-    /// Fires when user goes off-route. (currentPosition, destination)
-    var onOffRoute: ((CLLocationCoordinate2D, CLLocationCoordinate2D) -> Void)?
+    /// Fires ONCE per deviation episode when the user goes off-route.
+    var onOffRoute: ((OffRouteEvent) -> Void)?
 
     // MARK: - Start from saved polyline (primary path)
 
@@ -97,6 +121,7 @@ final class NavigationEngine {
         averageSpeedMPS = 0
         speedSampleCount = 0
         offRouteCount = 0
+        isRecoveringOffRoute = false
         locationUpdateCount = 0
         navigationToken = UUID()
         routePolylineCoordinates = polyline
@@ -162,6 +187,7 @@ final class NavigationEngine {
         averageSpeedMPS = 0
         speedSampleCount = 0
         offRouteCount = 0
+        isRecoveringOffRoute = false
         locationUpdateCount = 0
     }
 
@@ -308,22 +334,34 @@ final class NavigationEngine {
 
     /// Off-route detection stays on the RAW GPS fix — the projection passed in
     /// is of the raw coordinate, never the snapped one.
+    /// The event fires ONCE per deviation episode: the latch holds until the
+    /// driver returns within the corridor (or a recovery restarts navigation),
+    /// and guidance freezes instead of being pulled backward while off-route.
     private func checkOffRoute(location: CLLocation, projection: RouteProjection?) -> Bool {
         guard let projection else { return false }
         guard locationUpdateCount > offRouteGracePeriod else { return false }
 
         if projection.perpendicularDistance > offRouteDistance {
+            if isRecoveringOffRoute { return true }
             offRouteCount += 1
             if offRouteCount >= offRouteThreshold {
-                guard let destination = routePolylineCoordinates.last else { return false }
                 // The window anchor is stale once the driver leaves the route
                 projector?.resetWindow()
-                onOffRoute?(location.coordinate, destination)
+                isRecoveringOffRoute = true
                 offRouteCount = 0
+                let courseIsValid = location.course >= 0 && location.courseAccuracy >= 0
+                onOffRoute?(OffRouteEvent(
+                    coordinate: location.coordinate,
+                    courseDegrees: courseIsValid ? location.course : nil,
+                    speedMPS: max(0, location.speed),
+                    distanceAlongRoute: projection.distanceAlongRoute,
+                    currentStepIndex: currentStepIndex
+                ))
                 return true
             }
         } else {
             offRouteCount = 0
+            isRecoveringOffRoute = false
         }
 
         return false
@@ -412,7 +450,8 @@ final class NavigationEngine {
     // MARK: - MKRoute Adapter
 
     /// Convert MKRoute.Steps into NavSteps. This is the only place Apple types are used.
-    private static func convertMKRouteToSteps(_ route: MKRoute) -> [NavStep] {
+    /// Internal so the recovery splice can adapt fetched MKRoutes the same way.
+    static func convertMKRouteToSteps(_ route: MKRoute) -> [NavStep] {
         route.steps
             .filter { !$0.instructions.isEmpty }
             .map { step in
