@@ -188,6 +188,27 @@ enum RouteGeometry {
         return coords
     }
 
+    /// One-shot arc-length position of a point on a polyline — full scan over
+    /// every segment, for cases (like recovery planning) that project a few
+    /// points once and don't need RouteProjector's sliding window.
+    static func alongDistance(
+        of point: CLLocationCoordinate2D,
+        polyline: [CLLocationCoordinate2D],
+        cumulative: [Double]
+    ) -> Double {
+        guard polyline.count >= 2, cumulative.count == polyline.count else { return 0 }
+        var bestAlong = 0.0
+        var bestPerp = Double.greatestFiniteMagnitude
+        for i in 0..<(polyline.count - 1) {
+            let projection = projectOntoSegment(point: point, segStart: polyline[i], segEnd: polyline[i + 1])
+            if projection.distance < bestPerp {
+                bestPerp = projection.distance
+                bestAlong = cumulative[i] + projection.t * (cumulative[i + 1] - cumulative[i])
+            }
+        }
+        return bestAlong
+    }
+
     /// Project a point onto one segment. Returns the snapped coordinate, the
     /// fractional position t along the segment, and the perpendicular distance.
     static func projectOntoSegment(

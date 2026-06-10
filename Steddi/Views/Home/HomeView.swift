@@ -57,6 +57,11 @@ struct HomeView: View {
     @State private var activeDirection: CommuteDirection?
     @State private var pendingTraceForSave = false
 
+    // Off-route recovery — single-flight, cooldown, per-trip improvisation count
+    @State private var isRecoveryInFlight = false
+    @State private var lastRecoveryAt: Date?
+    @State private var recoveriesThisTrip = 0
+
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
@@ -1139,8 +1144,152 @@ struct HomeView: View {
     /// For custom routes: find nearest point AHEAD on saved polyline, route to rejoin it.
     /// For Apple routes: request fresh directions avoiding U-turns.
     private func handleOffRoute(_ event: OffRouteEvent) async {
-        guard let destination = navigationEngine?.routePolylineCoordinates.last else { return }
-        await handleOffRoute(from: event.coordinate, to: destination)
+        guard let engine = navigationEngine else { return }
+
+        // Single-flight + cooldown: while a recovery request is pending (or
+        // just resolved), further off-route fires are ignored — no stacked
+        // MKDirections requests, no repeated voice nagging.
+        guard !isRecoveryInFlight else { return }
+        if let last = lastRecoveryAt, Date().timeIntervalSince(last) < 30 { return }
+        isRecoveryInFlight = true
+        lastRecoveryAt = Date()
+        defer { isRecoveryInFlight = false }
+
+        HapticService.shared.fire(.rerouteSuggestion)
+
+        if let savedPolyline = activeSavedPolyline {
+            await recoverOntoSavedRoute(event: event, engine: engine, savedPolyline: savedPolyline)
+        } else if let destination = engine.routePolylineCoordinates.last {
+            await handleOffRoute(from: event.coordinate, to: destination)
+        }
+    }
+
+    /// Forward-momentum recovery onto a predefined route: weight macro legs
+    /// (the freeway, the right direction) over micro waypoints, take the most
+    /// direct path from the divergence to that target, then fall back onto
+    /// the saved route. U-turns are never the default — every candidate is
+    /// ahead of the driver — and none of this is gated by the opportunistic
+    /// reroute threshold.
+    private func recoverOntoSavedRoute(
+        event: OffRouteEvent,
+        engine: NavigationEngine,
+        savedPolyline: [CLLocationCoordinate2D]
+    ) async {
+        let steps = engine.steps
+        let cumulative = RouteGeometry.cumulativeDistances(savedPolyline)
+        let total = cumulative.last ?? 0
+        let alongs = steps.map {
+            RouteGeometry.alongDistance(of: $0.coordinate, polyline: savedPolyline, cumulative: cumulative)
+        }
+        let legs = RouteRecoveryEngine.classifyLegs(steps: steps, alongDistances: alongs, totalDistance: total)
+        let candidates = RouteRecoveryEngine.rejoinCandidates(
+            event: event, legs: legs, steps: steps, alongDistances: alongs,
+            polyline: savedPolyline, totalDistance: total
+        )
+        guard !candidates.isEmpty else { return }
+
+        VoiceGuidanceService.shared.speak("Rerouting ahead to rejoin your route.")
+
+        // Fetch a recovery route to each candidate concurrently.
+        let service = DirectionsService()
+        let origin = event.coordinate
+        let options = await withTaskGroup(of: RecoveryOption?.self) { group in
+            for (index, candidate) in candidates.enumerated() {
+                group.addTask { @MainActor in
+                    guard let route = try? await service.fetchRoute(from: origin, to: candidate.coordinate) else { return nil }
+                    let coords = PolylineEncoder.decode(route.encodedPolyline, precision: 6)
+                    let firstInstructions = route.legs.flatMap(\.steps).prefix(2)
+                        .map(\.instructions).joined(separator: " ").lowercased()
+                    return RecoveryOption(
+                        candidateIndex: index,
+                        etaSeconds: route.duration,
+                        initialBearingDegrees: RouteGeometry.bearing(
+                            atDistance: 0,
+                            polyline: coords,
+                            cumulative: RouteGeometry.cumulativeDistances(coords),
+                            lookAheadMeters: 75
+                        ),
+                        beginsWithUTurn: firstInstructions.contains("u-turn")
+                    )
+                }
+            }
+            var collected: [RecoveryOption] = []
+            for await option in group { if let option { collected.append(option) } }
+            return collected
+        }
+
+        let decision = RouteRecoveryEngine.choose(
+            candidates: candidates, options: options, event: event,
+            totalDistance: total, expectedTravelTime: engine.originalExpectedTravelTime,
+            recoveriesThisTrip: recoveriesThisTrip
+        )
+        recoveriesThisTrip += 1
+
+        switch decision {
+        case .rejoin(let index):
+            guard index < candidates.count,
+                  let option = options.first(where: { $0.candidateIndex == index }),
+                  let route = try? await service.fetchRoute(from: origin, to: candidates[index].coordinate)
+            else {
+                if let destination = savedPolyline.last {
+                    await handleOffRoute(from: event.coordinate, to: destination)
+                }
+                return
+            }
+            _ = option
+            splice(recovery: route, onto: savedPolyline, cumulative: cumulative,
+                   at: candidates[index], steps: steps, alongs: alongs, engine: engine)
+        case .abandonToDestination:
+            if let destination = savedPolyline.last {
+                await handleOffRoute(from: event.coordinate, to: destination)
+            }
+        }
+    }
+
+    /// Stitch the recovery route onto the saved route at the rejoin point and
+    /// restart the engine on the combined geometry — normal guidance then
+    /// falls back onto the predefined route automatically.
+    private func splice(
+        recovery: DirectionsRoute,
+        onto savedPolyline: [CLLocationCoordinate2D],
+        cumulative: [Double],
+        at candidate: RejoinCandidate,
+        steps: [NavStep],
+        alongs: [Double],
+        engine: NavigationEngine
+    ) {
+        let recoveryCoords = PolylineEncoder.decode(recovery.encodedPolyline, precision: 6)
+        guard recoveryCoords.count >= 2 else { return }
+
+        // Saved geometry from the rejoin point forward
+        let rejoinIndex = cumulative.firstIndex(where: { $0 >= candidate.alongDistance }) ?? (savedPolyline.count - 1)
+        let savedTail = Array(savedPolyline[rejoinIndex...])
+
+        // Recovery steps (drop its arrival step) + saved steps from the rejoin
+        let recoverySteps = recovery.legs.flatMap(\.steps)
+            .filter { !DirectionsService.isArrivalStep($0) }
+            .map { SavedStep(from: $0).toNavStep }
+        let savedTailSteps = zip(steps, alongs)
+            .filter { $0.1 >= candidate.alongDistance }
+            .map(\.0)
+
+        let combined = recoveryCoords + savedTail
+        let combinedSteps = recoverySteps + savedTailSteps
+        guard combined.count >= 2, !combinedSteps.isEmpty else { return }
+
+        let remaining = RouteRecoveryEngine.proratedRemainingETA(
+            fromAlong: candidate.alongDistance,
+            totalDistance: cumulative.last ?? 0,
+            expectedTravelTime: engine.originalExpectedTravelTime
+        )
+
+        engine.startNavigation(
+            polyline: combined,
+            steps: combinedSteps,
+            expectedTravelTime: recovery.duration + remaining
+        )
+        activeSavedPolyline = combined
+        navStateManager.activeRouteCoords = combined
     }
 
     private func handleOffRoute(from currentPos: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) async {
