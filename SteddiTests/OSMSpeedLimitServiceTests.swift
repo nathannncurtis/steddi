@@ -424,6 +424,22 @@ struct OSMSpeedLimitCacheTests {
         #expect(service.speedLimit(at: onRoad, heading: nil)?.mph == 25)
     }
 
+    @Test("Every Overpass request carries the exact identifying User-Agent")
+    func userAgentOnEveryRequest() async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // All mirrors fail so every endpoint is exercised in one prefetch.
+        let transport = TransportStub { _ in throw URLError(.timedOut) }
+        let service = OSMSpeedLimitService(transport: transport.transport, cacheDirectory: directory)
+        await service.prefetch(for: polyline, routeKey: "route-1")
+
+        #expect(transport.requests.count == 3)
+        for request in transport.requests {
+            #expect(request.value(forHTTPHeaderField: "User-Agent") == "Steddi/1.0 (steddi.io)")
+        }
+    }
+
     @Test("All mirrors failing leaves no data and no cache")
     func allMirrorsFail() async {
         let directory = tempCacheDirectory()

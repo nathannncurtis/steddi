@@ -493,8 +493,9 @@ private enum Tuning {
         "https://overpass.kumi.systems/api/interpreter",
         "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
     ]
-    /// Identifying User-Agent per Overpass usage policy.
-    static let userAgent = "Steddi/1.0 (to.nathancurtis.steddi; OSM speed limit prefetch)"
+    /// Identifying User-Agent per Overpass usage policy. Public instances
+    /// reject generic agents with 406, so keep this exact and recognizable.
+    static let userAgent = "Steddi/1.0 (steddi.io)"
     static let downsampleToleranceMeters: Double = 25
     static let maxQueryPoints = 250
     static let maxPointsPerClause = 250
