@@ -61,6 +61,10 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     private var smoothedBearing: Double = 0
     private var routeOverlay: MKPolyline?
 
+    /// Steddi's own navigation puck — driven by the engine's snapped pose, so
+    /// it rides the route polyline instead of MapKit's raw-GPS user dot.
+    private var puckAnnotation: SteddiPuckAnnotation?
+
     /// When true, camera auto-follow is paused (user is panning/exploring the map)
     private var isFreeLook = false
     private var recenterButton: UIButton?
@@ -213,10 +217,13 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     }
 
     @objc private func accentColorChanged() {
-        // Update the puck image directly on the existing annotation view
+        // Update the puck image directly on the existing annotation views
         if let userLocation = mapView.userLocation as MKAnnotation?,
            let annotationView = mapView.view(for: userLocation) {
             annotationView.image = Self.makePuckImage()
+        }
+        if let puck = puckAnnotation, let puckView = mapView.view(for: puck) {
+            puckView.image = Self.makePuckImage()
         }
 
         // Refresh route line if showing
@@ -335,9 +342,39 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     /// Saved polyline override — when set, the map renders this instead of MKRoute's polyline.
     var savedPolylineOverride: [CLLocationCoordinate2D]?
 
+    /// Swap the raw-GPS system dot for Steddi's engine-driven puck.
+    private func beginCustomPuck() {
+        mapView.view(for: mapView.userLocation)?.isHidden = true
+        let coord = mapView.userLocation.coordinate
+        if CLLocationCoordinate2DIsValid(coord), coord.latitude != 0 || coord.longitude != 0 {
+            updatePuck(coordinate: coord)
+        }
+    }
+
+    /// Remove the custom puck and restore the system dot.
+    private func endCustomPuck() {
+        if let puck = puckAnnotation {
+            mapView.removeAnnotation(puck)
+            puckAnnotation = nil
+        }
+        mapView.view(for: mapView.userLocation)?.isHidden = false
+    }
+
+    /// Move the custom puck, creating it lazily on the first real coordinate.
+    private func updatePuck(coordinate: CLLocationCoordinate2D) {
+        if let puck = puckAnnotation {
+            puck.coordinate = coordinate
+        } else {
+            let puck = SteddiPuckAnnotation(coordinate: coordinate)
+            puckAnnotation = puck
+            mapView.addAnnotation(puck)
+        }
+    }
+
     func startNavigation(route: MKRoute) {
         guard !isInNavigation else { return }
         isInNavigation = true
+        beginCustomPuck()
 
         // Use saved polyline if available, otherwise use the MKRoute polyline
         if let savedCoords = savedPolylineOverride, savedCoords.count >= 2 {
@@ -369,6 +406,7 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     func startCustomNavigation(polyline: [CLLocationCoordinate2D]) {
         guard !isInNavigation, polyline.count >= 2 else { return }
         isInNavigation = true
+        beginCustomPuck()
         navRouteCoords = polyline
 
         let mkPolyline = MKPolyline(coordinates: polyline, count: polyline.count)
@@ -388,6 +426,7 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         isInNavigation = false
         isFreeLook = false
         recenterButton?.isHidden = true
+        endCustomPuck()
 
         // Remove route overlay
         if let overlay = routeOverlay {
@@ -407,6 +446,20 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
 extension SteddiMapContainer: MKMapViewDelegate {
 
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+        if annotation is SteddiPuckAnnotation {
+            let identifier = "SteddiNavPuck"
+            let puckView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+            puckView.annotation = annotation
+            puckView.image = Self.makePuckImage()
+            puckView.canShowCallout = false
+            // Anchor the triangle's visual centroid — not the image center —
+            // on the coordinate so the puck pivots around its own body
+            puckView.centerOffset = CGPoint(x: 0, y: -6)
+            puckView.zPriority = .max
+            return puckView
+        }
+
         guard annotation is MKUserLocation else { return nil }
 
         let identifier = "SteddiPuck"
@@ -415,6 +468,9 @@ extension SteddiMapContainer: MKMapViewDelegate {
         annotationView.image = Self.makePuckImage()
         annotationView.canShowCallout = false
         annotationView.centerOffset = .zero
+        // The system annotation tracks raw GPS on MapKit's own animation clock —
+        // hidden during nav in favor of the engine-snapped custom puck
+        annotationView.isHidden = isInNavigation
         return annotationView
     }
 
@@ -431,16 +487,20 @@ extension SteddiMapContainer: MKMapViewDelegate {
     }
 
     func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
-        guard isInNavigation, !isFreeLook else { return }
+        guard isInNavigation else { return }
         guard let location = userLocation.location else { return }
 
-        // Snap camera position to route polyline for smooth following
+        // Snap to the route polyline so puck and camera share one position
         let displayCoord: CLLocationCoordinate2D
         if !navRouteCoords.isEmpty {
             displayCoord = NavigationEngine.snapToPolyline(point: location.coordinate, polyline: navRouteCoords)
         } else {
             displayCoord = location.coordinate
         }
+
+        updatePuck(coordinate: displayCoord)
+
+        guard !isFreeLook else { return }
 
         // Use route-based bearing for stable camera
         let routeBearing = Self.bearingAlongRoute(from: location.coordinate, routeCoords: navRouteCoords)
@@ -484,5 +544,20 @@ extension SteddiMapContainer: MKMapViewDelegate {
                 mapView.setCamera(camera, animated: false)
             }
         }
+    }
+}
+
+// MARK: - Custom Puck Annotation
+
+/// Annotation backing Steddi's navigation puck. The coordinate is KVO-compliant
+/// so MKMapView repositions the view when it changes — and updates wrapped in a
+/// CATransaction with actions disabled move it with no implicit animation,
+/// keeping the puck on the same clock as the camera.
+final class SteddiPuckAnnotation: NSObject, MKAnnotation {
+    @objc dynamic var coordinate: CLLocationCoordinate2D
+
+    init(coordinate: CLLocationCoordinate2D) {
+        self.coordinate = coordinate
+        super.init()
     }
 }
