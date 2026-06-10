@@ -1157,9 +1157,14 @@ struct HomeView: View {
     private func startLocationFeed() {
         locationFeedTask?.cancel()
         var updateCount = 0
+        var lastFedTimestamp: Date?
         locationFeedTask = Task { @MainActor in
             while navigationEngine?.isNavigating == true, !Task.isCancelled {
-                if let location = locationService.currentLocation {
+                // Only feed fresh fixes — refeeding the same stale CLLocation
+                // every 500ms churns the engine's published pose for no reason
+                if let location = locationService.currentLocation,
+                   location.timestamp != lastFedTimestamp {
+                    lastFedTimestamp = location.timestamp
                     navigationEngine?.updateLocation(location)
                 }
 
