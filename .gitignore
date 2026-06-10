@@ -23,3 +23,6 @@ Secrets.swift
 .netrc
 tests/__pycache__/
 .claude/
+
+# Xcode user state (nested)
+**/*.xcworkspace/xcuserdata/
