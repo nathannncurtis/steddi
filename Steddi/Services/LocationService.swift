@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import Observation
+import UIKit
 
 /// Manages location permissions and continuous location updates.
 @Observable
@@ -41,6 +42,19 @@ final class LocationService {
                 self?.deviceHeading = heading
             }
         }
+
+        // Keep the magnetometer reference frame in sync with how the phone is
+        // actually held — a portrait frame in a landscape mount skews headings.
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        NotificationCenter.default.addObserver(
+            forName: UIDevice.orientationDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateHeadingOrientation()
+            }
+        }
     }
 
     func requestPermission() {
@@ -52,8 +66,23 @@ final class LocationService {
     }
 
     func startUpdating() {
+        updateHeadingOrientation()
         locationManager.startUpdatingLocation()
         locationManager.startUpdatingHeading()
+    }
+
+    /// Point the heading reference frame at the device's physical orientation.
+    /// Flat or unknown orientations keep the last known frame.
+    private func updateHeadingOrientation() {
+        let orientation: CLDeviceOrientation
+        switch UIDevice.current.orientation {
+        case .portrait: orientation = .portrait
+        case .portraitUpsideDown: orientation = .portraitUpsideDown
+        case .landscapeLeft: orientation = .landscapeLeft
+        case .landscapeRight: orientation = .landscapeRight
+        default: return
+        }
+        locationManager.headingOrientation = orientation
     }
 
     func stopUpdating() {
@@ -102,9 +131,16 @@ private class LocationDelegate: NSObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        // Negative accuracy means the magnetometer reading is invalid — discard
+        guard newHeading.headingAccuracy >= 0 else { return }
         // trueHeading is relative to true north, -1 if unavailable
         let heading = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
         onHeadingUpdate?(heading)
+    }
+
+    func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool {
+        // Let iOS prompt for the figure-eight wave when calibration is needed
+        true
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
