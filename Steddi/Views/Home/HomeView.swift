@@ -852,6 +852,37 @@ struct HomeView: View {
 
             isCalculatingRoute = false
             beginCustomNavigation(polyline: savedCoords, steps: navSteps, expectedTravelTime: savedRoute.typicalDurationSeconds)
+            migrateInflatedPlannedDuration(savedRoute, coords: savedCoords)
+        }
+    }
+
+    /// Lazy migration: legacy planned routes carry durations inflated by the
+    /// old chained per-leg planner (every plot point modeled as a trip
+    /// destination). When a planned route's saved duration blows past the
+    /// sanity bound against a direct estimate, recompute it as one OSRM
+    /// via-route pinned to the saved geometry and persist the result.
+    /// Runs in the background after navigation starts. Idempotent — a
+    /// migrated duration passes the bound and is never re-fetched — and
+    /// guarded: a failed fetch leaves the route untouched.
+    private func migrateInflatedPlannedDuration(_ savedRoute: Route, coords: [CLLocationCoordinate2D]) {
+        guard savedRoute.source == .planned,
+              let saved = savedRoute.typicalDurationSeconds, saved > 0,
+              let origin = coords.first, let destination = coords.last else { return }
+
+        Task {
+            let service = DirectionsService()
+            guard let direct = try? await service.fetchDirectETA(from: origin, to: destination),
+                  NavigationEngine.exceedsSanityBound(saved: saved, directEstimate: direct) else { return }
+
+            // Follow the saved polyline: spike-cleaned, evenly sampled vias
+            let vias = DirectionsService.sampledViaPoints(from: RouteGeometry.removeSpikes(coords))
+            guard let recomputed = try? await service.fetchViaRoute(points: vias),
+                  recomputed.duration > 0, recomputed.duration < saved else { return }
+
+            print("[STEDDI-NAV] migrated inflated planned duration \(Int(saved))s -> \(Int(recomputed.duration))s")
+            savedRoute.typicalDurationSeconds = recomputed.duration
+            savedRoute.distanceMeters = recomputed.distance
+            try? modelContext.save()
         }
     }
 
