@@ -116,18 +116,17 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         mapView.setCamera(camera, animated: true)
     }
 
-    /// Chase-cam: follow user with route-based bearing, smoothed rotation, look-ahead offset
-    func updateCamera(coordinate: CLLocationCoordinate2D, bearing: Double) {
+    /// Chase-cam: follow the engine's snapped pose with its already-smoothed
+    /// bearing. Applied without animation — the engine pose is the single clock,
+    /// so CarPlay never runs its own animation curve against the phone's.
+    func updateNavigationPose(_ pose: NavPose, headingDegrees: Double?) {
         guard isInNavigation, !isFreeLook else { return }
 
-        let routeBearing = SteddiMapContainer.bearingAlongRoute(
-            from: coordinate, routeCoords: navRouteCoords
-        )
-        smoothedBearing = SteddiMapContainer.smoothBearing(
-            current: smoothedBearing, target: routeBearing, factor: 0.15
-        )
-        let lookAhead = SteddiMapContainer.offsetCoordinate(
-            coordinate, distanceMeters: 80, bearingDegrees: smoothedBearing
+        if let heading = headingDegrees ?? pose.segmentBearingDegrees {
+            smoothedBearing = heading
+        }
+        let lookAhead = RouteGeometry.offsetCoordinate(
+            pose.snappedCoordinate, distanceMeters: 80, bearingDegrees: smoothedBearing
         )
 
         let camera = MKMapCamera(
@@ -136,9 +135,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
             pitch: 60,
             heading: smoothedBearing
         )
-        UIView.animate(withDuration: 1.0, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
-            self.mapView.setCamera(camera, animated: false)
-        }
+        mapView.setCamera(camera, animated: false)
     }
 
     // MARK: - Zoom Controls

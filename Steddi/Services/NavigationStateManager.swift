@@ -31,6 +31,9 @@ final class NavigationStateManager {
     var speedLimitMph: Double? = nil
     var headingDegrees: Double? = nil
     var currentCoordinate: CLLocationCoordinate2D? = nil
+    /// Engine-snapped navigation pose — CarPlay reads the same projection the
+    /// phone renders instead of the raw GPS coordinate.
+    var currentPose: NavPose? = nil
     var distanceRemainingMeters: Double = 0
     var etaSeconds: TimeInterval = 0
 
@@ -77,30 +80,7 @@ final class NavigationStateManager {
                 guard let self, let engine = self.activeEngine else { break }
                 guard engine.isNavigating else { break }
 
-                self.instruction = engine.instruction
-                self.stepDistance = engine.stepDistance
-                self.stepDistanceRaw = engine.stepDistanceRaw
-                self.etaMinutes = engine.etaMinutes
-                self.distanceRemaining = engine.distanceRemaining
-                self.arrivalTime = engine.arrivalTime
-                self.roadName = engine.roadName
-                self.maneuverType = engine.maneuverType
-                self.followOnInstruction = engine.followOnInstruction
-                self.followOnManeuverSymbol = engine.followOnManeuverSymbol
-                self.currentSpeedMph = engine.currentSpeedMph
-                self.speedLimitMph = engine.speedLimitMph
-                self.headingDegrees = engine.headingDegrees
-                self.currentCoordinate = engine.currentCoordinate
-                self.distanceRemainingMeters = engine.distanceRemainingMeters
-                self.etaSeconds = engine.etaSeconds
-
-                // Build upcoming steps from engine
-                self.upcomingSteps = Self.buildUpcomingSteps(from: engine)
-
-                // Write to shared App Group for widget
-                let widgetDefaults = UserDefaults(suiteName: "group.to.nathancurtis.steddi")
-                widgetDefaults?.set(engine.etaMinutes, forKey: "widget.etaMinutes")
-                widgetDefaults?.set(engine.isNavigating, forKey: "widget.isNavigating")
+                self.syncFromEngine(engine)
 
                 if engine.hasArrived {
                     self.hasArrived = true
@@ -174,6 +154,36 @@ final class NavigationStateManager {
         }
     }
 
+    /// Copy one tick of engine state into the manager's published properties.
+    /// CarPlay reads these instead of touching the engine directly.
+    func syncFromEngine(_ engine: NavigationEngine) {
+        instruction = engine.instruction
+        stepDistance = engine.stepDistance
+        stepDistanceRaw = engine.stepDistanceRaw
+        etaMinutes = engine.etaMinutes
+        distanceRemaining = engine.distanceRemaining
+        arrivalTime = engine.arrivalTime
+        roadName = engine.roadName
+        maneuverType = engine.maneuverType
+        followOnInstruction = engine.followOnInstruction
+        followOnManeuverSymbol = engine.followOnManeuverSymbol
+        currentSpeedMph = engine.currentSpeedMph
+        speedLimitMph = engine.speedLimitMph
+        headingDegrees = engine.headingDegrees
+        currentCoordinate = engine.currentCoordinate
+        currentPose = engine.navPose
+        distanceRemainingMeters = engine.distanceRemainingMeters
+        etaSeconds = engine.etaSeconds
+
+        // Build upcoming steps from engine
+        upcomingSteps = Self.buildUpcomingSteps(from: engine)
+
+        // Write to shared App Group for widget
+        let widgetDefaults = UserDefaults(suiteName: "group.to.nathancurtis.steddi")
+        widgetDefaults?.set(engine.etaMinutes, forKey: "widget.etaMinutes")
+        widgetDefaults?.set(engine.isNavigating, forKey: "widget.isNavigating")
+    }
+
     func stopObserving() {
         pollingTask?.cancel()
         rerouteTask?.cancel()
@@ -196,6 +206,7 @@ final class NavigationStateManager {
         speedLimitMph = nil
         headingDegrees = nil
         currentCoordinate = nil
+        currentPose = nil
         distanceRemainingMeters = 0
         etaSeconds = 0
         hasArrived = false

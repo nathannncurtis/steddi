@@ -327,11 +327,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self, self.isShowingNavigation else { break }
 
-                // Update map camera
-                if let coord = self.stateManager.currentCoordinate {
-                    self.mapController?.updateCamera(
-                        coordinate: coord,
-                        bearing: self.stateManager.headingDegrees ?? 0
+                // Update map camera from the same snapped pose the phone renders
+                if let pose = self.stateManager.currentPose {
+                    self.mapController?.updateNavigationPose(
+                        pose,
+                        headingDegrees: self.stateManager.headingDegrees
                     )
                 }
 
