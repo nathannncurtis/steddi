@@ -27,14 +27,58 @@ private final class TransportStub: @unchecked Sendable {
     }
 }
 
-private func httpOK(_ data: Data, url: URL?) -> (Data, URLResponse) {
+/// Single-shot async gate: `wait()` suspends until `open()` is called.
+private final class AsyncGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func open() {
+        let resumed: [CheckedContinuation<Void, Never>] = lock.withLock {
+            isOpen = true
+            let waiting = waiters
+            waiters = []
+            return waiting
+        }
+        for waiter in resumed { waiter.resume() }
+    }
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            let resumeNow: Bool = lock.withLock {
+                if isOpen { return true }
+                waiters.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+    }
+}
+
+private final class CallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func next() -> Int {
+        lock.withLock {
+            count += 1
+            return count
+        }
+    }
+}
+
+private func httpResponse(status: Int, data: Data = Data(), url: URL?) -> (Data, URLResponse) {
     let response = HTTPURLResponse(
         url: url ?? URL(fileURLWithPath: "/"),
-        statusCode: 200,
+        statusCode: status,
         httpVersion: nil,
         headerFields: nil
     )
     return (data, response ?? URLResponse())
+}
+
+private func httpOK(_ data: Data, url: URL?) -> (Data, URLResponse) {
+    httpResponse(status: 200, data: data, url: url)
 }
 
 private func wayJSON(id: Int, highway: String, maxspeed: String?, coords: [(Double, Double)]) -> String {
@@ -452,6 +496,132 @@ struct OSMSpeedLimitCacheTests {
         #expect(transport.requests.count == 3)
         #expect(service.loadedRouteKey == nil)
         #expect(service.speedLimit(at: onRoad, heading: nil) == nil)
+    }
+
+    @Test("429 rate limit rotates to the next mirror")
+    func rateLimitRotates() async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let transport = TransportStub { request in
+            if request.url?.host?.contains("overpass-api.de") == true {
+                return httpResponse(status: 429, url: request.url)
+            }
+            return httpOK(overpassData(wayJSON(id: 1, highway: "residential", maxspeed: "25 mph", coords: [(0, 0), (0.001, 0)])), url: request.url)
+        }
+        let service = OSMSpeedLimitService(transport: transport.transport, cacheDirectory: directory)
+        await service.prefetch(for: polyline, routeKey: "route-1")
+
+        #expect(transport.requests.count == 2)
+        #expect(service.speedLimit(at: onRoad, heading: nil)?.mph == 25)
+    }
+
+    @Test("Server error rotates to the next mirror")
+    func serverErrorRotates() async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let transport = TransportStub { request in
+            if request.url?.host?.contains("overpass-api.de") == true {
+                return httpResponse(status: 504, url: request.url)
+            }
+            return httpOK(overpassData(wayJSON(id: 1, highway: "residential", maxspeed: "25 mph", coords: [(0, 0), (0.001, 0)])), url: request.url)
+        }
+        let service = OSMSpeedLimitService(transport: transport.transport, cacheDirectory: directory)
+        await service.prefetch(for: polyline, routeKey: "route-1")
+
+        #expect(transport.requests.count == 2)
+        #expect(service.speedLimit(at: onRoad, heading: nil)?.mph == 25)
+    }
+
+    @Test("Deterministic 4xx aborts without trying the remaining mirrors")
+    func badRequestDoesNotRotate() async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let transport = TransportStub { request in
+            httpResponse(status: 400, url: request.url)
+        }
+        let service = OSMSpeedLimitService(transport: transport.transport, cacheDirectory: directory)
+        await service.prefetch(for: polyline, routeKey: "route-1")
+
+        #expect(transport.requests.count == 1)
+        #expect(service.loadedRouteKey == nil)
+        #expect(service.speedLimit(at: onRoad, heading: nil) == nil)
+    }
+
+    @Test("Cancellation stops mirror rotation immediately", arguments: [true, false])
+    func cancellationStopsRotation(swiftCancellation: Bool) async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let transport = TransportStub { _ in
+            if swiftCancellation { throw CancellationError() }
+            throw URLError(.cancelled)
+        }
+        let service = OSMSpeedLimitService(transport: transport.transport, cacheDirectory: directory)
+        await service.prefetch(for: polyline, routeKey: "route-1")
+
+        #expect(transport.requests.count == 1)
+        #expect(service.loadedRouteKey == nil)
+    }
+
+    @Test("Corrupt cache file is ignored and prefetch falls back to the network")
+    func corruptCacheFallsBack() async throws {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // Truncated JSON at the exact path the prefetch will read.
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let key = OSMSpeedLimitService.cacheKey(for: polyline)
+        try Data(#"{"ways":[{"wayID":1,"limit"#.utf8).write(to: directory.appendingPathComponent("\(key).json"))
+
+        let transport = stub(mph: "25 mph")
+        let service = OSMSpeedLimitService(transport: transport.transport, cacheDirectory: directory)
+        await service.prefetch(for: polyline, routeKey: "route-1")
+
+        #expect(transport.requests.count == 1)
+        #expect(service.loadedRouteKey == "route-1")
+        #expect(service.speedLimit(at: onRoad, heading: nil)?.mph == 25)
+    }
+
+    @Test("In-flight stale prefetch cannot clobber a newer route's data")
+    func stalePrefetchCannotClobber() async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let stalePolyline = [coord(1, 1), coord(1.001, 1)]
+        let arrived = AsyncGate()
+        let release = AsyncGate()
+        let counter = CallCounter()
+
+        // The first request belongs to the stale route: hold it in flight
+        // until the fresh route has fully loaded, then let it finish last.
+        let transport: OSMSpeedLimitService.Transport = { request in
+            if counter.next() == 1 {
+                arrived.open()
+                await release.wait()
+                return httpOK(overpassData(wayJSON(id: 1, highway: "residential", maxspeed: "99 mph", coords: [(1, 1), (1.001, 1)])), url: request.url)
+            }
+            return httpOK(overpassData(wayJSON(id: 2, highway: "residential", maxspeed: "25 mph", coords: [(0, 0), (0.001, 0)])), url: request.url)
+        }
+
+        let service = OSMSpeedLimitService(transport: transport, cacheDirectory: directory)
+        let staleTask = Task { await service.prefetch(for: stalePolyline, routeKey: "stale") }
+        await arrived.wait()
+
+        await service.prefetch(for: polyline, routeKey: "fresh")
+        #expect(service.loadedRouteKey == "fresh")
+        #expect(service.isPrefetching == false)
+
+        release.open()
+        await staleTask.value
+
+        // The slow stale fetch landed last but must not have been installed.
+        #expect(service.loadedRouteKey == "fresh")
+        #expect(service.isPrefetching == false)
+        #expect(service.speedLimit(at: onRoad, heading: nil)?.mph == 25)
+        #expect(service.speedLimit(at: coord(1.0005, 1), heading: nil) == nil)
     }
 }
 
