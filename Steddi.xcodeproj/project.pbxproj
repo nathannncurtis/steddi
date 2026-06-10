@@ -55,6 +55,7 @@
 		9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */; };
 		9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */; };
 		9F54B7F94722C2EE69821F18 /* SteddiWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 534F293CE883ED26D52B0510 /* SteddiWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A22CFFF0BDE370AB28985EC8 /* AdvancedHapticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */; };
 		A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */; };
 		BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29048E65BF78AEB095A5D599 /* CommuteListView.swift */; };
 		BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */; };
@@ -168,6 +169,7 @@
 		72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiMapView.swift; sourceTree = "<group>"; };
 		7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDirectionResolver.swift; sourceTree = "<group>"; };
 		770C65D4283DB277ED143EA4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedHapticsView.swift; sourceTree = "<group>"; };
 		80E59AB1F96A5750EF1F970E /* MeasurementUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementUnit.swift; sourceTree = "<group>"; };
 		82950853F7696A66EC5389FA /* CommuteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDetailView.swift; sourceTree = "<group>"; };
 		8B17DD42334CC352C81C1B71 /* Steddi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Steddi.entitlements; sourceTree = "<group>"; };
@@ -341,6 +343,7 @@
 		92185840C3B254DF92B2AF8F /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */,
 				8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */,
 				F7111C46770386A928275F35 /* SettingsView.swift */,
 				F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */,
@@ -646,6 +649,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A22CFFF0BDE370AB28985EC8 /* AdvancedHapticsView.swift in Sources */,
 				87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */,
 				99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */,
 				64A4B0737C28DA81734CD449 /* CarPlayDashboardDelegate.swift in Sources */,
