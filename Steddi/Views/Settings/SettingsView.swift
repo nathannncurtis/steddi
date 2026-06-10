@@ -130,6 +130,14 @@ struct SettingsView: View {
                             Text(level.displayName).tag(level.rawValue)
                         }
                     }
+
+                    if hapticLevel == HapticLevel.advanced.rawValue {
+                        NavigationLink {
+                            AdvancedHapticsView()
+                        } label: {
+                            Label("Fine-tune haptics", systemImage: "slider.horizontal.3")
+                        }
+                    }
                 } header: {
                     Text("Navigation Defaults")
                 }
