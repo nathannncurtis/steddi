@@ -71,6 +71,12 @@ final class NavigationEngine {
     private var offRouteCount: Int = 0
     private let offRouteThreshold: Int = 5
     private let offRouteGracePeriod: Int = 10
+    /// Identifies the active navigation session so the async saved-ETA sanity
+    /// check can't apply a stale result to a newer route.
+    private var navigationToken = UUID()
+    /// Saved durations beyond this multiple of a direct estimate are treated
+    /// as corrupted (legacy chained-leg planner inflation).
+    nonisolated static let savedETAInflationBound: Double = 1.4
     /// Low-pass factor per ~1Hz fix for the published bearing.
     private let headingSmoothingFactor: Double = 0.35
     /// GPS course is only trusted above this ground speed (m/s).
@@ -92,6 +98,7 @@ final class NavigationEngine {
         speedSampleCount = 0
         offRouteCount = 0
         locationUpdateCount = 0
+        navigationToken = UUID()
         routePolylineCoordinates = polyline
 
         projector = polyline.count >= 2
@@ -99,6 +106,10 @@ final class NavigationEngine {
             : nil
         totalRouteDistance = projector?.totalDistance ?? 0
         originalExpectedTravelTime = expectedTravelTime ?? (totalRouteDistance / 13.4)
+
+        if let expectedTravelTime, totalRouteDistance > 0 {
+            scheduleSavedETASanityCheck(saved: expectedTravelTime)
+        }
 
         if !steps.isEmpty {
             applyStep(at: 0)
@@ -316,6 +327,46 @@ final class NavigationEngine {
         }
 
         return false
+    }
+
+    // MARK: - Saved ETA Sanity Floor
+
+    /// Legacy planned routes can carry durations inflated by chained per-leg
+    /// routing, and that saved value anchors the live ETA until real speed
+    /// samples arrive. Async and non-blocking: navigation starts immediately
+    /// on the saved value and is corrected when a quick direct MKDirections
+    /// estimate lands and the saved duration blows past the sanity bound.
+    private func scheduleSavedETASanityCheck(saved: TimeInterval) {
+        guard let origin = routePolylineCoordinates.first,
+              let destination = routePolylineCoordinates.last else { return }
+        let token = navigationToken
+        let distanceDerived = totalRouteDistance / 13.4
+        Task { [weak self] in
+            guard let direct = try? await DirectionsService().fetchDirectETA(from: origin, to: destination) else { return }
+            guard let self, self.isNavigating, self.navigationToken == token else { return }
+            self.originalExpectedTravelTime = Self.sanitizedExpectedTravelTime(
+                saved: saved,
+                directEstimate: direct,
+                distanceDerived: distanceDerived
+            )
+        }
+    }
+
+    /// True when a saved duration is implausibly large against a direct
+    /// origin-to-destination estimate.
+    nonisolated static func exceedsSanityBound(saved: TimeInterval, directEstimate: TimeInterval) -> Bool {
+        directEstimate > 0 && saved > directEstimate * savedETAInflationBound
+    }
+
+    /// The travel time the live ETA should anchor on. The direct estimate is
+    /// only a corruption detector — the replacement is distance-derived so it
+    /// still reflects the saved route's actual geometry.
+    nonisolated static func sanitizedExpectedTravelTime(
+        saved: TimeInterval,
+        directEstimate: TimeInterval,
+        distanceDerived: TimeInterval
+    ) -> TimeInterval {
+        exceedsSanityBound(saved: saved, directEstimate: directEstimate) ? distanceDerived : saved
     }
 
     // MARK: - Distance & ETA

@@ -775,3 +775,55 @@ struct NavigationEnginePoseTests {
         engine.stopNavigation()
     }
 }
+
+// MARK: - Saved ETA Sanity Bound
+
+@Suite("NavigationEngine saved ETA sanity")
+struct SavedETASanityTests {
+
+    @Test("Inflated saved duration trips the bound")
+    func inflatedTripsBound() {
+        // 30min saved vs 18min direct: 1.67x > 1.4x bound
+        #expect(NavigationEngine.exceedsSanityBound(saved: 1800, directEstimate: 1080))
+    }
+
+    @Test("Plausible saved duration passes")
+    func plausiblePasses() {
+        // Scenic saved route 20% slower than direct is legitimate
+        #expect(!NavigationEngine.exceedsSanityBound(saved: 1296, directEstimate: 1080))
+    }
+
+    @Test("Zero direct estimate never trips")
+    func zeroDirectNeverTrips() {
+        #expect(!NavigationEngine.exceedsSanityBound(saved: 1800, directEstimate: 0))
+    }
+
+    @Test("Sanitized time falls back to distance-derived only when corrupted")
+    func sanitizedSelection() {
+        #expect(NavigationEngine.sanitizedExpectedTravelTime(saved: 1800, directEstimate: 1080, distanceDerived: 1500) == 1500)
+        #expect(NavigationEngine.sanitizedExpectedTravelTime(saved: 1200, directEstimate: 1080, distanceDerived: 1500) == 1200)
+    }
+}
+
+// MARK: - Legacy Saved Step Filtering
+
+@Suite("Route.savedNavSteps legacy filtering")
+@MainActor
+struct SavedNavStepsFilteringTests {
+
+    @Test("Mid-route arrival steps are dropped, final arrival kept")
+    func dropsMidRouteArrivals() throws {
+        let legacy = """
+        [{"instruction":"Head north on Main St","distance":500,"latitude":33.0,"longitude":-117.0,"maneuverSymbol":"location.fill"},
+         {"instruction":"Arrive at your destination","distance":0,"latitude":33.01,"longitude":-117.0,"maneuverSymbol":"flag.fill"},
+         {"instruction":"Turn left onto Oak Ave","distance":800,"latitude":33.01,"longitude":-117.0,"maneuverSymbol":"arrow.turn.up.left"},
+         {"instruction":"Arrive at your destination","distance":0,"latitude":33.02,"longitude":-117.0,"maneuverSymbol":"flag.fill"}]
+        """
+        let route = Route(rank: 0, encodedPolyline: "")
+        route.encodedSteps = legacy
+        let steps = try #require(route.savedNavSteps)
+        #expect(steps.count == 3)
+        #expect(steps[1].instruction.contains("Oak Ave"))
+        #expect(steps.last?.maneuverSymbol == "flag.fill")
+    }
+}
