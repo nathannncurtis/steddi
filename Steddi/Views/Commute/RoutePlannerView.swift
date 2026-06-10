@@ -256,42 +256,39 @@ struct RoutePlannerView: View {
         let allPoints = [origin.coordinate] + waypoints + [dest.coordinate]
 
         do {
-            // If we have waypoints, we need to route through them
-            // For simplicity, chain origin → wp1 → wp2 → ... → destination
             if waypoints.isEmpty {
+                // Single destination: Apple routing
                 let route = try await service.fetchRoute(from: origin.coordinate, to: dest.coordinate)
-                calculatedPolyline = route.encodedPolyline
-                calculatedDistance = route.distance
-                calculatedDuration = route.duration
-                calculatedSteps = route.legs.flatMap { $0.steps }
+                apply(route)
             } else {
-                // Multi-waypoint: chain sequential MKDirections requests and stitch
-                var allCoords: [CLLocationCoordinate2D] = []
-                var allSteps: [DirectionsStep] = []
-                var totalDistance: Double = 0
-                var totalDuration: Double = 0
-
-                for i in 0..<(allPoints.count - 1) {
-                    let segRoute = try await service.fetchRoute(from: allPoints[i], to: allPoints[i + 1])
-                    let segCoords = PolylineEncoder.decode(segRoute.encodedPolyline, precision: 6)
-                    if !allCoords.isEmpty && !segCoords.isEmpty {
-                        allCoords.append(contentsOf: segCoords.dropFirst())
-                    } else {
-                        allCoords.append(contentsOf: segCoords)
+                // Plot points are pass-through vias, not stops. One OSRM
+                // via-route request yields a single through-route — one
+                // distance, one duration, no per-leg arrival spurs.
+                do {
+                    let route = try await service.fetchViaRoute(points: allPoints)
+                    apply(route)
+                } catch {
+                    // OSRM unreachable: chain MKDirections legs, then trim the
+                    // per-leg stop artifacts out of the stitched result.
+                    var legs: [DirectionsRoute] = []
+                    for i in 0..<(allPoints.count - 1) {
+                        legs.append(try await service.fetchRoute(from: allPoints[i], to: allPoints[i + 1]))
                     }
-                    allSteps.append(contentsOf: segRoute.legs.flatMap { $0.steps })
-                    totalDistance += segRoute.distance
-                    totalDuration += segRoute.duration
+                    if let stitched = DirectionsService.stitchTrimmedLegs(legs) {
+                        apply(stitched)
+                    }
                 }
-
-                calculatedPolyline = PolylineEncoder.encode(allCoords, precision: 6)
-                calculatedDistance = totalDistance
-                calculatedDuration = totalDuration
-                calculatedSteps = allSteps
             }
         } catch {}
 
         isCalculating = false
+    }
+
+    private func apply(_ route: DirectionsRoute) {
+        calculatedPolyline = route.encodedPolyline
+        calculatedDistance = route.distance
+        calculatedDuration = route.duration
+        calculatedSteps = route.legs.flatMap { $0.steps }
     }
 
     // MARK: - Save
