@@ -35,7 +35,9 @@ final class NavigationEngine {
     var followOnManeuverSymbol: String = ""
     var currentSpeedMph: Double = 0
     var speedLimitMph: Double? = nil
-    var headingDegrees: Double = 0
+    /// Smoothed travel bearing. nil until the first valid bearing — never a
+    /// due-north sentinel, and held (not reset) when no new bearing is available.
+    var headingDegrees: Double? = nil
     var currentCoordinate: CLLocationCoordinate2D?
     var snappedCoordinate: CLLocationCoordinate2D?
     /// Unified projection of the latest GPS fix onto the route — the single
@@ -63,6 +65,10 @@ final class NavigationEngine {
     private var offRouteCount: Int = 0
     private let offRouteThreshold: Int = 5
     private let offRouteGracePeriod: Int = 10
+    /// Low-pass factor per ~1Hz fix for the published bearing.
+    private let headingSmoothingFactor: Double = 0.35
+    /// GPS course is only trusted above this ground speed (m/s).
+    private let courseMinimumSpeedMPS: Double = 2.5
 
     /// Fires when user goes off-route. (currentPosition, destination)
     var onOffRoute: ((CLLocationCoordinate2D, CLLocationCoordinate2D) -> Void)?
@@ -127,7 +133,7 @@ final class NavigationEngine {
         followOnManeuverSymbol = ""
         currentSpeedMph = 0
         speedLimitMph = nil
-        headingDegrees = 0
+        headingDegrees = nil
         currentCoordinate = nil
         snappedCoordinate = nil
         navPose = nil
@@ -186,12 +192,27 @@ final class NavigationEngine {
         updateDistancesAndETA(location: location, projection: projection)
     }
 
-    /// Transitional heading update — route bearing when available, GPS course otherwise.
+    /// Published bearing priority:
+    /// (a) route segment bearing while on-route (snap within the off-route radius),
+    /// (b) valid GPS course while actually moving,
+    /// (c) otherwise HOLD the previous bearing — never reset mid-drive.
+    /// The chosen target is circular low-pass filtered before publishing.
     private func updateHeading(location: CLLocation, projection: RouteProjection?, speedMPS: Double) {
-        if let routeBearing = navPose?.segmentBearingDegrees {
-            headingDegrees = routeBearing
-        } else if location.course >= 0 {
-            headingDegrees = location.course
+        let target: Double?
+        if let projection, projection.perpendicularDistance < offRouteDistance,
+           let routeBearing = navPose?.segmentBearingDegrees {
+            target = routeBearing
+        } else if location.course >= 0, location.courseAccuracy >= 0, speedMPS > courseMinimumSpeedMPS {
+            target = location.course
+        } else {
+            target = nil
+        }
+
+        guard let target else { return }
+        if let current = headingDegrees {
+            headingDegrees = RouteGeometry.smoothBearing(current: current, target: target, factor: headingSmoothingFactor)
+        } else {
+            headingDegrees = target
         }
     }
 

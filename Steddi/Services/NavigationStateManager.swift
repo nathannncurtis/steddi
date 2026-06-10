@@ -29,7 +29,7 @@ final class NavigationStateManager {
 
     var currentSpeedMph: Double = 0
     var speedLimitMph: Double? = nil
-    var headingDegrees: Double = 0
+    var headingDegrees: Double? = nil
     var currentCoordinate: CLLocationCoordinate2D? = nil
     var distanceRemainingMeters: Double = 0
     var etaSeconds: TimeInterval = 0
@@ -194,7 +194,7 @@ final class NavigationStateManager {
         followOnManeuverSymbol = ""
         currentSpeedMph = 0
         speedLimitMph = nil
-        headingDegrees = 0
+        headingDegrees = nil
         currentCoordinate = nil
         distanceRemainingMeters = 0
         etaSeconds = 0

@@ -331,7 +331,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 if let coord = self.stateManager.currentCoordinate {
                     self.mapController?.updateCamera(
                         coordinate: coord,
-                        bearing: self.stateManager.headingDegrees
+                        bearing: self.stateManager.headingDegrees ?? 0
                     )
                 }
 
