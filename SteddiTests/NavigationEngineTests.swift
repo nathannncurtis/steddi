@@ -315,3 +315,108 @@ struct NavigationEngineStateTests {
         #expect(engine.isNavigating == false)
     }
 }
+
+// MARK: - Off-Route Detection Tests
+
+@Suite("NavigationEngine off-route detection")
+@MainActor
+struct NavigationEngineOffRouteTests {
+
+    /// Victoria Ave corridor (TestLocations/victoria_clean_drive.waypoints)
+    private static let corridor: [CLLocationCoordinate2D] = [
+        .init(latitude: 33.957140, longitude: -117.350939),
+        .init(latitude: 33.961500, longitude: -117.355800),
+        .init(latitude: 33.966000, longitude: -117.360700),
+        .init(latitude: 33.968000, longitude: -117.362900),
+        .init(latitude: 33.969500, longitude: -117.364500),
+        .init(latitude: 33.973500, longitude: -117.370300),
+        .init(latitude: 33.977740, longitude: -117.376010)
+    ]
+
+    /// Same drive with a mid-drive deviation (TestLocations/victoria_offroute_drive.waypoints)
+    private static let offRouteDrive: [CLLocationCoordinate2D] = [
+        .init(latitude: 33.957140, longitude: -117.350939),
+        .init(latitude: 33.961500, longitude: -117.355800),
+        .init(latitude: 33.966000, longitude: -117.360700),
+        .init(latitude: 33.968000, longitude: -117.362900),
+        .init(latitude: 33.966500, longitude: -117.366500),
+        .init(latitude: 33.965800, longitude: -117.368000),
+        .init(latitude: 33.969500, longitude: -117.364500),
+        .init(latitude: 33.973500, longitude: -117.370300),
+        .init(latitude: 33.977740, longitude: -117.376010)
+    ]
+
+    @Test("Victoria off-route drive fires after grace period plus consecutive threshold")
+    func offRouteFiresOnDeviation() throws {
+        let engine = NavigationEngine()
+        let steps = [
+            NavStep(instruction: "", distance: 3500, coordinate: Self.corridor[0], maneuverSymbol: "location.fill"),
+            NavStep(instruction: "", distance: 0, coordinate: Self.corridor[6], maneuverSymbol: "flag.fill")
+        ]
+        engine.startNavigation(polyline: Self.corridor, steps: steps)
+
+        // 15 m/s sampled every 500ms, matching tests/sim/drive.sh defaults
+        let locations = Self.driveLocations(along: Self.offRouteDrive, speedMPS: 15, cadence: 0.5)
+
+        var updatesDelivered = 0
+        var firstFireUpdate: Int?
+        engine.onOffRoute = { _, _ in
+            if firstFireUpdate == nil { firstFireUpdate = updatesDelivered }
+        }
+
+        for location in locations {
+            updatesDelivered += 1
+            engine.updateLocation(location)
+        }
+
+        // First update more than 80m off the corridor (1-based, matching update count)
+        let deviationStart = try #require(locations.firstIndex { location in
+            NavigationEngine.distanceFromPointToNearestSegment(
+                point: location.coordinate,
+                polyline: Self.corridor
+            ).perpendicularDistance > 80
+        }) + 1
+
+        let fireUpdate = try #require(firstFireUpdate)
+        #expect(fireUpdate > 10 + 5)
+        #expect(fireUpdate == deviationStart + 4)
+    }
+
+    /// Interpolate a waypoint path into evenly spaced synthetic CLLocations at a fixed cadence.
+    private static func driveLocations(
+        along path: [CLLocationCoordinate2D],
+        speedMPS: Double,
+        cadence: TimeInterval
+    ) -> [CLLocation] {
+        let spacing = speedMPS * cadence
+        var coords: [CLLocationCoordinate2D] = []
+        for i in 0..<(path.count - 1) {
+            let a = path[i]
+            let b = path[i + 1]
+            let samples = max(1, Int(NavigationEngine.haversineDistance(from: a, to: b) / spacing))
+            for sample in 0..<samples {
+                let t = Double(sample) / Double(samples)
+                coords.append(CLLocationCoordinate2D(
+                    latitude: a.latitude + (b.latitude - a.latitude) * t,
+                    longitude: a.longitude + (b.longitude - a.longitude) * t
+                ))
+            }
+        }
+        if let last = path.last {
+            coords.append(last)
+        }
+
+        let start = Date()
+        return coords.enumerated().map { index, coord in
+            CLLocation(
+                coordinate: coord,
+                altitude: 0,
+                horizontalAccuracy: 5,
+                verticalAccuracy: 5,
+                course: 0,
+                speed: speedMPS,
+                timestamp: start.addingTimeInterval(cadence * Double(index))
+            )
+        }
+    }
+}
