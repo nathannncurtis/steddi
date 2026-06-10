@@ -46,6 +46,7 @@
 		87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */; };
 		8A10CAD68217E7C75BC381C3 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */; };
 		8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82950853F7696A66EC5389FA /* CommuteDetailView.swift */; };
+		8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B46BB7337E920209A89889 /* HapticServiceTests.swift */; };
 		8C42BC8E8487C5F21A0D7EA4 /* NavigationAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B27E56129045AE269369A6 /* NavigationAttributes.swift */; };
 		8C6902233D467F3E4CC209D5 /* CarPlay.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 536F40426EDB0B72A580D76E /* CarPlay.framework */; };
 		943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */; };
@@ -129,6 +130,7 @@
 		03B614E4431FE25A25512707 /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiNavOverlay.swift; sourceTree = "<group>"; };
 		06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSceneDelegate.swift; sourceTree = "<group>"; };
+		08B46BB7337E920209A89889 /* HapticServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticServiceTests.swift; sourceTree = "<group>"; };
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
 		139001D61F9DF7A2C5C5060C /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
@@ -317,6 +319,7 @@
 		37C6378914C2EC30A12BFFE0 /* SteddiTests */ = {
 			isa = PBXGroup;
 			children = (
+				08B46BB7337E920209A89889 /* HapticServiceTests.swift */,
 				4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */,
 				16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */,
 				EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */,
@@ -717,6 +720,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */,
 				0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */,
 				2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */,
 				516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */,
