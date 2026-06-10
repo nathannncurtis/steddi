@@ -17,6 +17,7 @@
 		1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50B3D1495689CE92E4ED80B /* GeocodingService.swift */; };
 		1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */; };
 		26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */; };
+		2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */; };
 		2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
 		3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335291BA198DC1134B9072E8 /* LocationPickerView.swift */; };
@@ -195,6 +196,7 @@
 		BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayDashboardDelegate.swift; sourceTree = "<group>"; };
 		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
 		BF8849F63A69650A3821B776 /* SteddiLiveActivity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteddiLiveActivity.entitlements; sourceTree = "<group>"; };
+		C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMSpeedLimitService.swift; sourceTree = "<group>"; };
 		C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteETAWidget.swift; sourceTree = "<group>"; };
 		C3B24C7F73BAB34A1C42E122 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
@@ -476,6 +478,7 @@
 				DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */,
 				03B614E4431FE25A25512707 /* NowPlayingService.swift */,
 				F62156E1FDD078D989A2441A /* OfflineCacheService.swift */,
+				C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */,
 				0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */,
 				BA9033EAA004A2509272285E /* RouteGeometry.swift */,
 				262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */,
@@ -697,6 +700,7 @@
 				967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */,
 				57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */,
 				D458D1FFCB26A8CB84EE42C6 /* NowPlayingService.swift in Sources */,
+				2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */,
 				6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */,
 				87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */,
 				588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */,
