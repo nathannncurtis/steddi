@@ -27,14 +27,29 @@ struct ModelStoreLocatorSelectionTests {
         }
     }
 
-    @Test("Nil group container falls back to legacy URL")
+    @Test("Nil group container falls back to the existing legacy store")
     func nilGroupFallsBackToLegacy() throws {
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         let legacy = dir.appendingPathComponent("default.store")
+        try writeStore(at: legacy, contents: "legacy-data")
 
-        let selection = ModelStoreLocator.selectStoreURL(groupURL: nil, legacyURL: legacy)
+        let selection = ModelStoreLocator.selectStoreURL(groupURL: nil, legacyCandidates: [legacy])
         #expect(selection == .legacy(legacy))
+    }
+
+    @Test("Nil group container with no stores falls back to the last candidate")
+    func nilGroupNoStoresFallsBackToLastCandidate() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let primary = dir.appendingPathComponent("group-legacy/default.store")
+        let sandbox = dir.appendingPathComponent("sandbox/default.store")
+
+        let selection = ModelStoreLocator.selectStoreURL(
+            groupURL: nil,
+            legacyCandidates: [primary, sandbox]
+        )
+        #expect(selection == .legacy(sandbox))
     }
 
     @Test("Fresh install with no stores picks the group URL")
@@ -44,7 +59,7 @@ struct ModelStoreLocatorSelectionTests {
         let group = dir.appendingPathComponent("group/Steddi.store")
         let legacy = dir.appendingPathComponent("legacy/default.store")
 
-        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyURL: legacy)
+        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyCandidates: [legacy])
         #expect(selection == .group(group))
         // Nothing to migrate — no file should appear
         #expect(!FileManager.default.fileExists(atPath: group.path))
@@ -58,7 +73,7 @@ struct ModelStoreLocatorSelectionTests {
         let legacy = dir.appendingPathComponent("legacy/default.store")
         try writeStore(at: legacy, contents: "legacy-data")
 
-        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyURL: legacy)
+        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyCandidates: [legacy])
         #expect(selection == .group(group))
 
         // All three files copied
@@ -72,6 +87,63 @@ struct ModelStoreLocatorSelectionTests {
         #expect(FileManager.default.fileExists(atPath: legacy.path + "-wal"))
     }
 
+    @Test("First existing legacy candidate wins")
+    func firstExistingCandidateWins() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let group = dir.appendingPathComponent("group/Steddi.store")
+        // Primary candidate (group-container default location) missing,
+        // secondary (sandbox) present.
+        let primary = dir.appendingPathComponent("group-legacy/default.store")
+        let sandbox = dir.appendingPathComponent("sandbox/default.store")
+        try writeStore(at: sandbox, contents: "sandbox-data")
+
+        let selection = ModelStoreLocator.selectStoreURL(
+            groupURL: group,
+            legacyCandidates: [primary, sandbox]
+        )
+        #expect(selection == .group(group))
+        #expect(try String(contentsOf: group, encoding: .utf8) == "sandbox-data")
+    }
+
+    @Test("Primary legacy candidate preferred over later ones")
+    func primaryCandidatePreferred() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let group = dir.appendingPathComponent("group/Steddi.store")
+        let primary = dir.appendingPathComponent("group-legacy/default.store")
+        let sandbox = dir.appendingPathComponent("sandbox/default.store")
+        try writeStore(at: primary, contents: "primary-data")
+        try writeStore(at: sandbox, contents: "sandbox-data")
+
+        let selection = ModelStoreLocator.selectStoreURL(
+            groupURL: group,
+            legacyCandidates: [primary, sandbox]
+        )
+        #expect(selection == .group(group))
+        #expect(try String(contentsOf: group, encoding: .utf8) == "primary-data")
+    }
+
+    @Test("Migration is idempotent across repeated launches")
+    func migrationIsIdempotent() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let group = dir.appendingPathComponent("group/Steddi.store")
+        let legacy = dir.appendingPathComponent("legacy/default.store")
+        try writeStore(at: legacy, contents: "legacy-data")
+
+        _ = ModelStoreLocator.selectStoreURL(groupURL: group, legacyCandidates: [legacy])
+        // Simulate the app writing to the migrated store, then a relaunch.
+        try Data("group-data-after-use".utf8).write(to: group)
+        let second = ModelStoreLocator.selectStoreURL(groupURL: group, legacyCandidates: [legacy])
+
+        #expect(second == .group(group))
+        // Relaunch must not re-copy over live data.
+        #expect(try String(contentsOf: group, encoding: .utf8) == "group-data-after-use")
+        // Legacy store still never deleted.
+        #expect(FileManager.default.fileExists(atPath: legacy.path))
+    }
+
     @Test("Legacy store without sidecars still migrates the main file")
     func migratesWithoutSidecars() throws {
         let dir = try makeTempDir()
@@ -80,7 +152,7 @@ struct ModelStoreLocatorSelectionTests {
         let legacy = dir.appendingPathComponent("legacy/default.store")
         try writeStore(at: legacy, contents: "solo", sidecars: false)
 
-        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyURL: legacy)
+        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyCandidates: [legacy])
         #expect(selection == .group(group))
         #expect(try String(contentsOf: group, encoding: .utf8) == "solo")
         #expect(!FileManager.default.fileExists(atPath: group.path + "-shm"))
@@ -96,7 +168,7 @@ struct ModelStoreLocatorSelectionTests {
         try writeStore(at: group, contents: "group-data")
         try writeStore(at: legacy, contents: "legacy-data")
 
-        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyURL: legacy)
+        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyCandidates: [legacy])
         #expect(selection == .group(group))
         #expect(try String(contentsOf: group, encoding: .utf8) == "group-data")
     }
@@ -113,10 +185,27 @@ struct ModelStoreLocatorSelectionTests {
         try Data("file".utf8).write(to: blocker)
         let group = blocker.appendingPathComponent("nested/Steddi.store")
 
-        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyURL: legacy)
+        let selection = ModelStoreLocator.selectStoreURL(groupURL: group, legacyCandidates: [legacy])
         #expect(selection == .legacy(legacy))
         // Legacy store untouched
         #expect(try String(contentsOf: legacy, encoding: .utf8) == "legacy-data")
+    }
+
+    @Test("Copy staging leaves no temporary directories behind")
+    func copyLeavesNoStagingBehind() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let group = dir.appendingPathComponent("group/Steddi.store")
+        let legacy = dir.appendingPathComponent("legacy/default.store")
+        try writeStore(at: legacy, contents: "legacy-data")
+
+        try ModelStoreLocator.copyStoreFiles(from: legacy, to: group)
+
+        let leftovers = try FileManager.default
+            .contentsOfDirectory(atPath: group.deletingLastPathComponent().path)
+            .filter { $0.hasPrefix(".store-migration") }
+        #expect(leftovers.isEmpty)
+        #expect(try String(contentsOf: group, encoding: .utf8) == "legacy-data")
     }
 }
 
@@ -128,17 +217,38 @@ struct ModelStoreLocatorURLTests {
     @Test("Group store URL uses the fixed filename outside Application Support")
     func groupStoreURLInContainer() {
         // On simulator/device with the entitlement this resolves; the store
-        // file must sit in the group container, distinct from the legacy path.
+        // file must sit in the group container, distinct from the legacy paths.
         if let url = ModelStoreLocator.groupStoreURL() {
             #expect(url.lastPathComponent == ModelStoreLocator.storeFilename)
-            #expect(url != ModelStoreLocator.legacyStoreURL())
+            #expect(!ModelStoreLocator.legacyStoreCandidates().contains(url))
         }
     }
 
-    @Test("Legacy store URL is the SwiftData default location")
-    func legacyStoreURLDefault() {
-        let url = ModelStoreLocator.legacyStoreURL()
-        #expect(url.lastPathComponent == "default.store")
-        #expect(url.path.contains("Application Support"))
+    @Test("Primary legacy candidate is the group container's default store")
+    func primaryLegacyCandidateIsGroupDefaultStore() throws {
+        // Regression test for the upgrade data-loss bug: with an app-group
+        // entitlement, SwiftData's default ModelContainer lives at
+        // <group>/Library/Application Support/default.store — that path MUST
+        // be the first legacy candidate or existing installs never migrate.
+        let groupContainer = try #require(
+            FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: ModelStoreLocator.appGroupIdentifier
+            )
+        )
+        let candidates = ModelStoreLocator.legacyStoreCandidates()
+        let primary = try #require(candidates.first)
+
+        let expected = groupContainer
+            .appendingPathComponent("Library/Application Support", isDirectory: true)
+            .appendingPathComponent("default.store")
+        #expect(primary.standardizedFileURL.path == expected.standardizedFileURL.path)
+    }
+
+    @Test("Sandbox Application Support default store is kept as a fallback candidate")
+    func sandboxCandidateKeptAsFallback() {
+        let sandbox = URL.applicationSupportDirectory.appendingPathComponent("default.store")
+        let candidates = ModelStoreLocator.legacyStoreCandidates()
+        #expect(candidates.last?.standardizedFileURL.path == sandbox.standardizedFileURL.path)
+        #expect(candidates.allSatisfy { $0.lastPathComponent == "default.store" })
     }
 }
