@@ -18,6 +18,18 @@ struct VoiceOptionTests {
         }
     }
 
+    // Guards against a regression that makes resolve() always return nil:
+    // the fallback chain ends in speechVoices().first, so on any non-empty
+    // catalog every option must resolve to something. Only vacuous in the
+    // broken-voice-db state where the catalog itself is empty.
+    @Test("every option resolves when the voice catalog is non-empty")
+    func resolveFindsVoiceOnHealthyCatalog() {
+        guard !AVSpeechSynthesisVoice.speechVoices().isEmpty else { return }
+        for option in VoiceOption.allCases {
+            #expect(option.resolve() != nil, "\(option) should resolve on a non-empty catalog")
+        }
+    }
+
     @Test("display names are unique and non-empty")
     func displayNames() {
         let names = VoiceOption.allCases.map(\.displayName)
