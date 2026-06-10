@@ -56,9 +56,11 @@ final class OSMSpeedLimitService {
     private var segments: [Segment] = []
     private var grid: [GridCell: [Int]] = [:]
 
-    /// Hysteresis: stick with the last matched way unless a challenger stays
-    /// meaningfully closer for several consecutive lookups.
+    /// Hysteresis: stick with the last matched way unless the same challenger
+    /// stays meaningfully closer for several consecutive lookups. The streak
+    /// is per-challenger — two different ways alternating must not pool one.
     private var lastWayIndex: Int?
+    private var challengerIndex: Int?
     private var challengerStreak = 0
 
     init(
@@ -147,6 +149,11 @@ final class OSMSpeedLimitService {
         grid = index.grid
         loadedRouteKey = routeKey
         lastWayIndex = nil
+        resetChallenger()
+    }
+
+    private func resetChallenger() {
+        challengerIndex = nil
         challengerStreak = 0
     }
 
@@ -171,8 +178,14 @@ final class OSMSpeedLimitService {
                 ))
 
                 // Register the segment in every cell its bounding box covers.
+                // A single segment spanning more than ~100km of cells on one
+                // axis is corrupt data or an antimeridian crossing (longitude
+                // jumping 179.99 -> -179.99 would enumerate ~360k cells), so
+                // leave it out of the grid rather than blow up the index.
                 let latRange = Self.cellRange(a.latitude, b.latitude)
                 let lonRange = Self.cellRange(a.longitude, b.longitude)
+                guard latRange.count <= Tuning.maxCellSpanPerSegment,
+                      lonRange.count <= Tuning.maxCellSpanPerSegment else { continue }
                 for latCell in latRange {
                     for lonCell in lonRange {
                         grid[GridCell(lat: latCell, lon: lonCell), default: []].append(segmentIndex)
@@ -218,7 +231,7 @@ final class OSMSpeedLimitService {
 
         guard let nearest = wayDistances.min(by: { $0.value < $1.value }) else {
             lastWayIndex = nil
-            challengerStreak = 0
+            resetChallenger()
             return nil
         }
 
@@ -226,23 +239,29 @@ final class OSMSpeedLimitService {
         if let last = lastWayIndex, last != nearest.key {
             if let lastDistance = wayDistances[last] {
                 if nearest.value < lastDistance - Tuning.hysteresisMarginMeters {
-                    // Challenger is meaningfully closer — switch only after a streak.
-                    challengerStreak += 1
+                    // Challenger is meaningfully closer — switch only after the
+                    // same way sustains the streak.
+                    if challengerIndex == nearest.key {
+                        challengerStreak += 1
+                    } else {
+                        challengerIndex = nearest.key
+                        challengerStreak = 1
+                    }
                     if challengerStreak < Tuning.hysteresisLookups {
                         chosen = last
                     } else {
-                        challengerStreak = 0
+                        resetChallenger()
                     }
                 } else {
-                    challengerStreak = 0
+                    resetChallenger()
                     chosen = last
                 }
             } else {
                 // Last way is no longer a candidate — switch immediately.
-                challengerStreak = 0
+                resetChallenger()
             }
         } else {
-            challengerStreak = 0
+            resetChallenger()
         }
 
         lastWayIndex = chosen
@@ -557,6 +576,9 @@ private enum Tuning {
     static let cacheTTL: TimeInterval = 30 * 24 * 3600
     static let mphPerKmh = 0.621371
     static let cellSizeDegrees = 0.001
+    /// Bounding-box guard for grid registration: no plausible OSM way segment
+    /// spans 1000 cells (~1.1 degrees) on an axis.
+    static let maxCellSpanPerSegment = 1000
     static let matchRadiusMeters: Double = 30
     static let headingToleranceDegrees: Double = 50
     static let hysteresisMarginMeters: Double = 5

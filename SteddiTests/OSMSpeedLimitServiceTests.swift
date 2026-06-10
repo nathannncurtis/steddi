@@ -565,6 +565,34 @@ struct OSMSpeedLimitLookupTests {
         }
     }
 
+    @Test("Two different challengers cannot pool one hysteresis streak")
+    func alternatingChallengersDoNotPool() {
+        let service = makeOfflineService()
+        service.loadWays([
+            makeWay(id: 1, mph: 25, coords: [(0, 0), (0.001, 0)]),
+            makeWay(id: 2, mph: 45, coords: [(0, 0.0003), (0.001, 0.0003)]),
+            makeWay(id: 3, mph: 55, coords: [(0, -0.0003), (0.001, -0.0003)]),
+        ], routeKey: "r")
+
+        // Lock onto way 1.
+        #expect(service.speedLimit(at: coord(0.0005, 0), heading: nil)?.mph == 25)
+
+        // Alternate between points where way 2, then way 3, is the meaningfully
+        // closer challenger (5.5m vs 27.8m to way 1, inside the 30m gate). Each
+        // alternation restarts the streak, so way 1 must hold through all six.
+        let nearWayTwo = coord(0.0005, 0.00025)
+        let nearWayThree = coord(0.0005, -0.00025)
+        for _ in 0..<3 {
+            #expect(service.speedLimit(at: nearWayTwo, heading: nil)?.mph == 25)
+            #expect(service.speedLimit(at: nearWayThree, heading: nil)?.mph == 25)
+        }
+
+        // A consistent challenger still wins after three straight lookups.
+        #expect(service.speedLimit(at: nearWayTwo, heading: nil)?.mph == 25)
+        #expect(service.speedLimit(at: nearWayTwo, heading: nil)?.mph == 25)
+        #expect(service.speedLimit(at: nearWayTwo, heading: nil)?.mph == 45)
+    }
+
     @Test("Hysteresis resets when last way drops out of range")
     func hysteresisResetsWhenLastWayGone() {
         let service = makeOfflineService()
@@ -684,6 +712,21 @@ struct OSMSpeedLimitLookupTests {
 
         #expect(service.speedLimit(at: coord(0.00005, 0.0005), heading: nil)?.mph == 30)
         #expect(service.speedLimit(at: coord(-0.00015, 0.0005), heading: nil)?.mph == 30)
+    }
+
+    @Test("Antimeridian-spanning segment is excluded from the grid")
+    func antimeridianSegmentExcluded() {
+        let service = makeOfflineService()
+        // The wrap segment's longitude bounding box covers ~360k cells; it must
+        // be skipped entirely, without breaking indexing of the normal way.
+        service.loadWays([
+            makeWay(id: 1, mph: 25, coords: [(0, -179.9995), (0, 179.9995)]),
+            makeWay(id: 2, mph: 45, coords: [(0, 0), (0.001, 0)]),
+        ], routeKey: "r")
+
+        #expect(service.speedLimit(at: coord(0, -179.9995), heading: nil) == nil)
+        #expect(service.speedLimit(at: coord(0, 179.9995), heading: nil) == nil)
+        #expect(service.speedLimit(at: coord(0.0005, 0), heading: nil)?.mph == 45)
     }
 
     @Test("Way two cells away but outside 30m is not matched")
