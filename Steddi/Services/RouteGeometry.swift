@@ -150,6 +150,44 @@ enum RouteGeometry {
         return bearing(from: from, to: to)
     }
 
+    /// Collapse out-and-back spikes (… A → B → A …) left in stitched geometry
+    /// by legacy chained per-leg routing, where every plot point became a trip
+    /// destination with a snap-to-address spur. Iterates until stable so
+    /// multi-vertex spurs fully unwind. Adjacent near-duplicates are deduped.
+    static func removeSpikes(
+        _ polyline: [CLLocationCoordinate2D],
+        epsilonMeters: Double = 3
+    ) -> [CLLocationCoordinate2D] {
+        var coords = polyline
+        var changed = true
+        while changed {
+            changed = false
+
+            // Dedupe adjacent vertices within epsilon
+            var deduped: [CLLocationCoordinate2D] = []
+            for coord in coords {
+                if let last = deduped.last, haversineDistance(from: last, to: coord) < epsilonMeters {
+                    continue
+                }
+                deduped.append(coord)
+            }
+            if deduped.count != coords.count { changed = true }
+            coords = deduped
+
+            // Remove spike apexes whose neighbors coincide
+            var i = 1
+            while i < coords.count - 1 {
+                if haversineDistance(from: coords[i - 1], to: coords[i + 1]) < epsilonMeters {
+                    coords.remove(at: i)
+                    changed = true
+                } else {
+                    i += 1
+                }
+            }
+        }
+        return coords
+    }
+
     /// Project a point onto one segment. Returns the snapped coordinate, the
     /// fractional position t along the segment, and the perpendicular distance.
     static func projectOntoSegment(

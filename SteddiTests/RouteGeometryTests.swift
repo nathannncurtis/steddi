@@ -225,3 +225,59 @@ struct RouteProjectorTests {
         #expect(back.segmentIndex == 0)
     }
 }
+
+// MARK: - Spike Removal (legacy chained-leg spur cleanup)
+
+@Suite("RouteGeometry.removeSpikes")
+struct RemoveSpikesTests {
+
+    private func c(_ lat: Double, _ lon: Double) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    @Test("Out-and-back spike apex is removed")
+    func removesSimpleSpike() {
+        // A -> B -> spur -> B -> C : the spur vertex must vanish
+        let polyline = [
+            c(33.0000, -117.0000),
+            c(33.0010, -117.0000),
+            c(33.0010, -117.0005),  // spur apex
+            c(33.0010, -117.0000),  // retrace
+            c(33.0020, -117.0000),
+        ]
+        let cleaned = RouteGeometry.removeSpikes(polyline)
+        #expect(cleaned.count == 3)
+        #expect(abs(cleaned[1].latitude - 33.0010) < 1e-9)
+    }
+
+    @Test("Multi-vertex spur unwinds fully")
+    func unwindsDeepSpur() {
+        let polyline = [
+            c(33.0000, -117.0000),
+            c(33.0010, -117.0000),
+            c(33.0010, -117.0004),
+            c(33.0010, -117.0008),  // deep apex
+            c(33.0010, -117.0004),
+            c(33.0010, -117.0000),
+            c(33.0020, -117.0000),
+        ]
+        let cleaned = RouteGeometry.removeSpikes(polyline)
+        #expect(cleaned.count == 3)
+    }
+
+    @Test("Clean geometry is untouched")
+    func leavesCleanGeometryAlone() {
+        let polyline = (0...10).map { c(33.0 + Double($0) * 0.001, -117.0) }
+        #expect(RouteGeometry.removeSpikes(polyline).count == polyline.count)
+    }
+
+    @Test("Adjacent near-duplicates are deduped")
+    func dedupesNearDuplicates() {
+        let polyline = [
+            c(33.0000, -117.0000),
+            c(33.000001, -117.000001),  // ~0.15m away
+            c(33.0010, -117.0000),
+        ]
+        #expect(RouteGeometry.removeSpikes(polyline).count == 2)
+    }
+}
