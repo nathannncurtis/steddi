@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CoreLocation
 @testable import Steddi
 
 // MARK: - UpcomingStep Tests
@@ -320,5 +321,50 @@ struct NavigationStateManagerStateTests {
     func defaultManeuverType() {
         let manager = NavigationStateManager()
         #expect(manager.maneuverType == "arrow.up")
+    }
+}
+
+// MARK: - Pose Copy Tests
+
+@Suite("NavigationStateManager pose copy")
+@MainActor
+struct NavigationStateManagerPoseCopyTests {
+
+    @Test("syncFromEngine copies the snapped pose, not the raw coordinate")
+    func copiesSnappedPose() throws {
+        let engine = NavigationEngine()
+        let polyline = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        let steps = [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline[0], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[10], maneuverSymbol: "flag.fill"),
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        // ~18m east of the route line, halfway along
+        let location = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 33.005, longitude: -116.9998),
+            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: -1, courseAccuracy: -1, speed: 13, speedAccuracy: 1,
+            timestamp: Date()
+        )
+        engine.updateLocation(location)
+
+        let manager = NavigationStateManager()
+        manager.syncFromEngine(engine)
+
+        let enginePose = try #require(engine.navPose)
+        let copied = try #require(manager.currentPose)
+        #expect(copied.distanceAlongRoute == enginePose.distanceAlongRoute)
+        #expect(copied.segmentIndex == enginePose.segmentIndex)
+        #expect(copied.snappedCoordinate.latitude == enginePose.snappedCoordinate.latitude)
+        #expect(copied.snappedCoordinate.longitude == enginePose.snappedCoordinate.longitude)
+        #expect(copied.fixTimestamp == enginePose.fixTimestamp)
+        // CarPlay must read the SNAPPED position, not the raw GPS coordinate
+        #expect(copied.snappedCoordinate.longitude != location.coordinate.longitude)
+        #expect(manager.headingDegrees == engine.headingDegrees)
+
+        manager.stopObserving()
+        #expect(manager.currentPose == nil)
+        engine.stopNavigation()
     }
 }

@@ -13,6 +13,7 @@
 		10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */; };
 		13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4F33590D3CEB7AA217E684 /* LocationService.swift */; };
 		139B1E17264CCF63189264A6 /* SteddiShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */; };
+		19C3C8979AE3DF1ABFFF5567 /* NavPoseInterpolatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */; };
 		1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50B3D1495689CE92E4ED80B /* GeocodingService.swift */; };
 		1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */; };
 		26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */; };
@@ -140,6 +141,7 @@
 		139001D61F9DF7A2C5C5060C /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiShortcuts.swift; sourceTree = "<group>"; };
 		16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManagerTests.swift; sourceTree = "<group>"; };
+		247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolatorTests.swift; sourceTree = "<group>"; };
 		24F1F21786B81D853B9E61B6 /* EmergencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmergencyView.swift; sourceTree = "<group>"; };
 		262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceService.swift; sourceTree = "<group>"; };
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
@@ -330,6 +332,7 @@
 				08B46BB7337E920209A89889 /* HapticServiceTests.swift */,
 				4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */,
 				16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */,
+				247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */,
 				EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */,
 				3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */,
 				5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */,
@@ -736,6 +739,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */,
+				19C3C8979AE3DF1ABFFF5567 /* NavPoseInterpolatorTests.swift in Sources */,
 				0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */,
 				2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */,
 				516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */,
