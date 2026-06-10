@@ -494,10 +494,12 @@ final class NavigationEngine {
 
     nonisolated static func estimateSpeedLimit(from instruction: String) -> Double {
         let lower = instruction.lowercased()
-        if lower.contains("i-") || lower.contains("interstate") || lower.contains("freeway") || lower.contains("motorway") || lower.contains("us-") || lower.contains("highway") { return 65 }
-        if lower.contains("sr-") || lower.contains("state route") || lower.contains("expressway") || lower.contains("pkwy") || lower.contains("parkway") || lower.contains("blvd") || lower.contains("boulevard") { return 45 }
+        // Road-name tiers come before the maneuver tier so "Merge onto I-215"
+        // classifies by the road, not the merge.
+        if lower.contains("i-") || lower.contains("interstate") || lower.contains("freeway") || lower.contains("motorway") || lower.contains("us-") || lower.contains("ca-") || lower.contains("sr-") || lower.contains("highway") { return 65 }
+        if lower.contains("state route") || lower.contains("expressway") || lower.contains("pkwy") || lower.contains("parkway") || lower.contains("blvd") || lower.contains("boulevard") { return 45 }
+        if lower.contains("ave") || lower.contains("avenue") || lower.contains("street") || lower.contains("road") || lower.contains("drive") || lower.contains("lane") || lower.contains("court") || lower.range(of: #"\b(st|rd|dr|ln|ct)\b"#, options: .regularExpression) != nil { return 35 }
         if lower.contains("ramp") || lower.contains("merge") { return 40 }
-        if lower.contains("ave") || lower.contains("avenue") || lower.contains("st ") || lower.contains("street") || lower.contains("rd ") || lower.contains("road") || lower.contains("dr ") || lower.contains("drive") || lower.contains("ln ") || lower.contains("lane") || lower.contains("ct ") || lower.contains("court") { return 35 }
         return 45
     }
 
