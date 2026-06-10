@@ -38,6 +38,9 @@ final class NavigationEngine {
     var headingDegrees: Double = 0
     var currentCoordinate: CLLocationCoordinate2D?
     var snappedCoordinate: CLLocationCoordinate2D?
+    /// Unified projection of the latest GPS fix onto the route — the single
+    /// source of truth for the puck, the camera, and the compass.
+    var navPose: NavPose?
     var hasArrived: Bool = false
 
     /// Full route polyline for map rendering and position tracking.
@@ -46,6 +49,7 @@ final class NavigationEngine {
     // MARK: - Private State
 
     private var steps: [NavStep] = []
+    private var projector: RouteProjector?
     private var totalRouteDistance: Double = 0
     private var originalExpectedTravelTime: TimeInterval = 0
     private var averageSpeedMPS: Double = 0
@@ -78,7 +82,10 @@ final class NavigationEngine {
         locationUpdateCount = 0
         routePolylineCoordinates = polyline
 
-        totalRouteDistance = Self.polylineDistance(polyline)
+        projector = polyline.count >= 2
+            ? RouteProjector(polyline: polyline, fullRescanThreshold: offRouteDistance)
+            : nil
+        totalRouteDistance = projector?.totalDistance ?? 0
         originalExpectedTravelTime = expectedTravelTime ?? (totalRouteDistance / 13.4)
 
         if !steps.isEmpty {
@@ -123,8 +130,10 @@ final class NavigationEngine {
         headingDegrees = 0
         currentCoordinate = nil
         snappedCoordinate = nil
+        navPose = nil
         hasArrived = false
         routePolylineCoordinates = []
+        projector = nil
         totalRouteDistance = 0
         originalExpectedTravelTime = 0
         averageSpeedMPS = 0
@@ -141,25 +150,28 @@ final class NavigationEngine {
         currentCoordinate = location.coordinate
         locationUpdateCount += 1
 
-        // Snap to polyline
-        if !routePolylineCoordinates.isEmpty {
-            snappedCoordinate = Self.snapToPolyline(point: location.coordinate, polyline: routePolylineCoordinates)
-        } else {
-            snappedCoordinate = location.coordinate
-        }
-
-        // Route-based bearing for stability
-        if !routePolylineCoordinates.isEmpty {
-            let routeBearing = Self.bearingAlongRoute(from: location.coordinate, routeCoords: routePolylineCoordinates)
-            if routeBearing > 0 || routePolylineCoordinates.count >= 2 {
-                headingDegrees = routeBearing
-            }
-        } else if location.course >= 0 {
-            headingDegrees = location.course
-        }
-
         let speedMPS = max(0, location.speed)
         currentSpeedMph = speedMPS * 2.23694
+
+        // One projection of the raw fix drives snap, bearing, and distance-along
+        let projection = projector?.project(location.coordinate)
+        if let projection {
+            snappedCoordinate = projection.snappedCoordinate
+            navPose = NavPose(
+                snappedCoordinate: projection.snappedCoordinate,
+                segmentIndex: projection.segmentIndex,
+                t: projection.t,
+                distanceAlongRoute: projection.distanceAlongRoute,
+                segmentBearingDegrees: projector?.bearing(atDistance: projection.distanceAlongRoute),
+                speedMPS: speedMPS,
+                fixTimestamp: location.timestamp
+            )
+        } else {
+            snappedCoordinate = location.coordinate
+            navPose = nil
+        }
+
+        updateHeading(location: location, projection: projection, speedMPS: speedMPS)
 
         if speedMPS > 1.0 {
             speedSampleCount += 1
@@ -168,10 +180,19 @@ final class NavigationEngine {
 
         if checkArrival(location: location) { return }
 
-        if checkOffRoute(location: location) { return }
+        if checkOffRoute(location: location, projection: projection) { return }
 
         advanceStepIfNeeded(location: location)
-        updateDistancesAndETA(location: location)
+        updateDistancesAndETA(location: location, projection: projection)
+    }
+
+    /// Transitional heading update — route bearing when available, GPS course otherwise.
+    private func updateHeading(location: CLLocation, projection: RouteProjection?, speedMPS: Double) {
+        if let routeBearing = navPose?.segmentBearingDegrees {
+            headingDegrees = routeBearing
+        } else if location.course >= 0 {
+            headingDegrees = location.course
+        }
     }
 
     // MARK: - Step Logic
@@ -236,19 +257,18 @@ final class NavigationEngine {
         return false
     }
 
-    private func checkOffRoute(location: CLLocation) -> Bool {
-        guard !routePolylineCoordinates.isEmpty else { return false }
+    /// Off-route detection stays on the RAW GPS fix — the projection passed in
+    /// is of the raw coordinate, never the snapped one.
+    private func checkOffRoute(location: CLLocation, projection: RouteProjection?) -> Bool {
+        guard let projection else { return false }
         guard locationUpdateCount > offRouteGracePeriod else { return false }
-
-        let projection = Self.distanceFromPointToNearestSegment(
-            point: location.coordinate,
-            polyline: routePolylineCoordinates
-        )
 
         if projection.perpendicularDistance > offRouteDistance {
             offRouteCount += 1
             if offRouteCount >= offRouteThreshold {
                 guard let destination = routePolylineCoordinates.last else { return false }
+                // The window anchor is stale once the driver leaves the route
+                projector?.resetWindow()
                 onOffRoute?(location.coordinate, destination)
                 offRouteCount = 0
                 return true
@@ -262,13 +282,9 @@ final class NavigationEngine {
 
     // MARK: - Distance & ETA
 
-    private func updateDistancesAndETA(location: CLLocation) {
-        // Project user onto the full route polyline to get distance traveled
-        let projection = Self.distanceFromPointToNearestSegment(
-            point: location.coordinate,
-            polyline: routePolylineCoordinates
-        )
-        let distanceTraveled = projection.distanceAlongPolyline
+    private func updateDistancesAndETA(location: CLLocation, projection: RouteProjection?) {
+        // Distance traveled comes from the shared projection — no rescan
+        let distanceTraveled = projection?.distanceAlongRoute ?? 0
         let totalRemaining = max(0, totalRouteDistance - distanceTraveled)
 
         // Step-level remaining: distance from user to next step's coordinate
@@ -323,74 +339,8 @@ final class NavigationEngine {
 
     // MARK: - Geometry
 
-    struct ProjectionResult {
-        let distanceAlongPolyline: Double
-        let perpendicularDistance: Double
-    }
-
-    nonisolated static func distanceFromPointToNearestSegment(
-        point: CLLocationCoordinate2D,
-        polyline: [CLLocationCoordinate2D]
-    ) -> ProjectionResult {
-        guard polyline.count >= 2 else {
-            if let first = polyline.first {
-                return ProjectionResult(distanceAlongPolyline: 0, perpendicularDistance: haversineDistance(from: point, to: first))
-            }
-            return ProjectionResult(distanceAlongPolyline: 0, perpendicularDistance: .greatestFiniteMagnitude)
-        }
-
-        var bestPerpDistance = Double.greatestFiniteMagnitude
-        var bestAlongDistance: Double = 0
-        var cumulativeDistance: Double = 0
-
-        for i in 0..<(polyline.count - 1) {
-            let segStart = polyline[i]
-            let segEnd = polyline[i + 1]
-            let segLength = haversineDistance(from: segStart, to: segEnd)
-            let (projDist, t) = perpendicularDistance(point: point, segStart: segStart, segEnd: segEnd)
-
-            if projDist < bestPerpDistance {
-                bestPerpDistance = projDist
-                bestAlongDistance = cumulativeDistance + segLength * t
-            }
-            cumulativeDistance += segLength
-        }
-
-        return ProjectionResult(distanceAlongPolyline: bestAlongDistance, perpendicularDistance: bestPerpDistance)
-    }
-
-    private nonisolated static func perpendicularDistance(
-        point: CLLocationCoordinate2D,
-        segStart: CLLocationCoordinate2D,
-        segEnd: CLLocationCoordinate2D
-    ) -> (distance: Double, t: Double) {
-        let cosLat = cos(point.latitude * .pi / 180)
-        let px = (point.longitude - segStart.longitude) * cosLat
-        let py = point.latitude - segStart.latitude
-        let dx = (segEnd.longitude - segStart.longitude) * cosLat
-        let dy = segEnd.latitude - segStart.latitude
-
-        let segLenSq = dx * dx + dy * dy
-        var t: Double = 0
-        if segLenSq > 0 {
-            t = max(0, min(1, ((px * dx) + (py * dy)) / segLenSq))
-        }
-
-        let projLat = segStart.latitude + t * (segEnd.latitude - segStart.latitude)
-        let projLon = segStart.longitude + t * (segEnd.longitude - segStart.longitude)
-        return (haversineDistance(from: point, to: CLLocationCoordinate2D(latitude: projLat, longitude: projLon)), t)
-    }
-
     nonisolated static func haversineDistance(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D) -> Double {
-        let R = 6_371_000.0
-        let dLat = (b.latitude - a.latitude) * .pi / 180
-        let dLon = (b.longitude - a.longitude) * .pi / 180
-        let lat1 = a.latitude * .pi / 180
-        let lat2 = b.latitude * .pi / 180
-        let sinDLat = sin(dLat / 2)
-        let sinDLon = sin(dLon / 2)
-        let h = sinDLat * sinDLat + cos(lat1) * cos(lat2) * sinDLon * sinDLon
-        return 2 * R * asin(sqrt(h))
+        RouteGeometry.haversineDistance(from: a, to: b)
     }
 
     nonisolated static func snapToPolyline(point: CLLocationCoordinate2D, polyline: [CLLocationCoordinate2D]) -> CLLocationCoordinate2D {
@@ -418,28 +368,6 @@ final class NavigationEngine {
         return bestCoord
     }
 
-    nonisolated static func bearingAlongRoute(from position: CLLocationCoordinate2D, routeCoords: [CLLocationCoordinate2D]) -> Double {
-        guard routeCoords.count >= 2 else { return 0 }
-        var bestIndex = 0
-        var bestDist = Double.greatestFiniteMagnitude
-        for i in 0..<routeCoords.count {
-            let d = haversineDistance(from: position, to: routeCoords[i])
-            if d < bestDist { bestDist = d; bestIndex = i }
-        }
-        let lookAheadIndex = min(bestIndex + 3, routeCoords.count - 1)
-        guard lookAheadIndex > bestIndex else { return 0 }
-        let from = routeCoords[bestIndex]
-        let to = routeCoords[lookAheadIndex]
-        let dLon = (to.longitude - from.longitude) * .pi / 180
-        let lat1 = from.latitude * .pi / 180
-        let lat2 = to.latitude * .pi / 180
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        var bearing = atan2(y, x) * 180 / .pi
-        if bearing < 0 { bearing += 360 }
-        return bearing
-    }
-
     nonisolated static func extractCoordinates(from polyline: MKPolyline) -> [CLLocationCoordinate2D] {
         let count = polyline.pointCount
         var coords = [CLLocationCoordinate2D](repeating: CLLocationCoordinate2D(), count: count)
@@ -448,12 +376,7 @@ final class NavigationEngine {
     }
 
     nonisolated static func polylineDistance(_ coords: [CLLocationCoordinate2D]) -> Double {
-        guard coords.count >= 2 else { return 0 }
-        var dist: Double = 0
-        for i in 0..<(coords.count - 1) {
-            dist += haversineDistance(from: coords[i], to: coords[i + 1])
-        }
-        return dist
+        RouteGeometry.cumulativeDistances(coords).last ?? 0
     }
 
     // MARK: - Formatting
