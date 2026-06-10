@@ -13,7 +13,6 @@
 - Widget never shows commute/destination names — state manager only writes ETA and nav status to the App Group, never the names the widget reads
 - Siri "Check Commute ETA" returns nothing useful — the ETA fetch is stubbed, SwiftData integration pending
 - Accessibility/passenger flags (high contrast, simplified instructions, text/icon scaling) are set in Settings but never applied anywhere in the UI
-- Advanced haptics tier reads per-event intensities but there's no UI to configure them
 - Premium voice fallback is silent — if the selected voice isn't downloaded, it quietly falls back to a default voice with no prompt to download
 - Live Activity should also end on app terminate and scene disconnect — lifecycle hardening covers nav end/stop, rolling stale date, and orphan sweep, but no applicationWillTerminate/sceneDidDisconnect handler ends the activity (stale-date dimming partially mitigates)
 
