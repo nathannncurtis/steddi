@@ -438,6 +438,23 @@ struct HomeView: View {
     }
 
     /// Start navigation with a route (called from preview or directly for commutes).
+    /// Hook the OSM speed limit service into a fresh engine: position-based
+    /// lookups every fix, corridor prefetch warmed in the background.
+    private func wireSpeedLimits(for engine: NavigationEngine) {
+        engine.speedLimitProvider = { coordinate, heading in
+            OSMSpeedLimitService.shared.speedLimit(at: coordinate, heading: heading)
+        }
+        let corridor = engine.routePolylineCoordinates
+        guard corridor.count >= 2 else { return }
+        let key = "\(corridor.count)-" +
+            String(format: "%.5f,%.5f-%.5f,%.5f",
+                   corridor[0].latitude, corridor[0].longitude,
+                   corridor[corridor.count - 1].latitude, corridor[corridor.count - 1].longitude)
+        Task {
+            await OSMSpeedLimitService.shared.prefetch(for: corridor, routeKey: key)
+        }
+    }
+
     private func beginNavigation(with route: MKRoute) {
         locationService.enableNavigationMode()
         locationService.startRecording()
@@ -447,6 +464,7 @@ struct HomeView: View {
         let engine = NavigationEngine()
         engine.startNavigation(route: route)
         self.navigationEngine = engine
+        wireSpeedLimits(for: engine)
 
         engine.onOffRoute = { currentPos, destination in
             Task { @MainActor [self] in
@@ -848,6 +866,7 @@ struct HomeView: View {
         let engine = NavigationEngine()
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
         self.navigationEngine = engine
+        wireSpeedLimits(for: engine)
 
         engine.onOffRoute = { currentPos, destination in
             Task { @MainActor [self] in

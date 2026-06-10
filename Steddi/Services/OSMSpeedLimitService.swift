@@ -29,6 +29,8 @@ struct CachedSpeedLimits: Codable {
 @Observable
 @MainActor
 final class OSMSpeedLimitService {
+    static let shared = OSMSpeedLimitService()
+
 
     typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
