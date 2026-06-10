@@ -46,8 +46,11 @@ final class OSMSpeedLimitService {
     private let cacheDirectory: URL
     private let now: () -> Date
 
-    /// Ways currently loaded for lookup.
-    private var ways: [SpeedLimitWay] = []
+    /// Per-way speed limits for the currently loaded route. Way geometry is
+    /// dropped after indexing — the segments carry their own copies, so
+    /// retaining the full `SpeedLimitWay` set would hold every vertex twice
+    /// for the length of the drive.
+    private var wayLimits: [WayLimit] = []
 
     /// Spatial hash grid: cell -> indices into `segments`.
     private var segments: [Segment] = []
@@ -78,6 +81,10 @@ final class OSMSpeedLimitService {
 
     /// Fetch speed limits for all roads within 25m of the route polyline.
     /// Disk cache hit short-circuits the network entirely.
+    ///
+    /// Disk IO, JSON coding, polyline simplification, and the spatial index
+    /// build all run off the main actor: a 70-mile corridor payload is
+    /// multi-megabyte and would hitch the UI right at route start.
     func prefetch(for polyline: [CLLocationCoordinate2D], routeKey: String) async {
         guard polyline.count >= 2 else { return }
         prefetchGeneration += 1
@@ -87,37 +94,71 @@ final class OSMSpeedLimitService {
             if generation == prefetchGeneration { isPrefetching = false }
         }
 
-        let key = Self.cacheKey(for: polyline)
-        if let cached = loadCachedPayload(key: key) {
-            loadWays(cached.ways, routeKey: routeKey)
+        let directory = cacheDirectory
+        let currentDate = now()
+        let (fileURL, cached) = await Task.detached(priority: .userInitiated) { () -> (URL, CachedSpeedLimits?) in
+            let fileURL = directory.appendingPathComponent("\(Self.cacheKey(for: polyline)).json")
+            return (fileURL, Self.loadCachedPayload(at: fileURL, now: currentDate))
+        }.value
+        if let cached {
+            await install(ways: cached.ways, routeKey: routeKey, generation: generation)
             return
         }
 
-        let sampled = Self.downsample(
-            polyline,
-            tolerance: Tuning.downsampleToleranceMeters,
-            maxPoints: Tuning.maxQueryPoints
-        )
-        let query = Self.overpassQuery(for: sampled)
+        let query = await Task.detached(priority: .userInitiated) {
+            let sampled = Self.downsample(
+                polyline,
+                tolerance: Tuning.downsampleToleranceMeters,
+                maxPoints: Tuning.maxQueryPoints
+            )
+            return Self.overpassQuery(for: sampled)
+        }.value
         guard let fetched = await fetch(query: query) else { return }
 
         // Cache the result regardless (it is keyed by this polyline), but only
         // the newest prefetch may install ways for lookup.
-        savePayload(CachedSpeedLimits(ways: fetched, fetchedAt: now()), key: key)
-        guard generation == prefetchGeneration else { return }
-        loadWays(fetched, routeKey: routeKey)
+        let payload = CachedSpeedLimits(ways: fetched, fetchedAt: now())
+        await Task.detached(priority: .utility) {
+            Self.savePayload(payload, to: fileURL)
+        }.value
+        await install(ways: fetched, routeKey: routeKey, generation: generation)
     }
 
-    /// Replace the in-memory way set used for lookups and rebuild the spatial index.
+    /// Replace the in-memory way set used for lookups and rebuild the spatial
+    /// index synchronously. Prefetch goes through `install` instead so the
+    /// build happens off the main actor.
     func loadWays(_ newWays: [SpeedLimitWay], routeKey: String) {
-        ways = newWays.filter { $0.geometry.count >= 2 }
+        apply(Self.buildIndex(for: newWays), routeKey: routeKey)
+    }
+
+    /// Build the spatial index off the main actor, then publish it — unless a
+    /// newer prefetch generation started in the meantime.
+    private func install(ways newWays: [SpeedLimitWay], routeKey: String, generation: Int) async {
+        let index = await Task.detached(priority: .userInitiated) {
+            Self.buildIndex(for: newWays)
+        }.value
+        guard generation == prefetchGeneration else { return }
+        apply(index, routeKey: routeKey)
+    }
+
+    private func apply(_ index: SpatialIndex, routeKey: String) {
+        wayLimits = index.wayLimits
+        segments = index.segments
+        grid = index.grid
         loadedRouteKey = routeKey
-        segments = []
-        grid = [:]
         lastWayIndex = nil
         challengerStreak = 0
+    }
 
-        for (wayIndex, way) in ways.enumerated() {
+    private nonisolated static func buildIndex(for newWays: [SpeedLimitWay]) -> SpatialIndex {
+        let usable = newWays.filter { $0.geometry.count >= 2 }
+        var wayLimits: [WayLimit] = []
+        wayLimits.reserveCapacity(usable.count)
+        var segments: [Segment] = []
+        var grid: [GridCell: [Int]] = [:]
+
+        for (wayIndex, way) in usable.enumerated() {
+            wayLimits.append(WayLimit(mph: way.limitMph, isEstimated: way.isEstimated))
             for i in 0..<(way.geometry.count - 1) {
                 let a = CLLocationCoordinate2D(latitude: way.geometry[i].lat, longitude: way.geometry[i].lon)
                 let b = CLLocationCoordinate2D(latitude: way.geometry[i + 1].lat, longitude: way.geometry[i + 1].lon)
@@ -139,6 +180,7 @@ final class OSMSpeedLimitService {
                 }
             }
         }
+        return SpatialIndex(wayLimits: wayLimits, segments: segments, grid: grid)
     }
 
     // MARK: - Lookup
@@ -204,9 +246,9 @@ final class OSMSpeedLimitService {
         }
 
         lastWayIndex = chosen
-        guard chosen < ways.count else { return nil }
-        let way = ways[chosen]
-        return (way.limitMph, way.isEstimated)
+        guard chosen < wayLimits.count else { return nil }
+        let limit = wayLimits[chosen]
+        return (limit.mph, limit.isEstimated)
     }
 
     /// Angular difference between two bearings, ignoring direction of travel (mod 180).
@@ -248,7 +290,10 @@ final class OSMSpeedLimitService {
                     if http.statusCode == 429 || http.statusCode >= 500 { continue }
                     return nil
                 }
-                return try Self.parseOverpassResponse(data)
+                // Decode off-main: a long-corridor response can be several MB.
+                return try await Task.detached(priority: .userInitiated) {
+                    try Self.parseOverpassResponse(data)
+                }.value
             } catch is CancellationError {
                 return nil
             } catch {
@@ -432,33 +477,42 @@ final class OSMSpeedLimitService {
         return SHA256.hash(data: Data(encoded.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
-    private func cacheFileURL(key: String) -> URL {
-        cacheDirectory.appendingPathComponent("\(key).json")
-    }
-
-    private func loadCachedPayload(key: String) -> CachedSpeedLimits? {
-        let fileURL = cacheFileURL(key: key)
+    private nonisolated static func loadCachedPayload(at fileURL: URL, now: Date) -> CachedSpeedLimits? {
         guard let data = try? Data(contentsOf: fileURL),
               let payload = try? JSONDecoder().decode(CachedSpeedLimits.self, from: data) else { return nil }
 
-        guard now().timeIntervalSince(payload.fetchedAt) < Tuning.cacheTTL else {
+        guard now.timeIntervalSince(payload.fetchedAt) < Tuning.cacheTTL else {
             try? FileManager.default.removeItem(at: fileURL)
             return nil
         }
         return payload
     }
 
-    private func savePayload(_ payload: CachedSpeedLimits, key: String) {
+    private nonisolated static func savePayload(_ payload: CachedSpeedLimits, to fileURL: URL) {
         let fileManager = FileManager.default
-        if !fileManager.fileExists(atPath: cacheDirectory.path) {
-            try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        let directory = fileURL.deletingLastPathComponent()
+        if !fileManager.fileExists(atPath: directory.path) {
+            try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         }
         guard let data = try? JSONEncoder().encode(payload) else { return }
-        try? data.write(to: cacheFileURL(key: key))
+        try? data.write(to: fileURL)
     }
 }
 
 // MARK: - Spatial Index Types
+
+/// Speed limit retained per way after its geometry has been indexed.
+private struct WayLimit {
+    let mph: Double
+    let isEstimated: Bool
+}
+
+/// Immutable lookup structures, built off-main and installed atomically.
+private struct SpatialIndex {
+    let wayLimits: [WayLimit]
+    let segments: [Segment]
+    let grid: [GridCell: [Int]]
+}
 
 private struct Segment {
     let wayIndex: Int
