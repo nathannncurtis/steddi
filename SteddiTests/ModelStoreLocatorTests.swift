@@ -252,3 +252,52 @@ struct ModelStoreLocatorURLTests {
         #expect(candidates.allSatisfy { $0.lastPathComponent == "default.store" })
     }
 }
+
+// MARK: - Read-Only Store Selection Tests
+
+@Suite("ModelStoreLocator.readOnlyStoreURL")
+struct ModelStoreLocatorReadOnlyTests {
+
+    private func makeTempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ModelStoreLocatorReadOnlyTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    @Test("Prefers the group store when it exists")
+    func prefersGroupStore() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let group = dir.appendingPathComponent("Steddi.store")
+        let legacy = dir.appendingPathComponent("default.store")
+        try Data("g".utf8).write(to: group)
+        try Data("l".utf8).write(to: legacy)
+
+        let url = ModelStoreLocator.readOnlyStoreURL(groupURL: group, legacyCandidates: [legacy])
+        #expect(url == group)
+    }
+
+    @Test("Falls back to the legacy store before the app's first post-update launch")
+    func fallsBackToLegacyStore() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let group = dir.appendingPathComponent("Steddi.store")
+        let legacy = dir.appendingPathComponent("default.store")
+        try Data("l".utf8).write(to: legacy)
+
+        let url = ModelStoreLocator.readOnlyStoreURL(groupURL: group, legacyCandidates: [legacy])
+        #expect(url == legacy)
+    }
+
+    @Test("Returns nil when no store exists anywhere")
+    func nilWhenNothingExists() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let group = dir.appendingPathComponent("Steddi.store")
+        let legacy = dir.appendingPathComponent("default.store")
+
+        let url = ModelStoreLocator.readOnlyStoreURL(groupURL: group, legacyCandidates: [legacy])
+        #expect(url == nil)
+    }
+}

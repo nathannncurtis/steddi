@@ -8,10 +8,11 @@ struct CheckCommuteETAIntent: AppIntent {
     static var description: IntentDescription = "Check how long your commute will take right now."
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
-        // Read commutes from the shared App Group store (read-only).
+        // Read commutes from the shared App Group store (read-only), falling
+        // back to the legacy store if the app hasn't migrated yet.
         let container: ModelContainer
         do {
-            container = try ModelStoreLocator.makeReadOnlyGroupContainer()
+            container = try ModelStoreLocator.makeReadOnlySharedContainer()
         } catch {
             return respond("You haven't set up any commutes yet.")
         }

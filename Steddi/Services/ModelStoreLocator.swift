@@ -233,18 +233,36 @@ enum ModelStoreLocator {
         }
     }
 
-    /// Open a read-only container on the group store for intents and
-    /// extensions. Throws if the group store doesn't exist yet.
-    static func makeReadOnlyGroupContainer(fileManager: FileManager = .default) throws -> ModelContainer {
-        guard let url = groupStoreURL(fileManager: fileManager),
-              fileManager.fileExists(atPath: url.path) else {
-            throw StoreError.groupStoreUnavailable
+    /// Store to read for intents and extensions: the group store when it
+    /// exists, otherwise an existing legacy store — the user may not have
+    /// launched the app (which performs the migration) since updating.
+    static func readOnlyStoreURL(
+        groupURL: URL?,
+        legacyCandidates: [URL],
+        fileManager: FileManager = .default
+    ) -> URL? {
+        if let groupURL, fileManager.fileExists(atPath: groupURL.path) {
+            return groupURL
+        }
+        return existingLegacyStoreURL(candidates: legacyCandidates, fileManager: fileManager)
+    }
+
+    /// Open a read-only container on the shared store for intents and
+    /// extensions, falling back to the legacy store until the app has run
+    /// its migration. Throws if no store exists on disk at all.
+    static func makeReadOnlySharedContainer(fileManager: FileManager = .default) throws -> ModelContainer {
+        guard let url = readOnlyStoreURL(
+            groupURL: groupStoreURL(fileManager: fileManager),
+            legacyCandidates: legacyStoreCandidates(fileManager: fileManager),
+            fileManager: fileManager
+        ) else {
+            throw StoreError.sharedStoreUnavailable
         }
         let config = ModelConfiguration(url: url, allowsSave: false)
         return try ModelContainer(for: schema, configurations: [config])
     }
 
     enum StoreError: Error {
-        case groupStoreUnavailable
+        case sharedStoreUnavailable
     }
 }
