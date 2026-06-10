@@ -4,24 +4,38 @@ import Foundation
 
 @Suite("HapticService per-event intensity", .serialized)
 @MainActor
-struct HapticServiceIntensityTests {
+final class HapticServiceIntensityTests {
 
-    private func makeDefaults() -> UserDefaults {
-        let suiteName = "HapticServiceTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
+    private let suiteName = "HapticServiceTests-\(UUID().uuidString)"
+    private let defaults: UserDefaults
+
+    init() {
+        defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
-        return defaults
+    }
+
+    deinit {
+        defaults.removePersistentDomain(forName: suiteName)
     }
 
     // MARK: - Defaults
 
     @Test("Unset events return their Dynamic defaults")
     func unsetReturnsDynamicDefaults() {
-        let service = HapticService(defaults: makeDefaults())
+        let service = HapticService(defaults: defaults)
 
         for event in HapticEvent.allCases {
             #expect(service.intensity(for: event) == event.dynamicDefault)
         }
+    }
+
+    @Test("Dynamic profile matches the tuned constants")
+    func dynamicProfileValues() {
+        #expect(HapticEvent.turnApproaching.dynamicDefault == 0.4)
+        #expect(HapticEvent.rerouteSuggestion.dynamicDefault == 0.6)
+        #expect(HapticEvent.arrival.dynamicDefault == 1.0)
+        #expect(HapticEvent.uiToggle.dynamicDefault == 0.2)
+        #expect(HapticEvent.alert.dynamicDefault == 0.7)
     }
 
     @Test("Dynamic defaults are all within 0...1")
@@ -36,7 +50,7 @@ struct HapticServiceIntensityTests {
 
     @Test("Set intensity reads back")
     func setIntensityReadsBack() {
-        let service = HapticService(defaults: makeDefaults())
+        let service = HapticService(defaults: defaults)
 
         service.setIntensity(0.85, for: .turnApproaching)
 
@@ -45,7 +59,6 @@ struct HapticServiceIntensityTests {
 
     @Test("Set intensity persists across service instances")
     func persistsAcrossInstances() {
-        let defaults = makeDefaults()
         HapticService(defaults: defaults).setIntensity(0.45, for: .arrival)
 
         let reloaded = HapticService(defaults: defaults)
@@ -55,7 +68,7 @@ struct HapticServiceIntensityTests {
 
     @Test("Setting one event does not affect others")
     func setIsScopedToEvent() {
-        let service = HapticService(defaults: makeDefaults())
+        let service = HapticService(defaults: defaults)
 
         service.setIntensity(0.1, for: .uiToggle)
 
@@ -65,7 +78,7 @@ struct HapticServiceIntensityTests {
 
     @Test("Zero is a valid stored intensity, not a fallback to default")
     func zeroIsStored() {
-        let service = HapticService(defaults: makeDefaults())
+        let service = HapticService(defaults: defaults)
 
         service.setIntensity(0, for: .arrival)
 
@@ -76,7 +89,7 @@ struct HapticServiceIntensityTests {
 
     @Test("Write above 1 clamps to 1")
     func writeClampsHigh() {
-        let service = HapticService(defaults: makeDefaults())
+        let service = HapticService(defaults: defaults)
 
         service.setIntensity(1.7, for: .alert)
 
@@ -85,7 +98,7 @@ struct HapticServiceIntensityTests {
 
     @Test("Write below 0 clamps to 0")
     func writeClampsLow() {
-        let service = HapticService(defaults: makeDefaults())
+        let service = HapticService(defaults: defaults)
 
         service.setIntensity(-0.4, for: .alert)
 
@@ -94,7 +107,6 @@ struct HapticServiceIntensityTests {
 
     @Test("Out-of-range stored value clamps on read")
     func readClampsStoredValue() {
-        let defaults = makeDefaults()
         defaults.set(2.5, forKey: "steddi.haptic.\(HapticEvent.turnApproaching.rawValue)")
 
         let service = HapticService(defaults: defaults)
@@ -106,7 +118,7 @@ struct HapticServiceIntensityTests {
 
     @Test("Reset restores Dynamic defaults for all events")
     func resetRestoresDefaults() {
-        let service = HapticService(defaults: makeDefaults())
+        let service = HapticService(defaults: defaults)
         for event in HapticEvent.allCases {
             service.setIntensity(0.99, for: event)
         }
