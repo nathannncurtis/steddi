@@ -41,4 +41,53 @@ final class DisplayModeService {
     var useHighContrast: Bool {
         isAccessibilityMode
     }
+
+    // MARK: - Instruction Simplifier
+
+    /// Connectors that always introduce road-name detail ("Merge onto I-215 S").
+    private static let alwaysCutConnectors = [" onto ", " towards ", " toward "]
+    /// Connectors that introduce road names unless followed by "the …" —
+    /// "on the right" / "at the fork" is maneuver detail, not a road name.
+    private static let guardedConnectors = [" to ", " on ", " at "]
+
+    /// Strip road-name detail from a maneuver instruction, leaving the bare
+    /// maneuver: "Turn left onto N Orange St" -> "Turn left".
+    /// Display-time transform only — voice guidance keeps the full instruction.
+    static func simplifiedInstruction(_ instruction: String) -> String {
+        let trimmed = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+
+        let lower = trimmed.lowercased()
+
+        // Arrival phrasing is already bare — the destination is not road noise
+        if lower.contains("destination") || lower.hasPrefix("arrive") {
+            return trimmed
+        }
+
+        var cut: String.Index?
+
+        for connector in Self.alwaysCutConnectors {
+            if let range = trimmed.range(of: connector, options: .caseInsensitive),
+               cut == nil || range.lowerBound < cut! {
+                cut = range.lowerBound
+            }
+        }
+
+        for connector in Self.guardedConnectors {
+            var searchStart = trimmed.startIndex
+            while let range = trimmed.range(of: connector, options: .caseInsensitive, range: searchStart..<trimmed.endIndex) {
+                if !trimmed[range.upperBound...].lowercased().hasPrefix("the ") {
+                    if cut == nil || range.lowerBound < cut! {
+                        cut = range.lowerBound
+                    }
+                    break
+                }
+                searchStart = range.upperBound
+            }
+        }
+
+        guard let cut else { return trimmed }
+        let bareManeuver = trimmed[..<cut].trimmingCharacters(in: CharacterSet(charactersIn: " ,"))
+        return bareManeuver.isEmpty ? trimmed : bareManeuver
+    }
 }
