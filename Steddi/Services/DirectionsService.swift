@@ -171,6 +171,11 @@ final class DirectionsService {
             legCoords[i + 1] = next
         }
 
+        // Collapse any residual out-and-back spikes (snap-to-address spurs
+        // that aren't vertex-exact retraces) before measuring trimmed legs,
+        // so distance and duration stay consistent.
+        legCoords = legCoords.map { RouteGeometry.removeSpikes($0) }
+
         // Scale each leg's duration to its trimmed geometry at the leg's own
         // average speed: trimmedDistance / (legDistance / legDuration).
         var totalDuration: Double = 0
@@ -219,6 +224,19 @@ final class DirectionsService {
 
     /// Coordinates closer than this are the same junction vertex.
     private static let junctionEpsilonMeters: Double = 3
+
+    /// Evenly sampled via points (endpoints always kept) so a via-route
+    /// request follows a saved polyline without exceeding OSRM's coordinate
+    /// limit or building an oversized URL.
+    static func sampledViaPoints(
+        from coords: [CLLocationCoordinate2D],
+        maxPoints: Int = 12
+    ) -> [CLLocationCoordinate2D] {
+        guard maxPoints >= 2, coords.count > maxPoints else { return coords }
+        return (0..<maxPoints).map { i in
+            coords[Int(round(Double(i) * Double(coords.count - 1) / Double(maxPoints - 1)))]
+        }
+    }
 
     static func isArrivalStep(_ step: DirectionsStep) -> Bool {
         step.maneuverType == "flag.fill"
