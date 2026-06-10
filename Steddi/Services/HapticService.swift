@@ -57,12 +57,14 @@ enum HapticLevel: String, CaseIterable, Identifiable {
 final class HapticService {
     static let shared = HapticService()
 
+    private let defaults: UserDefaults
     private let impactLight = UIImpactFeedbackGenerator(style: .light)
     private let impactMedium = UIImpactFeedbackGenerator(style: .medium)
     private let impactHeavy = UIImpactFeedbackGenerator(style: .heavy)
     private let notification = UINotificationFeedbackGenerator()
 
-    private init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         impactLight.prepare()
         impactMedium.prepare()
         impactHeavy.prepare()
@@ -70,8 +72,34 @@ final class HapticService {
     }
 
     private var level: HapticLevel {
-        let raw = UserDefaults.standard.string(forKey: "steddi.hapticLevel") ?? HapticLevel.dynamic.rawValue
+        let raw = defaults.string(forKey: "steddi.hapticLevel") ?? HapticLevel.dynamic.rawValue
         return HapticLevel(rawValue: raw) ?? .dynamic
+    }
+
+    // MARK: - Per-Event Intensity (Advanced mode)
+
+    /// Stored intensity for an event, clamped to 0...1. Falls back to the Dynamic default.
+    func intensity(for event: HapticEvent) -> Double {
+        guard let stored = defaults.object(forKey: intensityKey(for: event)) as? Double else {
+            return event.dynamicDefault
+        }
+        return min(max(stored, 0), 1)
+    }
+
+    /// Persist a custom intensity for an event, clamped to 0...1.
+    func setIntensity(_ intensity: Double, for event: HapticEvent) {
+        defaults.set(min(max(intensity, 0), 1), forKey: intensityKey(for: event))
+    }
+
+    /// Clear all custom intensities so events fall back to their Dynamic defaults.
+    func resetIntensitiesToDynamicDefaults() {
+        for event in HapticEvent.allCases {
+            defaults.removeObject(forKey: intensityKey(for: event))
+        }
+    }
+
+    private func intensityKey(for event: HapticEvent) -> String {
+        "steddi.haptic.\(event.rawValue)"
     }
 
     /// Fire a haptic for the given event.
@@ -86,14 +114,17 @@ final class HapticService {
         case .dynamic:
             fireAtIntensity(event.dynamicDefault)
         case .advanced:
-            let key = "steddi.haptic.\(event.rawValue)"
-            let custom = UserDefaults.standard.double(forKey: key)
-            let intensity = custom > 0 ? custom : event.dynamicDefault
-            fireAtIntensity(intensity)
+            fireAtIntensity(intensity(for: event))
         }
     }
 
+    /// Fire an event at its stored intensity regardless of level, for auditioning in settings.
+    func preview(_ event: HapticEvent) {
+        fireAtIntensity(intensity(for: event))
+    }
+
     private func fireAtIntensity(_ intensity: Double) {
+        guard intensity > 0 else { return }
         if intensity <= 0.3 {
             impactLight.impactOccurred(intensity: intensity)
         } else if intensity <= 0.6 {
