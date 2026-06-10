@@ -23,10 +23,15 @@ struct RoutePreferences {
     }
 }
 
-/// Wraps Apple MapKit MKDirections for route fetching and ETA estimation.
+/// Wraps Apple MapKit MKDirections for route fetching and ETA estimation,
+/// plus OSRM via-routing for multi-point planned routes.
 final class DirectionsService {
 
-    init() {}
+    private let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
 
     /// Fetch a route between two points.
     func fetchRoute(
@@ -64,11 +69,12 @@ final class DirectionsService {
             throw DirectionsError.noRoute
         }
 
-        return try await fetchETA(from: origin, to: destinationCoord)
+        return try await fetchDirectETA(from: origin, to: destinationCoord)
     }
 
-    /// Get the current ETA between two coordinates.
-    func fetchETA(
+    /// Direct origin-to-destination travel time estimate from MKDirections.
+    /// Used as a sanity reference for saved route durations.
+    func fetchDirectETA(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D
     ) async throws -> TimeInterval {
@@ -81,6 +87,147 @@ final class DirectionsService {
         let eta = try await directions.calculateETA()
 
         return eta.expectedTravelTime
+    }
+
+    // MARK: - Via Routing (OSRM)
+
+    /// One through-route across every plot point. Intermediate coordinates are
+    /// pass-through vias — OSRM returns a single distance and duration with no
+    /// per-stop dwell and no snap-to-address arrival spurs, unlike chaining one
+    /// MKDirections request per leg (which models a complete trip ending at
+    /// every tap and inflates the totals).
+    func fetchViaRoute(points: [CLLocationCoordinate2D]) async throws -> DirectionsRoute {
+        guard points.count >= 2 else {
+            throw DirectionsError.noRoute
+        }
+
+        let coordinates = points.map { "\($0.longitude),\($0.latitude)" }.joined(separator: ";")
+        guard var components = URLComponents(string: "https://router.project-osrm.org/route/v1/driving/\(coordinates)") else {
+            throw DirectionsError.apiError
+        }
+        components.queryItems = [
+            URLQueryItem(name: "continue_straight", value: "true"),
+            URLQueryItem(name: "geometries", value: "polyline6"),
+            URLQueryItem(name: "overview", value: "full"),
+            URLQueryItem(name: "steps", value: "true"),
+            URLQueryItem(name: "alternatives", value: "false"),
+        ]
+
+        guard let url = components.url else {
+            throw DirectionsError.apiError
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 25
+        request.setValue("Steddi/1.0 (steddi.io)", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw DirectionsError.apiError
+        }
+
+        let result = try JSONDecoder().decode(ViaRouteResponse.self, from: data)
+        guard result.code == "Ok", let route = result.routes?.first else {
+            throw DirectionsError.noRoute
+        }
+
+        let coords = PolylineEncoder.decode(route.geometry, precision: 6)
+        guard coords.count >= 2 else {
+            throw DirectionsError.noRoute
+        }
+
+        return DirectionsRoute(
+            encodedPolyline: route.geometry,
+            distance: route.distance,
+            duration: route.duration,
+            legs: [DirectionsLeg(steps: Self.viaSteps(from: route, fullGeometry: coords))]
+        )
+    }
+
+    // MARK: - Chained-Leg Fallback Stitching
+
+    /// Stitch chained per-leg routes into one through-route, trimming the
+    /// stop artifacts each leg boundary carries: out-and-back spurs at the
+    /// junction geometry, the intermediate arrival/departure steps, and the
+    /// per-leg duration share of the trimmed spur distance.
+    static func stitchTrimmedLegs(_ legs: [DirectionsRoute]) -> DirectionsRoute? {
+        guard !legs.isEmpty else { return nil }
+        guard legs.count > 1 else { return legs[0] }
+
+        var legCoords = legs.map { PolylineEncoder.decode($0.encodedPolyline, precision: 6) }
+
+        // Trim out-and-back spurs at each junction: a leg routed TO a tap
+        // coordinate ends in a spur the next leg immediately retraces.
+        for i in 0..<(legCoords.count - 1) {
+            var previous = legCoords[i]
+            var next = legCoords[i + 1]
+            while previous.count >= 2, next.count >= 2,
+                  RouteGeometry.haversineDistance(from: previous[previous.count - 2], to: next[1]) < junctionEpsilonMeters {
+                previous.removeLast()
+                next.removeFirst()
+            }
+            legCoords[i] = previous
+            legCoords[i + 1] = next
+        }
+
+        // Scale each leg's duration to its trimmed geometry at the leg's own
+        // average speed: trimmedDistance / (legDistance / legDuration).
+        var totalDuration: Double = 0
+        for (i, leg) in legs.enumerated() {
+            guard leg.duration > 0, leg.distance > 0 else { continue }
+            let trimmedDistance = RouteGeometry.cumulativeDistances(legCoords[i]).last ?? 0
+            totalDuration += trimmedDistance / (leg.distance / leg.duration)
+        }
+
+        // Stitch the trimmed geometry, deduping the shared junction vertex
+        var stitched: [CLLocationCoordinate2D] = []
+        for coords in legCoords {
+            if let last = stitched.last, let first = coords.first,
+               RouteGeometry.haversineDistance(from: last, to: first) < junctionEpsilonMeters {
+                stitched.append(contentsOf: coords.dropFirst())
+            } else {
+                stitched.append(contentsOf: coords)
+            }
+        }
+        guard stitched.count >= 2 else { return nil }
+        let totalDistance = RouteGeometry.cumulativeDistances(stitched).last ?? 0
+
+        // Drop each intermediate leg's arrival step and the next leg's depart
+        // steps — plot points are pass-throughs, not stops.
+        var steps: [DirectionsStep] = []
+        for (i, leg) in legs.enumerated() {
+            var legSteps = leg.legs.flatMap { $0.steps }
+            if i > 0 {
+                legSteps = Array(legSteps.drop { $0.instructions.isEmpty || isDepartStep($0) })
+            }
+            if i < legs.count - 1 {
+                while let last = legSteps.last, isArrivalStep(last) {
+                    legSteps.removeLast()
+                }
+            }
+            steps.append(contentsOf: legSteps)
+        }
+
+        return DirectionsRoute(
+            encodedPolyline: PolylineEncoder.encode(stitched, precision: 6),
+            distance: totalDistance,
+            duration: totalDuration,
+            legs: [DirectionsLeg(steps: steps)]
+        )
+    }
+
+    /// Coordinates closer than this are the same junction vertex.
+    private static let junctionEpsilonMeters: Double = 3
+
+    static func isArrivalStep(_ step: DirectionsStep) -> Bool {
+        step.maneuverType == "flag.fill"
+            || NavigationEngine.sfSymbolFromInstruction(step.instructions) == "flag.fill"
+    }
+
+    static func isDepartStep(_ step: DirectionsStep) -> Bool {
+        step.maneuverType == "location.fill"
+            || NavigationEngine.sfSymbolFromInstruction(step.instructions) == "location.fill"
     }
 
     /// Fetch a route, ignoring exclusion zones.
@@ -122,6 +269,106 @@ final class DirectionsService {
             duration: mkRoute.expectedTravelTime,
             legs: [DirectionsLeg(steps: steps)]
         )
+    }
+
+    /// Flatten OSRM legs into the app's step model. Intermediate vias are
+    /// pass-throughs, so the arrive/depart pair OSRM emits at every waypoint
+    /// is dropped — only the first depart and the final arrival survive.
+    /// Falls back to geometry-derived steps when OSRM steps are unusable.
+    private static func viaSteps(
+        from route: ViaRouteResponse.Route,
+        fullGeometry: [CLLocationCoordinate2D]
+    ) -> [DirectionsStep] {
+        var steps: [DirectionsStep] = []
+        for (legIndex, leg) in route.legs.enumerated() {
+            for step in leg.steps ?? [] {
+                if step.maneuver.type == "arrive" && legIndex < route.legs.count - 1 { continue }
+                if step.maneuver.type == "depart" && legIndex > 0 { continue }
+
+                let instruction = Self.instruction(for: step)
+                steps.append(DirectionsStep(
+                    instructions: instruction,
+                    distance: step.distance,
+                    maneuverType: NavigationEngine.sfSymbolFromInstruction(instruction),
+                    coordinate: step.maneuver.coordinate
+                ))
+            }
+        }
+
+        if steps.count < 2 {
+            return CustomRouteBuilder.buildSteps(from: fullGeometry).map { navStep in
+                DirectionsStep(
+                    instructions: navStep.instruction,
+                    distance: navStep.distance,
+                    maneuverType: navStep.maneuverSymbol,
+                    coordinate: navStep.coordinate
+                )
+            }
+        }
+
+        return steps
+    }
+
+    /// Map an OSRM maneuver to the app's instruction phrasing — the same
+    /// phrases NavigationEngine.sfSymbolFromInstruction classifies.
+    private static func instruction(for step: ViaRouteResponse.Step) -> String {
+        let road = step.name.trimmingCharacters(in: .whitespaces)
+        let onto = road.isEmpty ? "" : " onto \(road)"
+        let on = road.isEmpty ? "" : " on \(road)"
+        let modifier = step.maneuver.modifier ?? ""
+
+        switch step.maneuver.type {
+        case "depart":
+            if let bearing = step.maneuver.bearingAfter {
+                return "Head \(CustomRouteBuilder.cardinalDirection(Double(bearing)))\(on)"
+            }
+            return "Head out\(on)"
+        case "arrive":
+            return "Arrive at your destination"
+        case "merge":
+            return "Merge\(onto)"
+        case "on ramp":
+            if modifier.contains("left") { return "Take the ramp on the left\(onto)" }
+            if modifier.contains("right") { return "Take the ramp on the right\(onto)" }
+            return "Take the ramp\(onto)"
+        case "off ramp":
+            return "Take the exit\(onto)"
+        case "fork":
+            if modifier.contains("left") { return "Keep left at the fork\(onto)" }
+            if modifier.contains("right") { return "Keep right at the fork\(onto)" }
+            return "Continue at the fork\(onto)"
+        case "roundabout", "rotary":
+            if let exit = step.maneuver.exit {
+                return "Enter the roundabout and take exit \(exit)"
+            }
+            return "Enter the roundabout"
+        case "exit roundabout", "exit rotary":
+            return "Exit the roundabout\(onto)"
+        case "new name", "continue":
+            if let phrase = turnPhrase(for: modifier) {
+                return road.isEmpty ? phrase : "\(phrase) to stay\(on)"
+            }
+            return road.isEmpty ? "Continue straight" : "Continue\(on)"
+        default:
+            if let phrase = turnPhrase(for: modifier) {
+                return modifier == "uturn" ? phrase : "\(phrase)\(onto)"
+            }
+            return road.isEmpty ? "Continue straight" : "Continue\(on)"
+        }
+    }
+
+    /// Phrase for a turning OSRM modifier. nil for straight/unknown.
+    private static func turnPhrase(for modifier: String) -> String? {
+        switch modifier {
+        case "uturn": return "Make a U-turn"
+        case "sharp left": return "Turn sharp left"
+        case "sharp right": return "Turn sharp right"
+        case "left": return "Turn left"
+        case "right": return "Turn right"
+        case "slight left": return "Bear left"
+        case "slight right": return "Bear right"
+        default: return nil
+        }
     }
 
     /// Extract CLLocationCoordinate2D array from an MKPolyline.
@@ -183,6 +430,51 @@ struct DirectionsStep {
     let distance: Double
     let maneuverType: String                 // SF Symbol name
     let coordinate: CLLocationCoordinate2D   // maneuver location
+}
+
+// MARK: - OSRM API Response Types
+
+struct ViaRouteResponse: Decodable {
+    let code: String
+    let routes: [Route]?
+
+    struct Route: Decodable {
+        let geometry: String
+        let distance: Double
+        let duration: Double
+        let legs: [Leg]
+    }
+
+    struct Leg: Decodable {
+        let distance: Double
+        let duration: Double
+        let steps: [Step]?
+    }
+
+    struct Step: Decodable {
+        let distance: Double
+        let duration: Double
+        let name: String
+        let maneuver: Maneuver
+    }
+
+    struct Maneuver: Decodable {
+        let location: [Double]   // [longitude, latitude]
+        let type: String
+        let modifier: String?
+        let bearingAfter: Int?
+        let exit: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case location, type, modifier, exit
+            case bearingAfter = "bearing_after"
+        }
+
+        var coordinate: CLLocationCoordinate2D {
+            guard location.count >= 2 else { return CLLocationCoordinate2D() }
+            return CLLocationCoordinate2D(latitude: location[1], longitude: location[0])
+        }
+    }
 }
 
 // MARK: - Errors

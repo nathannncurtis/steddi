@@ -95,7 +95,7 @@ final class CustomRouteBuilder {
         return "Bear \(side)"
     }
 
-    private static func cardinalDirection(_ degrees: Double) -> String {
+    static func cardinalDirection(_ degrees: Double) -> String {
         let n = ((degrees.truncatingRemainder(dividingBy: 360)) + 360).truncatingRemainder(dividingBy: 360)
         switch n {
         case 337.5..<360, 0..<22.5: return "north"
