@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import MapKit
+import WidgetKit
 
 /// Shared single source of truth for navigation state.
 /// Both the phone UI and CarPlay read from this object.
@@ -57,12 +58,21 @@ final class NavigationStateManager {
     private var pollingTask: Task<Void, Never>?
     private var rerouteTask: Task<Void, Never>?
 
+    // MARK: - Widget Shared Defaults
+
+    private static let widgetSuiteName = "group.to.nathancurtis.steddi"
+    private static let widgetKind = "CommuteETAWidget"
+
+    @ObservationIgnored
+    private let widgetDefaults = UserDefaults(suiteName: NavigationStateManager.widgetSuiteName)
+
     // MARK: - Observation
 
     func startObserving(
         engine: NavigationEngine,
         commute: Commute? = nil,
-        direction: CommuteDirection? = nil
+        direction: CommuteDirection? = nil,
+        destinationName: String? = nil
     ) {
         stopObserving()
 
@@ -70,6 +80,8 @@ final class NavigationStateManager {
         activeEngine = engine
         activeCommute = commute
         activeDirection = direction
+
+        writeWidgetSession(commute: commute, direction: direction, destinationName: destinationName)
 
         // Store route coords for CarPlay map rendering
         activeRouteCoords = engine.routePolylineCoordinates
@@ -179,7 +191,6 @@ final class NavigationStateManager {
         upcomingSteps = Self.buildUpcomingSteps(from: engine)
 
         // Write to shared App Group for widget
-        let widgetDefaults = UserDefaults(suiteName: "group.to.nathancurtis.steddi")
         widgetDefaults?.set(engine.etaMinutes, forKey: "widget.etaMinutes")
         widgetDefaults?.set(engine.isNavigating, forKey: "widget.isNavigating")
     }
@@ -190,6 +201,10 @@ final class NavigationStateManager {
 
         pollingTask = nil
         rerouteTask = nil
+
+        if isNavigating {
+            clearWidgetSession()
+        }
 
         isNavigating = false
         instruction = ""
@@ -217,6 +232,44 @@ final class NavigationStateManager {
         rerouteSuggestion = nil
         currentRemainingETA = 0
         upcomingSteps = []
+    }
+
+    // MARK: - Widget Session
+
+    /// Write the session identity (commute + destination names) the widget
+    /// renders alongside the per-tick ETA, then refresh its timeline.
+    private func writeWidgetSession(commute: Commute?, direction: CommuteDirection?, destinationName: String?) {
+        let resolvedDestination = destinationName ?? Self.commuteEndpointName(commute: commute, direction: direction)
+
+        if let commuteName = commute?.name {
+            widgetDefaults?.set(commuteName, forKey: "widget.commuteName")
+        } else {
+            // No commute (search nav) — fall back to the widget's default label
+            widgetDefaults?.removeObject(forKey: "widget.commuteName")
+        }
+
+        if let resolvedDestination {
+            widgetDefaults?.set(resolvedDestination, forKey: "widget.destinationName")
+        } else {
+            widgetDefaults?.removeObject(forKey: "widget.destinationName")
+        }
+
+        widgetDefaults?.set(true, forKey: "widget.isNavigating")
+        WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
+    }
+
+    /// Navigation ended — the live ETA is meaningless now, but the names stay
+    /// so the widget keeps its commute context until the next session.
+    private func clearWidgetSession() {
+        widgetDefaults?.set(false, forKey: "widget.isNavigating")
+        widgetDefaults?.set(0, forKey: "widget.etaMinutes")
+        WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
+    }
+
+    /// Endpoint the driver is heading to for a commute direction.
+    private static func commuteEndpointName(commute: Commute?, direction: CommuteDirection?) -> String? {
+        guard let commute else { return nil }
+        return direction == .destinationToOrigin ? commute.origin?.name : commute.destination?.name
     }
 
     // MARK: - Upcoming Steps Builder
