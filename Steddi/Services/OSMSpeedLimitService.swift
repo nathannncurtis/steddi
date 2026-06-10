@@ -43,6 +43,15 @@ final class OSMSpeedLimitService {
     /// Ways currently loaded for lookup.
     private var ways: [SpeedLimitWay] = []
 
+    /// Spatial hash grid: cell -> indices into `segments`.
+    private var segments: [Segment] = []
+    private var grid: [GridCell: [Int]] = [:]
+
+    /// Hysteresis: stick with the last matched way unless a challenger stays
+    /// meaningfully closer for several consecutive lookups.
+    private var lastWayIndex: Int?
+    private var challengerStreak = 0
+
     init(
         transport: @escaping Transport = { try await URLSession.shared.data(for: $0) },
         cacheDirectory: URL? = nil,
@@ -86,10 +95,120 @@ final class OSMSpeedLimitService {
         loadWays(fetched, routeKey: routeKey)
     }
 
-    /// Replace the in-memory way set used for lookups.
+    /// Replace the in-memory way set used for lookups and rebuild the spatial index.
     func loadWays(_ newWays: [SpeedLimitWay], routeKey: String) {
         ways = newWays.filter { $0.geometry.count >= 2 }
         loadedRouteKey = routeKey
+        segments = []
+        grid = [:]
+        lastWayIndex = nil
+        challengerStreak = 0
+
+        for (wayIndex, way) in ways.enumerated() {
+            for i in 0..<(way.geometry.count - 1) {
+                let a = CLLocationCoordinate2D(latitude: way.geometry[i].lat, longitude: way.geometry[i].lon)
+                let b = CLLocationCoordinate2D(latitude: way.geometry[i + 1].lat, longitude: way.geometry[i + 1].lon)
+                let segmentIndex = segments.count
+                segments.append(Segment(
+                    wayIndex: wayIndex,
+                    start: a,
+                    end: b,
+                    bearing: CustomRouteBuilder.bearing(from: a, to: b)
+                ))
+
+                // Register the segment in every cell its bounding box covers.
+                let latRange = Self.cellRange(a.latitude, b.latitude)
+                let lonRange = Self.cellRange(a.longitude, b.longitude)
+                for latCell in latRange {
+                    for lonCell in lonRange {
+                        grid[GridCell(lat: latCell, lon: lonCell), default: []].append(segmentIndex)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Lookup
+
+    /// Synchronous in-memory speed limit lookup for the current position.
+    /// Candidates come from the spatial grid (cell + 8 neighbors), gated to 30m
+    /// perpendicular distance, heading-filtered, with way-switch hysteresis.
+    func speedLimit(at coordinate: CLLocationCoordinate2D, heading: Double?) -> (mph: Double, isEstimated: Bool)? {
+        guard !segments.isEmpty else { return nil }
+
+        let centerLat = Self.cellIndex(coordinate.latitude)
+        let centerLon = Self.cellIndex(coordinate.longitude)
+        var candidates = Set<Int>()
+        for dLat in -1...1 {
+            for dLon in -1...1 {
+                if let indices = grid[GridCell(lat: centerLat + dLat, lon: centerLon + dLon)] {
+                    candidates.formUnion(indices)
+                }
+            }
+        }
+
+        // Nearest qualifying distance per way.
+        var wayDistances: [Int: Double] = [:]
+        for segmentIndex in candidates {
+            let segment = segments[segmentIndex]
+            if let heading, Self.bearingDelta(segment.bearing, heading) > Tuning.headingToleranceDegrees {
+                continue
+            }
+            let distance = Self.distanceToSegment(coordinate, segment.start, segment.end)
+            guard distance <= Tuning.matchRadiusMeters else { continue }
+            if distance < wayDistances[segment.wayIndex] ?? .infinity {
+                wayDistances[segment.wayIndex] = distance
+            }
+        }
+
+        guard let nearest = wayDistances.min(by: { $0.value < $1.value }) else {
+            lastWayIndex = nil
+            challengerStreak = 0
+            return nil
+        }
+
+        var chosen = nearest.key
+        if let last = lastWayIndex, last != nearest.key {
+            if let lastDistance = wayDistances[last] {
+                if nearest.value < lastDistance - Tuning.hysteresisMarginMeters {
+                    // Challenger is meaningfully closer — switch only after a streak.
+                    challengerStreak += 1
+                    if challengerStreak < Tuning.hysteresisLookups {
+                        chosen = last
+                    } else {
+                        challengerStreak = 0
+                    }
+                } else {
+                    challengerStreak = 0
+                    chosen = last
+                }
+            } else {
+                // Last way is no longer a candidate — switch immediately.
+                challengerStreak = 0
+            }
+        } else {
+            challengerStreak = 0
+        }
+
+        lastWayIndex = chosen
+        guard chosen < ways.count else { return nil }
+        let way = ways[chosen]
+        return (way.limitMph, way.isEstimated)
+    }
+
+    /// Angular difference between two bearings, ignoring direction of travel (mod 180).
+    nonisolated static func bearingDelta(_ a: Double, _ b: Double) -> Double {
+        var diff = abs(a - b).truncatingRemainder(dividingBy: 180)
+        if diff > 90 { diff = 180 - diff }
+        return diff
+    }
+
+    private nonisolated static func cellIndex(_ degrees: Double) -> Int {
+        Int(floor(degrees / Tuning.cellSizeDegrees))
+    }
+
+    private nonisolated static func cellRange(_ a: Double, _ b: Double) -> ClosedRange<Int> {
+        cellIndex(min(a, b))...cellIndex(max(a, b))
     }
 
     // MARK: - Network
@@ -314,6 +433,20 @@ final class OSMSpeedLimitService {
     }
 }
 
+// MARK: - Spatial Index Types
+
+private struct Segment {
+    let wayIndex: Int
+    let start: CLLocationCoordinate2D
+    let end: CLLocationCoordinate2D
+    let bearing: Double
+}
+
+private struct GridCell: Hashable {
+    let lat: Int
+    let lon: Int
+}
+
 // MARK: - Overpass Response
 
 private struct OverpassResponse: Decodable {
@@ -341,4 +474,9 @@ private enum Tuning {
     static let aroundRadiusMeters = 25
     static let cacheTTL: TimeInterval = 30 * 24 * 3600
     static let mphPerKmh = 0.621371
+    static let cellSizeDegrees = 0.001
+    static let matchRadiusMeters: Double = 30
+    static let headingToleranceDegrees: Double = 50
+    static let hysteresisMarginMeters: Double = 5
+    static let hysteresisLookups = 3
 }
