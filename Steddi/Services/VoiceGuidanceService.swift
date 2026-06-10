@@ -26,7 +26,9 @@ enum VoiceOption: String, CaseIterable, Identifiable {
 
     /// Resolve the best available voice for this option.
     /// Falls back to enhanced → compact → default language voice.
-    func resolve() -> AVSpeechSynthesisVoice {
+    /// Returns nil when the OS voice catalog is unavailable; a nil utterance
+    /// voice makes AVSpeechSynthesizer use the system default.
+    func resolve() -> AVSpeechSynthesisVoice? {
         if let voice = AVSpeechSynthesisVoice(identifier: rawValue) { return voice }
 
         // Try enhanced variant
@@ -40,8 +42,11 @@ enum VoiceOption: String, CaseIterable, Identifiable {
 
         if let voice = AVSpeechSynthesisVoice(language: "en-US") { return voice }
         if let voice = AVSpeechSynthesisVoice(language: "en") { return voice }
-        // Every iOS device has at least one speech voice; this is a last resort
-        return AVSpeechSynthesisVoice.speechVoices().first!
+        // speechVoices() can be empty when the OS voice db fails to load —
+        // simulators often log "[VoiceDBClient] Error fetching voices:
+        // DecodingError ... Using fallback voices". That noise is Apple's
+        // private AVSpeechSynthesis machinery, not app code; don't chase it.
+        return AVSpeechSynthesisVoice.speechVoices().first
     }
 }
 
@@ -51,7 +56,7 @@ final class VoiceGuidanceService {
 
     private let synthesizer = AVSpeechSynthesizer()
     private var isEnabled = true
-    private var currentVoice: AVSpeechSynthesisVoice
+    private var currentVoice: AVSpeechSynthesisVoice?
 
     private init() {
         let savedId = UserDefaults.standard.string(forKey: "steddi.voiceIdentifier") ?? VoiceOption.ava.rawValue
