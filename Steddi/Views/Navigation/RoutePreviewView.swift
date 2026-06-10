@@ -158,13 +158,10 @@ struct NavigationPreviewMap: UIViewRepresentable {
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
         mapView.delegate = context.coordinator
-        let config = MKStandardMapConfiguration(emphasisStyle: .muted)
-        config.showsTraffic = true
-        mapView.preferredConfiguration = config
+        mapView.preferredConfiguration = SteddiTheme.mapConfiguration(traffic: true, poiFilter: .excludingAll)
         mapView.showsUserLocation = true
         mapView.showsCompass = false
         mapView.showsScale = false
-        mapView.pointOfInterestFilter = .excludingAll
         mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
         return mapView
     }
