@@ -299,13 +299,13 @@ struct PhoneCompanionView: View {
         }()
 
         let speedColor: Color = {
-            if overLimit > 10 { return SteddiTheme.warmRed }
-            if overLimit > 0 { return SteddiTheme.accent }
+            if overLimit > 8 { return SteddiTheme.warmRed }
+            if overLimit > 0 { return SteddiTheme.warningAmber }
             return SteddiTheme.textPrimary
         }()
 
         let bgColor: Color = {
-            if overLimit > 10 { return SteddiTheme.warmRedSubtle }
+            if overLimit > 8 { return SteddiTheme.warmRedSubtle }
             return SteddiTheme.surfaceElevated
         }()
 

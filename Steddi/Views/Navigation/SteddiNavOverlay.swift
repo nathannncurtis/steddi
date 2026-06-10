@@ -524,13 +524,13 @@ struct SteddiNavOverlay: View {
         }()
 
         let speedColor: Color = {
-            if overLimit > 10 { return SteddiTheme.warmRed }
-            if overLimit > 0 { return SteddiTheme.accent }
+            if overLimit > 8 { return SteddiTheme.warmRed }
+            if overLimit > 0 { return SteddiTheme.warningAmber }
             return SteddiTheme.textPrimary
         }()
 
         let bgColor: Color = {
-            if overLimit > 10 { return SteddiTheme.warmRedSubtle }
+            if overLimit > 8 { return SteddiTheme.warmRedSubtle }
             return SteddiTheme.surfaceSecondary
         }()
 
@@ -570,12 +570,16 @@ struct SteddiNavOverlay: View {
             if let limit = speedLimitMph {
                 Text("\(Int(limit))")
                     .font(SteddiTheme.mono(10 * scale))
-                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .foregroundStyle(overLimit > 0 ? SteddiTheme.warmRed
+                                     : engine.speedLimitIsEstimated ? SteddiTheme.textMuted
+                                     : SteddiTheme.textPrimary)
                     .frame(width: 22 * scale, height: 22 * scale)
                     .background(
                         Circle()
                             .fill(SteddiTheme.surfacePrimary)
-                            .overlay(Circle().stroke(SteddiTheme.textMuted.opacity(0.5), lineWidth: 1.5))
+                            .overlay(Circle().stroke(
+                                overLimit > 0 ? SteddiTheme.warmRed : SteddiTheme.textMuted.opacity(0.5),
+                                lineWidth: 1.5))
                     )
                     .offset(x: 4 * scale, y: -4 * scale)
             }

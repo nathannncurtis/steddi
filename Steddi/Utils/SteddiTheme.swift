@@ -64,6 +64,7 @@ enum SteddiTheme {
     /// Soft red — warnings, delays, problems. Not alarming.
     static let warmRed = Color(red: 0.91, green: 0.30, blue: 0.24)      // #E84D3D
     static let warmRedSubtle = Color(red: 0.91, green: 0.30, blue: 0.24).opacity(0.15)
+    static let warningAmber = Color(red: 0.95, green: 0.65, blue: 0.15)   // #F2A626 — over-limit warning, independent of accent
 
     /// Surface colors — adaptive for light/dark mode
     static let surfacePrimary = Color(UIColor { traits in
