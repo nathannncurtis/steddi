@@ -472,17 +472,18 @@ struct HomeView: View {
             }
         }
 
+        let destName = navigationDestination?.name ?? "Destination"
         navStateManager.activeRouteCoords = engine.routePolylineCoordinates
         navStateManager.startObserving(
             engine: engine,
             commute: activeCommute,
-            direction: activeDirection
+            direction: activeDirection,
+            destinationName: destName
         )
 
         startLocationFeed()
 
         // Start Live Activity
-        let destName = navigationDestination?.name ?? "Destination"
         LiveActivityService.shared.startActivity(destinationName: destName)
 
         withAnimation(.easeInOut(duration: 0.4)) {
@@ -874,17 +875,18 @@ struct HomeView: View {
             }
         }
 
+        let destName = navigationDestination?.name ?? "Destination"
         navStateManager.activeRouteCoords = engine.routePolylineCoordinates
         navStateManager.startObserving(
             engine: engine,
             commute: activeCommute,
-            direction: activeDirection
+            direction: activeDirection,
+            destinationName: destName
         )
 
         startLocationFeed()
 
         // Start Live Activity
-        let destName = navigationDestination?.name ?? "Destination"
         LiveActivityService.shared.startActivity(destinationName: destName)
 
         withAnimation(.easeInOut(duration: 0.4)) {
