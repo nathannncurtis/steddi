@@ -58,9 +58,14 @@ echo "== install + prep"
 xcrun simctl install "$UDID" "$APP_PATH"
 xcrun simctl privacy "$UDID" grant location-always "$BUNDLE_ID"
 xcrun simctl spawn "$UDID" defaults write "$BUNDLE_ID" hasCompletedOnboarding -bool true
+# Pre-approve the steddi:// scheme so `simctl openurl` doesn't hang on the
+# "Open in Steddi?" SpringBoard confirmation (appears on iOS 18.4+ runtimes).
+xcrun simctl spawn "$UDID" defaults write com.apple.launchservices.schemeapproval \
+    "com.apple.CoreSimulator.CoreSimulatorBridge-->steddi" -string "$BUNDLE_ID"
 xcrun simctl location "$UDID" set "${WAYPOINT_ARGS[0]}"
 
 echo "== launch + start navigation"
+xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
 xcrun simctl launch "$UDID" "$BUNDLE_ID"
 xcrun simctl openurl "$UDID" "steddi://navigate?lat=33.97774&lng=-117.37601&name=Victoria%20Test"
 sleep 12
