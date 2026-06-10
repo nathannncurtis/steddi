@@ -81,11 +81,23 @@ import CoreLocation
 
 extension Route {
     /// Decode the saved steps from JSON.
+    /// Legacy blobs from the chained-leg planner embed an arrival step at
+    /// every plot point — only the final arrival is real, so mid-route
+    /// arrival-pattern steps are dropped.
     var savedNavSteps: [NavStep]? {
         guard let json = encodedSteps, let data = json.data(using: .utf8) else { return nil }
         guard let savedSteps = try? JSONDecoder().decode([SavedStep].self, from: data) else { return nil }
-        let navSteps = savedSteps.filter { !$0.instruction.isEmpty }.map { $0.toNavStep }
+        let nonEmpty = savedSteps.filter { !$0.instruction.isEmpty }
+        let navSteps = nonEmpty.enumerated()
+            .filter { index, step in index == nonEmpty.count - 1 || !Self.isArrivalPattern(step) }
+            .map { $0.element.toNavStep }
         return navSteps.isEmpty ? nil : navSteps
+    }
+
+    /// Whether a saved step reads as an arrival, by symbol or instruction.
+    private static func isArrivalPattern(_ step: SavedStep) -> Bool {
+        step.maneuverSymbol == "flag.fill"
+            || NavigationEngine.sfSymbolFromInstruction(step.instruction) == "flag.fill"
     }
 
     /// Encode steps as JSON for storage.
