@@ -64,9 +64,17 @@ final class DirectionsService {
             throw DirectionsError.noRoute
         }
 
+        return try await fetchETA(from: origin, to: destinationCoord)
+    }
+
+    /// Get the current ETA between two coordinates.
+    func fetchETA(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D
+    ) async throws -> TimeInterval {
         let request = MKDirections.Request()
         request.source = MKMapItem(location: CLLocation(latitude: origin.latitude, longitude: origin.longitude), address: nil)
-        request.destination = MKMapItem(location: CLLocation(latitude: destinationCoord.latitude, longitude: destinationCoord.longitude), address: nil)
+        request.destination = MKMapItem(location: CLLocation(latitude: destination.latitude, longitude: destination.longitude), address: nil)
         request.transportType = .automobile
 
         let directions = MKDirections(request: request)
