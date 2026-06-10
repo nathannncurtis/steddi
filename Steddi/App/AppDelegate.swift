@@ -8,21 +8,16 @@ private let appLog = Logger(subsystem: "to.nathancurtis.steddi", category: "App"
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
+    /// Non-nil when the app had to fall back to an in-memory store.
+    private(set) var storageWarning: String?
+
     lazy var modelContainer: ModelContainer = {
-        do {
-            return try ModelContainer(for:
-                PinnedLocation.self,
-                Commute.self,
-                Route.self,
-                DriveRecord.self,
-                NoGoZone.self,
-                CommuteTrip.self,
-                Report.self
-            )
-        } catch {
-            appLog.fault("Failed to create ModelContainer: \(error.localizedDescription)")
-            fatalError("Failed to create ModelContainer: \(error)")
+        let result = ModelStoreLocator.makeAppContainer()
+        if let warning = result.warning {
+            appLog.fault("Running on in-memory store: \(warning)")
+            storageWarning = warning
         }
+        return result.container
     }()
 
     let locationService = LocationService()

@@ -14,8 +14,9 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
         guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
 
-        let rootView = SteddiRootView()
-            .modelContainer(appDelegate.modelContainer)
+        let container = appDelegate.modelContainer
+        let rootView = SteddiRootView(storageWarning: appDelegate.storageWarning)
+            .modelContainer(container)
             .environment(appDelegate.locationService)
             .environment(appDelegate.offlineCacheService)
             .environment(NavigationStateManager.shared)
@@ -96,6 +97,8 @@ extension Notification.Name {
 
 /// Reactive root view that switches between onboarding and home
 private struct SteddiRootView: View {
+    let storageWarning: String?
+
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("themeMode") private var themeMode = "dynamic"
 
@@ -108,6 +111,17 @@ private struct SteddiRootView: View {
             }
         }
         .preferredColorScheme(resolvedColorScheme)
+        .safeAreaInset(edge: .top) {
+            if let storageWarning {
+                Label(storageWarning, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.red.opacity(0.92), in: Capsule())
+                    .padding(.top, 4)
+            }
+        }
     }
 
     private var resolvedColorScheme: ColorScheme? {

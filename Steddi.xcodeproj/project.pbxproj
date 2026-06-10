@@ -57,6 +57,7 @@
 		967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDEFFA656C308FF61D985BF /* NoGoZone.swift */; };
 		99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */; };
 		9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */; };
+		9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */; };
 		9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */; };
 		9F54B7F94722C2EE69821F18 /* SteddiWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 534F293CE883ED26D52B0510 /* SteddiWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A22CFFF0BDE370AB28985EC8 /* AdvancedHapticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */; };
@@ -90,6 +91,7 @@
 		F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */; };
 		F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA9033EAA004A2509272285E /* RouteGeometry.swift */; };
 		F988967C38892DF7EE141166 /* NavigationStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */; };
+		FA7C506C7D917FBF5EDAE6EE /* ModelStoreLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA8461A623AD14BABDF3FAE8 /* ModelStoreLocator.swift */; };
 		FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598632F13EF2804C543D14D0 /* LocationCardView.swift */; };
 		FCE1679710D8DE18A9FDC517 /* Report.swift in Sources */ = {isa = PBXBuildFile; fileRef = CADE3A03C008B4BD3D0FE2E6 /* Report.swift */; };
 /* End PBXBuildFile section */
@@ -214,6 +216,7 @@
 		DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolator.swift; sourceTree = "<group>"; };
 		E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiLiveActivityBundle.swift; sourceTree = "<group>"; };
 		E64DED98F409553C18FBECB6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStoreLocatorTests.swift; sourceTree = "<group>"; };
 		EAA8B2837951D77986E1E11A /* Steddi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Steddi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EBD3684A653CCA35C0F4BAC7 /* SteddiNavigationActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiNavigationActivity.swift; sourceTree = "<group>"; };
 		EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCacheServiceTests.swift; sourceTree = "<group>"; };
@@ -225,6 +228,7 @@
 		F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteCardView.swift; sourceTree = "<group>"; };
 		F7111C46770386A928275F35 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdExplainerView.swift; sourceTree = "<group>"; };
+		FA8461A623AD14BABDF3FAE8 /* ModelStoreLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStoreLocator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -334,6 +338,7 @@
 			isa = PBXGroup;
 			children = (
 				08B46BB7337E920209A89889 /* HapticServiceTests.swift */,
+				E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */,
 				4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */,
 				16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */,
 				247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */,
@@ -476,6 +481,7 @@
 				B4D0B9209F9F81F57E555407 /* LiveActivityService.swift */,
 				3B4F33590D3CEB7AA217E684 /* LocationService.swift */,
 				AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */,
+				FA8461A623AD14BABDF3FAE8 /* ModelStoreLocator.swift */,
 				B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */,
 				A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */,
 				DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */,
@@ -696,6 +702,7 @@
 				13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */,
 				26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */,
 				D649B2DE89F3D939E458A826 /* MeasurementUnit.swift in Sources */,
+				FA7C506C7D917FBF5EDAE6EE /* ModelStoreLocator.swift in Sources */,
 				5822FFAEECCEC7E5E31C3D1C /* NavPoseInterpolator.swift in Sources */,
 				8C42BC8E8487C5F21A0D7EA4 /* NavigationAttributes.swift in Sources */,
 				7AC6366691401A8DB28223A8 /* NavigationEngine.swift in Sources */,
@@ -746,6 +753,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */,
+				9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */,
 				19C3C8979AE3DF1ABFFF5567 /* NavPoseInterpolatorTests.swift in Sources */,
 				0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */,
 				2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */,
