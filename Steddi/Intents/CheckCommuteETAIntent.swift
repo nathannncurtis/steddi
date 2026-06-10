@@ -43,7 +43,7 @@ struct CheckCommuteETAIntent: AppIntent {
         let destinationName = destinationPin.name
 
         do {
-            let eta = try await DirectionsService().fetchETA(
+            let eta = try await DirectionsService().fetchDirectETA(
                 from: startCoordinate,
                 to: destinationPin.coordinate
             )
