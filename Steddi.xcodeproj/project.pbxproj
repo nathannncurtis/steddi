@@ -92,6 +92,7 @@
 		E92F9527A2AEDB8A859E6834 /* NavigationAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6284ADAB45E23AF8893D2CC2 /* NavigationAttributes.swift */; };
 		F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */; };
 		F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA9033EAA004A2509272285E /* RouteGeometry.swift */; };
+		F487CF1CC6152EF271644653 /* RouteRecoveryEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03670FA5EF8B8CA954F816D1 /* RouteRecoveryEngine.swift */; };
 		F988967C38892DF7EE141166 /* NavigationStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */; };
 		FA7C506C7D917FBF5EDAE6EE /* ModelStoreLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA8461A623AD14BABDF3FAE8 /* ModelStoreLocator.swift */; };
 		FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598632F13EF2804C543D14D0 /* LocationCardView.swift */; };
@@ -138,6 +139,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		03670FA5EF8B8CA954F816D1 /* RouteRecoveryEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRecoveryEngine.swift; sourceTree = "<group>"; };
 		03B614E4431FE25A25512707 /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiNavOverlay.swift; sourceTree = "<group>"; };
 		06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSceneDelegate.swift; sourceTree = "<group>"; };
@@ -496,6 +498,7 @@
 				C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */,
 				0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */,
 				BA9033EAA004A2509272285E /* RouteGeometry.swift */,
+				03670FA5EF8B8CA954F816D1 /* RouteRecoveryEngine.swift */,
 				262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */,
 			);
 			path = Services;
@@ -731,6 +734,7 @@
 				F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */,
 				CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */,
 				C71246A6559A6AC5CE9A73C3 /* RoutePreviewView.swift in Sources */,
+				F487CF1CC6152EF271644653 /* RouteRecoveryEngine.swift in Sources */,
 				571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */,
 				0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */,
 				D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */,
