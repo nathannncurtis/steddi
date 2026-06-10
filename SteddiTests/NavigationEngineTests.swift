@@ -232,6 +232,107 @@ struct NavigationEngineRoadNameTests {
     }
 }
 
+// MARK: - Speed Limit Estimation Tests
+
+@Suite("NavigationEngine.estimateSpeedLimit")
+struct NavigationEngineSpeedLimitTests {
+
+    @Test("Merge onto interstate classifies by road, not maneuver")
+    func mergeOntoInterstate() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Merge onto I-215") == 65)
+    }
+
+    @Test("Ramp onto US route classifies by road, not maneuver")
+    func rampOntoUSRoute() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Take the ramp onto US-101 North") == 65)
+    }
+
+    @Test("CA state route is 65")
+    func caStateRoute() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Continue on CA-60 East") == 65)
+    }
+
+    @Test("SR state route is 65")
+    func srStateRoute() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Merge onto SR-91") == 65)
+    }
+
+    @Test("Freeway keyword is 65")
+    func freeway() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Continue onto the freeway") == 65)
+    }
+
+    @Test("Boulevard is 45")
+    func boulevard() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn right onto Sunset Blvd") == 45)
+    }
+
+    @Test("Parkway is 45")
+    func parkway() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Continue on Chino Hills Pkwy") == 45)
+    }
+
+    @Test("Street abbreviation at end of instruction is 35")
+    func streetAbbreviationAtEnd() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn left onto Main St") == 35)
+    }
+
+    @Test("Road abbreviation at end of instruction is 35")
+    func roadAbbreviationAtEnd() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn right onto Euclid Rd") == 35)
+    }
+
+    @Test("Drive abbreviation is 35")
+    func driveAbbreviation() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Bear left onto Country Club Dr") == 35)
+    }
+
+    @Test("Lane abbreviation is 35")
+    func laneAbbreviation() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn onto Maple Ln") == 35)
+    }
+
+    @Test("Court abbreviation is 35")
+    func courtAbbreviation() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn left onto Oak Ct") == 35)
+    }
+
+    @Test("Full street word is 35")
+    func fullStreetWord() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn left onto First Street") == 35)
+    }
+
+    @Test("Avenue is 35")
+    func avenue() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn right onto 5th Avenue") == 35)
+    }
+
+    @Test("st inside a word is not a street")
+    func stInsideWord() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Head west") == 45)
+    }
+
+    @Test("Word starting with st is not a street")
+    func wordStartingWithSt() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn onto Standish Way") == 45)
+    }
+
+    @Test("Bare ramp is 40")
+    func bareRamp() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Take the ramp") == 40)
+    }
+
+    @Test("Bare merge is 40")
+    func bareMerge() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Merge left") == 40)
+    }
+
+    @Test("Unknown instruction defaults to 45")
+    func unknownDefault() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Make a U-turn") == 45)
+    }
+}
+
 // MARK: - Initial State & Stop Navigation Tests
 
 @Suite("NavigationEngine state lifecycle")
