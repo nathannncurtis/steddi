@@ -32,11 +32,38 @@ struct SteddiNavOverlay: View {
     // engine publishes its first valid travel bearing
     @State private var compassSector: Int? = nil
 
+    // Display modes — stored here so SwiftUI re-renders when Settings toggles
+    // them; the derived scales/flags stay owned by DisplayModeService
+    @AppStorage("steddi.passengerMode") private var isPassengerMode: Bool = false
+    @AppStorage("steddi.accessibilityMode") private var isAccessibilityMode: Bool = false
+
+    private var textScale: Double { DisplayModeService.shared.textScale }
+    private var iconScale: Double { DisplayModeService.shared.iconScale }
+    private var highContrast: Bool { DisplayModeService.shared.useHighContrast }
+    /// Touch-target multiplier for controls the passenger works (report,
+    /// reroute, end) — rides the icon scale so both modes grow them.
+    private var controlScale: Double { DisplayModeService.shared.iconScale }
+
+    /// Maneuver text shown on screen — simplified to the bare maneuver in
+    /// accessibility mode. Voice guidance always speaks the full instruction.
+    private var displayInstruction: String {
+        DisplayModeService.shared.useSimplifiedInstructions
+            ? DisplayModeService.simplifiedInstruction(engine.instruction)
+            : engine.instruction
+    }
+
+    private var displayFollowOnInstruction: String {
+        DisplayModeService.shared.useSimplifiedInstructions
+            ? DisplayModeService.simplifiedInstruction(engine.followOnInstruction)
+            : engine.followOnInstruction
+    }
+
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
+        let _ = (isPassengerMode, isAccessibilityMode) // re-render on display mode change
         ZStack {
             if isLandscape {
                 landscapeNavLayout
@@ -122,47 +149,51 @@ struct SteddiNavOverlay: View {
 
     // MARK: - Landscape Nav Layout
 
+    /// Landscape instruction cards widen with the text scale so larger type
+    /// keeps two full lines instead of truncating.
+    private var landscapeCardWidth: CGFloat { 300 * textScale }
+
     private var landscapeNavLayout: some View {
         ZStack {
             // Top-left: instruction card (floating)
             VStack {
                 HStack(spacing: 10) {
                     Image(systemName: engine.maneuverType)
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 28 * iconScale, weight: .bold))
                         .foregroundStyle(SteddiTheme.accent)
-                        .frame(width: 50, height: 50)
+                        .frame(width: 50 * iconScale, height: 50 * iconScale)
                         .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 14))
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(engine.stepDistance)
-                            .font(SteddiTheme.mono(26))
+                            .font(SteddiTheme.mono(26 * textScale))
                             .foregroundStyle(SteddiTheme.textPrimary)
-                        Text(engine.instruction)
-                            .font(SteddiTheme.body(15))
-                            .foregroundStyle(SteddiTheme.textSecondary)
+                        Text(displayInstruction)
+                            .font(SteddiTheme.body(15 * textScale, highContrast: highContrast))
+                            .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                             .lineLimit(2)
                     }
                 }
                 .padding(14)
-                .frame(width: 300, alignment: .leading)
-                .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
+                .frame(width: landscapeCardWidth, alignment: .leading)
+                .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.95, highContrast: highContrast)), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
 
                 // Next maneuver (compact, below instruction)
                 if !engine.followOnInstruction.isEmpty {
                     HStack(spacing: 6) {
                         Image(systemName: engine.followOnManeuverSymbol)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 13 * iconScale, weight: .semibold))
                             .foregroundStyle(SteddiTheme.accent.opacity(0.7))
-                        Text("Then: \(engine.followOnInstruction)")
-                            .font(SteddiTheme.body(13))
-                            .foregroundStyle(SteddiTheme.textMuted)
+                        Text("Then: \(displayFollowOnInstruction)")
+                            .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                            .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
                             .lineLimit(1)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .frame(width: 300, alignment: .leading)
-                    .background(SteddiTheme.surfacePrimary.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
+                    .frame(width: landscapeCardWidth, alignment: .leading)
+                    .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.85, highContrast: highContrast)), in: RoundedRectangle(cornerRadius: 12))
                 }
 
                 Spacer()
@@ -186,38 +217,38 @@ struct SteddiNavOverlay: View {
 
                 // ETA bar
                 HStack(spacing: 12) {
-                    speedometer(size: 44)
+                    speedometer(size: 44 * iconScale)
 
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 3) {
                             Text("\(engine.etaMinutes)")
-                                .font(SteddiTheme.mono(22))
+                                .font(SteddiTheme.mono(22 * textScale))
                                 .foregroundStyle(SteddiTheme.textPrimary)
                             Text("min")
-                                .font(SteddiTheme.body(13))
-                                .foregroundStyle(SteddiTheme.textSecondary)
+                                .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                         }
                         HStack(spacing: 6) {
                             Text(engine.distanceRemaining)
-                                .font(SteddiTheme.mono(12))
-                                .foregroundStyle(SteddiTheme.textMuted)
+                                .font(SteddiTheme.mono(12 * textScale))
+                                .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
                             Text(engine.arrivalTime)
-                                .font(SteddiTheme.mono(12))
-                                .foregroundStyle(SteddiTheme.textMuted)
+                                .font(SteddiTheme.mono(12 * textScale))
+                                .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
                         }
                     }
 
                     Button(action: onEndNavigation) {
                         Text("End")
-                            .font(.body.weight(.semibold))
+                            .font(.system(size: 17 * textScale, weight: .semibold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, 20 * controlScale)
+                            .padding(.vertical, 10 * controlScale)
                             .background(SteddiTheme.warmRed, in: Capsule())
                     }
                 }
                 .padding(12)
-                .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
+                .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.95, highContrast: highContrast)), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
                 .shadow(color: .black.opacity(0.3), radius: 8, y: -2)
             }
             .padding(.leading, 50) // clear notch
@@ -227,11 +258,11 @@ struct SteddiNavOverlay: View {
             // Street name: centered bottom
             if !engine.roadName.isEmpty {
                 Text(engine.roadName)
-                    .font(SteddiTheme.body(13))
-                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
-                    .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                    .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.85, highContrast: highContrast)), in: Capsule())
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 8)
             }
@@ -244,24 +275,25 @@ struct SteddiNavOverlay: View {
         HStack(spacing: 16) {
             // Maneuver icon — large and prominent
             Image(systemName: engine.maneuverType)
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 40 * iconScale, weight: .bold))
                 .foregroundStyle(SteddiTheme.accent)
-                .frame(width: 72, height: 72)
+                .frame(width: 72 * iconScale, height: 72 * iconScale)
                 .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 18))
 
             VStack(alignment: .leading, spacing: 6) {
                 // Distance — LARGE mono for glanceability
                 Text(engine.stepDistance)
-                    .font(SteddiTheme.mono(34))
+                    .font(SteddiTheme.mono(34 * textScale))
                     .foregroundStyle(SteddiTheme.textPrimary)
                     .minimumScaleFactor(0.7)
 
                 // Instruction — clear and readable
-                Text(engine.instruction)
-                    .font(SteddiTheme.body(18))
-                    .foregroundStyle(SteddiTheme.textSecondary)
+                Text(displayInstruction)
+                    .font(SteddiTheme.body(18 * textScale, highContrast: highContrast))
+                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .minimumScaleFactor(0.7)
             }
 
             Spacer()
@@ -272,11 +304,11 @@ struct SteddiNavOverlay: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                        .fill(SteddiTheme.surfacePrimary.opacity(0.82))
+                        .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.82, highContrast: highContrast)))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                        .stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1)
+                        .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.15, highContrast: highContrast)), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
         }
@@ -287,13 +319,13 @@ struct SteddiNavOverlay: View {
     private var followOnBanner: some View {
         HStack(spacing: 10) {
             Image(systemName: engine.followOnManeuverSymbol)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 16 * iconScale, weight: .semibold))
                 .foregroundStyle(SteddiTheme.accent.opacity(0.7))
-                .frame(width: 28, height: 28)
+                .frame(width: 28 * iconScale, height: 28 * iconScale)
 
-            Text("Then: \(engine.followOnInstruction)")
-                .font(SteddiTheme.body(14))
-                .foregroundStyle(SteddiTheme.textMuted)
+            Text("Then: \(displayFollowOnInstruction)")
+                .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
+                .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
                 .lineLimit(1)
 
             Spacer()
@@ -302,10 +334,10 @@ struct SteddiNavOverlay: View {
         .padding(.vertical, 10)
         .background {
             RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                .fill(SteddiTheme.surfacePrimary.opacity(0.75))
+                .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.75, highContrast: highContrast)))
                 .overlay(
                     RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                        .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
+                        .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.08, highContrast: highContrast)), lineWidth: 1)
                 )
         }
     }
@@ -314,16 +346,16 @@ struct SteddiNavOverlay: View {
 
     private var streetNameCapsule: some View {
         Text(engine.roadName)
-            .font(SteddiTheme.body(14))
-            .foregroundStyle(SteddiTheme.textSecondary)
+            .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
+            .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
             .padding(.horizontal, 16)
             .padding(.vertical, 7)
             .background {
                 Capsule()
-                    .fill(SteddiTheme.surfacePrimary.opacity(0.85))
+                    .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.85, highContrast: highContrast)))
                     .overlay(
                         Capsule()
-                            .stroke(SteddiTheme.accent.opacity(0.25), lineWidth: 1)
+                            .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.25, highContrast: highContrast)), lineWidth: 1)
                     )
             }
     }
@@ -333,12 +365,12 @@ struct SteddiNavOverlay: View {
     private var compassIndicator: some View {
         ZStack {
             Circle()
-                .fill(SteddiTheme.surfacePrimary.opacity(0.88))
-                .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1))
-                .frame(width: 44, height: 44)
+                .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.88, highContrast: highContrast)))
+                .overlay(Circle().stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.12, highContrast: highContrast)), lineWidth: 1))
+                .frame(width: 44 * iconScale, height: 44 * iconScale)
 
             Text(compassLabel)
-                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                .font(.system(size: 15 * textScale, weight: .heavy, design: .rounded))
                 .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
         }
         .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
@@ -409,12 +441,12 @@ struct SteddiNavOverlay: View {
     private var landscapeCompassIndicator: some View {
         ZStack {
             Circle()
-                .fill(SteddiTheme.surfacePrimary.opacity(0.88))
-                .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
-                .frame(width: 50, height: 50)
+                .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.88, highContrast: highContrast)))
+                .overlay(Circle().stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.15, highContrast: highContrast)), lineWidth: 1))
+                .frame(width: 50 * iconScale, height: 50 * iconScale)
 
             Text(compassLabel)
-                .font(.system(size: 16, weight: .heavy, design: .rounded))
+                .font(.system(size: 16 * textScale, weight: .heavy, design: .rounded))
                 .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
         }
         .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
@@ -423,14 +455,14 @@ struct SteddiNavOverlay: View {
     private func landscapeButton(_ symbol: String, rotationDegrees: Double = 0, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 20, weight: .medium))
+                .font(.system(size: 20 * controlScale, weight: .medium))
                 .foregroundStyle(SteddiTheme.accent)
                 .rotationEffect(.degrees(rotationDegrees))
-                .frame(width: 50, height: 50)
+                .frame(width: 50 * controlScale, height: 50 * controlScale)
                 .background {
                     Circle()
-                        .fill(SteddiTheme.surfacePrimary.opacity(0.88))
-                        .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
+                        .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.88, highContrast: highContrast)))
+                        .overlay(Circle().stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.15, highContrast: highContrast)), lineWidth: 1))
                 }
                 .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
         }
@@ -438,12 +470,12 @@ struct SteddiNavOverlay: View {
 
     private func floatingButtonCircle(symbol: String, isActive: Bool) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: 17, weight: .medium))
-            .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textMuted)
-            .frame(width: 44, height: 44)
+            .font(.system(size: 17 * controlScale, weight: .medium))
+            .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textMuted(highContrast: highContrast))
+            .frame(width: 44 * controlScale, height: 44 * controlScale)
             .background {
                 Circle()
-                    .fill(SteddiTheme.surfacePrimary.opacity(0.88))
+                    .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.88, highContrast: highContrast)))
                     .overlay(
                         Circle()
                             .stroke(isActive ? SteddiTheme.accent.opacity(0.2) : SteddiTheme.textMuted.opacity(0.1), lineWidth: 1)
@@ -457,32 +489,32 @@ struct SteddiNavOverlay: View {
     private var bottomBar: some View {
         HStack(alignment: .center, spacing: 0) {
             // Speedometer — left
-            speedometer(size: 64)
+            speedometer(size: 64 * iconScale)
 
             // ETA block — center
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
                     Text("\(engine.etaMinutes)")
-                        .font(SteddiTheme.mono(32))
+                        .font(SteddiTheme.mono(32 * textScale))
                         .foregroundStyle(SteddiTheme.textPrimary)
                     Text("min")
-                        .font(SteddiTheme.body(14))
-                        .foregroundStyle(SteddiTheme.textSecondary)
+                        .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
+                        .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                         .padding(.top, 8)
                 }
 
                 HStack(spacing: 8) {
                     Text(engine.distanceRemaining)
-                        .font(SteddiTheme.mono(13))
-                        .foregroundStyle(SteddiTheme.textSecondary)
+                        .font(SteddiTheme.mono(13 * textScale))
+                        .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
 
                     Circle()
                         .fill(SteddiTheme.textMuted)
                         .frame(width: 3, height: 3)
 
                     Text(engine.arrivalTime)
-                        .font(SteddiTheme.mono(13))
-                        .foregroundStyle(SteddiTheme.textMuted)
+                        .font(SteddiTheme.mono(13 * textScale))
+                        .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -490,10 +522,10 @@ struct SteddiNavOverlay: View {
             // End button — right
             Button(action: onEndNavigation) {
                 Text("End")
-                    .font(.body.weight(.semibold))
+                    .font(.system(size: 17 * textScale, weight: .semibold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 24 * controlScale)
+                    .padding(.vertical, 12 * controlScale)
                     .background(SteddiTheme.warmRed, in: Capsule())
             }
         }
@@ -504,11 +536,11 @@ struct SteddiNavOverlay: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                        .fill(SteddiTheme.surfacePrimary.opacity(0.82))
+                        .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.82, highContrast: highContrast)))
                 )
                 .overlay(
                     UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                        .stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1)
+                        .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.08, highContrast: highContrast)), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.35), radius: 20, y: -5)
         }
@@ -629,21 +661,21 @@ struct SteddiNavOverlay: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 20))
+                    .font(.system(size: 20 * iconScale))
                     .foregroundStyle(color)
-                    .frame(width: 32)
+                    .frame(width: 32 * iconScale)
 
                 Text(label)
-                    .font(SteddiTheme.body(17))
+                    .font(SteddiTheme.body(17 * textScale, highContrast: highContrast))
                     .foregroundStyle(SteddiTheme.textPrimary)
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(SteddiTheme.textMuted)
+                    .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 4 * controlScale)
         }
         .listRowBackground(SteddiTheme.surfaceSecondary)
     }

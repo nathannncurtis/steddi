@@ -117,6 +117,34 @@ enum SteddiTheme {
         .system(size: size, weight: .medium, design: .monospaced)
     }
 
+    // MARK: - High Contrast (accessibility mode)
+
+    /// Body text that thickens for high-contrast reading.
+    static func body(_ size: CGFloat, highContrast: Bool) -> Font {
+        .system(size: size, weight: highContrast ? .semibold : .regular, design: .default)
+    }
+
+    /// Secondary text promoted to full contrast when high contrast is on.
+    static func textSecondary(highContrast: Bool) -> Color {
+        highContrast ? textPrimary : textSecondary
+    }
+
+    /// Muted text promoted one contrast level when high contrast is on.
+    static func textMuted(highContrast: Bool) -> Color {
+        highContrast ? textSecondary : textMuted
+    }
+
+    /// Floating nav surfaces go fully opaque under high contrast so text
+    /// never fights the map underneath.
+    static func navSurfaceOpacity(_ base: Double, highContrast: Bool) -> Double {
+        highContrast ? 1.0 : base
+    }
+
+    /// Hairline card strokes thicken to a visible border under high contrast.
+    static func navStrokeOpacity(_ base: Double, highContrast: Bool) -> Double {
+        highContrast ? max(base, 0.45) : base
+    }
+
     // MARK: - Corner Radii
 
     static let radiusSmall: CGFloat = 10
