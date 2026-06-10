@@ -6,7 +6,6 @@ import AVFoundation
 /// Uses NavigationEngine for routing brain, renders its own SwiftUI interface.
 struct SteddiNavOverlay: View {
     @AppStorage("accentColor") private var accentColor = "lavender"
-    @Environment(LocationService.self) private var locationService
     let engine: NavigationEngine
     let onEndNavigation: () -> Void
     var onToggleVoice: () -> Void = {}
@@ -28,6 +27,10 @@ struct SteddiNavOverlay: View {
     @State private var showReportSheet = false
     @State private var showReportedToast = false
     @State private var reportedType: String = ""
+
+    // Compass — current 45-degree sector (0 = N ... 7 = NW), nil until the
+    // engine publishes its first valid travel bearing
+    @State private var compassSector: Int? = nil
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
@@ -56,6 +59,9 @@ struct SteddiNavOverlay: View {
         }
         .onAppear {
             VoiceGuidanceService.shared.enabled = isVoiceOn
+        }
+        .onChange(of: engine.headingDegrees, initial: true) { _, newValue in
+            updateCompassSector(for: newValue)
         }
         .task {
             startRerouteLoop()
@@ -331,26 +337,37 @@ struct SteddiNavOverlay: View {
                 .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1))
                 .frame(width: 44, height: 44)
 
-            Text(cardinalLabel(for: locationService.deviceHeading))
+            Text(compassLabel)
                 .font(.system(size: 15, weight: .heavy, design: .rounded))
-                .foregroundStyle(SteddiTheme.accent)
+                .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
         }
         .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
     }
 
-    private func cardinalLabel(for degrees: Double) -> String {
+    private static let compassLabels = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+
+    /// Cardinal letter for the engine's travel bearing — dimmed dash until the
+    /// first valid bearing arrives.
+    private var compassLabel: String {
+        compassSector.map { Self.compassLabels[$0] } ?? "–"
+    }
+
+    /// Update the 45-degree compass sector with hysteresis: the letter only
+    /// changes once the bearing is ~9 degrees past a 22.5-degree sector
+    /// boundary, so it can't flap between two letters on a wavering bearing.
+    private func updateCompassSector(for degrees: Double?) {
+        guard let degrees else { return }
         let normalized = ((degrees.truncatingRemainder(dividingBy: 360)) + 360).truncatingRemainder(dividingBy: 360)
-        switch normalized {
-        case 337.5..<360, 0..<22.5: return "N"
-        case 22.5..<67.5: return "NE"
-        case 67.5..<112.5: return "E"
-        case 112.5..<157.5: return "SE"
-        case 157.5..<202.5: return "S"
-        case 202.5..<247.5: return "SW"
-        case 247.5..<292.5: return "W"
-        case 292.5..<337.5: return "NW"
-        default: return "N"
+
+        if let current = compassSector {
+            let center = Double(current) * 45.0
+            var diff = normalized - center
+            if diff > 180 { diff -= 360 }
+            if diff < -180 { diff += 360 }
+            if abs(diff) <= 22.5 + 9 { return }
         }
+
+        compassSector = Int(((normalized + 22.5).truncatingRemainder(dividingBy: 360)) / 45.0) % 8
     }
 
     private var voiceButton: some View {
@@ -396,9 +413,9 @@ struct SteddiNavOverlay: View {
                 .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
                 .frame(width: 50, height: 50)
 
-            Text(cardinalLabel(for: locationService.deviceHeading))
+            Text(compassLabel)
                 .font(.system(size: 16, weight: .heavy, design: .rounded))
-                .foregroundStyle(SteddiTheme.accent)
+                .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
         }
         .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
     }
@@ -725,18 +742,5 @@ struct SteddiNavOverlay: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: arrival)
-    }
-}
-
-// MARK: - Triangle Shape
-
-private struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
     }
 }
