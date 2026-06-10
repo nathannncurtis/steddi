@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreLocation
+import MapKit
 
 /// Steddi's visual identity — warm, steady, confident.
 enum SteddiTheme {
@@ -121,6 +122,27 @@ enum SteddiTheme {
     static let radiusMedium: CGFloat = 16
     static let radiusLarge: CGFloat = 24
     static let radiusCard: CGFloat = 20
+
+    // MARK: - Map Configuration
+
+    /// Shared map style for every map surface. MapKit silently ignores
+    /// `showsTraffic` under `.muted` emphasis, so traffic surfaces use `.default`.
+    /// POIs stay visible unless a surface opts out via `poiFilter` — the no-go
+    /// editor and planner rely on POI labels for picking places.
+    static func mapConfiguration(
+        traffic: Bool,
+        poiFilter: MKPointOfInterestFilter? = nil
+    ) -> MKStandardMapConfiguration {
+        let config = MKStandardMapConfiguration(
+            elevationStyle: .flat,
+            emphasisStyle: traffic ? .default : .muted
+        )
+        config.showsTraffic = traffic
+        if let poiFilter {
+            config.pointOfInterestFilter = poiFilter
+        }
+        return config
+    }
 
     // MARK: - Traffic Status
 
