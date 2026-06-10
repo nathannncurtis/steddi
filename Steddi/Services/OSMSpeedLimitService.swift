@@ -36,6 +36,12 @@ final class OSMSpeedLimitService {
     private(set) var loadedRouteKey: String?
     private(set) var isPrefetching = false
 
+    /// Monotonic prefetch token. A reroute can start a new prefetch while an
+    /// older one is still in flight; only the newest generation may publish
+    /// its ways or clear `isPrefetching`, so a slow stale fetch can never
+    /// clobber the active route's data.
+    private var prefetchGeneration = 0
+
     private let transport: Transport
     private let cacheDirectory: URL
     private let now: () -> Date
@@ -74,8 +80,12 @@ final class OSMSpeedLimitService {
     /// Disk cache hit short-circuits the network entirely.
     func prefetch(for polyline: [CLLocationCoordinate2D], routeKey: String) async {
         guard polyline.count >= 2 else { return }
+        prefetchGeneration += 1
+        let generation = prefetchGeneration
         isPrefetching = true
-        defer { isPrefetching = false }
+        defer {
+            if generation == prefetchGeneration { isPrefetching = false }
+        }
 
         let key = Self.cacheKey(for: polyline)
         if let cached = loadCachedPayload(key: key) {
@@ -91,7 +101,10 @@ final class OSMSpeedLimitService {
         let query = Self.overpassQuery(for: sampled)
         guard let fetched = await fetch(query: query) else { return }
 
+        // Cache the result regardless (it is keyed by this polyline), but only
+        // the newest prefetch may install ways for lookup.
         savePayload(CachedSpeedLimits(ways: fetched, fetchedAt: now()), key: key)
+        guard generation == prefetchGeneration else { return }
         loadWays(fetched, routeKey: routeKey)
     }
 
