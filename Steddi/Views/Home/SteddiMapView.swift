@@ -145,10 +145,7 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         mapView.insetsLayoutMarginsFromSafeArea = false
         mapView.delegate = self
 
-        // Clean muted dark map style
-        let config = MKStandardMapConfiguration(emphasisStyle: .muted)
-        config.showsTraffic = true
-        mapView.preferredConfiguration = config
+        mapView.preferredConfiguration = SteddiTheme.mapConfiguration(traffic: true, poiFilter: .excludingAll)
         applyThemeStyle()
 
         // Show user location with custom puck (handled in delegate)
@@ -157,12 +154,6 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         // Hide ornaments that clash with Steddi UI
         mapView.showsCompass = false
         mapView.showsScale = false
-
-        // Show 3D buildings
-        mapView.showsBuildings = true
-
-        // Clean map — hide POIs
-        mapView.pointOfInterestFilter = .excludingAll
 
         // Match the bottom sheet color so there's no visible gap below the sheet
         let sheetColor = UIColor { traits in
