@@ -118,8 +118,12 @@ final class HapticService {
         }
     }
 
-    /// Fire an event at its stored intensity regardless of level, for auditioning in settings.
+    /// Fire an event at its stored intensity, for auditioning in settings.
+    /// Bypasses the level-based intensity mapping (the fine-tune UI is only
+    /// reachable in Advanced) but still respects Off so a future caller can
+    /// never buzz a user who disabled haptics.
     func preview(_ event: HapticEvent) {
+        guard level != .off else { return }
         fireAtIntensity(intensity(for: event))
     }
 
