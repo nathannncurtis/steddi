@@ -99,6 +99,16 @@ struct NavPoseInterpolatorTests {
         #expect(d == 20)
     }
 
+    @Test("Zero speed never extrapolates — late frames hold at the fix")
+    func zeroSpeedHoldsAtFix() throws {
+        // Stopped at a light: stale fixes must not creep the puck forward
+        var interpolator = NavPoseInterpolator()
+        interpolator.push(pose(distance: 100, speed: 0, t: 0), at: 100.0)
+        interpolator.push(pose(distance: 100, speed: 0, t: 1), at: 101.0)
+        let d = try #require(interpolator.distanceAlongRoute(at: 103.5))
+        #expect(d == 100)
+    }
+
     @Test("Reset clears all pose state")
     func resetClearsState() {
         var interpolator = NavPoseInterpolator()

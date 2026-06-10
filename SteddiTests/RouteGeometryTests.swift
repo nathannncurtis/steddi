@@ -177,6 +177,38 @@ struct RouteProjectorTests {
         #expect(far.perpendicularDistance < 1)
     }
 
+    @Test("GPS jitter one segment backward snaps backward within the window")
+    func backwardJitterWithinWindow() throws {
+        var projector = RouteProjector(polyline: straightRoute(segments: 10))
+        // Anchor mid-segment-5 (~611m along)
+        let firstResult = projector.project(CLLocationCoordinate2D(latitude: 33.0055, longitude: -117.0))
+        let first = try #require(firstResult)
+        #expect(first.segmentIndex == 5)
+
+        // Jitter ~78m backward into segment 4 — windowBehind=1 must allow it
+        let backResult = projector.project(CLLocationCoordinate2D(latitude: 33.0048, longitude: -117.0))
+        let back = try #require(backResult)
+        #expect(back.segmentIndex == 4)
+        #expect(back.distanceAlongRoute < first.distanceAlongRoute)
+        #expect(back.perpendicularDistance < 1)
+    }
+
+    @Test("Large backward jump beyond the window triggers a full rescan")
+    func backwardFullRescan() throws {
+        var projector = RouteProjector(polyline: straightRoute(segments: 100))
+        // Anchor far up the route at segment 80
+        let farResult = projector.project(CLLocationCoordinate2D(latitude: 33.0805, longitude: -117.0))
+        let far = try #require(farResult)
+        #expect(far.segmentIndex == 80)
+
+        // A fix ~8km behind the window (position correction, e.g. tunnel exit):
+        // the windowed snap is way off-route, so the full rescan must recover
+        let recoveredResult = projector.project(CLLocationCoordinate2D(latitude: 33.0055, longitude: -117.0))
+        let recovered = try #require(recoveredResult)
+        #expect(recovered.segmentIndex == 5)
+        #expect(recovered.perpendicularDistance < 1)
+    }
+
     @Test("Single-point polyline yields no projection")
     func degeneratePolyline() {
         var projector = RouteProjector(polyline: [CLLocationCoordinate2D(latitude: 33, longitude: -117)])

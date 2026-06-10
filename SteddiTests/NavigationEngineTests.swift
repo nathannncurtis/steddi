@@ -371,10 +371,9 @@ struct NavigationEngineOffRouteTests {
 
         // First update more than 80m off the corridor (1-based, matching update count)
         let deviationStart = try #require(locations.firstIndex { location in
-            NavigationEngine.distanceFromPointToNearestSegment(
-                point: location.coordinate,
-                polyline: Self.corridor
-            ).perpendicularDistance > 80
+            var projector = RouteProjector(polyline: Self.corridor)
+            guard let projection = projector.project(location.coordinate) else { return false }
+            return projection.perpendicularDistance > 80
         }) + 1
 
         let fireUpdate = try #require(firstFireUpdate)
@@ -418,6 +417,9 @@ struct NavigationEngineOffRouteTests {
                 timestamp: start.addingTimeInterval(cadence * Double(index))
             )
         }
+    }
+}
+
 // MARK: - Pose & Bearing Tests
 
 @Suite("NavigationEngine pose & bearing")
@@ -586,6 +588,63 @@ struct NavigationEnginePoseTests {
 
         // Stopped with invalid course: bearing must hold, never reset
         engine.updateLocation(fix(lat: 33.005, lon: -116.99, course: -1, speed: 0, t: 1))
+        #expect(try #require(engine.headingDegrees) == heading)
+        engine.stopNavigation()
+    }
+
+    @Test("Outbound fixes on an out-and-back stay on the outbound leg")
+    func outAndBackOutboundLeg() throws {
+        // Identical geometry to the return-leg test, but drive only OUTBOUND:
+        // every fix must project near its true outbound arc length, never jump
+        // ahead to the geometrically identical return leg.
+        let out = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.0005, longitude: -117.0) }
+        let back = (1...10).map { CLLocationCoordinate2D(latitude: 33.005 - Double($0) * 0.0005, longitude: -117.0) }
+        let polyline = out + back
+
+        let engine = NavigationEngine()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        let halfway = RouteGeometry.cumulativeDistances(polyline)[10]
+
+        for (i, lat) in [33.001, 33.002, 33.003, 33.004].enumerated() {
+            engine.updateLocation(fix(lat: lat, lon: -117.00003, t: Double(i)))
+            let along = try #require(engine.navPose).distanceAlongRoute
+            let expected = (lat - 33.0) / 0.005 * halfway
+            #expect(abs(along - expected) < 15)
+            #expect(along < halfway)
+        }
+        engine.stopNavigation()
+    }
+
+    @Test("Valid GPS course below the speed gate holds the heading")
+    func slowSpeedCourseGated() throws {
+        let engine = NavigationEngine()
+        let polyline = straightRoute(segments: 20)
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        // Establish a heading from a fast off-route fix with a valid course
+        engine.updateLocation(fix(lat: 33.005, lon: -116.99, course: 90, courseAccuracy: 5, speed: 13, t: 0))
+        let heading = try #require(engine.headingDegrees)
+        #expect(abs(heading - 90) < 0.01)
+
+        // Crawling (2.0 m/s <= 2.5 gate) with a wildly different valid course:
+        // the course must not be trusted — heading holds
+        engine.updateLocation(fix(lat: 33.005, lon: -116.99, course: 180, courseAccuracy: 5, speed: 2.0, t: 1))
+        #expect(try #require(engine.headingDegrees) == heading)
+        engine.stopNavigation()
+    }
+
+    @Test("Negative courseAccuracy gates the GPS course even at speed")
+    func negativeCourseAccuracyGated() throws {
+        let engine = NavigationEngine()
+        let polyline = straightRoute(segments: 20)
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        engine.updateLocation(fix(lat: 33.005, lon: -116.99, course: 90, courseAccuracy: 5, speed: 13, t: 0))
+        let heading = try #require(engine.headingDegrees)
+
+        // Fast fix, plausible course value, but courseAccuracy says invalid
+        engine.updateLocation(fix(lat: 33.005, lon: -116.99, course: 180, courseAccuracy: -1, speed: 13, t: 1))
         #expect(try #require(engine.headingDegrees) == heading)
         engine.stopNavigation()
     }
