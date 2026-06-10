@@ -41,6 +41,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    func applicationWillTerminate(_ application: UIApplication) {
+        // Nav is active and the process is dying — end the Live Activity now
+        // or it lingers on the Lock Screen as a zombie until iOS reaps it.
+        guard NavigationStateManager.shared.isNavigating else { return }
+        LiveActivityService.shared.endActivityImmediately()
+    }
+
     func application(
         _ application: UIApplication,
         configurationForConnecting connectingSceneSession: UISceneSession,

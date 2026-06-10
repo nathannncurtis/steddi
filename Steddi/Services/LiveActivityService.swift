@@ -85,6 +85,26 @@ final class LiveActivityService {
         }
     }
 
+    /// End the Live Activity right now — termination path for
+    /// applicationWillTerminate / sceneDidDisconnect, where the normal async
+    /// lifecycle never gets a chance to run before the process dies.
+    /// Blocks the caller briefly (bounded at 2s) so the end request lands;
+    /// without it the activity lingers on the Lock Screen as a zombie.
+    func endActivityImmediately() {
+        let activities = Activity<NavigationAttributes>.activities
+        guard !activities.isEmpty else { return }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        Task.detached(priority: .userInitiated) {
+            for activity in activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 2)
+        currentActivity = nil
+    }
+
     /// Kill any orphaned activities from previous sessions.
     func cleanupOrphanedActivities() {
         for activity in Activity<NavigationAttributes>.activities {

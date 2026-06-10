@@ -43,6 +43,14 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
         handleURL(url)
     }
 
+    func sceneDidDisconnect(_ scene: UIScene) {
+        // Scene torn down mid-navigation (user swiped the app away) —
+        // applicationWillTerminate is not guaranteed to fire, so end the
+        // Live Activity here too or it lingers on the Lock Screen.
+        guard NavigationStateManager.shared.isNavigating else { return }
+        LiveActivityService.shared.endActivityImmediately()
+    }
+
     private func handleURL(_ url: URL) {
         // steddi://navigate?lat=X&lng=Y&name=Z
         // steddi://search?q=X
