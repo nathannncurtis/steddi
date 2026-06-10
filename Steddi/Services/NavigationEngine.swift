@@ -35,6 +35,12 @@ final class NavigationEngine {
     var followOnManeuverSymbol: String = ""
     var currentSpeedMph: Double = 0
     var speedLimitMph: Double? = nil
+    var speedLimitIsEstimated = false
+
+    /// Injected position-based speed limit lookup (OSM-backed). Closure keeps
+    /// the engine free of service dependencies and unit-testable.
+    @ObservationIgnored
+    var speedLimitProvider: ((CLLocationCoordinate2D, Double?) -> (mph: Double, isEstimated: Bool)?)? = nil
     /// Smoothed travel bearing. nil until the first valid bearing — never a
     /// due-north sentinel, and held (not reset) when no new bearing is available.
     var headingDegrees: Double? = nil
@@ -178,6 +184,7 @@ final class NavigationEngine {
         }
 
         updateHeading(location: location, projection: projection, speedMPS: speedMPS)
+        updateSpeedLimit(location: location)
 
         if speedMPS > 1.0 {
             speedSampleCount += 1
@@ -214,6 +221,16 @@ final class NavigationEngine {
         } else {
             headingDegrees = target
         }
+    }
+
+    /// Position-based speed limit from the injected provider (OSM data),
+    /// refreshed every fix so the limit tracks the actual road, not the step.
+    /// Falls back to the instruction heuristic set in applyStep when the
+    /// provider has no match for this position.
+    private func updateSpeedLimit(location: CLLocation) {
+        guard let provided = speedLimitProvider?(location.coordinate, headingDegrees) else { return }
+        speedLimitMph = provided.mph
+        speedLimitIsEstimated = provided.isEstimated
     }
 
     // MARK: - Step Logic
