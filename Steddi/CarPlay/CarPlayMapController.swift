@@ -25,14 +25,11 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
         mapView.delegate = self
 
-        let config = MKStandardMapConfiguration(emphasisStyle: .muted)
-        config.showsTraffic = true
-        mapView.preferredConfiguration = config
+        mapView.preferredConfiguration = SteddiTheme.mapConfiguration(traffic: true, poiFilter: .excludingAll)
 
         mapView.showsUserLocation = true
         mapView.showsCompass = false
         mapView.showsScale = false
-        mapView.pointOfInterestFilter = .excludingAll
 
         // Follow user location immediately — don't default to a fixed region
         mapView.setUserTrackingMode(.follow, animated: false)
