@@ -331,6 +331,16 @@ struct NavigationEngineSpeedLimitTests {
     func unknownDefault() {
         #expect(NavigationEngine.estimateSpeedLimit(from: "Make a U-turn") == 45)
     }
+
+    @Test("Turn right onto Main St is 35")
+    func turnRightOntoMainSt() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn right onto Main St") == 35)
+    }
+
+    @Test("Merge onto CA-60 W is 65")
+    func mergeOntoCA60W() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Merge onto CA-60 W") == 65)
+    }
 }
 
 // MARK: - Initial State & Stop Navigation Tests
