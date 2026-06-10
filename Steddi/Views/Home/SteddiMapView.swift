@@ -427,6 +427,35 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         routeCumulativeDistances = []
     }
 
+    /// Every nav start hands the map and the engine the same polyline, but an
+    /// automatic off-route reroute restarts only the engine. When the engine's
+    /// route no longer matches ours, adopt it: overlay, cumulative distances,
+    /// and a fresh interpolator (pose distances reference the new route).
+    private func syncRouteWithEngineIfNeeded(_ engine: NavigationEngine) {
+        let engineCoords = engine.routePolylineCoordinates
+        guard engineCoords.count >= 2 else { return }
+
+        if engineCoords.count == navRouteCoords.count,
+           let engineFirst = engineCoords.first, let mapFirst = navRouteCoords.first,
+           let engineLast = engineCoords.last, let mapLast = navRouteCoords.last,
+           engineFirst.latitude == mapFirst.latitude, engineFirst.longitude == mapFirst.longitude,
+           engineLast.latitude == mapLast.latitude, engineLast.longitude == mapLast.longitude {
+            return // same route
+        }
+
+        navRouteCoords = engineCoords
+        routeCumulativeDistances = RouteGeometry.cumulativeDistances(engineCoords)
+        interpolator.reset()
+        lastPoseTimestamp = nil
+
+        if let overlay = routeOverlay {
+            mapView.removeOverlay(overlay)
+        }
+        let polyline = MKPolyline(coordinates: engineCoords, count: engineCoords.count)
+        routeOverlay = polyline
+        mapView.addOverlay(polyline, level: .aboveRoads)
+    }
+
     @objc private func appDidEnterBackground() {
         displayLink?.isPaused = true
     }
@@ -438,6 +467,10 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     fileprivate func displayLinkFired(_ link: CADisplayLink) {
         guard isInNavigation, let engine = navigationEngine, engine.isNavigating else { return }
         let now = link.timestamp
+
+        // Auto-reroute swaps the engine's polyline without restarting the map —
+        // adopt it before interpreting arc lengths against the wrong route
+        syncRouteWithEngineIfNeeded(engine)
 
         // Feed any new fix into the interpolator (deduped by fix timestamp)
         if let pose = engine.navPose, pose.fixTimestamp != lastPoseTimestamp {
