@@ -345,8 +345,7 @@ struct RoutePlannerMap: UIViewRepresentable {
         mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
         mapView.delegate = context.coordinator
 
-        let config = MKStandardMapConfiguration(emphasisStyle: .muted)
-        mapView.preferredConfiguration = config
+        mapView.preferredConfiguration = SteddiTheme.mapConfiguration(traffic: false)
 
         mapView.showsCompass = false
         mapView.showsScale = false
