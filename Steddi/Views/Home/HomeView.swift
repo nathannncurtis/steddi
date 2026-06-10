@@ -335,6 +335,17 @@ struct HomeView: View {
             }
             showPostArrival = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .steddiNavigateToLocation)) { notification in
+            // steddi://navigate and CarPlay Start Navigation both post this
+            guard let lat = notification.userInfo?["lat"] as? Double,
+                  let lng = notification.userInfo?["lng"] as? Double else { return }
+            let name = notification.userInfo?["name"] as? String ?? "Destination"
+            navigateTo(
+                name: name,
+                coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
+                skipPreview: true
+            )
+        }
     }
 
     // MARK: - Donation Milestone
