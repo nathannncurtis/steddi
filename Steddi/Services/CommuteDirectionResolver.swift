@@ -56,9 +56,10 @@ struct CommuteDirectionResolver {
     // MARK: - Schedule Rules
 
     /// Check if the current day-of-week and hour match the user's configured schedule.
-    private static func scheduledDirection(
+    /// Internal so location-less callers (Siri intents) can resolve by schedule alone.
+    static func scheduledDirection(
         commute: Commute,
-        now: Date
+        now: Date = Date()
     ) -> CommuteDirection? {
         let cal = Calendar.current
         let currentDay = cal.component(.weekday, from: now)  // Sun=1 .. Sat=7
@@ -85,6 +86,47 @@ struct CommuteDirectionResolver {
         }
 
         return nil
+    }
+
+    /// The direction of the next upcoming schedule window after `now`.
+    /// Used when no schedule window is currently active and there's no
+    /// location fix — "which way is this person going next?"
+    static func nextScheduledDirection(
+        commute: Commute,
+        now: Date = Date()
+    ) -> CommuteDirection? {
+        let cal = Calendar.current
+
+        let rules: [(days: String?, startHour: Int?, direction: CommuteDirection)] = [
+            (commute.scheduleToDestDays, commute.scheduleToDestStartHour, .originToDestination),
+            (commute.scheduleToOriginDays, commute.scheduleToOriginStartHour, .destinationToOrigin)
+        ]
+
+        var best: (start: Date, direction: CommuteDirection)?
+
+        for rule in rules {
+            guard let daysStr = rule.days, let startHour = rule.startHour else { continue }
+            let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
+            guard !days.isEmpty else { continue }
+
+            // Find this rule's next window start within the coming week.
+            for dayOffset in 0...7 {
+                guard let day = cal.date(byAdding: .day, value: dayOffset, to: now),
+                      days.contains(cal.component(.weekday, from: day)),
+                      let start = cal.date(bySettingHour: startHour, minute: 0, second: 0, of: day),
+                      start > now else { continue }
+                if let current = best {
+                    if start < current.start {
+                        best = (start, rule.direction)
+                    }
+                } else {
+                    best = (start, rule.direction)
+                }
+                break
+            }
+        }
+
+        return best?.direction
     }
 
     // MARK: - Learned Patterns
