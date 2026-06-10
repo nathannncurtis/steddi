@@ -235,14 +235,26 @@ final class OSMSpeedLimitService {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            // Overpass usage policy asks for an identifying User-Agent.
+            request.setValue(Tuning.userAgent, forHTTPHeaderField: "User-Agent")
             request.httpBody = body
             request.timeoutInterval = 30
 
             do {
                 let (data, response) = try await transport(request)
-                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) { continue }
+                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    // 429 and 5xx are mirror-specific; any other 4xx means the
+                    // query itself is bad and would fail identically everywhere.
+                    if http.statusCode == 429 || http.statusCode >= 500 { continue }
+                    return nil
+                }
                 return try Self.parseOverpassResponse(data)
+            } catch is CancellationError {
+                return nil
             } catch {
+                // URLSession surfaces task cancellation as URLError(.cancelled);
+                // a cancelled prefetch must not keep POSTing to the next mirror.
+                if (error as? URLError)?.code == .cancelled || Task.isCancelled { return nil }
                 continue
             }
         }
@@ -481,6 +493,8 @@ private enum Tuning {
         "https://overpass.kumi.systems/api/interpreter",
         "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
     ]
+    /// Identifying User-Agent per Overpass usage policy.
+    static let userAgent = "Steddi/1.0 (to.nathancurtis.steddi; OSM speed limit prefetch)"
     static let downsampleToleranceMeters: Double = 25
     static let maxQueryPoints = 250
     static let maxPointsPerClause = 250
