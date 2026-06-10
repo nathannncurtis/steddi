@@ -1,48 +1,41 @@
 # Steddi Development Setup
 
 ## Prerequisites
-- Xcode 15.0+ (Swift 5.9+)
-- iOS 17+ device or simulator
-- Mapbox account (free tier)
+- Xcode with the iOS 26 SDK
+- [xcodegen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
+- iOS 26+ device or simulator
 
-## Mapbox Configuration
+No API keys or tokens — Steddi uses Apple MapKit and the public OSRM demo server.
 
-### 1. Get your tokens
-Go to https://account.mapbox.com/access-tokens/
+## Project Generation
+The Xcode project is generated from `project.yml`:
 
-You need two tokens:
-- **Public token** (default): Used in the app at runtime
-- **Secret token**: Create one with Downloads:Read scope. Used only for SPM to fetch the SDK.
-
-### 2. Configure secret token for SPM downloads
-Add to ~/.netrc on your Mac:
 ```
-machine api.mapbox.com
-login mapbox
-password YOUR_SECRET_TOKEN
+git clone <repo>
+cd steddi
+xcodegen generate
 ```
 
-### 3. Configure public token in app
-Set MBXAccessToken in Steddi/Info.plist:
-```xml
-<key>MBXAccessToken</key>
-<string>YOUR_PUBLIC_TOKEN</string>
-```
+Re-run `xcodegen generate` after any change to `project.yml`. All Info.plist entries (location usage strings, background modes, URL scheme, CarPlay scene configuration) are defined in `project.yml` — no manual plist editing needed.
 
-### 4. Required Info.plist entries
-```xml
-<key>NSLocationWhenInUseUsageDescription</key>
-<string>Steddi needs your location to navigate and record routes.</string>
-<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-<string>Steddi needs background location access to continue navigation when the app is in the background.</string>
-<key>UIBackgroundModes</key>
-<array>
-    <string>audio</string>
-    <string>location</string>
-</array>
-```
+## Signing
+Code signing is Automatic. `project.yml` sets `DEVELOPMENT_TEAM` on all targets (Steddi, SteddiWidget, SteddiLiveActivity, SteddiTests) — change it to your own team ID if you're not the owner, then regenerate.
+
+Entitlements in use:
+- App Group `group.to.nathancurtis.steddi` (app, widget, live activity)
+- CarPlay navigation (`com.apple.developer.carplay-maps`) — requires Apple approval; remove from `Steddi/Steddi.entitlements` if your account doesn't have it
 
 ## Building
-1. Open Steddi.xcodeproj in Xcode (generated once project is created)
-2. SPM will automatically resolve Mapbox dependencies using your .netrc credentials
-3. Select your device/simulator and build
+1. Open `Steddi.xcodeproj` in Xcode
+2. Select a device or simulator
+3. Run the `Steddi` scheme
+
+Or from the command line:
+
+```
+xcodebuild -project Steddi.xcodeproj -scheme Steddi -destination 'generic/platform=iOS Simulator' build
+```
+
+## Tests
+- Swift: `SteddiTests` target (run via Xcode or `xcodebuild test`)
+- Python: ports of the reroute engine and CarPlay state logic — `python3 -m pytest tests/ -v` from the project root
