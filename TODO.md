@@ -1,18 +1,21 @@
 # Steddi TODO
 
-## Priority 1 — Bugs & Fixes
-- App Group entitlement needs to be enabled in Apple Developer portal (code is ready, blocked on provisioning)
-- Route preview per-commute disable setting (preview UI is built, commute skip not yet wired)
+## Priority 1 — Real-Drive Bugs (March test drives)
+- Compass rotates with the phone — should show a stable cardinal direction of travel
+- Planned-route ETA is wrong — plot points are treated as stops, inflating the estimate
+- Off-route recovery should prefer forward-momentum rejoin: route along macro legs, not micro waypoints, never default to a U-turn, and don't gate recovery behind the reroute threshold
+- Route line not centered with the puck
+- Puck jitters — needs continuously smooth movement
+- Traffic conditions not rendering on the map
+- Speedometer color never triggers — needs real speed-limit data (OSM) instead of guessing from instruction text
 
-## Priority 2 — CarPlay
-- Test CPMapTemplate on real CarPlay (map view implemented, needs real device verification)
-- Verify steering wheel media controls work with Now Playing integration (future)
-
-## Priority 3 — Live Activities
-- Live Activity for active navigation (ETA, next turn, distance remaining)
-- Dynamic Island compact/expanded views
-- Lock Screen widget
-- Aggressive lifecycle cleanup: end activity on nav end, app terminate, scene disconnect. Stale date rolling 5-10 min ahead so zombie activities auto-dim if app dies. On launch, always sweep for orphaned activities.
+## Priority 2 — Finish What's Marked Done
+- Widget never shows commute/destination names — state manager only writes ETA and nav status to the App Group, never the names the widget reads
+- Siri "Check Commute ETA" returns nothing useful — the ETA fetch is stubbed, SwiftData integration pending
+- Accessibility/passenger flags (high contrast, simplified instructions, text/icon scaling) are set in Settings but never applied anywhere in the UI
+- Advanced haptics tier reads per-event intensities but there's no UI to configure them
+- Premium voice fallback is silent — if the selected voice isn't downloaded, it quietly falls back to a default voice with no prompt to download
+- Live Activity should also end on app terminate and scene disconnect — lifecycle hardening covers nav end/stop, rolling stale date, and orphan sweep, but no applicationWillTerminate/sceneDidDisconnect handler ends the activity (stale-date dimming partially mitigates)
 
 ## Trips
 - Third category alongside pins and commutes — saved routes to non-recurring or one-off destinations
@@ -74,7 +77,7 @@
 - Surface drive history data: average commute time by day of week, trends over time
 - Detailed analytical view for power users — time spent sitting in traffic, total time spent commuting to/from work over weeks/months
 - Trend insights like "your Tuesday commute has gotten 8 minutes worse since January"
-- Record speed data over time during drives (speedometer data already exists, just needs to be persisted)
+- Visualize speed over time in analytics (speed is already persisted in DriveRecord GPS points)
 
 ## Siri Shortcuts / App Intents
 - "Hey Siri, start my commute" / "Hey Siri, how's my drive to work looking?"
@@ -126,6 +129,7 @@
 - On-device GPS testing (arrival detection, map matching, route recording)
 - NavigationEngine real-world validation
 - Daily 70-mile round trip commute (streets + highways, multiple route options) as primary test bed
+- CarPlay verification on a real head unit (CPMapTemplate map view, dashboard widget, steering wheel media controls)
 
 ## Done ✅
 - MapKit migration (removed Mapbox entirely — zero logos)
@@ -202,4 +206,4 @@
 - Fix: .onOpenURL replaced with NotificationCenter (incompatible with UIKit lifecycle, crashed on CarPlay connect)
 - CarPlay: CPMapTemplate as permanent root, CPMapTemplateDelegate for pan/banners, free-look mode
 - Note: CPMapTemplate crashes on iOS 26.4 simulator (Apple bug in CPSMapTemplateViewController._updateShareButtonVisibility) — works on 26.3
-- Website rebuilt: hero map animation, 3D mockups, animated icons, roadmap page, live repo sync
+- Live Activity lifecycle hardening: rolling stale date (10 min), orphan sweep on launch, end on nav end/stop
