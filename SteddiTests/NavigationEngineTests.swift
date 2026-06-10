@@ -418,5 +418,190 @@ struct NavigationEngineOffRouteTests {
                 timestamp: start.addingTimeInterval(cadence * Double(index))
             )
         }
+// MARK: - Pose & Bearing Tests
+
+@Suite("NavigationEngine pose & bearing")
+@MainActor
+struct NavigationEnginePoseTests {
+
+    /// Straight route running north from (33, -117), ~111m per segment.
+    private func straightRoute(segments: Int) -> [CLLocationCoordinate2D] {
+        (0...segments).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+    }
+
+    /// Steps with empty instructions so tests stay silent (no voice guidance).
+    private func silentSteps(along polyline: [CLLocationCoordinate2D]) -> [NavStep] {
+        [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline.first ?? CLLocationCoordinate2D(), maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline.last ?? CLLocationCoordinate2D(), maneuverSymbol: "flag.fill"),
+        ]
+    }
+
+    private func fix(
+        lat: Double, lon: Double,
+        course: Double = -1, courseAccuracy: Double = -1,
+        speed: Double = 13, t: TimeInterval = 0
+    ) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+            altitude: 0,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            course: course,
+            courseAccuracy: courseAccuracy,
+            speed: speed,
+            speedAccuracy: 1,
+            timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
+        )
+    }
+
+    private func circularDelta(_ a: Double, _ b: Double) -> Double {
+        var d = abs(a - b).truncatingRemainder(dividingBy: 360)
+        if d > 180 { d = 360 - d }
+        return d
+    }
+
+    @Test("Snapped pose is published from an offset fix")
+    func snappedPosePublished() throws {
+        let engine = NavigationEngine()
+        let polyline = straightRoute(segments: 20)
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        // ~18m east of the line, halfway up the route
+        let location = fix(lat: 33.005, lon: -116.9998)
+        engine.updateLocation(location)
+
+        let pose = try #require(engine.navPose)
+        #expect(abs(pose.snappedCoordinate.longitude - (-117.0)) < 1e-6)
+        #expect(abs(pose.snappedCoordinate.latitude - 33.005) < 1e-5)
+        #expect(pose.t >= 0 && pose.t <= 1)
+        #expect(pose.speedMPS == 13)
+        #expect(pose.fixTimestamp == location.timestamp)
+
+        let snapped = try #require(engine.snappedCoordinate)
+        #expect(snapped.latitude == pose.snappedCoordinate.latitude)
+        #expect(snapped.longitude == pose.snappedCoordinate.longitude)
+
+        engine.stopNavigation()
+        #expect(engine.navPose == nil)
+    }
+
+    @Test("Distance along route is monotonic for forward fixes")
+    func projectionMonotonic() throws {
+        let engine = NavigationEngine()
+        let polyline = straightRoute(segments: 20)
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        var lastAlong = -1.0
+        for i in 0..<15 {
+            // ~55m steps north with a small westward GPS offset
+            engine.updateLocation(fix(lat: 33.0 + Double(i) * 0.0005, lon: -117.00005, t: Double(i)))
+            let along = try #require(engine.navPose).distanceAlongRoute
+            #expect(along >= lastAlong)
+            lastAlong = along
+        }
+        engine.stopNavigation()
+    }
+
+    @Test("Out-and-back route stays on the return leg via the window")
+    func outAndBackDisambiguation() throws {
+        // North ~555m then straight back south on the identical line
+        let out = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.0005, longitude: -117.0) }
+        let back = (1...10).map { CLLocationCoordinate2D(latitude: 33.005 - Double($0) * 0.0005, longitude: -117.0) }
+        let polyline = out + back
+
+        let engine = NavigationEngine()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        let halfway = RouteGeometry.cumulativeDistances(polyline)[10]
+
+        // Drive out, turn around, and come back
+        let lats = [33.001, 33.002, 33.003, 33.0045, 33.005, 33.0045, 33.003, 33.002]
+        var lastAlong = -1.0
+        var alongAtReturn: Double = 0
+        for (i, lat) in lats.enumerated() {
+            engine.updateLocation(fix(lat: lat, lon: -117.00003, t: Double(i)))
+            let along = try #require(engine.navPose).distanceAlongRoute
+            #expect(along >= lastAlong)
+            lastAlong = along
+            alongAtReturn = along
+        }
+
+        // The final fix is physically at 33.002 — a full-polyline nearest scan
+        // would put it ~222m along the outbound leg; the window keeps it on the
+        // return leg, well past the turnaround.
+        #expect(alongAtReturn > halfway)
+        engine.stopNavigation()
+    }
+
+    @Test("Bearing rotates continuously along an arc with no vertex steps")
+    func bearingContinuityOnArc() throws {
+        // Quarter circle, radius 500m, one vertex every 3 degrees
+        let center = CLLocationCoordinate2D(latitude: 33.0, longitude: -117.0)
+        let polyline = stride(from: 0.0, through: 90.0, by: 3.0).map {
+            RouteGeometry.offsetCoordinate(center, distanceMeters: 500, bearingDegrees: $0)
+        }
+
+        let engine = NavigationEngine()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        var bearings: [Double] = []
+        for i in stride(from: 0, to: 20, by: 2) {
+            engine.updateLocation(fix(lat: polyline[i].latitude, lon: polyline[i].longitude, t: Double(i)))
+            let pose = try #require(engine.navPose)
+            bearings.append(try #require(pose.segmentBearingDegrees))
+        }
+
+        #expect(bearings.count == 10)
+        for i in 1..<bearings.count {
+            #expect(circularDelta(bearings[i], bearings[i - 1]) < 12)
+        }
+        // The tangent should have rotated meaningfully across the arc
+        #expect(circularDelta(bearings.first ?? 0, bearings.last ?? 0) > 30)
+        engine.stopNavigation()
+    }
+
+    @Test("No polyline yields nil pose and heading holds nil without course")
+    func nilPoseAndHeading() {
+        let engine = NavigationEngine()
+        let steps = [NavStep(instruction: "", distance: 100, coordinate: CLLocationCoordinate2D(latitude: 34, longitude: -118), maneuverSymbol: "arrow.up")]
+        engine.startNavigation(polyline: [], steps: steps)
+
+        engine.updateLocation(fix(lat: 33.0, lon: -117.0, course: -1, speed: 0))
+        #expect(engine.navPose == nil)
+        #expect(engine.headingDegrees == nil)
+        engine.stopNavigation()
+    }
+
+    @Test("Heading uses GPS course off-route and holds when course goes invalid")
+    func headingPriorityAndHold() throws {
+        let engine = NavigationEngine()
+        let polyline = straightRoute(segments: 20)
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        // ~900m east of the route: off-route, so route bearing is not trusted
+        engine.updateLocation(fix(lat: 33.005, lon: -116.99, course: 90, courseAccuracy: 5, speed: 13, t: 0))
+        let heading = try #require(engine.headingDegrees)
+        #expect(abs(heading - 90) < 0.01)
+
+        // Stopped with invalid course: bearing must hold, never reset
+        engine.updateLocation(fix(lat: 33.005, lon: -116.99, course: -1, speed: 0, t: 1))
+        #expect(try #require(engine.headingDegrees) == heading)
+        engine.stopNavigation()
+    }
+
+    @Test("On-route heading converges to the route bearing")
+    func headingConvergesToRouteBearing() throws {
+        let engine = NavigationEngine()
+        let polyline = straightRoute(segments: 20)
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        // Route runs due north (0 degrees); feed fixes with a noisy east course
+        for i in 0..<12 {
+            engine.updateLocation(fix(lat: 33.0 + Double(i) * 0.0003, lon: -117.0, course: 40, courseAccuracy: 5, t: Double(i)))
+        }
+        let heading = try #require(engine.headingDegrees)
+        #expect(circularDelta(heading, 0) < 5)
+        engine.stopNavigation()
     }
 }

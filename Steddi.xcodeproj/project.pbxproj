@@ -37,6 +37,7 @@
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
 		7132E610C067CB033EF4B8F8 /* SteddiLiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */; };
 		72DD5D3842C50C4BEA5B5D44 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */; };
+		7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */; };
 		755CA9609153C6BBD3833D97 /* CheckCommuteETAIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */; };
 		7AC6366691401A8DB28223A8 /* NavigationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */; };
 		8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */; };
@@ -180,6 +181,7 @@
 		9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteAnalyticsView.swift; sourceTree = "<group>"; };
 		94C0D76787187AFA4D836876 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometryTests.swift; sourceTree = "<group>"; };
 		A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManager.swift; sourceTree = "<group>"; };
 		AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapMatchingService.swift; sourceTree = "<group>"; };
 		AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteTrip.swift; sourceTree = "<group>"; };
@@ -329,6 +331,7 @@
 				EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */,
 				3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */,
 				5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */,
+				A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */,
 				CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */,
 			);
 			path = SteddiTests;
@@ -734,6 +737,7 @@
 				516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */,
 				44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */,
 				F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */,
+				7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */,
 				CE0E87101839B1C3153234A1 /* VoiceGuidanceServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
