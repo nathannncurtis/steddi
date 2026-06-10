@@ -364,31 +364,6 @@ final class NavigationEngine {
         RouteGeometry.haversineDistance(from: a, to: b)
     }
 
-    nonisolated static func snapToPolyline(point: CLLocationCoordinate2D, polyline: [CLLocationCoordinate2D]) -> CLLocationCoordinate2D {
-        guard polyline.count >= 2 else { return polyline.first ?? point }
-        var bestDist = Double.greatestFiniteMagnitude
-        var bestCoord = point
-        let cosLat = cos(point.latitude * .pi / 180)
-
-        for i in 0..<(polyline.count - 1) {
-            let segStart = polyline[i]
-            let segEnd = polyline[i + 1]
-            let px = (point.longitude - segStart.longitude) * cosLat
-            let py = point.latitude - segStart.latitude
-            let dx = (segEnd.longitude - segStart.longitude) * cosLat
-            let dy = segEnd.latitude - segStart.latitude
-            let segLenSq = dx * dx + dy * dy
-            var t: Double = 0
-            if segLenSq > 0 { t = max(0, min(1, ((px * dx) + (py * dy)) / segLenSq)) }
-            let projLat = segStart.latitude + t * (segEnd.latitude - segStart.latitude)
-            let projLon = segStart.longitude + t * (segEnd.longitude - segStart.longitude)
-            let projCoord = CLLocationCoordinate2D(latitude: projLat, longitude: projLon)
-            let dist = haversineDistance(from: point, to: projCoord)
-            if dist < bestDist { bestDist = dist; bestCoord = projCoord }
-        }
-        return bestCoord
-    }
-
     nonisolated static func extractCoordinates(from polyline: MKPolyline) -> [CLLocationCoordinate2D] {
         let count = polyline.pointCount
         var coords = [CLLocationCoordinate2D](repeating: CLLocationCoordinate2D(), count: count)

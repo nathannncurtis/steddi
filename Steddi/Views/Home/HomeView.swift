@@ -111,6 +111,7 @@ struct HomeView: View {
                 is3DView: $is3DNav,
                 navigationRoute: navigationRoute,
                 savedRoutePolyline: activeSavedPolyline,
+                engine: navigationEngine,
                 onLongPress: { coord in
                     longPressCoordinate = coord
                     showAddLocation = true

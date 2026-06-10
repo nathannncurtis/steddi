@@ -11,6 +11,7 @@ struct SteddiMapView: UIViewControllerRepresentable {
     @Binding var is3DView: Bool
     let navigationRoute: MKRoute?
     var savedRoutePolyline: [CLLocationCoordinate2D]?
+    var engine: NavigationEngine?
     let onLongPress: (CLLocationCoordinate2D) -> Void
     let onArrival: () -> Void
     let onCancelled: () -> Void
@@ -23,6 +24,7 @@ struct SteddiMapView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ vc: SteddiMapContainer, context: Context) {
+        vc.navigationEngine = engine
         if isNavigating, let route = navigationRoute {
             // MKRoute path (dumb nav / search)
             print("[STEDDI-MAP] updateUI: MKRoute path, isInNav=\(vc.isInNavigation)")
@@ -61,9 +63,29 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     private var smoothedBearing: Double = 0
     private var routeOverlay: MKPolyline?
 
+    /// Engine whose published pose drives the puck, camera, and compass.
+    weak var navigationEngine: NavigationEngine?
+
     /// Steddi's own navigation puck — driven by the engine's snapped pose, so
     /// it rides the route polyline instead of MapKit's raw-GPS user dot.
     private var puckAnnotation: SteddiPuckAnnotation?
+
+    // Per-frame pose interpolation — one clock for puck AND camera
+    private var displayLink: CADisplayLink?
+    private var interpolator = NavPoseInterpolator()
+    private var routeCumulativeDistances: [Double] = []
+    private var lastPoseTimestamp: Date?
+    private var lastFrameTimestamp: TimeInterval = 0
+    private var hasSmoothedBearing = false
+    private var lastDisplayCoordinate: CLLocationCoordinate2D?
+    /// Per-frame camera writes are suppressed until this time while a one-shot
+    /// camera animation (recenter, 2D/3D toggle, nav start) is in flight.
+    private var cameraTransitionUntil: TimeInterval = 0
+    /// Time constant of the per-frame heading low-pass, seconds.
+    private let headingTau: Double = 0.7
+    /// The puck blends back toward raw GPS beyond this perpendicular distance —
+    /// never snap-display a driver who genuinely left the route.
+    private let offRouteBlendStartMeters: Double = 30
 
     /// When true, camera auto-follow is paused (user is panning/exploring the map)
     private var isFreeLook = false
@@ -204,6 +226,10 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         // Observe theme mode changes
         NotificationCenter.default.addObserver(self, selector: #selector(themeModeChanged), name: .steddiThemeModeChanged, object: nil)
 
+        // Pause the per-frame nav loop while backgrounded
+        NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+
         // Center on user location once available
         mapView.setUserTrackingMode(.follow, animated: false)
     }
@@ -246,15 +272,10 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     @objc private func recenterTapped() {
         isFreeLook = false
         recenterButton?.isHidden = true
-        // Snap back to current position
-        if let location = mapView.userLocation.location {
-            let displayCoord: CLLocationCoordinate2D
-            if !navRouteCoords.isEmpty {
-                displayCoord = NavigationEngine.snapToPolyline(point: location.coordinate, polyline: navRouteCoords)
-            } else {
-                displayCoord = location.coordinate
-            }
-            applyCameraForNav(at: displayCoord, course: smoothedBearing, animated: true)
+        // Snap back to the last interpolated pose position
+        let coord = lastDisplayCoordinate ?? mapView.userLocation.location?.coordinate
+        if let coord, CLLocationCoordinate2DIsValid(coord) {
+            applyCameraForNav(at: coord, course: smoothedBearing, animated: true)
         }
     }
 
@@ -268,75 +289,10 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     func set3DView(_ is3D: Bool) {
         guard currentIs3D != is3D else { return }
         currentIs3D = is3D
-        // Update camera immediately with current location
-        let coord = mapView.userLocation.coordinate
+        // Update camera immediately from the last interpolated pose
+        let coord = lastDisplayCoordinate ?? mapView.userLocation.coordinate
         guard CLLocationCoordinate2DIsValid(coord) else { return }
         applyCameraForNav(at: coord, course: smoothedBearing, animated: true)
-    }
-
-    /// Get the bearing along the route at the closest point to the user's position.
-    /// This gives a stable, route-following bearing instead of noisy GPS course.
-    static func bearingAlongRoute(from position: CLLocationCoordinate2D, routeCoords: [CLLocationCoordinate2D]) -> Double {
-        guard routeCoords.count >= 2 else { return 0 }
-
-        // Find the closest route segment
-        var bestIndex = 0
-        var bestDist = Double.greatestFiniteMagnitude
-        let posLoc = CLLocation(latitude: position.latitude, longitude: position.longitude)
-
-        for i in 0..<routeCoords.count {
-            let d = posLoc.distance(from: CLLocation(latitude: routeCoords[i].latitude, longitude: routeCoords[i].longitude))
-            if d < bestDist {
-                bestDist = d
-                bestIndex = i
-            }
-        }
-
-        // Use the next point on the route to determine forward bearing
-        let lookAheadIndex = min(bestIndex + 3, routeCoords.count - 1) // look a few points ahead for stability
-        guard lookAheadIndex > bestIndex else { return 0 }
-
-        let from = routeCoords[bestIndex]
-        let to = routeCoords[lookAheadIndex]
-
-        let dLon = (to.longitude - from.longitude) * .pi / 180
-        let lat1 = from.latitude * .pi / 180
-        let lat2 = to.latitude * .pi / 180
-
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        var bearing = atan2(y, x) * 180 / .pi
-        if bearing < 0 { bearing += 360 }
-        return bearing
-    }
-
-    /// Smooth bearing transitions to prevent jerky camera rotation.
-    static func smoothBearing(current: Double, target: Double, factor: Double) -> Double {
-        // Handle the 360/0 wraparound
-        var diff = target - current
-        if diff > 180 { diff -= 360 }
-        if diff < -180 { diff += 360 }
-        var result = current + diff * factor
-        if result < 0 { result += 360 }
-        if result >= 360 { result -= 360 }
-        return result
-    }
-
-    /// Offset a coordinate by a distance along a bearing (for chase-cam look-ahead)
-    static func offsetCoordinate(_ coord: CLLocationCoordinate2D, distanceMeters: Double, bearingDegrees: Double) -> CLLocationCoordinate2D {
-        let R = 6371000.0 // earth radius in meters
-        let d = distanceMeters / R
-        let brng = bearingDegrees * .pi / 180
-        let lat1 = coord.latitude * .pi / 180
-        let lon1 = coord.longitude * .pi / 180
-
-        let lat2 = asin(sin(lat1) * cos(d) + cos(lat1) * sin(d) * cos(brng))
-        let lon2 = lon1 + atan2(sin(brng) * sin(d) * cos(lat1), cos(d) - sin(lat1) * sin(lat2))
-
-        return CLLocationCoordinate2D(
-            latitude: lat2 * 180 / .pi,
-            longitude: lon2 * 180 / .pi
-        )
     }
 
     /// Saved polyline override — when set, the map renders this instead of MKRoute's polyline.
@@ -400,6 +356,8 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         if CLLocationCoordinate2DIsValid(userCoord) {
             applyCameraForNav(at: userCoord, course: mapView.userLocation.location?.course ?? 0, animated: true)
         }
+
+        beginPoseDrivenFollowing()
     }
 
     /// Start navigation with just a polyline (no MKRoute). Used for saved/custom routes.
@@ -419,6 +377,8 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         if CLLocationCoordinate2DIsValid(userCoord) {
             applyCameraForNav(at: userCoord, course: mapView.userLocation.location?.course ?? 0, animated: true)
         }
+
+        beginPoseDrivenFollowing()
     }
 
     func stopNavigation() {
@@ -426,6 +386,7 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         isInNavigation = false
         isFreeLook = false
         recenterButton?.isHidden = true
+        endPoseDrivenFollowing()
         endCustomPuck()
 
         // Remove route overlay
@@ -438,6 +399,132 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
 
         // Reset to follow mode (no heading) for home screen
         mapView.setUserTrackingMode(.follow, animated: true)
+    }
+
+    // MARK: - Pose-Driven Following (display link)
+
+    /// Start the per-frame loop that drives puck and camera from the engine's
+    /// interpolated pose — one position, one heading, one clock.
+    private func beginPoseDrivenFollowing() {
+        endPoseDrivenFollowing()
+        interpolator.reset()
+        routeCumulativeDistances = RouteGeometry.cumulativeDistances(navRouteCoords)
+        lastPoseTimestamp = nil
+        lastFrameTimestamp = 0
+        hasSmoothedBearing = false
+        lastDisplayCoordinate = nil
+
+        // Weak proxy target — CADisplayLink retains its target strongly
+        let link = CADisplayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.tick(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    private func endPoseDrivenFollowing() {
+        displayLink?.invalidate()
+        displayLink = nil
+        routeCumulativeDistances = []
+    }
+
+    @objc private func appDidEnterBackground() {
+        displayLink?.isPaused = true
+    }
+
+    @objc private func appWillEnterForeground() {
+        displayLink?.isPaused = false
+    }
+
+    fileprivate func displayLinkFired(_ link: CADisplayLink) {
+        guard isInNavigation, let engine = navigationEngine, engine.isNavigating else { return }
+        let now = link.timestamp
+
+        // Feed any new fix into the interpolator (deduped by fix timestamp)
+        if let pose = engine.navPose, pose.fixTimestamp != lastPoseTimestamp {
+            lastPoseTimestamp = pose.fixTimestamp
+            interpolator.push(pose, at: now)
+        }
+        guard let currentPose = interpolator.currentPose else { return }
+
+        // Never extrapolate past the next maneuver or the route end
+        var maxDistance = currentPose.distanceAlongRoute + max(0, engine.stepDistanceRaw)
+        if let total = routeCumulativeDistances.last {
+            maxDistance = min(maxDistance, total)
+        }
+        guard let distance = interpolator.distanceAlongRoute(at: now, maxDistance: maxDistance) else { return }
+
+        // Walk the polyline back to a coordinate — stays on the line through curves
+        var displayCoord = RouteGeometry.coordinate(
+            atDistance: distance,
+            polyline: navRouteCoords,
+            cumulative: routeCumulativeDistances
+        ) ?? currentPose.snappedCoordinate
+
+        // Off-route honesty: blend the puck back toward raw GPS when the fix is
+        // genuinely far from the line, instead of pretending we're on-route
+        var offRouteBlend: Double = 0
+        if let raw = engine.currentCoordinate {
+            let perpendicular = RouteGeometry.haversineDistance(from: raw, to: currentPose.snappedCoordinate)
+            if perpendicular > offRouteBlendStartMeters {
+                offRouteBlend = min(1, (perpendicular - offRouteBlendStartMeters) / offRouteBlendStartMeters)
+                displayCoord = RouteGeometry.interpolate(from: displayCoord, to: raw, t: offRouteBlend)
+            }
+        }
+
+        // Heading: route tangent at the interpolated position while on-route,
+        // the engine's published bearing (GPS-course based) while blending off
+        let routeBearing = RouteGeometry.bearing(
+            atDistance: distance,
+            polyline: navRouteCoords,
+            cumulative: routeCumulativeDistances
+        )
+        let targetBearing = offRouteBlend > 0
+            ? (engine.headingDegrees ?? routeBearing)
+            : (routeBearing ?? engine.headingDegrees)
+
+        let dt = lastFrameTimestamp > 0 ? max(0.001, now - lastFrameTimestamp) : link.duration
+        lastFrameTimestamp = now
+        if let targetBearing {
+            if hasSmoothedBearing {
+                // Per-frame exponential low-pass with time constant headingTau
+                let alpha = 1 - exp(-dt / headingTau)
+                smoothedBearing = RouteGeometry.smoothBearing(current: smoothedBearing, target: targetBearing, factor: alpha)
+            } else {
+                smoothedBearing = targetBearing
+                hasSmoothedBearing = true
+            }
+        }
+
+        lastDisplayCoordinate = displayCoord
+
+        // One transaction, no implicit animations: puck and camera move from
+        // the same interpolated pose on the same frame
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        updatePuck(coordinate: displayCoord)
+        if !isFreeLook, CACurrentMediaTime() >= cameraTransitionUntil {
+            applyCameraForNav(at: displayCoord, course: smoothedBearing, animated: false)
+        }
+        // Counter-rotate the puck so it points along the travel bearing even
+        // when the camera heading lags or the user is free-looking
+        if let puck = puckAnnotation, let puckView = mapView.view(for: puck) {
+            let angle = (smoothedBearing - mapView.camera.heading) * .pi / 180
+            puckView.transform = CGAffineTransform(rotationAngle: angle)
+        }
+        CATransaction.commit()
+    }
+}
+
+/// Breaks the CADisplayLink -> target retain cycle.
+private final class DisplayLinkProxy {
+    private weak var container: SteddiMapContainer?
+
+    init(_ container: SteddiMapContainer) {
+        self.container = container
+    }
+
+    @objc func tick(_ link: CADisplayLink) {
+        container?.displayLinkFired(link)
     }
 }
 
@@ -486,63 +573,37 @@ extension SteddiMapContainer: MKMapViewDelegate {
         return MKOverlayRenderer(overlay: overlay)
     }
 
-    func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
-        guard isInNavigation else { return }
-        guard let location = userLocation.location else { return }
-
-        // Snap to the route polyline so puck and camera share one position
-        let displayCoord: CLLocationCoordinate2D
-        if !navRouteCoords.isEmpty {
-            displayCoord = NavigationEngine.snapToPolyline(point: location.coordinate, polyline: navRouteCoords)
-        } else {
-            displayCoord = location.coordinate
-        }
-
-        updatePuck(coordinate: displayCoord)
-
-        guard !isFreeLook else { return }
-
-        // Use route-based bearing for stable camera
-        let routeBearing = Self.bearingAlongRoute(from: location.coordinate, routeCoords: navRouteCoords)
-        let course = routeBearing > 0 ? routeBearing : (location.course >= 0 ? location.course : smoothedBearing)
-        smoothedBearing = Self.smoothBearing(current: smoothedBearing, target: course, factor: 0.2)
-
-        applyCameraForNav(at: displayCoord, course: smoothedBearing, animated: true)
-    }
-
-    /// Apply the navigation camera — matches Apple Maps driving view behavior
+    /// Apply the navigation camera — matches Apple Maps driving view behavior.
+    /// The per-frame pose loop calls this with animated:false; one-shot
+    /// transitions (recenter, 2D/3D toggle, nav start) use animated:true and
+    /// briefly suppress the per-frame writes so the two never fight.
     private func applyCameraForNav(at coord: CLLocationCoordinate2D, course: Double, animated: Bool) {
+        let camera: MKMapCamera
         if currentIs3D {
-            // 3D driving view: tilted, course-up, user in lower third
-            let lookAhead = Self.offsetCoordinate(coord, distanceMeters: 60, bearingDegrees: course)
-            let camera = MKMapCamera(
+            // 3D driving view: tilted, course-up, user in lower third — the
+            // look-ahead offset comes from the same smoothed heading as the camera
+            let lookAhead = RouteGeometry.offsetCoordinate(coord, distanceMeters: 60, bearingDegrees: course)
+            camera = MKMapCamera(
                 lookingAtCenter: lookAhead,
                 fromDistance: 600,
                 pitch: 45,
                 heading: course
             )
-            if animated {
-                UIView.animate(withDuration: 0.8, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
-                    self.mapView.setCamera(camera, animated: false)
-                }
-            } else {
-                mapView.setCamera(camera, animated: false)
-            }
         } else {
             // 2D driving view: flat, course-up, centered on user
-            let camera = MKMapCamera(
+            camera = MKMapCamera(
                 lookingAtCenter: coord,
                 fromDistance: 1200,
                 pitch: 0,
                 heading: course
             )
-            if animated {
-                UIView.animate(withDuration: 0.8, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
-                    self.mapView.setCamera(camera, animated: false)
-                }
-            } else {
-                mapView.setCamera(camera, animated: false)
-            }
+        }
+
+        if animated {
+            cameraTransitionUntil = CACurrentMediaTime() + 0.8
+            mapView.setCamera(camera, animated: true)
+        } else {
+            mapView.setCamera(camera, animated: false)
         }
     }
 }
