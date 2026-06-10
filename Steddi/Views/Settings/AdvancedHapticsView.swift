@@ -1,11 +1,13 @@
 import SwiftUI
 
 struct AdvancedHapticsView: View {
+    @AppStorage("accentColor") private var accentColor = "lavender"
     @State private var intensities: [HapticEvent: Double] = Dictionary(
         uniqueKeysWithValues: HapticEvent.allCases.map { ($0, HapticService.shared.intensity(for: $0)) }
     )
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         List {
             Section {
                 ForEach(HapticEvent.allCases) { event in
@@ -36,7 +38,8 @@ struct AdvancedHapticsView: View {
     }
 
     private func eventRow(_ event: HapticEvent) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let intensity = intensities[event] ?? event.dynamicDefault
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: event.sfSymbol)
                     .foregroundStyle(SteddiTheme.accent)
@@ -46,7 +49,7 @@ struct AdvancedHapticsView: View {
 
                 Spacer()
 
-                Text("\(Int((intensities[event] ?? event.dynamicDefault) * 100))%")
+                Text(intensityLabel(intensity))
                     .foregroundStyle(SteddiTheme.textSecondary)
                     .font(SteddiTheme.mono(14))
 
@@ -57,6 +60,7 @@ struct AdvancedHapticsView: View {
                         .foregroundStyle(SteddiTheme.accent)
                 }
                 .buttonStyle(.borderless)
+                .disabled(intensity == 0)
                 .accessibilityLabel("Try \(event.displayName) haptic")
             }
 
@@ -71,8 +75,14 @@ struct AdvancedHapticsView: View {
                 }
             )
             .tint(SteddiTheme.accent)
+            .accessibilityLabel("\(event.displayName) intensity")
+            .accessibilityValue(intensityLabel(intensity))
         }
         .padding(.vertical, 4)
+    }
+
+    private func intensityLabel(_ intensity: Double) -> String {
+        intensity == 0 ? "Off" : "\(Int(intensity * 100))%"
     }
 
     private func binding(for event: HapticEvent) -> Binding<Double> {
