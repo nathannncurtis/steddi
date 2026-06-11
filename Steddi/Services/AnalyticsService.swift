@@ -161,29 +161,58 @@ final class AnalyticsService {
 
     /// How many drives the list section shows.
     static let recentDriveLimit = 50
+    /// Regression and traffic charts operate on at most this many recent
+    /// drives, regardless of window size.
+    nonisolated static let trendSampleLimit = 120
+    /// Time-in-traffic chart caps at this many bars.
+    nonisolated static let trafficChartLimit = 60
     /// Drives longer than this are recording glitches, not commutes.
     nonisolated static let maxPlausibleDurationSeconds: Double = 5 * 3600
 
     // MARK: Loading
 
     /// Loads stats, trends, and the recent-drive list for a window.
+    ///
+    /// Small windows (4w/3m) aggregate raw summary fields directly — a
+    /// bounded, scalar-only fetch. Large windows (1y/all) go cache-first
+    /// through CommuteAnalyticsAggregate weekly buckets, rebuilding only
+    /// buckets that are stale or whose drive count changed.
     func loadAnalytics(window: AnalyticsTimeWindow, context: ModelContext, now: Date = Date()) {
         isLoading = true
         defer { isLoading = false }
 
         backfillMissingSummaries(context: context)
 
-        let windowStart = window.startDate(now: now)
-        let samples = fetchSamples(from: windowStart, context: context)
+        let calendar = Calendar.current
+        let windowStart = window.startDate(now: now, calendar: calendar)
 
-        aggregateStats = Self.computeAggregateStats(samples: samples)
-        trafficTimeData = Self.buildTrafficChart(samples: samples)
+        switch window {
+        case .fourWeeks, .threeMonths:
+            let samples = Self.fetchSamples(context: context, from: windowStart)
+            aggregateStats = Self.computeAggregateStats(samples: samples, calendar: calendar)
+            trafficTimeData = Self.buildTrafficChart(samples: Array(samples.suffix(Self.trafficChartLimit)))
+            applyTrends(Self.computeTrends(samples: samples, now: now, calendar: calendar))
 
-        let trendResult = Self.computeTrends(samples: samples, now: now)
-        trendInsights = trendResult.insights
-        trendGateMessage = trendResult.gateMessage
+        case .oneYear, .all:
+            if Self.aggregatesNeedRebuild(context: context, now: now, calendar: calendar) {
+                Self.rebuildAggregates(context: context, now: now, calendar: calendar)
+            }
+            aggregateStats = Self.cacheFirstStats(
+                context: context, windowStart: windowStart, now: now, calendar: calendar
+            )
+            let trendSamples = Self.fetchSamples(
+                context: context, from: windowStart, newestFirstLimit: Self.trendSampleLimit
+            )
+            trafficTimeData = Self.buildTrafficChart(samples: Array(trendSamples.suffix(Self.trafficChartLimit)))
+            applyTrends(Self.computeTrends(samples: trendSamples, now: now, calendar: calendar))
+        }
 
         recentDrives = fetchRecentDrives(from: windowStart, context: context)
+    }
+
+    private func applyTrends(_ result: (insights: [TrendInsight], gateMessage: String?)) {
+        trendInsights = result.insights
+        trendGateMessage = result.gateMessage
     }
 
     /// Builds the detail payload for one drive. The only code path that
@@ -467,34 +496,255 @@ final class AnalyticsService {
         }
     }
 
-    // MARK: - Fetching
+    // MARK: - Lazy Aggregation (cache-first)
 
-    /// Completed-drive samples in the window, outliers removed. Reads only
-    /// summary fields — never decodes GPS blobs.
-    private func fetchSamples(from windowStart: Date?, context: ModelContext) -> [DriveSample] {
-        var descriptor: FetchDescriptor<DriveRecord>
+    /// Start of the calendar week containing `date`.
+    nonisolated static func weekStart(for date: Date, calendar: Calendar) -> Date {
+        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+    }
+
+    /// Cheap invalidation check: any stale bucket, or a closed-week drive
+    /// count that no longer matches the cached buckets (drives added or
+    /// deleted). Uses fetchCount — no records are materialized.
+    nonisolated static func aggregatesNeedRebuild(
+        context: ModelContext, now: Date, calendar: Calendar
+    ) -> Bool {
+        let buckets = (try? context.fetch(FetchDescriptor<CommuteAnalyticsAggregate>())) ?? []
+        if buckets.contains(where: { $0.isStale(asOf: now) }) { return true }
+
+        let currentWeekStart = weekStart(for: now, calendar: calendar)
+        let maxDuration = maxPlausibleDurationSeconds
+        let descriptor = FetchDescriptor<DriveRecord>(
+            predicate: #Predicate {
+                $0.startedAt < currentWeekStart &&
+                ($0.totalDurationSeconds ?? 0) > 0 &&
+                ($0.totalDurationSeconds ?? 0) <= maxDuration
+            }
+        )
+        let closedWeekCount = (try? context.fetchCount(descriptor)) ?? 0
+        return closedWeekCount != buckets.reduce(0) { $0 + $1.driveCount }
+    }
+
+    /// Rebuilds the weekly aggregate buckets for every closed week.
+    /// Buckets that are current (same drive count, not stale) are left
+    /// untouched; weeks with no remaining drives lose their bucket.
+    /// The open (current) week is never cached — it's always live.
+    nonisolated static func rebuildAggregates(
+        context: ModelContext, now: Date = Date(), calendar: Calendar = .current
+    ) {
+        let currentWeekStart = weekStart(for: now, calendar: calendar)
+        let samples = fetchSamples(context: context, from: nil, to: currentWeekStart)
+
+        var byWeek: [Date: [DriveSample]] = [:]
+        for sample in samples {
+            byWeek[weekStart(for: sample.startedAt, calendar: calendar), default: []].append(sample)
+        }
+
+        let existing = (try? context.fetch(FetchDescriptor<CommuteAnalyticsAggregate>())) ?? []
+        var existingByWeek: [Date: CommuteAnalyticsAggregate] = [:]
+        for bucket in existing {
+            // Duplicate or out-of-range buckets are corruption — drop them.
+            if existingByWeek[bucket.weekStart] != nil || bucket.weekStart >= currentWeekStart {
+                context.delete(bucket)
+            } else {
+                existingByWeek[bucket.weekStart] = bucket
+            }
+        }
+
+        for (week, weekSamples) in byWeek {
+            if let bucket = existingByWeek.removeValue(forKey: week) {
+                if bucket.driveCount == weekSamples.count, !bucket.isStale(asOf: now) { continue }
+                populate(bucket, with: weekSamples, calendar: calendar, now: now)
+            } else {
+                let bucket = CommuteAnalyticsAggregate(weekStart: week)
+                populate(bucket, with: weekSamples, calendar: calendar, now: now)
+                context.insert(bucket)
+            }
+        }
+
+        // Whatever remains covers weeks that no longer have any drives.
+        for orphan in existingByWeek.values {
+            context.delete(orphan)
+        }
+
+        try? context.save()
+    }
+
+    /// Fills one weekly bucket from its samples.
+    nonisolated private static func populate(
+        _ bucket: CommuteAnalyticsAggregate,
+        with samples: [DriveSample],
+        calendar: Calendar,
+        now: Date
+    ) {
+        let stats = computeAggregateStats(samples: samples, calendar: calendar)
+        bucket.driveCount = stats.driveCount
+        bucket.totalDrivingSeconds = stats.totalDrivingSeconds
+        bucket.totalTrafficSeconds = stats.totalTrafficSeconds
+        bucket.averageDurationSeconds = stats.averageDurationSeconds
+        bucket.medianDurationSeconds = stats.medianDurationSeconds
+        bucket.p90DurationSeconds = stats.p90DurationSeconds
+        var sums = Array(repeating: 0.0, count: 7)
+        var counts = Array(repeating: 0, count: 7)
+        for sample in samples {
+            let weekday = calendar.component(.weekday, from: sample.startedAt) - 1
+            sums[weekday] += sample.durationSeconds
+            counts[weekday] += 1
+        }
+        bucket.weekdayDurationSums = sums
+        bucket.weekdayDriveCounts = counts
+        bucket.generatedAt = now
+    }
+
+    /// Window stats assembled cache-first: cached buckets for fully-covered
+    /// closed weeks, plus raw samples for the partial week at the window's
+    /// start edge and the open current week.
+    nonisolated static func cacheFirstStats(
+        context: ModelContext, windowStart: Date?, now: Date, calendar: Calendar
+    ) -> AggregateStats {
+        let currentWeekStart = weekStart(for: now, calendar: calendar)
+
+        // First week fully inside the window.
+        var firstBucketWeek = Date.distantPast
+        var headSamples: [DriveSample] = []
         if let windowStart {
-            descriptor = FetchDescriptor<DriveRecord>(
-                predicate: #Predicate { $0.startedAt >= windowStart && $0.endedAt != nil },
-                sortBy: [SortDescriptor(\.startedAt)]
-            )
-        } else {
-            descriptor = FetchDescriptor<DriveRecord>(
-                predicate: #Predicate { $0.endedAt != nil },
-                sortBy: [SortDescriptor(\.startedAt)]
+            let startWeek = weekStart(for: windowStart, calendar: calendar)
+            if startWeek == windowStart {
+                firstBucketWeek = startWeek
+            } else {
+                firstBucketWeek = calendar.date(byAdding: .day, value: 7, to: startWeek) ?? startWeek
+                headSamples = fetchSamples(context: context, from: windowStart, to: min(firstBucketWeek, currentWeekStart))
+            }
+        }
+
+        let lower = firstBucketWeek
+        let bucketDescriptor = FetchDescriptor<CommuteAnalyticsAggregate>(
+            predicate: #Predicate { $0.weekStart >= lower && $0.weekStart < currentWeekStart },
+            sortBy: [SortDescriptor(\.weekStart)]
+        )
+        let buckets = (try? context.fetch(bucketDescriptor)) ?? []
+
+        let openSamples = fetchSamples(context: context, from: max(currentWeekStart, windowStart ?? .distantPast))
+        return mergeAggregates(buckets, looseSamples: headSamples + openSamples, calendar: calendar)
+    }
+
+    /// Merges cached weekly buckets with un-cached samples into window
+    /// stats. Counts, totals, averages, and weekday breakdowns merge
+    /// exactly; median/p90 are weighted estimates from the per-week
+    /// percentiles (exact when a single source dominates).
+    nonisolated static func mergeAggregates(
+        _ buckets: [CommuteAnalyticsAggregate],
+        looseSamples: [DriveSample],
+        calendar: Calendar = .current
+    ) -> AggregateStats {
+        guard !buckets.isEmpty else {
+            return computeAggregateStats(samples: looseSamples, calendar: calendar)
+        }
+
+        var driveCount = looseSamples.count
+        var totalDriving = looseSamples.map(\.durationSeconds).reduce(0, +)
+        var totalTraffic = looseSamples.map(\.trafficSeconds).reduce(0, +)
+        var sums = Array(repeating: 0.0, count: 7)
+        var counts = Array(repeating: 0, count: 7)
+        for sample in looseSamples {
+            let weekday = calendar.component(.weekday, from: sample.startedAt) - 1
+            sums[weekday] += sample.durationSeconds
+            counts[weekday] += 1
+        }
+
+        var medianPairs: [(value: Double, weight: Double)] = looseSamples.map { ($0.durationSeconds, 1) }
+        var p90Pairs = medianPairs
+
+        for bucket in buckets {
+            driveCount += bucket.driveCount
+            totalDriving += bucket.totalDrivingSeconds
+            totalTraffic += bucket.totalTrafficSeconds
+            for idx in 0..<min(7, bucket.weekdayDurationSums.count) {
+                sums[idx] += bucket.weekdayDurationSums[idx]
+                counts[idx] += bucket.weekdayDriveCounts[idx]
+            }
+            if bucket.driveCount > 0 {
+                medianPairs.append((bucket.medianDurationSeconds, Double(bucket.driveCount)))
+                p90Pairs.append((bucket.p90DurationSeconds, Double(bucket.driveCount)))
+            }
+        }
+
+        guard driveCount > 0 else { return .empty }
+
+        let dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        let weekdayAverages: [WeekdayAverage] = (0..<7).compactMap { idx in
+            guard counts[idx] > 0 else { return nil }
+            return WeekdayAverage(
+                weekdayIndex: idx,
+                label: dayNames[idx],
+                averageMinutes: sums[idx] / Double(counts[idx]) / 60,
+                driveCount: counts[idx]
             )
         }
+
+        return AggregateStats(
+            driveCount: driveCount,
+            totalDrivingSeconds: totalDriving,
+            totalTrafficSeconds: totalTraffic,
+            averageDurationSeconds: totalDriving / Double(driveCount),
+            medianDurationSeconds: weightedPercentile(medianPairs, 0.5),
+            p90DurationSeconds: weightedPercentile(p90Pairs, 0.9),
+            weekdayAverages: weekdayAverages
+        )
+    }
+
+    /// Step-function weighted percentile: smallest value whose cumulative
+    /// weight reaches `p` of the total.
+    nonisolated static func weightedPercentile(_ pairs: [(value: Double, weight: Double)], _ p: Double) -> Double {
+        let valid = pairs.filter { $0.weight > 0 }.sorted { $0.value < $1.value }
+        guard !valid.isEmpty else { return 0 }
+        let total = valid.reduce(0) { $0 + $1.weight }
+        let target = p * total
+        var cumulative = 0.0
+        for pair in valid {
+            cumulative += pair.weight
+            if cumulative >= target { return pair.value }
+        }
+        return valid[valid.count - 1].value
+    }
+
+    // MARK: - Fetching
+
+    /// Completed-drive samples in [from, to), outliers removed, oldest
+    /// first. Fetches only the scalar summary columns — the GPS blob is
+    /// never materialized. `newestFirstLimit` bounds the fetch to the most
+    /// recent N drives (result still returned oldest first).
+    nonisolated static func fetchSamples(
+        context: ModelContext,
+        from start: Date?,
+        to end: Date? = nil,
+        newestFirstLimit: Int? = nil
+    ) -> [DriveSample] {
+        let lower = start ?? Date.distantPast
+        let upper = end ?? Date.distantFuture
+        let maxDuration = maxPlausibleDurationSeconds
+        var descriptor = FetchDescriptor<DriveRecord>(
+            predicate: #Predicate {
+                $0.startedAt >= lower && $0.startedAt < upper &&
+                ($0.totalDurationSeconds ?? 0) > 0 &&
+                ($0.totalDurationSeconds ?? 0) <= maxDuration
+            },
+            sortBy: [SortDescriptor(\.startedAt, order: newestFirstLimit == nil ? .forward : .reverse)]
+        )
+        if let newestFirstLimit {
+            descriptor.fetchLimit = newestFirstLimit
+        }
+        descriptor.propertiesToFetch = [\.startedAt, \.totalDurationSeconds, \.trafficDurationSeconds]
+
         let records = (try? context.fetch(descriptor)) ?? []
-        return records.compactMap { record in
-            guard let duration = record.totalDurationSeconds,
-                  duration > 0, duration <= Self.maxPlausibleDurationSeconds
-            else { return nil }
-            return DriveSample(
+        let samples = records.map { record in
+            DriveSample(
                 startedAt: record.startedAt,
-                durationSeconds: duration,
+                durationSeconds: record.totalDurationSeconds ?? 0,
                 trafficSeconds: record.trafficDurationSeconds ?? 0
             )
         }
+        return newestFirstLimit == nil ? samples : samples.sorted { $0.startedAt < $1.startedAt }
     }
 
     /// Most recent drives for the list section, newest first, capped.
@@ -516,10 +766,14 @@ final class AnalyticsService {
 
     /// One-time migration for records saved before summary fields existed:
     /// decode their blobs once, persist the summaries, never decode again.
-    private func backfillMissingSummaries(context: ModelContext) {
-        let descriptor = FetchDescriptor<DriveRecord>(
-            predicate: #Predicate { $0.endedAt != nil && $0.totalDurationSeconds == nil }
+    /// Batched so a large legacy library backfills across a few loads
+    /// instead of stalling the first one.
+    private func backfillMissingSummaries(context: ModelContext, batchSize: Int = 200) {
+        var descriptor = FetchDescriptor<DriveRecord>(
+            predicate: #Predicate { $0.endedAt != nil && $0.totalDurationSeconds == nil },
+            sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
+        descriptor.fetchLimit = batchSize
         guard let legacy = try? context.fetch(descriptor), !legacy.isEmpty else { return }
         for record in legacy {
             record.finalizeSummary()

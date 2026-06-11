@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftData
 @testable import Steddi
 
 // MARK: - AnalyticsService Tests
@@ -365,5 +366,207 @@ struct DriveRecordSummaryTests {
         #expect(record.trafficDurationSeconds == firstPass.1)
         #expect(record.maxSpeedMps == firstPass.2)
         #expect(record.averageSpeedMps == firstPass.3)
+    }
+}
+
+// MARK: - Aggregation Cache Invalidation Tests
+
+@Suite("Analytics aggregation invalidation", .serialized)
+struct AnalyticsAggregationTests {
+
+    static var utcCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
+    /// Wednesday 2026-03-18 12:00 UTC — mid-week so the current week is open.
+    static let now: Date = {
+        var components = DateComponents()
+        components.year = 2026; components.month = 3; components.day = 18; components.hour = 12
+        return utcCalendar.date(from: components)!
+    }()
+
+    static func makeStore() throws -> (container: ModelContainer, context: ModelContext) {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ModelStoreLocator.schema, configurations: config)
+        return (container, ModelContext(container))
+    }
+
+    @discardableResult
+    static func insertDrive(
+        _ context: ModelContext, startedAt: Date, minutes: Double, trafficMinutes: Double = 0
+    ) -> DriveRecord {
+        let record = DriveRecord(startedAt: startedAt)
+        record.endedAt = startedAt.addingTimeInterval(minutes * 60)
+        record.totalDurationSeconds = minutes * 60
+        record.trafficDurationSeconds = trafficMinutes * 60
+        context.insert(record)
+        return record
+    }
+
+    static func allBuckets(_ context: ModelContext) -> [CommuteAnalyticsAggregate] {
+        let descriptor = FetchDescriptor<CommuteAnalyticsAggregate>(sortBy: [SortDescriptor(\.weekStart)])
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    @Test("Rebuild creates buckets for closed weeks only")
+    func rebuildBucketsClosedWeeks() throws {
+        let (container, context) = try Self.makeStore()
+        _ = container
+        let week = AnalyticsService.weekStart(for: Self.now, calendar: Self.utcCalendar)
+
+        // 2 drives two weeks ago, 3 one week ago, 1 in the open week.
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(-14 * 86400), minutes: 30)
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(-13 * 86400), minutes: 34)
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(-7 * 86400), minutes: 28, trafficMinutes: 6)
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(-6 * 86400), minutes: 30)
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(-5 * 86400), minutes: 32)
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(1 * 86400), minutes: 40)
+        try context.save()
+
+        AnalyticsService.rebuildAggregates(context: context, now: Self.now, calendar: Self.utcCalendar)
+
+        let buckets = Self.allBuckets(context)
+        #expect(buckets.count == 2)
+        #expect(buckets[0].driveCount == 2)
+        #expect(abs(buckets[0].totalDrivingSeconds - 64 * 60) < 0.001)
+        #expect(buckets[1].driveCount == 3)
+        #expect(abs(buckets[1].totalTrafficSeconds - 6 * 60) < 0.001)
+        #expect(buckets.allSatisfy { $0.weekStart < week })
+    }
+
+    @Test("Fresh cache reports no rebuild needed; new drives invalidate it")
+    func invalidationOnNewDrive() throws {
+        let (container, context) = try Self.makeStore()
+        _ = container
+        let week = AnalyticsService.weekStart(for: Self.now, calendar: Self.utcCalendar)
+        for day in [-14, -12, -7] {
+            Self.insertDrive(context, startedAt: week.addingTimeInterval(Double(day) * 86400), minutes: 30)
+        }
+        try context.save()
+        AnalyticsService.rebuildAggregates(context: context, now: Self.now, calendar: Self.utcCalendar)
+
+        #expect(!AnalyticsService.aggregatesNeedRebuild(context: context, now: Self.now, calendar: Self.utcCalendar))
+
+        // A drive landing in an already-cached week invalidates the cache.
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(-13 * 86400), minutes: 45)
+        try context.save()
+        #expect(AnalyticsService.aggregatesNeedRebuild(context: context, now: Self.now, calendar: Self.utcCalendar))
+
+        AnalyticsService.rebuildAggregates(context: context, now: Self.now, calendar: Self.utcCalendar)
+        let buckets = Self.allBuckets(context)
+        #expect(buckets.first?.driveCount == 3)
+        #expect(!AnalyticsService.aggregatesNeedRebuild(context: context, now: Self.now, calendar: Self.utcCalendar))
+    }
+
+    @Test("Stale buckets are regenerated even when counts match")
+    func staleBucketRegenerated() throws {
+        let (container, context) = try Self.makeStore()
+        _ = container
+        let week = AnalyticsService.weekStart(for: Self.now, calendar: Self.utcCalendar)
+        for day in [-14, -13, -12] {
+            Self.insertDrive(context, startedAt: week.addingTimeInterval(Double(day) * 86400), minutes: 30)
+        }
+        try context.save()
+        AnalyticsService.rebuildAggregates(context: context, now: Self.now, calendar: Self.utcCalendar)
+
+        // Age the bucket past the staleness horizon and corrupt a value
+        // the count check can't see.
+        let bucket = try #require(Self.allBuckets(context).first)
+        bucket.generatedAt = Self.now.addingTimeInterval(-8 * 86400)
+        bucket.averageDurationSeconds = 999_999
+        try context.save()
+
+        #expect(AnalyticsService.aggregatesNeedRebuild(context: context, now: Self.now, calendar: Self.utcCalendar))
+        AnalyticsService.rebuildAggregates(context: context, now: Self.now, calendar: Self.utcCalendar)
+
+        let refreshed = try #require(Self.allBuckets(context).first)
+        #expect(abs(refreshed.averageDurationSeconds - 30 * 60) < 0.001)
+        #expect(refreshed.generatedAt == Self.now)
+    }
+
+    @Test("Buckets for weeks with no remaining drives are deleted")
+    func orphanBucketDeleted() throws {
+        let (container, context) = try Self.makeStore()
+        _ = container
+        let week = AnalyticsService.weekStart(for: Self.now, calendar: Self.utcCalendar)
+        let doomed = Self.insertDrive(context, startedAt: week.addingTimeInterval(-14 * 86400), minutes: 30)
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(-7 * 86400), minutes: 30)
+        try context.save()
+        AnalyticsService.rebuildAggregates(context: context, now: Self.now, calendar: Self.utcCalendar)
+        #expect(Self.allBuckets(context).count == 2)
+
+        context.delete(doomed)
+        try context.save()
+        #expect(AnalyticsService.aggregatesNeedRebuild(context: context, now: Self.now, calendar: Self.utcCalendar))
+
+        AnalyticsService.rebuildAggregates(context: context, now: Self.now, calendar: Self.utcCalendar)
+        let buckets = Self.allBuckets(context)
+        #expect(buckets.count == 1)
+        #expect(buckets[0].weekStart == week.addingTimeInterval(-7 * 86400))
+    }
+
+    @Test("Cache-first stats merge buckets with the open week exactly")
+    func cacheFirstMerge() throws {
+        let (container, context) = try Self.makeStore()
+        _ = container
+        let week = AnalyticsService.weekStart(for: Self.now, calendar: Self.utcCalendar)
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(-14 * 86400), minutes: 30, trafficMinutes: 5)
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(-7 * 86400), minutes: 40, trafficMinutes: 10)
+        Self.insertDrive(context, startedAt: week.addingTimeInterval(1 * 86400), minutes: 50, trafficMinutes: 15)
+        try context.save()
+        AnalyticsService.rebuildAggregates(context: context, now: Self.now, calendar: Self.utcCalendar)
+
+        let stats = AnalyticsService.cacheFirstStats(
+            context: context, windowStart: nil, now: Self.now, calendar: Self.utcCalendar
+        )
+        #expect(stats.driveCount == 3)
+        #expect(abs(stats.totalDrivingSeconds - 120 * 60) < 0.001)
+        #expect(abs(stats.totalTrafficSeconds - 30 * 60) < 0.001)
+        #expect(abs(stats.averageDurationSeconds - 40 * 60) < 0.001)
+    }
+
+    @Test("Merged weekday averages are exact across buckets and loose samples")
+    func mergeWeekdayExact() throws {
+        let calendar = Self.utcCalendar
+        let week = AnalyticsService.weekStart(for: Self.now, calendar: calendar)
+
+        // Bucket holds one Monday drive of 30 min.
+        let bucket = CommuteAnalyticsAggregate(weekStart: week.addingTimeInterval(-7 * 86400))
+        bucket.driveCount = 1
+        bucket.totalDrivingSeconds = 30 * 60
+        bucket.medianDurationSeconds = 30 * 60
+        bucket.p90DurationSeconds = 30 * 60
+        bucket.averageDurationSeconds = 30 * 60
+        var sums = Array(repeating: 0.0, count: 7)
+        var counts = Array(repeating: 0, count: 7)
+        sums[1] = 30 * 60; counts[1] = 1
+        bucket.weekdayDurationSums = sums
+        bucket.weekdayDriveCounts = counts
+
+        // Loose sample: another Monday drive of 50 min (week start is Sunday
+        // for the gregorian calendar, so +1 day is Monday).
+        let loose = [DriveSample(
+            startedAt: week.addingTimeInterval(1 * 86400),
+            durationSeconds: 50 * 60,
+            trafficSeconds: 0
+        )]
+
+        let stats = AnalyticsService.mergeAggregates([bucket], looseSamples: loose, calendar: calendar)
+        let monday = stats.weekdayAverages.first { $0.weekdayIndex == 1 }
+        #expect(monday?.driveCount == 2)
+        #expect(abs((monday?.averageMinutes ?? 0) - 40) < 0.001)
+    }
+
+    @Test("Weighted percentile picks the value at the cumulative target")
+    func weightedPercentileMath() {
+        let pairs: [(value: Double, weight: Double)] = [(10, 1), (20, 1), (30, 1), (40, 1)]
+        #expect(AnalyticsService.weightedPercentile(pairs, 0.5) == 20)
+        #expect(AnalyticsService.weightedPercentile(pairs, 0.9) == 40)
+        #expect(AnalyticsService.weightedPercentile([(25, 12)], 0.5) == 25)
+        #expect(AnalyticsService.weightedPercentile([], 0.5) == 0)
+        // Zero-weight entries are ignored.
+        #expect(AnalyticsService.weightedPercentile([(5, 0), (15, 3)], 0.5) == 15)
     }
 }

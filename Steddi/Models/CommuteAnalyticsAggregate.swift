@@ -71,6 +71,10 @@ final class CommuteAnalyticsAggregate {
     static let staleAfter: TimeInterval = 7 * 24 * 3600
 
     var isStale: Bool {
-        Date().timeIntervalSince(generatedAt) > Self.staleAfter
+        isStale(asOf: Date())
+    }
+
+    func isStale(asOf date: Date) -> Bool {
+        date.timeIntervalSince(generatedAt) > Self.staleAfter
     }
 }
