@@ -216,6 +216,19 @@ struct HomeView: View {
                 )
             }
 
+            // Trip arrival moment — floats above the nav overlay during the
+            // continuous-mode pause and as the trip-complete card
+            if let arrivedStop = tripArrivalStop, !showTripArrivalPrompt {
+                TripArrivalCard(
+                    stopName: arrivedStop.name,
+                    nextStopName: activeTrip?.currentStop?.name,
+                    onTap: { tripArrivalCardTapped() }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .padding(.top, isLandscape ? 16 : 130)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             // Home UI — hides during navigation
             if !isNavigating && !isCalculatingRoute {
                 if isLandscape {
@@ -303,6 +316,27 @@ struct HomeView: View {
         .sheet(isPresented: $showTripList) {
             NavigationStack {
                 TripListView()
+            }
+        }
+        .sheet(isPresented: $showTripArrivalPrompt, onDismiss: handleTripPromptDismiss) {
+            if let trip = activeTrip, let nextStop = trip.currentStop {
+                TripArrivalPromptSheet(
+                    arrivedStopName: tripArrivalStop?.name,
+                    nextStop: nextStop,
+                    legIndex: trip.currentStopIndex + 1,
+                    totalLegs: trip.orderedStops.count,
+                    onNextLeg: {
+                        advanceTripLeg(to: nextStop, trip: trip)
+                    },
+                    onSwitchToContinuous: {
+                        trip.flowMode = .continuous
+                        advanceTripLeg(to: nextStop, trip: trip)
+                    },
+                    onEndTrip: {
+                        endTripNavigation(completed: false)
+                    }
+                )
+                .presentationDetents([.medium, .large])
             }
         }
         .confirmationDialog(
@@ -1303,8 +1337,40 @@ struct HomeView: View {
         if !completed {
             activeTrip?.lastNavigatedAt = Date()
             tripArrivalStop = nil
+        } else {
+            // Let the trip-complete card linger briefly, then clear it
+            tripAutoAdvanceTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3.5))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.3)) { tripArrivalStop = nil }
+            }
         }
         showTripArrivalPrompt = false
+        try? modelContext.save()
+        activeTrip = nil
+    }
+
+    /// Continuous-mode arrival card tapped: cancel the auto-advance and take
+    /// manual control for a quick stop (next-leg prompt). The trip-complete
+    /// card just dismisses.
+    private func tripArrivalCardTapped() {
+        tripAutoAdvanceTask?.cancel()
+        tripAutoAdvanceTask = nil
+
+        guard let trip = activeTrip, trip.currentStop != nil else {
+            withAnimation(.easeOut(duration: 0.25)) { tripArrivalStop = nil }
+            return
+        }
+        pauseNavigationBetweenLegs()
+        showTripArrivalPrompt = true
+    }
+
+    /// Next-leg prompt swiped away without a choice: leave the trip paused —
+    /// position persists, so the resume banner picks it back up.
+    private func handleTripPromptDismiss() {
+        guard !isNavigating, !isCalculatingRoute, let trip = activeTrip else { return }
+        tripArrivalStop = nil
+        trip.lastNavigatedAt = Date()
         try? modelContext.save()
         activeTrip = nil
     }
