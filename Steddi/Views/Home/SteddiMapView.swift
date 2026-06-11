@@ -466,6 +466,11 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
 
     fileprivate func displayLinkFired(_ link: CADisplayLink) {
         guard isInNavigation, let engine = navigationEngine, engine.isNavigating else { return }
+        // Phone locked with CarPlay connected: the app-level background
+        // notification never fires (the CarPlay scene stays foreground), but
+        // the PHONE scene does background on lock — gate on the hosting
+        // scene's activation state so an unseen map never burns 30fps writes.
+        guard let scene = view.window?.windowScene, scene.activationState == .foregroundActive else { return }
         let now = link.timestamp
 
         // Auto-reroute swaps the engine's polyline without restarting the map —
