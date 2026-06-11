@@ -17,6 +17,7 @@
 		13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4F33590D3CEB7AA217E684 /* LocationService.swift */; };
 		139B1E17264CCF63189264A6 /* SteddiShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */; };
 		19C3C8979AE3DF1ABFFF5567 /* NavPoseInterpolatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */; };
+		1B58E771169BE73B3BAF9897 /* TripCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B17C3D0A429809ADB9CCBA /* TripCardView.swift */; };
 		1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50B3D1495689CE92E4ED80B /* GeocodingService.swift */; };
 		1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */; };
 		21592CE104F443B0892973CF /* TunnelDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E610B8A29F73B013FB139D /* TunnelDetectionService.swift */; };
@@ -252,6 +253,7 @@
 		C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMSpeedLimitService.swift; sourceTree = "<group>"; };
 		C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteETAWidget.swift; sourceTree = "<group>"; };
 		C3B24C7F73BAB34A1C42E122 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		C5B17C3D0A429809ADB9CCBA /* TripCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripCardView.swift; sourceTree = "<group>"; };
 		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
 		C62D85ED65451F0DD7CCB4E5 /* ThemeEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEngine.swift; sourceTree = "<group>"; };
 		C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayMapController.swift; sourceTree = "<group>"; };
@@ -349,6 +351,14 @@
 				24F1F21786B81D853B9E61B6 /* EmergencyView.swift */,
 			);
 			path = Emergency;
+			sourceTree = "<group>";
+		};
+		25341A177C46756EBC7F08BC /* Trips */ = {
+			isa = PBXGroup;
+			children = (
+				C5B17C3D0A429809ADB9CCBA /* TripCardView.swift */,
+			);
+			path = Trips;
 			sourceTree = "<group>";
 		};
 		308F7C4E16BF500275E6733D /* Steddi */ = {
@@ -596,6 +606,7 @@
 				B1894EE5BD1CDC02EA50F276 /* Navigation */,
 				AA49E1B7BCC0892981A2EA21 /* Onboarding */,
 				92185840C3B254DF92B2AF8F /* Settings */,
+				25341A177C46756EBC7F08BC /* Trips */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -844,6 +855,7 @@
 				8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */,
 				5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */,
 				A780066C24DF0AD042F0B658 /* Trip.swift in Sources */,
+				1B58E771169BE73B3BAF9897 /* TripCardView.swift in Sources */,
 				0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */,
 				534D40A3F52FDDA9AE84C20C /* TripStop.swift in Sources */,
 				21592CE104F443B0892973CF /* TunnelDetectionService.swift in Sources */,

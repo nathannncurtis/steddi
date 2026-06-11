@@ -10,6 +10,7 @@ struct HomeView: View {
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
     @Query(sort: \Commute.createdAt) private var commutes: [Commute]
     @Query private var commuteTrips: [CommuteTrip]
+    @Query(sort: \Trip.createdAt) private var trips: [Trip]
 
     // Accent color — triggers re-render of entire home + children when changed
     @AppStorage("accentColor") private var accentColor = "lavender"
@@ -20,6 +21,7 @@ struct HomeView: View {
     enum SheetTab: String, CaseIterable {
         case commutes = "Commutes"
         case places = "Places"
+        case trips = "Trips"
     }
 
     // Navigation state
@@ -48,6 +50,7 @@ struct HomeView: View {
     @State private var showSearch = false
     @State private var showAddLocation = false
     @State private var showCommuteList = false
+    @State private var showTripList = false
     @State private var showPostArrival = false
     @State private var longPressCoordinate: CLLocationCoordinate2D?
     @State private var recordedPoints: [GPSPoint] = []
@@ -649,6 +652,8 @@ struct HomeView: View {
                             commutesTab
                         case .places:
                             placesTab
+                        case .trips:
+                            tripsTab
                         }
                     }
                 }
@@ -703,6 +708,8 @@ struct HomeView: View {
                 commutesTab
             case .places:
                 placesTab
+            case .trips:
+                tripsTab
             }
         }
         .background(SteddiTheme.surfacePrimary)
@@ -1069,6 +1076,79 @@ struct HomeView: View {
         for (index, item) in items.enumerated() {
             item.sortOrder = index
         }
+    }
+
+    // MARK: - Trips Tab
+
+    private var activeTrips: [Trip] {
+        trips.filter { !$0.isArchived }
+    }
+
+    private var tripsTab: some View {
+        Group {
+            if activeTrips.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "map")
+                        .font(.title2)
+                        .foregroundStyle(SteddiTheme.accent)
+                    Text("No trips yet")
+                        .font(SteddiTheme.heading(16))
+                        .foregroundStyle(SteddiTheme.textPrimary)
+                    Text("Plan a multi-stop journey")
+                        .font(SteddiTheme.body(14))
+                        .foregroundStyle(SteddiTheme.textSecondary)
+                    Button {
+                        showTripList = true
+                    } label: {
+                        Label("New Trip", systemImage: "plus")
+                            .font(SteddiTheme.heading(14))
+                            .foregroundStyle(SteddiTheme.accent)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(SteddiTheme.accentSubtle, in: Capsule())
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(.vertical, 24)
+                .padding(.horizontal, 20)
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(activeTrips) { trip in
+                            tripCard(trip)
+                        }
+                        Button {
+                            showTripList = true
+                        } label: {
+                            Label("New Trip", systemImage: "plus")
+                                .font(SteddiTheme.heading(13))
+                                .foregroundStyle(SteddiTheme.accent)
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .frame(maxHeight: isLandscape ? .infinity : 160)
+            }
+        }
+    }
+
+    private func tripCard(_ trip: Trip) -> some View {
+        TripCardView(
+            trip: trip,
+            distanceToNextStop: trip.currentStop.flatMap { formattedDistance(to: $0.coordinate) },
+            onTap: { startTrip(trip) },
+            onEdit: { showTripList = true },
+            onArchive: { trip.isArchived = true },
+            onDelete: { modelContext.delete(trip) }
+        )
+    }
+
+    /// Begin or resume trip navigation — implemented with the trip nav
+    /// orchestration (activeTrip state, leg-by-leg advancement).
+    private func startTrip(_ trip: Trip) {
+        // Wired in the trip navigation orchestration commit.
     }
 
     // MARK: - Loading Overlay
