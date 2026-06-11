@@ -104,4 +104,20 @@ struct GPSPoint: Codable, Hashable {
         self.timestamp = location.timestamp
         self.speed = location.speed
     }
+
+    init(
+        latitude: Double,
+        longitude: Double,
+        altitude: Double,
+        horizontalAccuracy: Double,
+        timestamp: Date,
+        speed: Double
+    ) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+        self.horizontalAccuracy = horizontalAccuracy
+        self.timestamp = timestamp
+        self.speed = speed
+    }
 }
