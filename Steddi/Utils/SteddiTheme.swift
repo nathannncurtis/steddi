@@ -66,39 +66,21 @@ enum SteddiTheme {
     static let warmRedSubtle = Color(red: 0.91, green: 0.30, blue: 0.24).opacity(0.15)
     static let warningAmber = Color(red: 0.95, green: 0.65, blue: 0.15)   // #F2A626 — over-limit warning, independent of accent
 
-    /// Surface colors — adaptive for light/dark mode
-    static let surfacePrimary = Color(UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.11, green: 0.10, blue: 0.09, alpha: 1) // warm dark
-            : UIColor(red: 0.98, green: 0.97, blue: 0.96, alpha: 1) // warm white
-    })
-    static let surfaceSecondary = Color(UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.17, green: 0.16, blue: 0.15, alpha: 1)
-            : UIColor(red: 0.94, green: 0.93, blue: 0.92, alpha: 1)
-    })
-    static let surfaceElevated = Color(UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.22, green: 0.21, blue: 0.19, alpha: 1)
-            : UIColor(red: 0.90, green: 0.89, blue: 0.88, alpha: 1)
-    })
+    /// Surface colors — resolved by ThemeEngine. The dark/light endpoints are
+    /// pixel-identical to the old trait-adaptive values (see ThemePalette);
+    /// dynamic mode interpolates between them, through grey when enabled.
+    /// Views keep reading these statics unchanged — the facade hides the
+    /// engine entirely. Repaints ride the existing theme notifications plus
+    /// `.steddiDynamicThemeUpdated`; colors resolve from the latest snapshot
+    /// every time a body re-evaluates.
+    static var surfacePrimary: Color { ThemeEngine.snapshot.surfacePrimary.color }
+    static var surfaceSecondary: Color { ThemeEngine.snapshot.surfaceSecondary.color }
+    static var surfaceElevated: Color { ThemeEngine.snapshot.surfaceElevated.color }
 
-    /// Text — adaptive
-    static let textPrimary = Color(UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.97, green: 0.96, blue: 0.95, alpha: 1) // warm white
-            : UIColor(red: 0.11, green: 0.10, blue: 0.09, alpha: 1) // warm dark
-    })
-    static let textSecondary = Color(UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.66, green: 0.63, blue: 0.60, alpha: 1)
-            : UIColor(red: 0.45, green: 0.43, blue: 0.41, alpha: 1)
-    })
-    static let textMuted = Color(UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.46, green: 0.44, blue: 0.42, alpha: 1)
-            : UIColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1)
-    })
+    /// Text — resolved by ThemeEngine alongside the surfaces.
+    static var textPrimary: Color { ThemeEngine.snapshot.textPrimary.color }
+    static var textSecondary: Color { ThemeEngine.snapshot.textSecondary.color }
+    static var textMuted: Color { ThemeEngine.snapshot.textMuted.color }
 
     // MARK: - Typography
 
@@ -327,10 +309,15 @@ enum ThemeMode: String, CaseIterable {
 }
 
 extension SteddiTheme {
+    /// Legacy mode, still read by map surfaces. The `"themeMode"` key is a
+    /// shadow kept in sync with `ThemeModeEx` (grey projects to light here).
     static var currentThemeMode: ThemeMode {
         let raw = UserDefaults.standard.string(forKey: "themeMode") ?? ThemeMode.dynamic.rawValue
         return ThemeMode(rawValue: raw) ?? .dark
     }
+
+    /// The user's actual selected mode, grey included.
+    static var currentThemeModeEx: ThemeModeEx { ThemeModeEx.current() }
 }
 
 // MARK: - Notifications
