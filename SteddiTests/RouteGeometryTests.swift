@@ -281,3 +281,47 @@ struct RemoveSpikesTests {
         #expect(RouteGeometry.removeSpikes(polyline).count == 2)
     }
 }
+
+// MARK: - Post-Reset Leg Disambiguation (regression)
+
+@Suite("RouteProjector post-reset disambiguation")
+struct PostResetDisambiguationTests {
+
+    /// Out-and-back on identical geometry: north 33.000 -> 33.005, back south.
+    /// ~1111m out, ~1111m back (vertices every ~55m).
+    private var outAndBack: [CLLocationCoordinate2D] {
+        let out = (0...20).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.0005, longitude: -117.0) }
+        let back = (1...20).map { CLLocationCoordinate2D(latitude: 33.01 - Double($0) * 0.0005, longitude: -117.0) }
+        return out + back
+    }
+
+    @Test("Return-leg pose survives a window reset on shared geometry")
+    func returnLegSurvivesReset() throws {
+        let polyline = outAndBack
+        var projector = RouteProjector(polyline: polyline)
+        let total = projector.totalDistance
+
+        // Drive out and onto the return leg: project a point at ~75% of the
+        // route (second pass over the shared line, heading south)
+        for lat in stride(from: 33.000, through: 33.0095, by: 0.0005) {
+            _ = projector.project(.init(latitude: lat, longitude: -117.0))
+        }
+        for lat in stride(from: 33.0095, through: 33.0075, by: -0.0005) {
+            _ = projector.project(.init(latitude: lat, longitude: -117.0))
+        }
+        let beforeOptional = projector.project(.init(latitude: 33.007, longitude: -117.0))
+        let before = try #require(beforeOptional)
+        #expect(before.distanceAlongRoute > total / 2, "pose must be on the return leg before the reset")
+
+        // Off-route confirmation resets the window mid-return-leg
+        projector.resetWindow()
+
+        // GPS recovers on the shared line slightly further south — the pose
+        // must continue on the RETURN leg (along > half), never re-anchor to
+        // the outbound leg and walk backward
+        let afterOptional = projector.project(.init(latitude: 33.0065, longitude: -117.0))
+        let after = try #require(afterOptional)
+        #expect(after.distanceAlongRoute > total / 2, "post-reset rescan re-anchored to the outbound leg")
+        #expect(after.distanceAlongRoute > before.distanceAlongRoute, "pose walked backward after reset")
+    }
+}

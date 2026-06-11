@@ -272,11 +272,17 @@ struct RouteProjector {
         self.fullRescanThreshold = fullRescanThreshold
     }
 
-    /// Forget the window anchor. Call on reroute or confirmed off-route so the
-    /// next fix performs a full rescan instead of trusting a stale segment.
+    /// Forget the window anchor. Call on confirmed off-route so the next fix
+    /// performs a full rescan instead of trusting a stale segment.
+    ///
+    /// The along-route position is deliberately KEPT: on identical-geometry
+    /// out-and-back routes, a post-reset rescan with no continuity hint ties
+    /// every shared segment and anchors to the lowest index — the outbound
+    /// leg — then walks the pose backward. The retained hint breaks those
+    /// ties toward where the driver actually was. (Reroutes build a fresh
+    /// projector, so a stale hint never crosses route changes.)
     mutating func resetWindow() {
         lastSegmentIndex = nil
-        lastDistanceAlong = nil
     }
 
     /// Project a raw GPS fix onto the route. Searches a window around the last
