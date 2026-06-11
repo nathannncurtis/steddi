@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04087916791CAF8B1AFD67AA /* TripProgression.swift */; };
 		06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */; };
+		0786561020231240135F9738 /* TripPlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD8704B61414025699515828 /* TripPlannerView.swift */; };
 		080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */; };
 		0A72D4673A9DC592DE1BDC01 /* AggregateStatsCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9342593EFE74CD157A9C4854 /* AggregateStatsCards.swift */; };
 		0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */; };
@@ -240,6 +241,7 @@
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometryTests.swift; sourceTree = "<group>"; };
 		A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManager.swift; sourceTree = "<group>"; };
+		AD8704B61414025699515828 /* TripPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlannerView.swift; sourceTree = "<group>"; };
 		ADE05CCCE2E6BA708ED405BF /* TrendInsightCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendInsightCard.swift; sourceTree = "<group>"; };
 		AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapMatchingService.swift; sourceTree = "<group>"; };
 		AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteTrip.swift; sourceTree = "<group>"; };
@@ -357,6 +359,7 @@
 			isa = PBXGroup;
 			children = (
 				C5B17C3D0A429809ADB9CCBA /* TripCardView.swift */,
+				AD8704B61414025699515828 /* TripPlannerView.swift */,
 			);
 			path = Trips;
 			sourceTree = "<group>";
@@ -856,6 +859,7 @@
 				5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */,
 				A780066C24DF0AD042F0B658 /* Trip.swift in Sources */,
 				1B58E771169BE73B3BAF9897 /* TripCardView.swift in Sources */,
+				0786561020231240135F9738 /* TripPlannerView.swift in Sources */,
 				0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */,
 				534D40A3F52FDDA9AE84C20C /* TripStop.swift in Sources */,
 				21592CE104F443B0892973CF /* TunnelDetectionService.swift in Sources */,
