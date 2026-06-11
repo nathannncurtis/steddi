@@ -83,7 +83,7 @@ struct CommuteAnalyticsView: View {
                 trendGateCard(gate)
             } else {
                 ForEach(service.trendInsights) { insight in
-                    trendCard(insight)
+                    TrendInsightCard(insight: insight)
                 }
             }
         }
@@ -107,47 +107,12 @@ struct CommuteAnalyticsView: View {
         }
     }
 
-    private func trendCard(_ insight: TrendInsight) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(insight.message)
-                .font(SteddiTheme.heading(15))
-                .foregroundStyle(SteddiTheme.textPrimary)
-            if let detail = insight.detail {
-                Text(detail)
-                    .font(SteddiTheme.body(13))
-                    .foregroundStyle(SteddiTheme.textSecondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                .fill(SteddiTheme.surfaceSecondary)
-        }
-    }
-
     // MARK: - Aggregate Stats
 
     private var statsSection: some View {
-        let stats = service.aggregateStats
-        return VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionHeader("At a Glance")
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                StatCard(value: "\(stats.driveCount)", label: "Drives", icon: "car.fill")
-                StatCard(
-                    value: AnalyticsFormat.minutesValue(seconds: stats.averageDurationSeconds),
-                    label: "Avg drive", unit: "min", icon: "clock"
-                )
-                StatCard(
-                    value: AnalyticsFormat.hoursValue(seconds: stats.totalDrivingSeconds),
-                    label: "Time driving", unit: "hrs", icon: "steeringwheel"
-                )
-                StatCard(
-                    value: AnalyticsFormat.hoursValue(seconds: stats.totalTrafficSeconds),
-                    label: "In traffic", unit: "hrs", icon: "car.rear.waves.up",
-                    tint: stats.totalTrafficSeconds > 0 ? SteddiTheme.warmRed : SteddiTheme.sage
-                )
-            }
+            AggregateStatsCards(stats: service.aggregateStats)
         }
     }
 
