@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04087916791CAF8B1AFD67AA /* TripProgression.swift */; };
 		06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */; };
 		080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */; };
 		0A72D4673A9DC592DE1BDC01 /* AggregateStatsCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9342593EFE74CD157A9C4854 /* AggregateStatsCards.swift */; };
@@ -34,6 +35,7 @@
 		4BD69219F4033B5D7DD61286 /* SteddiWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */; };
 		4D4EA23D419752C08D4929B2 /* DriveRowCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798937A1E2AA43874413C040 /* DriveRowCard.swift */; };
 		516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */; };
+		534D40A3F52FDDA9AE84C20C /* TripStop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B99A3381CC68B028C99DD0E /* TripStop.swift */; };
 		571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7111C46770386A928275F35 /* SettingsView.swift */; };
 		57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */; };
 		5822FFAEECCEC7E5E31C3D1C /* NavPoseInterpolator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */; };
@@ -75,6 +77,7 @@
 		A22CFFF0BDE370AB28985EC8 /* AdvancedHapticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */; };
 		A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */; };
 		A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */; };
+		A780066C24DF0AD042F0B658 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C25F38675758DD0FE5C92BE /* Trip.swift */; };
 		B697491FBDB6DEAA201BF5FC /* ThemePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777F9439E5905A75A1BBDB95 /* ThemePalette.swift */; };
 		B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */; };
 		B89C3A80892FD0596BAA0543 /* OSMSpeedLimitServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3380F79E0670137420A0A6AC /* OSMSpeedLimitServiceTests.swift */; };
@@ -91,7 +94,6 @@
 		CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE4512ED735A6D3CD409755 /* VoicePicker.swift */; };
 		CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B385FB734BECC176514917FB /* RoutePlannerView.swift */; };
 		CE0E87101839B1C3153234A1 /* VoiceGuidanceServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */; };
-		AA02000000000000000000A2 /* ThemeEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02000000000000000000B2 /* ThemeEngineTests.swift */; };
 		D458D1FFCB26A8CB84EE42C6 /* NowPlayingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B614E4431FE25A25512707 /* NowPlayingService.swift */; };
 		D5D2CC709306B626B120D222 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4892145CE55DFF9FF13FC7 /* DonationView.swift */; };
 		D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */; };
@@ -112,6 +114,7 @@
 		F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA9033EAA004A2509272285E /* RouteGeometry.swift */; };
 		F37B3C0B2FD46D546EB6BE9B /* RouteRecoveryEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7D3F80DC55A1A5E68D3DA5 /* RouteRecoveryEngineTests.swift */; };
 		F487CF1CC6152EF271644653 /* RouteRecoveryEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03670FA5EF8B8CA954F816D1 /* RouteRecoveryEngine.swift */; };
+		F77FC27F57FDECE474D81093 /* ThemeEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 622A4EBF2DCE91568A12E937 /* ThemeEngineTests.swift */; };
 		F988967C38892DF7EE141166 /* NavigationStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */; };
 		FA7C506C7D917FBF5EDAE6EE /* ModelStoreLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA8461A623AD14BABDF3FAE8 /* ModelStoreLocator.swift */; };
 		FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598632F13EF2804C543D14D0 /* LocationCardView.swift */; };
@@ -162,10 +165,12 @@
 		03670FA5EF8B8CA954F816D1 /* RouteRecoveryEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRecoveryEngine.swift; sourceTree = "<group>"; };
 		03B614E4431FE25A25512707 /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiNavOverlay.swift; sourceTree = "<group>"; };
+		04087916791CAF8B1AFD67AA /* TripProgression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripProgression.swift; sourceTree = "<group>"; };
 		052C83FEE88416F3FE9DBCCE /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSceneDelegate.swift; sourceTree = "<group>"; };
 		08B46BB7337E920209A89889 /* HapticServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticServiceTests.swift; sourceTree = "<group>"; };
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		0B99A3381CC68B028C99DD0E /* TripStop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripStop.swift; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
 		139001D61F9DF7A2C5C5060C /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiShortcuts.swift; sourceTree = "<group>"; };
@@ -198,9 +203,11 @@
 		57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionsService.swift; sourceTree = "<group>"; };
 		598632F13EF2804C543D14D0 /* LocationCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationCardView.swift; sourceTree = "<group>"; };
 		5B7D3F80DC55A1A5E68D3DA5 /* RouteRecoveryEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRecoveryEngineTests.swift; sourceTree = "<group>"; };
+		5C25F38675758DD0FE5C92BE /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trip.swift; sourceTree = "<group>"; };
 		5F1A30250323ADAE79B65516 /* DisplayModeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayModeService.swift; sourceTree = "<group>"; };
 		5FD7FD0CA7EFBCBD7F77B96F /* SteddiWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteddiWidget.entitlements; sourceTree = "<group>"; };
 		60B620B91EBE2D984AD636A9 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
+		622A4EBF2DCE91568A12E937 /* ThemeEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEngineTests.swift; sourceTree = "<group>"; };
 		6284ADAB45E23AF8893D2CC2 /* NavigationAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationAttributes.swift; sourceTree = "<group>"; };
 		64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveRecord.swift; sourceTree = "<group>"; };
 		671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
@@ -252,7 +259,6 @@
 		CADE3A03C008B4BD3D0FE2E6 /* Report.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report.swift; sourceTree = "<group>"; };
 		CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoder.swift; sourceTree = "<group>"; };
 		CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceServiceTests.swift; sourceTree = "<group>"; };
-		AA02000000000000000000B2 /* ThemeEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEngineTests.swift; sourceTree = "<group>"; };
 		CE8C721636439033B457CA4E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalNotificationService.swift; sourceTree = "<group>"; };
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
@@ -331,6 +337,8 @@
 				8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */,
 				CADE3A03C008B4BD3D0FE2E6 /* Report.swift */,
 				F2113E7A877B78A7BF8CF75C /* Route.swift */,
+				5C25F38675758DD0FE5C92BE /* Trip.swift */,
+				0B99A3381CC68B028C99DD0E /* TripStop.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -407,8 +415,8 @@
 				5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */,
 				A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */,
 				5B7D3F80DC55A1A5E68D3DA5 /* RouteRecoveryEngineTests.swift */,
+				622A4EBF2DCE91568A12E937 /* ThemeEngineTests.swift */,
 				CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */,
-				AA02000000000000000000B2 /* ThemeEngineTests.swift */,
 			);
 			path = SteddiTests;
 			sourceTree = "<group>";
@@ -569,6 +577,7 @@
 				BA9033EAA004A2509272285E /* RouteGeometry.swift */,
 				03670FA5EF8B8CA954F816D1 /* RouteRecoveryEngine.swift */,
 				C62D85ED65451F0DD7CCB4E5 /* ThemeEngine.swift */,
+				04087916791CAF8B1AFD67AA /* TripProgression.swift */,
 				84E610B8A29F73B013FB139D /* TunnelDetectionService.swift */,
 				262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */,
 				544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */,
@@ -834,6 +843,9 @@
 				43C4CC9A502866B2BE5E5A35 /* ThemeRevisionTrait.swift in Sources */,
 				8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */,
 				5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */,
+				A780066C24DF0AD042F0B658 /* Trip.swift in Sources */,
+				0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */,
+				534D40A3F52FDDA9AE84C20C /* TripStop.swift in Sources */,
 				21592CE104F443B0892973CF /* TunnelDetectionService.swift in Sources */,
 				62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */,
 				CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */,
@@ -869,8 +881,8 @@
 				F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */,
 				7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */,
 				F37B3C0B2FD46D546EB6BE9B /* RouteRecoveryEngineTests.swift in Sources */,
+				F77FC27F57FDECE474D81093 /* ThemeEngineTests.swift in Sources */,
 				CE0E87101839B1C3153234A1 /* VoiceGuidanceServiceTests.swift in Sources */,
-				AA02000000000000000000A2 /* ThemeEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

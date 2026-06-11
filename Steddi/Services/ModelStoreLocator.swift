@@ -28,7 +28,9 @@ enum ModelStoreLocator {
             NoGoZone.self,
             CommuteTrip.self,
             Report.self,
-            CommuteAnalyticsAggregate.self
+            CommuteAnalyticsAggregate.self,
+            Trip.self,
+            TripStop.self
         ])
     }
 
