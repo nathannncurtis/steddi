@@ -10,10 +10,21 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     private var isInNavigation = false
     private var isFreeLook = false
     private var navRouteCoords: [CLLocationCoordinate2D] = []
+    private var routeCumulative: [Double] = []
     private var smoothedBearing: Double = 0
     private var currentZoom: Double = 17.5
     private var routeOverlay: MKPolyline?
     private var hasReceivedLocation = false
+
+    // Display-link interpolation — same single-clock pattern as the phone map,
+    // so the camera glides between 1Hz poses instead of teleporting per second.
+    private var interpolator = NavPoseInterpolator()
+    private var displayLink: CADisplayLink?
+    private var lastPoseTimestamp: Date?
+
+    deinit {
+        displayLink?.invalidate()
+    }
 
     // MARK: - Lifecycle
 
@@ -63,8 +74,12 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         guard !isInNavigation else { return }
         isInNavigation = true
         navRouteCoords = routeCoords
+        routeCumulative = RouteGeometry.cumulativeDistances(routeCoords)
         smoothedBearing = 0
         currentZoom = 17.5
+        interpolator = NavPoseInterpolator()
+        lastPoseTimestamp = nil
+        startDisplayLink()
 
         showRouteLine(routeCoords)
 
@@ -88,6 +103,8 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         guard isInNavigation else { return }
         isInNavigation = false
         navRouteCoords = []
+        routeCumulative = []
+        stopDisplayLink()
 
         removeRouteLine()
 
@@ -116,19 +133,68 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         mapView.setCamera(camera, animated: true)
     }
 
-    /// Chase-cam: follow the engine's snapped pose with its already-smoothed
-    /// bearing. Applied without animation — the engine pose is the single clock,
-    /// so CarPlay never runs its own animation curve against the phone's.
+    /// Feed a fresh engine pose into the interpolator. The display link — not
+    /// this call — drives the camera, so motion glides between the ~1Hz poses
+    /// instead of teleporting once per second.
     func updateNavigationPose(_ pose: NavPose, headingDegrees: Double?) {
-        guard isInNavigation, !isFreeLook else { return }
-
+        guard isInNavigation else { return }
         if let heading = headingDegrees ?? pose.segmentBearingDegrees {
             smoothedBearing = heading
         }
-        let lookAhead = RouteGeometry.offsetCoordinate(
-            pose.snappedCoordinate, distanceMeters: 80, bearingDegrees: smoothedBearing
-        )
+        guard pose.fixTimestamp != lastPoseTimestamp else { return }
+        lastPoseTimestamp = pose.fixTimestamp
+        interpolator.push(pose, at: CACurrentMediaTime())
+    }
 
+    /// Adopt the engine's polyline when an auto-reroute swapped it — redraw the
+    /// overlay and rebase arc lengths so the camera doesn't chase a stale route.
+    func syncRoute(_ coords: [CLLocationCoordinate2D]) {
+        guard isInNavigation, coords.count >= 2 else { return }
+        if coords.count == navRouteCoords.count,
+           let newFirst = coords.first, let oldFirst = navRouteCoords.first,
+           let newLast = coords.last, let oldLast = navRouteCoords.last,
+           newFirst.latitude == oldFirst.latitude, newFirst.longitude == oldFirst.longitude,
+           newLast.latitude == oldLast.latitude, newLast.longitude == oldLast.longitude {
+            return // same route
+        }
+        navRouteCoords = coords
+        routeCumulative = RouteGeometry.cumulativeDistances(coords)
+        interpolator = NavPoseInterpolator()
+        lastPoseTimestamp = nil
+        removeRouteLine()
+        showRouteLine(coords)
+    }
+
+    // MARK: - Display Link
+
+    private func startDisplayLink() {
+        displayLink?.invalidate()
+        let link = CADisplayLink(target: CarPlayDisplayLinkProxy(self), selector: #selector(CarPlayDisplayLinkProxy.tick(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 30, preferred: 30)
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    private func stopDisplayLink() {
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    fileprivate func displayLinkFired(_ link: CADisplayLink) {
+        guard isInNavigation, !isFreeLook else { return }
+        let now = link.timestamp
+
+        var maxDistance = Double.greatestFiniteMagnitude
+        if let total = routeCumulative.last { maxDistance = total }
+        guard let distance = interpolator.distanceAlongRoute(at: now, maxDistance: maxDistance),
+              let center = RouteGeometry.coordinate(
+                  atDistance: distance, polyline: navRouteCoords, cumulative: routeCumulative
+              )
+        else { return }
+
+        let lookAhead = RouteGeometry.offsetCoordinate(
+            center, distanceMeters: 80, bearingDegrees: smoothedBearing
+        )
         let camera = MKMapCamera(
             lookingAtCenter: lookAhead,
             fromDistance: zoomToDistance(currentZoom),
@@ -223,5 +289,15 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     private func zoomToDistance(_ zoom: Double) -> CLLocationDistance {
         let lat = mapView.centerCoordinate.latitude
         return 156543.03 * cos(lat * .pi / 180) / pow(2, zoom) * 256
+    }
+}
+
+/// Breaks the CADisplayLink -> target retain cycle for the CarPlay map.
+private final class CarPlayDisplayLinkProxy {
+    private weak var controller: CarPlayMapController?
+    init(_ controller: CarPlayMapController) { self.controller = controller }
+    @objc func tick(_ link: CADisplayLink) {
+        guard let controller else { link.invalidate(); return }
+        controller.displayLinkFired(link)
     }
 }

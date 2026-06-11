@@ -327,6 +327,9 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self, self.isShowingNavigation else { break }
 
+                // Auto-reroute swaps the active route — keep the overlay current
+                self.mapController?.syncRoute(self.stateManager.activeRouteCoords)
+
                 // Update map camera from the same snapped pose the phone renders
                 if let pose = self.stateManager.currentPose {
                     self.mapController?.updateNavigationPose(
