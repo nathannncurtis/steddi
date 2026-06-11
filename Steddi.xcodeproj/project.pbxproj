@@ -18,6 +18,7 @@
 		19C3C8979AE3DF1ABFFF5567 /* NavPoseInterpolatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */; };
 		1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50B3D1495689CE92E4ED80B /* GeocodingService.swift */; };
 		1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */; };
+		218DF5B6DB79D3851EC0D6EA /* DynamicThemeComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7583BEE7230D81C23D5FC1A7 /* DynamicThemeComponents.swift */; };
 		23D2E82BE8E42B35C09DC2B0 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 052C83FEE88416F3FE9DBCCE /* EmptyStateView.swift */; };
 		26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */; };
 		2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */; };
@@ -27,6 +28,7 @@
 		441AC263D0497D1AA6E95964 /* SteddiLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */; };
 		4A0898B3E04DFD141E0808AD /* EmergencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F1F21786B81D853B9E61B6 /* EmergencyView.swift */; };
+		4A8A3A9A1BA94ADE882306D9 /* ThemeModeEx.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */; };
 		4BD69219F4033B5D7DD61286 /* SteddiWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */; };
 		4D4EA23D419752C08D4929B2 /* DriveRowCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798937A1E2AA43874413C040 /* DriveRowCard.swift */; };
 		516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */; };
@@ -198,6 +200,7 @@
 		72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiMapView.swift; sourceTree = "<group>"; };
 		7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDirectionResolver.swift; sourceTree = "<group>"; };
+		7583BEE7230D81C23D5FC1A7 /* DynamicThemeComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicThemeComponents.swift; sourceTree = "<group>"; };
 		7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayModeServiceTests.swift; sourceTree = "<group>"; };
 		770C65D4283DB277ED143EA4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		798937A1E2AA43874413C040 /* DriveRowCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveRowCard.swift; sourceTree = "<group>"; };
@@ -249,6 +252,7 @@
 		EF4892145CE55DFF9FF13FC7 /* DonationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DonationView.swift; sourceTree = "<group>"; };
 		F2113E7A877B78A7BF8CF75C /* Route.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Route.swift; sourceTree = "<group>"; };
 		F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiApp.swift; sourceTree = "<group>"; };
+		F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeModeEx.swift; sourceTree = "<group>"; };
 		F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartCommuteIntent.swift; sourceTree = "<group>"; };
 		F62156E1FDD078D989A2441A /* OfflineCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCacheService.swift; sourceTree = "<group>"; };
 		F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteCardView.swift; sourceTree = "<group>"; };
@@ -570,8 +574,10 @@
 		FF31CEBB3E9CBFBF76A9DADA /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				7583BEE7230D81C23D5FC1A7 /* DynamicThemeComponents.swift */,
 				CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */,
 				37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */,
+				F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -743,6 +749,7 @@
 				FECCB424F21C704617A2FEA3 /* DriveDetailView.swift in Sources */,
 				943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */,
 				4D4EA23D419752C08D4929B2 /* DriveRowCard.swift in Sources */,
+				218DF5B6DB79D3851EC0D6EA /* DynamicThemeComponents.swift in Sources */,
 				4A0898B3E04DFD141E0808AD /* EmergencyView.swift in Sources */,
 				23D2E82BE8E42B35C09DC2B0 /* EmptyStateView.swift in Sources */,
 				C7C6B2714873506D611A112D /* FuzzyRouteParser.swift in Sources */,
@@ -787,6 +794,7 @@
 				E8518F81F0D9BA02AAEA282D /* SteddiNavOverlay.swift in Sources */,
 				139B1E17264CCF63189264A6 /* SteddiShortcuts.swift in Sources */,
 				C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */,
+				4A8A3A9A1BA94ADE882306D9 /* ThemeModeEx.swift in Sources */,
 				8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */,
 				5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */,
 				62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */,
