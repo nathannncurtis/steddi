@@ -14,6 +14,9 @@ struct SteddiNavOverlay: View {
     var onReport: ((String, CLLocationCoordinate2D) -> Void)? = nil
     var commute: Commute? = nil
     var direction: CommuteDirection? = nil
+    /// Set during multi-stop trip navigation — shows the leg counter and
+    /// trip-aware remaining summary alongside the maneuver display.
+    var tripContext: TripNavContext? = nil
 
     // Reroute suggestion
     @State private var rerouteSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)? = nil
@@ -104,6 +107,12 @@ struct SteddiNavOverlay: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 60)
 
+                if let tripContext {
+                    tripLegBanner(tripContext)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                }
+
                 if !engine.followOnInstruction.isEmpty {
                     followOnBanner
                         .padding(.horizontal, 16)
@@ -178,6 +187,12 @@ struct SteddiNavOverlay: View {
                 .frame(width: landscapeCardWidth, alignment: .leading)
                 .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.95, highContrast: highContrast)), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
+
+                // Trip leg context (compact, below instruction)
+                if let tripContext {
+                    tripLegBanner(tripContext)
+                        .frame(width: landscapeCardWidth, alignment: .leading)
+                }
 
                 // Next maneuver (compact, below instruction)
                 if !engine.followOnInstruction.isEmpty {
@@ -311,6 +326,41 @@ struct SteddiNavOverlay: View {
                         .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.15, highContrast: highContrast)), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+        }
+    }
+
+    // MARK: - Trip Leg Banner
+
+    /// Leg counter + next-stop name + trip-aware remaining summary, shown
+    /// only during trip navigation.
+    private func tripLegBanner(_ trip: TripNavContext) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up.fill")
+                .font(.system(size: 12 * iconScale, weight: .semibold))
+                .foregroundStyle(SteddiTheme.accent)
+
+            Text("Leg \(trip.legIndex) of \(trip.totalLegs) · \(trip.nextStopName)")
+                .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                .lineLimit(1)
+
+            Spacer()
+
+            if let summary = trip.remainingSummary {
+                Text(summary)
+                    .font(SteddiTheme.mono(12 * textScale))
+                    .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background {
+            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.8, highContrast: highContrast)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                        .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.12, highContrast: highContrast)), lineWidth: 1)
+                )
         }
     }
 
@@ -779,4 +829,17 @@ struct SteddiNavOverlay: View {
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: arrival)
     }
+}
+
+// MARK: - Trip Nav Context
+
+/// Per-leg trip context the overlay (and Live Activity bridge) renders during
+/// multi-stop trip navigation.
+struct TripNavContext: Equatable {
+    let tripName: String
+    let legIndex: Int        // 1-based
+    let totalLegs: Int
+    let nextStopName: String
+    /// Trip-aware remaining summary across all legs, e.g. "1h 45m · 3 more stops"
+    let remainingSummary: String?
 }

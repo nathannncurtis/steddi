@@ -1,6 +1,14 @@
 import ActivityKit
 import Foundation
 
+/// Trip context attached to a navigation Live Activity — drives the
+/// "Leg 2 of 5" presentation for multi-stop trips.
+struct TripActivityContext {
+    let tripName: String
+    let legIndex: Int    // 1-based
+    let totalLegs: Int
+}
+
 /// Manages the navigation Live Activity lifecycle.
 /// Starts activity when nav begins, updates on each engine tick, ends on arrival or stop.
 @MainActor
@@ -8,13 +16,16 @@ final class LiveActivityService {
     static let shared = LiveActivityService()
 
     private var currentActivity: Activity<NavigationAttributes>?
+    /// Trip context for the current session — folded into every update.
+    private var tripContext: TripActivityContext?
 
     private init() {}
 
     /// Start a Live Activity for the current navigation session.
-    func startActivity(destinationName: String) {
+    func startActivity(destinationName: String, tripContext: TripActivityContext? = nil) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
+        self.tripContext = tripContext
         let attributes = NavigationAttributes(destinationName: destinationName)
         let initialState = NavigationAttributes.ContentState(
             instruction: "Starting navigation...",
@@ -24,7 +35,10 @@ final class LiveActivityService {
             arrivalTime: "",
             maneuverSymbol: "arrow.up",
             speedMph: 0,
-            roadName: ""
+            roadName: "",
+            tripName: tripContext?.tripName,
+            legIndex: tripContext?.legIndex,
+            totalLegs: tripContext?.totalLegs
         )
 
         let content = ActivityContent(state: initialState, staleDate: Date().addingTimeInterval(600))
@@ -52,7 +66,10 @@ final class LiveActivityService {
             arrivalTime: engine.arrivalTime,
             maneuverSymbol: engine.maneuverType,
             speedMph: Int(engine.currentSpeedMph),
-            roadName: engine.roadName
+            roadName: engine.roadName,
+            tripName: tripContext?.tripName,
+            legIndex: tripContext?.legIndex,
+            totalLegs: tripContext?.totalLegs
         )
 
         let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(600))
@@ -64,6 +81,7 @@ final class LiveActivityService {
 
     /// End the Live Activity.
     func endActivity() {
+        tripContext = nil
         guard let activity = currentActivity else { return }
 
         let finalState = NavigationAttributes.ContentState(

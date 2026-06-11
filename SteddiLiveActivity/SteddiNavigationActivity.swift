@@ -40,7 +40,13 @@ struct SteddiNavigationActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
-                        if !context.state.roadName.isEmpty {
+                        if let legIndex = context.state.legIndex, let totalLegs = context.state.totalLegs {
+                            // Trip context: "Leg 2 of 5 → Stop name"
+                            Text("Leg \(legIndex) of \(totalLegs) → \(context.attributes.destinationName)")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769))
+                                .lineLimit(1)
+                        } else if !context.state.roadName.isEmpty {
                             Text(context.state.roadName)
                                 .font(.system(size: 11))
                                 .foregroundStyle(.white.opacity(0.5))
@@ -83,6 +89,12 @@ struct LockScreenView: View {
 
             // Instruction
             VStack(alignment: .leading, spacing: 4) {
+                if let tripName = state.tripName, let legIndex = state.legIndex, let totalLegs = state.totalLegs {
+                    Text("\(tripName) · Leg \(legIndex) of \(totalLegs)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769))
+                        .lineLimit(1)
+                }
                 Text(state.stepDistance)
                     .font(.system(size: 22, weight: .bold, design: .monospaced))
                     .foregroundStyle(.white)

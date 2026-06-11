@@ -212,7 +212,8 @@ struct HomeView: View {
                         modelContext.insert(report)
                     },
                     commute: activeCommute,
-                    direction: activeDirection
+                    direction: activeDirection,
+                    tripContext: tripNavContext(engine: engine)
                 )
             }
 
@@ -545,7 +546,7 @@ struct HomeView: View {
         startLocationFeed()
 
         // Start Live Activity
-        LiveActivityService.shared.startActivity(destinationName: destName)
+        LiveActivityService.shared.startActivity(destinationName: destName, tripContext: liveActivityTripContext)
 
         withAnimation(.easeInOut(duration: 0.4)) {
             isNavigating = true
@@ -988,7 +989,7 @@ struct HomeView: View {
         startLocationFeed()
 
         // Start Live Activity
-        LiveActivityService.shared.startActivity(destinationName: destName)
+        LiveActivityService.shared.startActivity(destinationName: destName, tripContext: liveActivityTripContext)
 
         withAnimation(.easeInOut(duration: 0.4)) {
             isNavigating = true
@@ -1373,6 +1374,61 @@ struct HomeView: View {
         trip.lastNavigatedAt = Date()
         try? modelContext.save()
         activeTrip = nil
+    }
+
+    // MARK: - Trip Context (Overlay + Live Activity)
+
+    /// Leg counter + trip-aware remaining summary for the nav overlay.
+    private func tripNavContext(engine: NavigationEngine) -> TripNavContext? {
+        guard let trip = activeTrip, let stop = trip.currentStop else { return nil }
+        return TripNavContext(
+            tripName: trip.name,
+            legIndex: trip.currentStopIndex + 1,
+            totalLegs: trip.orderedStops.count,
+            nextStopName: stop.name,
+            remainingSummary: tripRemainingSummary(trip: trip, currentStop: stop, engine: engine)
+        )
+    }
+
+    /// Trip context for the Live Activity session of the current leg.
+    private var liveActivityTripContext: TripActivityContext? {
+        guard let trip = activeTrip, trip.currentStop != nil else { return nil }
+        return TripActivityContext(
+            tripName: trip.name,
+            legIndex: trip.currentStopIndex + 1,
+            totalLegs: trip.orderedStops.count
+        )
+    }
+
+    /// Trip-aware ETA: the engine's live ETA for the current leg plus
+    /// estimates for the legs after it — saved route durations when present,
+    /// straight-line estimates otherwise. No extra direction requests fire.
+    private func tripRemainingSummary(trip: Trip, currentStop: TripStop, engine: NavigationEngine) -> String? {
+        let remaining = trip.remainingStops
+        guard !remaining.isEmpty else { return nil }
+
+        var legs: [TripProgression.LegEstimate] = []
+        var previous = currentStop
+        for stop in remaining {
+            let meters = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
+                .distance(from: CLLocation(latitude: stop.latitude, longitude: stop.longitude))
+            legs.append(TripProgression.LegEstimate(
+                savedDurationSeconds: stop.savedRoute?.typicalDurationSeconds,
+                straightLineMeters: meters
+            ))
+            previous = stop
+        }
+
+        let total = TripProgression.remainingTripSeconds(
+            currentLegSeconds: engine.etaSeconds,
+            remainingLegs: legs
+        )
+        let minutes = Int(ceil(total / 60))
+        let stopsText = "\(remaining.count) more"
+        if minutes >= 60 {
+            return "\(minutes / 60)h \(minutes % 60)m · \(stopsText)"
+        }
+        return "\(minutes) min · \(stopsText)"
     }
 
     // MARK: - Resume Trip Banner
