@@ -60,6 +60,13 @@ struct HomeView: View {
     @State private var activeDirection: CommuteDirection?
     @State private var pendingTraceForSave = false
 
+    // Active trip tracking (leg-by-leg navigation orchestration)
+    @State private var activeTrip: Trip?
+    @State private var tripArrivalStop: TripStop?       // stop just arrived at
+    @State private var showTripArrivalPrompt = false    // manual mode next-leg prompt
+    @State private var tripAutoAdvanceTask: Task<Void, Never>?
+    @State private var dismissedResumeBanners: Set<UUID> = []
+
     // Off-route recovery — single-flight, cooldown, per-trip improvisation count
     @State private var isRecoveryInFlight = false
     @State private var lastRecoveryAt: Date?
@@ -134,6 +141,13 @@ struct HomeView: View {
                 SteddiNavOverlay(
                     engine: engine,
                     onEndNavigation: {
+                        // Trip navigation ends through its own path — position
+                        // persists so the trip can resume later, and none of
+                        // the commute route-save machinery fires.
+                        if activeTrip != nil {
+                            endTripNavigation(completed: false)
+                            return
+                        }
                         let points = locationService.stopRecording()
                         locationService.disableNavigationMode()
                         locationFeedTask?.cancel()
@@ -389,7 +403,7 @@ struct HomeView: View {
 
     // MARK: - Navigation
 
-    private func navigateTo(name: String, coordinate: CLLocationCoordinate2D, address: String? = nil, skipPreview: Bool = false) {
+    private func navigateTo(name: String, coordinate: CLLocationCoordinate2D, address: String? = nil, skipPreview: Bool = false, preferences: RoutePreferences? = nil) {
         let dest = PinnedLocation(
             name: name,
             latitude: coordinate.latitude,
@@ -419,7 +433,7 @@ struct HomeView: View {
             request.source = MKMapItem(location: CLLocation(latitude: currentLocation.coordinate.latitude, longitude: currentLocation.coordinate.longitude), address: nil)
             request.destination = MKMapItem(location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude), address: nil)
             request.transportType = .automobile
-            RoutePreferences.resolve(commute: activeCommute).apply(to: request)
+            (preferences ?? RoutePreferences.resolve(commute: activeCommute)).apply(to: request)
 
             let directions = MKDirections(request: request)
 
@@ -574,8 +588,13 @@ struct HomeView: View {
             }
             .padding(.top, isLandscape ? 0 : 54) // keep UI below status bar in portrait only
 
-            bottomSheet
-                .padding(.bottom, isLandscape ? 0 : 34) // keep sheet above home indicator in portrait only
+            VStack(spacing: 10) {
+                if let trip = resumableTrip {
+                    resumeTripBanner(trip)
+                }
+                bottomSheet
+            }
+            .padding(.bottom, isLandscape ? 0 : 34) // keep sheet above home indicator in portrait only
         }
     }
 
@@ -1150,10 +1169,211 @@ struct HomeView: View {
         )
     }
 
-    /// Begin or resume trip navigation — implemented with the trip nav
-    /// orchestration (activeTrip state, leg-by-leg advancement).
+    // MARK: - Trip Navigation Orchestration
+
+    /// Begin or resume trip navigation. A fresh trip starts at stop 0; an
+    /// in-progress trip resumes its current stop (UUID-based position, so
+    /// reorders and deletes since the last session can't orphan it).
     private func startTrip(_ trip: Trip) {
-        // Wired in the trip navigation orchestration commit.
+        guard !isNavigating, !isCalculatingRoute else { return }
+        if trip.currentStopId == nil {
+            trip.start()
+        } else {
+            trip.lastNavigatedAt = Date()
+        }
+        guard let stop = trip.currentStop else { return }
+        activeTrip = trip
+        tripArrivalStop = nil
+        try? modelContext.save()
+        beginTripLeg(to: stop, trip: trip)
+    }
+
+    /// Navigate one leg: saved per-leg route when the stop has one, otherwise
+    /// live routing with trip/stop preferences. Both paths flow through the
+    /// existing engine.startNavigation machinery.
+    private func beginTripLeg(to stop: TripStop, trip: Trip) {
+        if let savedRoute = stop.savedRoute {
+            let dest = PinnedLocation(
+                name: stop.name,
+                latitude: stop.latitude,
+                longitude: stop.longitude,
+                address: stop.address
+            )
+            navigateWithSavedRoute(savedRoute, to: dest)
+        } else {
+            navigateTo(
+                name: stop.name,
+                coordinate: stop.coordinate,
+                address: stop.address,
+                skipPreview: true,
+                preferences: trip.routePreferences(for: stop)
+            )
+        }
+    }
+
+    /// Strict trip-arrival routing — intermediate stops NEVER show the
+    /// commute PostArrivalSheet. Continuous mode: brief arrival card, then
+    /// auto-advance. Manual mode: pause and prompt for the next leg. The
+    /// final stop completes and archives the trip.
+    private func handleTripArrival() {
+        guard let trip = activeTrip, let arrivedStop = trip.currentStop else { return }
+
+        arrivedStop.arrivalTime = Date()
+        tripArrivalStop = arrivedStop
+
+        // Persist position on every arrival fire — app death during the
+        // between-legs pause resumes on the correct leg.
+        let result = trip.advanceAfterArrival()
+        try? modelContext.save()
+
+        switch result {
+        case .completed:
+            endTripNavigation(completed: true)
+        case .nextLeg:
+            guard let nextStop = trip.currentStop else {
+                endTripNavigation(completed: true)
+                return
+            }
+            if trip.flowMode == .continuous {
+                scheduleAutoAdvance(to: nextStop, trip: trip)
+            } else {
+                pauseNavigationBetweenLegs()
+                showTripArrivalPrompt = true
+            }
+        }
+    }
+
+    /// Continuous mode: brief arrival moment (3s), then the next leg starts
+    /// on its own. Cancelled if the user taps the card to take manual control.
+    private func scheduleAutoAdvance(to stop: TripStop, trip: Trip) {
+        tripAutoAdvanceTask?.cancel()
+        tripAutoAdvanceTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            advanceTripLeg(to: stop, trip: trip)
+        }
+    }
+
+    /// Start navigation to the next stop — restarts the Live Activity so the
+    /// session shows the new leg destination.
+    private func advanceTripLeg(to stop: TripStop, trip: Trip) {
+        tripAutoAdvanceTask?.cancel()
+        tripAutoAdvanceTask = nil
+        tripArrivalStop = nil
+        showTripArrivalPrompt = false
+        LiveActivityService.shared.endActivity()
+        beginTripLeg(to: stop, trip: trip)
+    }
+
+    /// Manual mode pause between legs: engine and overlay stand down, the
+    /// trip stays active so the next-leg prompt can continue it.
+    private func pauseNavigationBetweenLegs() {
+        _ = locationService.stopRecording()
+        locationService.disableNavigationMode()
+        locationFeedTask?.cancel()
+        locationFeedTask = nil
+        navigationEngine?.stopNavigation()
+        navStateManager.stopObserving()
+        LiveActivityService.shared.endActivity()
+        is3DNav = true
+        withAnimation(.easeInOut(duration: 0.3)) {
+            isNavigating = false
+        }
+        navigationRoute = nil
+        activeSavedPolyline = nil
+    }
+
+    /// Tear down trip navigation. Completed trips were already archived by
+    /// advanceAfterArrival; an early End keeps the position for resume.
+    private func endTripNavigation(completed: Bool) {
+        tripAutoAdvanceTask?.cancel()
+        tripAutoAdvanceTask = nil
+        _ = locationService.stopRecording()
+        locationService.disableNavigationMode()
+        locationFeedTask?.cancel()
+        locationFeedTask = nil
+        navigationEngine?.stopNavigation()
+        navStateManager.stopObserving()
+        LiveActivityService.shared.endActivity()
+        is3DNav = true
+        isNavigating = false
+        navigationRoute = nil
+        activeSavedPolyline = nil
+
+        if !completed {
+            activeTrip?.lastNavigatedAt = Date()
+            tripArrivalStop = nil
+        }
+        showTripArrivalPrompt = false
+        try? modelContext.save()
+        activeTrip = nil
+    }
+
+    // MARK: - Resume Trip Banner
+
+    /// First in-progress trip not currently navigating — offered for resume
+    /// after an app death or an early End.
+    private var resumableTrip: Trip? {
+        guard !isNavigating, activeTrip == nil else { return nil }
+        return trips.first { $0.isInProgress && !$0.isArchived && !dismissedResumeBanners.contains($0.id) }
+    }
+
+    private func resumeTripBanner(_ trip: Trip) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(SteddiTheme.accent)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Resume \(trip.name)")
+                    .font(SteddiTheme.heading(14))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+                HStack(spacing: 4) {
+                    Text("Leg \(trip.currentStopIndex + 1) of \(trip.orderedStops.count)")
+                    if let last = trip.lastNavigatedAt {
+                        Text("·")
+                        Text(last.formatted(date: .abbreviated, time: .shortened))
+                    }
+                }
+                .font(SteddiTheme.body(12))
+                .foregroundStyle(SteddiTheme.textSecondary)
+            }
+
+            Spacer()
+
+            Button {
+                startTrip(trip)
+            } label: {
+                Text("Resume")
+                    .font(SteddiTheme.heading(13))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(SteddiTheme.accent, in: Capsule())
+            }
+
+            Button {
+                dismissedResumeBanners.insert(trip.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SteddiTheme.textMuted)
+                    .frame(width: 28, height: 28)
+                    .background(SteddiTheme.surfaceSecondary, in: Circle())
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                        .stroke(SteddiTheme.accent.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+        }
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Loading Overlay
@@ -1452,6 +1672,14 @@ struct HomeView: View {
         var lastFedTimestamp: Date?
         locationFeedTask = Task { @MainActor in
             while navigationEngine?.isNavigating == true, !Task.isCancelled {
+                // Trip leg arrival — the engine latches hasArrived but keeps
+                // navigating; trips advance legs here. Commutes keep their
+                // manual End flow, so this only routes when a trip is active.
+                if activeTrip != nil, navigationEngine?.hasArrived == true {
+                    handleTripArrival()
+                    break
+                }
+
                 // Only feed fresh fixes — refeeding the same stale CLLocation
                 // every 500ms churns the engine's published pose for no reason
                 if let location = locationService.currentLocation,
