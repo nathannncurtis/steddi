@@ -61,6 +61,7 @@
 		8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B46BB7337E920209A89889 /* HapticServiceTests.swift */; };
 		8C42BC8E8487C5F21A0D7EA4 /* NavigationAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B27E56129045AE269369A6 /* NavigationAttributes.swift */; };
 		8C6902233D467F3E4CC209D5 /* CarPlay.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 536F40426EDB0B72A580D76E /* CarPlay.framework */; };
+		9275C4BC68051B778B8E32C5 /* WeatherKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */; };
 		943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */; };
 		967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDEFFA656C308FF61D985BF /* NoGoZone.swift */; };
 		99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */; };
@@ -185,6 +186,7 @@
 		536F40426EDB0B72A580D76E /* CarPlay.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = CarPlay.framework; sourceTree = "<group>"; };
 		5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngineTests.swift; sourceTree = "<group>"; };
 		53EB5BD45FD5C3961CFC647C /* PhoneCompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneCompanionView.swift; sourceTree = "<group>"; };
+		544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherKitService.swift; sourceTree = "<group>"; };
 		57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionsService.swift; sourceTree = "<group>"; };
 		598632F13EF2804C543D14D0 /* LocationCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationCardView.swift; sourceTree = "<group>"; };
 		5B7D3F80DC55A1A5E68D3DA5 /* RouteRecoveryEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRecoveryEngineTests.swift; sourceTree = "<group>"; };
@@ -547,6 +549,7 @@
 				03670FA5EF8B8CA954F816D1 /* RouteRecoveryEngine.swift */,
 				C62D85ED65451F0DD7CCB4E5 /* ThemeEngine.swift */,
 				262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */,
+				544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -807,6 +810,7 @@
 				5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */,
 				62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */,
 				CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */,
+				9275C4BC68051B778B8E32C5 /* WeatherKitService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
