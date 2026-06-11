@@ -260,6 +260,7 @@ struct PostArrivalSheet: View {
         record.associatedCommute = commute
         record.wasConverted = true
         record.endedAt = Date()
+        record.finalizeSummary()
         modelContext.insert(record)
 
         try? modelContext.save()
