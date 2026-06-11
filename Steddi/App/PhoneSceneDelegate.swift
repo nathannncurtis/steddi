@@ -22,11 +22,13 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             .environment(NavigationStateManager.shared)
 
         let window = UIWindow(windowScene: windowScene)
-        let mode = SteddiTheme.currentThemeMode
-        switch mode {
+        switch SteddiTheme.currentThemeModeEx {
         case .dark: window.backgroundColor = .black
         case .light: window.backgroundColor = .white
-        case .dynamic: window.backgroundColor = .systemBackground
+        case .grey: window.backgroundColor = ThemePalette.grey.surfacePrimary.uiColor
+        // Dynamic: match the engine's resolved surface so the launch frame
+        // never flashes the wrong polarity mid-transition.
+        case .dynamic: window.backgroundColor = ThemeEngine.shared.currentState.surfacePrimary.uiColor
         }
         window.rootViewController = UIHostingController(rootView: rootView)
         window.makeKeyAndVisible()
@@ -108,7 +110,7 @@ private struct SteddiRootView: View {
     let storageWarning: String?
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @AppStorage("themeMode") private var themeMode = "dynamic"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx = ThemeModeEx.dynamic.rawValue
 
     var body: some View {
         Group {
@@ -133,10 +135,10 @@ private struct SteddiRootView: View {
     }
 
     private var resolvedColorScheme: ColorScheme? {
-        switch themeMode {
-        case "dark": return .dark
-        case "light": return .light
-        default: return ThemeMode.isDaytime ? .light : .dark
-        }
+        let mode = ThemeModeEx(rawValue: themeModeEx) ?? .dynamic
+        guard mode == .dynamic else { return mode.colorScheme }
+        // Observation-tracked read: the body re-evaluates whenever the engine
+        // publishes a new state, so chrome follows the continuous solar curve.
+        return ThemeEngine.shared.currentState.prefersDarkChrome ? .dark : .light
     }
 }

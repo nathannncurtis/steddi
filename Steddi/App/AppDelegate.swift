@@ -36,6 +36,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         ArrivalNotificationService.shared.registerCategory()
         ArrivalNotificationService.shared.setupDelegate()
 
+        // Migrate the legacy "themeMode" key before the engine reads settings,
+        // then spin the engine up so the first frame paints the right palette.
+        ThemeModeEx.migrateLegacyIfNeeded()
+        _ = ThemeEngine.shared
+
         _ = NavigationStateManager.shared
 
         return true
