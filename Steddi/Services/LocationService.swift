@@ -27,6 +27,10 @@ final class LocationService {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.currentLocation = location
+                // Theming: every fix feeds tunnel detection. The service
+                // dedupes by fix timestamp, so the navigation loop forwarding
+                // the same fix is harmless.
+                TunnelDetectionService.shared.updateLocation(location)
                 if self.isRecording, location.horizontalAccuracy <= 20 {
                     self.recordedPoints.append(GPSPoint(from: location))
                 }

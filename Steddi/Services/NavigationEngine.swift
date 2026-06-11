@@ -136,9 +136,27 @@ final class NavigationEngine {
             scheduleSavedETASanityCheck(saved: expectedTravelTime)
         }
 
+        // Theming: prefetch tunnel geometry along this route so portal fades
+        // are driven by OSM data, not just signal loss. Fire-and-forget —
+        // failures degrade to the GPS heuristics.
+        if polyline.count >= 2 {
+            let routeKey = Self.tunnelRouteKey(for: polyline)
+            Task { await TunnelDetectionService.shared.prefetch(for: polyline, routeKey: routeKey) }
+        }
+
         if !steps.isEmpty {
             applyStep(at: 0)
         }
+    }
+
+    /// Stable cache key for a route's tunnel geometry: endpoints + point count
+    /// identify a polyline without hashing thousands of coordinates.
+    nonisolated static func tunnelRouteKey(for polyline: [CLLocationCoordinate2D]) -> String {
+        guard let first = polyline.first, let last = polyline.last else { return "empty" }
+        return String(
+            format: "%.5f,%.5f|%.5f,%.5f|%d",
+            first.latitude, first.longitude, last.latitude, last.longitude, polyline.count
+        )
     }
 
     // MARK: - Start from MKRoute (adapter for dumb nav)
@@ -158,6 +176,7 @@ final class NavigationEngine {
 
     func stopNavigation() {
         VoiceGuidanceService.shared.stop()
+        TunnelDetectionService.shared.clearRoute()
         isNavigating = false
         steps = []
         currentStepIndex = 0
@@ -195,6 +214,10 @@ final class NavigationEngine {
 
     func updateLocation(_ location: CLLocation) {
         guard isNavigating, !steps.isEmpty else { return }
+
+        // Theming: the nav loop is the authoritative ~1Hz feed during
+        // navigation (deduped against the LocationService forward).
+        TunnelDetectionService.shared.updateLocation(location)
 
         currentCoordinate = location.coordinate
         locationUpdateCount += 1

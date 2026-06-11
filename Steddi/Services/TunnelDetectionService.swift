@@ -54,6 +54,14 @@ final class TunnelDetectionService {
 
     /// Consecutive location fixes with degraded accuracy.
     private var weakSignalStreak = 0
+    /// Most recent fix timestamp processed. Both LocationService and the
+    /// navigation loop forward fixes — usually the same one — so each fix
+    /// is processed exactly once no matter how many feeds deliver it.
+    private var lastFixTimestamp: Date?
+    /// Ground speed at the last trustworthy fix. The blind heuristic (weak
+    /// streak with no OSM data) only arms when the driver was actually moving
+    /// before the signal died — a phone indoors loses accuracy at zero speed.
+    private var lastGoodSpeedMPS: Double = 0
 
     init(
         transport: @escaping Transport = { try await URLSession.shared.data(for: $0) },
@@ -127,6 +135,8 @@ final class TunnelDetectionService {
         phaseChangedAt = nil
         progressAtChange = 0
         weakSignalStreak = 0
+        lastFixTimestamp = nil
+        lastGoodSpeedMPS = 0
         status = .outdoor
         transitionProgress = 0
         apply(0, false)
@@ -158,9 +168,13 @@ final class TunnelDetectionService {
     /// Per-fix detection driving the fade. Called from the navigation loop
     /// (~1/sec); each call recomputes progress and pushes it to the engine.
     func updateLocation(_ location: CLLocation) {
+        if let lastFixTimestamp, location.timestamp <= lastFixTimestamp { return }
+        lastFixTimestamp = location.timestamp
+
         let accuracy = location.horizontalAccuracy
         let weakSignal = accuracy < 0 || accuracy > Tuning.weakAccuracyMeters
         weakSignalStreak = weakSignal ? weakSignalStreak + 1 : 0
+        if !weakSignal, location.speed >= 0 { lastGoodSpeedMPS = location.speed }
 
         let coordinate = location.coordinate
         let geometricallyInside = Self.isInside(coordinate, segments: segments)
@@ -169,10 +183,12 @@ final class TunnelDetectionService {
 
         // Signals, strongest first: standing on a tunnel way; signal lost near
         // a known tunnel (GPS coasts stale fixes inside, so proximity + loss
-        // beats pure geometry); prolonged loss with no OSM data at all.
+        // beats pure geometry); prolonged loss with no OSM data at all, but
+        // only if the driver was moving at road speed before the signal died.
         let detected = geometricallyInside
             || (nearTunnel && weakSignalStreak >= Tuning.weakStreakNearTunnel)
-            || (segments.isEmpty && weakSignalStreak >= Tuning.weakStreakBlind)
+            || (segments.isEmpty && weakSignalStreak >= Tuning.weakStreakBlind
+                && lastGoodSpeedMPS >= Tuning.blindMinSpeedMPS)
 
         let timestamp = now()
         switch (detected, phase) {
@@ -376,6 +392,8 @@ private enum Tuning {
     static let weakAccuracyMeters: Double = 80
     static let weakStreakNearTunnel = 3
     static let weakStreakBlind = 6
+    /// Last-good-fix speed below this (m/s) disarms blind detection (~18 mph).
+    static let blindMinSpeedMPS: Double = 8
 
     static let entryRampSeconds: TimeInterval = 1
     static let exitFadeSeconds: TimeInterval = 5
