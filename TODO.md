@@ -1,20 +1,8 @@
 # Steddi TODO
 
-## Priority 1 — Real-Drive Bugs (March test drives)
-- Compass rotates with the phone — should show a stable cardinal direction of travel
-- Planned-route ETA is wrong — plot points are treated as stops, inflating the estimate
-- Off-route recovery should prefer forward-momentum rejoin: route along macro legs, not micro waypoints, never default to a U-turn, and don't gate recovery behind the reroute threshold
-- Route line not centered with the puck
-- Puck jitters — needs continuously smooth movement
-- Traffic conditions not rendering on the map
-- Speedometer color never triggers — needs real speed-limit data (OSM) instead of guessing from instruction text
-
-## Priority 2 — Finish What's Marked Done
-- Widget never shows commute/destination names — state manager only writes ETA and nav status to the App Group, never the names the widget reads
-- Siri "Check Commute ETA" returns nothing useful — the ETA fetch is stubbed, SwiftData integration pending
-- Accessibility/passenger flags (high contrast, simplified instructions, text/icon scaling) are set in Settings but never applied anywhere in the UI
-- Premium voice fallback is silent — if the selected voice isn't downloaded, it quietly falls back to a default voice with no prompt to download
-- Live Activity should also end on app terminate and scene disconnect — lifecycle hardening covers nav end/stop, rolling stale date, and orphan sweep, but no applicationWillTerminate/sceneDidDisconnect handler ends the activity (stale-date dimming partially mitigates)
+## Priority 1 — Verify on the Road
+- All seven March real-drive bugs are fixed in code and simulator-verified — needs the 70-mile commute to confirm: stable compass, plot-point ETAs, forward-momentum off-route recovery, puck centered and smooth, traffic rendering, real OSM speed limits with visible over-limit colors
+- Prompt to download the selected premium voice when it isn't installed (fallback now shows honest system-default state, but no download nudge yet)
 
 ## Trips
 - Third category alongside pins and commutes — saved routes to non-recurring or one-off destinations
@@ -206,3 +194,16 @@
 - CarPlay: CPMapTemplate as permanent root, CPMapTemplateDelegate for pan/banners, free-look mode
 - Note: CPMapTemplate crashes on iOS 26.4 simulator (Apple bug in CPSMapTemplateViewController._updateShareButtonVisibility) — works on 26.3
 - Live Activity lifecycle hardening: rolling stale date (10 min), orphan sweep on launch, end on nav end/stop
+- Fix: compass reads engine travel bearing with sector hysteresis (magnetometer no longer drives it)
+- Fix: unified nav pose — puck rides the snapped route on a display-link clock, camera and compass agree
+- Fix: traffic renders on home/nav/preview/planner maps (muted emphasis was silently disabling it)
+- Fix: planned-route ETA — plot points are pass-through vias (OSRM), spur-trimmed fallback, legacy duration migration
+- Off-route recovery: forward rejoin targets, macro legs over micro waypoints, no U-turn default, ungated from reroute threshold
+- OSM speed limits: corridor prefetch, spatial lookup with heading filter, amber/red over-limit bands
+- Widget shows commute and destination names, timelines reload on nav transitions
+- Siri "Check Commute ETA" answers with live ETA from the shared store (SwiftData moved to App Group with safe migration)
+- Accessibility/passenger modes applied: text/icon/control scaling, high contrast, simplified instructions
+- Advanced haptics fine-tuning UI with per-event intensity sliders
+- Voice picker hardened: off-main catalog probe, honest system-default state, crash fix on empty voice catalog
+- Live Activity ends on app terminate and scene disconnect
+- Simulated-drive test harness: waypoint files on real road geometry, drive.sh, off-route replay tests
