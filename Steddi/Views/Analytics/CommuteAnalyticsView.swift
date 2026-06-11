@@ -20,7 +20,7 @@ struct CommuteAnalyticsView: View {
                     windowPicker
 
                     if service.aggregateStats.driveCount == 0 {
-                        emptyState
+                        AnalyticsEmptyStateView()
                     } else {
                         trendsSection
                         statsSection
@@ -190,58 +190,12 @@ struct CommuteAnalyticsView: View {
                 sectionHeader("Drives")
                 ForEach(service.recentDrives, id: \.id) { record in
                     NavigationLink(value: record) {
-                        driveRow(record)
+                        DriveRowCard(record: record)
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
-    }
-
-    private func driveRow(_ record: DriveRecord) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(record.associatedCommute?.name ?? "Drive")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(SteddiTheme.textPrimary)
-                Text(record.startedAt, style: .date)
-                    .font(.system(size: 12))
-                    .foregroundStyle(SteddiTheme.textSecondary)
-            }
-            Spacer()
-            if let duration = record.totalDurationSeconds {
-                Text(AnalyticsFormat.duration(seconds: duration))
-                    .font(SteddiTheme.mono(15))
-                    .foregroundStyle(SteddiTheme.textPrimary)
-            }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(SteddiTheme.textMuted)
-        }
-        .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                .fill(SteddiTheme.surfaceSecondary)
-        }
-    }
-
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "chart.xyaxis.line")
-                .font(.system(size: 36))
-                .foregroundStyle(SteddiTheme.accent)
-            Text("No drives yet")
-                .font(SteddiTheme.heading(18))
-                .foregroundStyle(SteddiTheme.textPrimary)
-            Text("Finish a navigation and your commute story starts here.")
-                .font(SteddiTheme.body(14))
-                .foregroundStyle(SteddiTheme.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 80)
     }
 
     // MARK: - Helpers
