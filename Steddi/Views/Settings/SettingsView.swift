@@ -15,7 +15,8 @@ struct SettingsView: View {
     @AppStorage("steddi.defaultAvoidsHighways") private var avoidsHighways: Bool = false
     @AppStorage("steddi.hapticLevel") private var hapticLevel: String = HapticLevel.dynamic.rawValue
     @AppStorage("accentColor") private var accentColor: String = SteddiTheme.AccentOption.lavender.rawValue
-    @AppStorage("themeMode") private var themeMode: String = "dynamic"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
+    @State private var dynamicComponents = DynamicThemeComponents.load()
     @AppStorage("steddi.passengerMode") private var passengerMode: Bool = false
     @AppStorage("steddi.accessibilityMode") private var accessibilityMode: Bool = false
 
@@ -79,18 +80,36 @@ struct SettingsView: View {
                         Text("Theme")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Picker("Theme", selection: $themeMode) {
-                            Text("Dark").tag("dark")
-                            Text("Light").tag("light")
-                            Text("Dynamic").tag("dynamic")
+                        Picker("Theme", selection: $themeModeEx) {
+                            ForEach(ThemeModeEx.allCases, id: \.rawValue) { mode in
+                                Text(mode.displayName).tag(mode.rawValue)
+                            }
                         }
                         .pickerStyle(.segmented)
                     }
-                    .onChange(of: themeMode) {
-                        NotificationCenter.default.post(name: .steddiThemeModeChanged, object: nil)
+                    .onChange(of: themeModeEx) {
+                        // The engine persists the mode, keeps the legacy
+                        // "themeMode" shadow in sync for map surfaces, and
+                        // posts .steddiThemeModeChanged itself.
+                        ThemeEngine.shared.baseMode = ThemeModeEx(rawValue: themeModeEx) ?? .dynamic
+                    }
+
+                    if themeModeEx == ThemeModeEx.dynamic.rawValue {
+                        Toggle("Solar cycle", isOn: $dynamicComponents.solarCycle)
+                        Toggle("Weather response", isOn: $dynamicComponents.weatherResponse)
+                        Toggle("Temperature tinting", isOn: $dynamicComponents.temperatureTinting)
+                        Toggle("Tunnel detection", isOn: $dynamicComponents.tunnelDetection)
+                        Toggle("Grey mode", isOn: $dynamicComponents.greyMode)
                     }
                 } header: {
                     Text("Appearance")
+                } footer: {
+                    if themeModeEx == ThemeModeEx.dynamic.rawValue {
+                        Text("Dynamic theming shifts colors with sunrise and sunset, weather, temperature, and tunnels. Grey mode blends through a neutral grey between dark and light.")
+                    }
+                }
+                .onChange(of: dynamicComponents) {
+                    ThemeEngine.shared.dynamicComponents = dynamicComponents
                 }
 
                 // MARK: - Navigation Defaults
@@ -276,11 +295,7 @@ struct SettingsView: View {
     }
 
     private var resolvedColorScheme: ColorScheme? {
-        switch themeMode {
-        case "dark": return .dark
-        case "light": return .light
-        default: return ThemeMode.isDaytime ? .light : .dark
-        }
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
     }
 
     private func deleteNoGoZones(at offsets: IndexSet) {
