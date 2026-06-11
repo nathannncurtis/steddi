@@ -141,6 +141,7 @@ final class ThemeEngine {
     private var updateTimer: Timer?
     private let locationProvider: () -> CLLocationCoordinate2D?
     private let now: () -> Date
+    private let normsProvider = LocalNormsProvider()
 
     init(
         locationProvider: (() -> CLLocationCoordinate2D?)? = nil,
@@ -201,7 +202,7 @@ final class ThemeEngine {
             weatherCondition: weatherCondition,
             weatherCoefficients: weatherCoefficients,
             temperatureF: currentTemperatureF,
-            localNorm: localNorm,
+            localNorm: localNorm ?? coordinate.map { normsProvider.getNormForToday(at: $0) },
             tunnelProgress: tunnelTransitionProgress,
             isTunnelDetected: isTunnelDetected
         )
