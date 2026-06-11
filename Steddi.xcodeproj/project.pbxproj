@@ -59,10 +59,12 @@
 		7A02746BE36AE68D66022B5A /* TemperatureNorms.json in Resources */ = {isa = PBXBuildFile; fileRef = 50D3C8B274D86BDFE1B49206 /* TemperatureNorms.json */; };
 		7AC6366691401A8DB28223A8 /* NavigationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */; };
 		8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */; };
+		80DA5BC56FE71CEAFF04ACB3 /* TripListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2AD9EEDA9797E406B435ED /* TripListView.swift */; };
 		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
 		85A049022E0338B7E5E8B084 /* CommuteETAWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */; };
 		87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64DED98F409553C18FBECB6 /* AppDelegate.swift */; };
 		87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */; };
+		8841973A7B427AF7CDAAEF1F /* TripEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD469486D86528327AFC385D /* TripEditorView.swift */; };
 		8A10CAD68217E7C75BC381C3 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */; };
 		8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82950853F7696A66EC5389FA /* CommuteDetailView.swift */; };
 		8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B46BB7337E920209A89889 /* HapticServiceTests.swift */; };
@@ -227,6 +229,7 @@
 		777F9439E5905A75A1BBDB95 /* ThemePalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePalette.swift; sourceTree = "<group>"; };
 		798937A1E2AA43874413C040 /* DriveRowCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveRowCard.swift; sourceTree = "<group>"; };
 		7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedHapticsView.swift; sourceTree = "<group>"; };
+		7E2AD9EEDA9797E406B435ED /* TripListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripListView.swift; sourceTree = "<group>"; };
 		80E59AB1F96A5750EF1F970E /* MeasurementUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementUnit.swift; sourceTree = "<group>"; };
 		82950853F7696A66EC5389FA /* CommuteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDetailView.swift; sourceTree = "<group>"; };
 		83E69E8FABE683A4030C5E2B /* StatCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatCard.swift; sourceTree = "<group>"; };
@@ -268,6 +271,7 @@
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
 		D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomRouteBuilder.swift; sourceTree = "<group>"; };
 		DA765EC74CF76F5C912157D4 /* HapticService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticService.swift; sourceTree = "<group>"; };
+		DD469486D86528327AFC385D /* TripEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripEditorView.swift; sourceTree = "<group>"; };
 		DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolator.swift; sourceTree = "<group>"; };
 		E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiLiveActivityBundle.swift; sourceTree = "<group>"; };
 		E64DED98F409553C18FBECB6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -359,6 +363,8 @@
 			isa = PBXGroup;
 			children = (
 				C5B17C3D0A429809ADB9CCBA /* TripCardView.swift */,
+				DD469486D86528327AFC385D /* TripEditorView.swift */,
+				7E2AD9EEDA9797E406B435ED /* TripListView.swift */,
 				AD8704B61414025699515828 /* TripPlannerView.swift */,
 			);
 			path = Trips;
@@ -859,6 +865,8 @@
 				5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */,
 				A780066C24DF0AD042F0B658 /* Trip.swift in Sources */,
 				1B58E771169BE73B3BAF9897 /* TripCardView.swift in Sources */,
+				8841973A7B427AF7CDAAEF1F /* TripEditorView.swift in Sources */,
+				80DA5BC56FE71CEAFF04ACB3 /* TripListView.swift in Sources */,
 				0786561020231240135F9738 /* TripPlannerView.swift in Sources */,
 				0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */,
 				534D40A3F52FDDA9AE84C20C /* TripStop.swift in Sources */,

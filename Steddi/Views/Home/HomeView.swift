@@ -286,6 +286,11 @@ struct HomeView: View {
                 CommuteListView()
             }
         }
+        .sheet(isPresented: $showTripList) {
+            NavigationStack {
+                TripListView()
+            }
+        }
         .confirmationDialog(
             "Where are you headed?",
             isPresented: $showDirectionPicker,
