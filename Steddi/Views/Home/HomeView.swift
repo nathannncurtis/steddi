@@ -120,6 +120,10 @@ struct HomeView: View {
     @State private var arrivalCommute: Commute?
     @State private var arrivalDirection: CommuteDirection?
     @State private var testPolyline: String? = nil
+
+    // Surfaced when a review link-out (Yelp / Google / Apple Maps) fails to open
+    // — e.g. the target app isn't installed or the URL can't be handled.
+    @State private var placeLinkErrorMessage: String?
     private let mockPolyline = "gipx_Appax~Exr@GzBu@p@iBGqKAgI?uBjCAz{@?dNFzPPfAClKA`VGnS?vA?dGBtLKrAQ|DmArCwA|FnOjCvHhAvGTnE?jEe@xEkBfJsDbMuHdT{GvPeC`IeAnGoA~Vy@xXU~^LvM`@hFzAvI`F|NnChHnBvG~ArHlAvL`@dHInLqBxYoBl[cAhL{AnJoCpLoClJkGfPqEhIoFxH}GpHkCfC}FpEuFfDeIfDqKrCkIlA{]nC{Db@sFhAoEjBkEzCuD~CyCdDkDzF}ClHcBnH_AdIWjJJjJr@tI|ArHnCnJ|BdGjDxGbGnIlDtD"
 
     var body: some View {
@@ -426,6 +430,17 @@ struct HomeView: View {
                 coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
                 skipPreview: true
             )
+        }
+        .alert(
+            "Couldn’t Open Link",
+            isPresented: Binding(
+                get: { placeLinkErrorMessage != nil },
+                set: { if !$0 { placeLinkErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { placeLinkErrorMessage = nil }
+        } message: {
+            Text(placeLinkErrorMessage ?? "")
         }
     }
 
@@ -1198,21 +1213,21 @@ struct HomeView: View {
     private func placeCardMenu(_ location: PinnedLocation) -> some View {
         if let url = ReviewURLs.yelpSearchURL(name: location.name, coordinate: location.coordinate) {
             Button {
-                UIApplication.shared.open(url)
+                openReviewURL(url, target: "Yelp")
             } label: {
                 Label("View Reviews (Yelp)", systemImage: "star.fill")
             }
         }
         if let url = ReviewURLs.googleMapsURL(name: location.name, coordinate: location.coordinate) {
             Button {
-                UIApplication.shared.open(url)
+                openReviewURL(url, target: "Google Maps")
             } label: {
                 Label("View on Google Maps", systemImage: "map.fill")
             }
         }
         if let url = ReviewURLs.appleMapsURL(name: location.name, coordinate: location.coordinate) {
             Button {
-                UIApplication.shared.open(url)
+                openReviewURL(url, target: "Apple Maps")
             } label: {
                 Label("View in Apple Maps", systemImage: "map")
             }
@@ -1222,6 +1237,18 @@ struct HomeView: View {
             modelContext.delete(location)
         } label: {
             Label("Delete", systemImage: "trash")
+        }
+    }
+
+    /// Opens a review link-out and surfaces an alert if the system can't handle
+    /// the URL (e.g. the target app isn't installed). `target` names the
+    /// destination for the failure message.
+    private func openReviewURL(_ url: URL, target: String) {
+        UIApplication.shared.open(url) { success in
+            if !success {
+                placeLinkErrorMessage =
+                    "Couldn’t open \(target). Make sure the app is installed and try again."
+            }
         }
     }
 
