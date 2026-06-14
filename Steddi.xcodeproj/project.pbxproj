@@ -74,6 +74,7 @@
 		5E824FC4DFBAD777E796CB8B /* RoadConditionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33742A2E837A5F87965C89FA /* RoadConditionServiceTests.swift */; };
 		5FF7589B635F105A507DE8A6 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94C0D76787187AFA4D836876 /* SwiftUI.framework */; };
 		60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */; };
+		61EDBB67DD27445DF1471AC7 /* CustomRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77FDA01EA3986E1BFD4347DE /* CustomRouter.swift */; };
 		62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */; };
 		62F76345C827AE0B9E53CD23 /* DisplayModeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F1A30250323ADAE79B65516 /* DisplayModeService.swift */; };
 		6403E0888CD891BDBC0939E3 /* RouteDrawAnimationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC186A20EADF968F64AF5C3B /* RouteDrawAnimationTests.swift */; };
@@ -329,6 +330,7 @@
 		7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayModeServiceTests.swift; sourceTree = "<group>"; };
 		770C65D4283DB277ED143EA4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		777F9439E5905A75A1BBDB95 /* ThemePalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePalette.swift; sourceTree = "<group>"; };
+		77FDA01EA3986E1BFD4347DE /* CustomRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomRouter.swift; sourceTree = "<group>"; };
 		798937A1E2AA43874413C040 /* DriveRowCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveRowCard.swift; sourceTree = "<group>"; };
 		7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryHeap.swift; sourceTree = "<group>"; };
 		7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedHapticsView.swift; sourceTree = "<group>"; };
@@ -721,6 +723,7 @@
 			children = (
 				75D80501CDFFA0CFCCA74216 /* AStarSearch.swift */,
 				7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */,
+				77FDA01EA3986E1BFD4347DE /* CustomRouter.swift */,
 				2DFB098646F43016ACE60B9F /* DefaultCostModel.swift */,
 				BC9D08E3026C7F5520ACED2C /* OSMTagParsing.swift */,
 				8F4DF3CEF0AD3014468BAD09 /* RoadGraph.swift */,
@@ -1038,6 +1041,7 @@
 				10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */,
 				650E6F734C0E0EFE2B9BEBBF /* CommuteWeatherService.swift in Sources */,
 				C4A0314513C0EDA3FFC980BB /* CustomRouteBuilder.swift in Sources */,
+				61EDBB67DD27445DF1471AC7 /* CustomRouter.swift in Sources */,
 				0E09441FE050C20774C8887E /* DaysOfWeekPicker.swift in Sources */,
 				E566271D07B108A193F239AD /* DefaultCostModel.swift in Sources */,
 				CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */,
