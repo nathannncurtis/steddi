@@ -17,6 +17,8 @@ struct HomeView: View {
 
     // Bottom sheet tab
     @State private var sheetTab: SheetTab = .commutes
+    /// Flips true on first commutes-tab appearance to stagger the cards in.
+    @State private var commuteCardsAppeared = false
 
     enum SheetTab: String, CaseIterable {
         case commutes = "Commutes"
@@ -783,7 +785,7 @@ struct HomeView: View {
                     // Tabs
                     HStack(spacing: 0) {
                         ForEach(SheetTab.allCases, id: \.self) { tab in
-                            Button { sheetTab = tab } label: {
+                            Button { withAnimation(TransitionKit.quickFade) { sheetTab = tab } } label: {
                                 Text(tab.rawValue)
                                     .font(SteddiTheme.heading(12))
                                     .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textMuted)
@@ -798,16 +800,20 @@ struct HomeView: View {
                     SteadyLine(color: SteddiTheme.accent, height: 1)
                         .padding(.horizontal, 20)
 
-                    // Content — compact
+                    // Content — compact, crossfades between tabs.
                     ScrollView {
-                        switch sheetTab {
-                        case .commutes:
-                            commutesTab
-                        case .places:
-                            placesTab
-                        case .trips:
-                            tripsTab
+                        Group {
+                            switch sheetTab {
+                            case .commutes:
+                                commutesTab
+                            case .places:
+                                placesTab
+                            case .trips:
+                                tripsTab
+                            }
                         }
+                        .id(sheetTab)
+                        .transition(.opacity)
                     }
                 }
             }
@@ -839,7 +845,7 @@ struct HomeView: View {
             HStack(spacing: 0) {
                 ForEach(SheetTab.allCases, id: \.self) { tab in
                     Button {
-                        sheetTab = tab
+                        withAnimation(TransitionKit.quickFade) { sheetTab = tab }
                     } label: {
                         Text(tab.rawValue)
                             .font(SteddiTheme.heading(14))
@@ -855,15 +861,19 @@ struct HomeView: View {
             SteadyLine(color: SteddiTheme.accent, height: 1)
                 .padding(.horizontal, 32)
 
-            // Content
-            switch sheetTab {
-            case .commutes:
-                commutesTab
-            case .places:
-                placesTab
-            case .trips:
-                tripsTab
+            // Content — crossfades between tabs.
+            Group {
+                switch sheetTab {
+                case .commutes:
+                    commutesTab
+                case .places:
+                    placesTab
+                case .trips:
+                    tripsTab
+                }
             }
+            .id(sheetTab)
+            .transition(.opacity)
         }
         .background(SteddiTheme.surfacePrimary)
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
@@ -908,8 +918,11 @@ struct HomeView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 8) {
-                        ForEach(commutes) { commute in
+                        ForEach(Array(commutes.enumerated()), id: \.element.id) { index, commute in
                             commuteRows(commute)
+                                .opacity(commuteCardsAppeared ? 1 : 0)
+                                .offset(x: commuteCardsAppeared ? 0 : -24)
+                                .animation(TransitionKit.cardStagger(index: index), value: commuteCardsAppeared)
                         }
                         Button {
                             showCommuteList = true
@@ -924,6 +937,17 @@ struct HomeView: View {
                     .padding(.vertical, 12)
                 }
                 .frame(maxHeight: isLandscape ? .infinity : 160)
+                .onAppear {
+                    guard !commuteCardsAppeared else { return }
+                    if SteddiMotion.shouldAnimate {
+                        commuteCardsAppeared = true
+                    } else {
+                        // Reduce Motion: show cards instantly, no stagger.
+                        var txn = Transaction()
+                        txn.disablesAnimations = true
+                        withTransaction(txn) { commuteCardsAppeared = true }
+                    }
+                }
             }
         }
     }
@@ -1114,6 +1138,7 @@ struct HomeView: View {
         }
 
         return Button {
+            HapticService.shared.fire(.uiToggle)
             // Tapping the card body — if confident, go directly; if ambiguous, show picker
             if isConfident, let dir = confidentDirection {
                 startCommute(commute, direction: dir)
@@ -1161,7 +1186,7 @@ struct HomeView: View {
                     )
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.steddiPress)
     }
 
     /// Distance display row within a commute card
