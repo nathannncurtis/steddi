@@ -24,7 +24,11 @@ struct SteddiNavOverlay: View {
 
     // Toggles
     @AppStorage("steddi.voiceGuidanceEnabled") var isVoiceOn: Bool = true
+    @AppStorage("steddi.showNowPlayingBar") private var showNowPlayingBar: Bool = true
     @State var is3DView: Bool = true
+
+    // Now Playing mini-bar — owns its own observation lifecycle (music-ducking).
+    @State private var nowPlaying = NowPlayingService.shared
 
     // Report
     @State private var showReportSheet = false
@@ -89,6 +93,10 @@ struct SteddiNavOverlay: View {
         }
         .onAppear {
             VoiceGuidanceService.shared.enabled = isVoiceOn
+            nowPlaying.startObserving()
+        }
+        .onDisappear {
+            nowPlaying.stopObserving()
         }
         .onChange(of: engine.headingDegrees, initial: true) { _, newValue in
             updateCompassSector(for: newValue)
@@ -122,6 +130,12 @@ struct SteddiNavOverlay: View {
                 if !engine.roadName.isEmpty {
                     streetNameCapsule
                         .padding(.top, 10)
+                }
+
+                if showNowPlayingBar && nowPlaying.hasNowPlaying {
+                    NowPlayingMiniBar(service: nowPlaying)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
                 }
 
                 Spacer()
