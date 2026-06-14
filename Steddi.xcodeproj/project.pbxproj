@@ -13,6 +13,7 @@
 		080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */; };
 		0A72D4673A9DC592DE1BDC01 /* AggregateStatsCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9342593EFE74CD157A9C4854 /* AggregateStatsCards.swift */; };
 		0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */; };
+		0E09441FE050C20774C8887E /* DaysOfWeekPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC40EBECC2D5A14FFFB4F991 /* DaysOfWeekPicker.swift */; };
 		0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */; };
 		10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */; };
 		13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4F33590D3CEB7AA217E684 /* LocationService.swift */; };
@@ -25,6 +26,7 @@
 		21592CE104F443B0892973CF /* TunnelDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E610B8A29F73B013FB139D /* TunnelDetectionService.swift */; };
 		218DF5B6DB79D3851EC0D6EA /* DynamicThemeComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7583BEE7230D81C23D5FC1A7 /* DynamicThemeComponents.swift */; };
 		23D2E82BE8E42B35C09DC2B0 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 052C83FEE88416F3FE9DBCCE /* EmptyStateView.swift */; };
+		23F49DE2D7799CE634E0B517 /* HourRangePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AFF04B1D7EC87A1F88EC0BB /* HourRangePicker.swift */; };
 		26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */; };
 		2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */; };
 		2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */; };
@@ -79,6 +81,7 @@
 		9275C4BC68051B778B8E32C5 /* WeatherKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */; };
 		943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */; };
 		967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDEFFA656C308FF61D985BF /* NoGoZone.swift */; };
+		97B5BB006220978DA3693CDA /* ModeButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */; };
 		99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */; };
 		9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */; };
 		9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */; };
@@ -248,6 +251,7 @@
 		83E69E8FABE683A4030C5E2B /* StatCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatCard.swift; sourceTree = "<group>"; };
 		84E610B8A29F73B013FB139D /* TunnelDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDetectionService.swift; sourceTree = "<group>"; };
 		857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneMapV2.swift; sourceTree = "<group>"; };
+		8AFF04B1D7EC87A1F88EC0BB /* HourRangePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HourRangePicker.swift; sourceTree = "<group>"; };
 		8B17DD42334CC352C81C1B71 /* Steddi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Steddi.entitlements; sourceTree = "<group>"; };
 		8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedLocation.swift; sourceTree = "<group>"; };
 		8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneEditorView.swift; sourceTree = "<group>"; };
@@ -258,6 +262,7 @@
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometryTests.swift; sourceTree = "<group>"; };
 		A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManager.swift; sourceTree = "<group>"; };
+		AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeButtonStyle.swift; sourceTree = "<group>"; };
 		AD8704B61414025699515828 /* TripPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlannerView.swift; sourceTree = "<group>"; };
 		ADE05CCCE2E6BA708ED405BF /* TrendInsightCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendInsightCard.swift; sourceTree = "<group>"; };
 		AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapMatchingService.swift; sourceTree = "<group>"; };
@@ -268,6 +273,7 @@
 		B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationEngine.swift; sourceTree = "<group>"; };
 		BA9033EAA004A2509272285E /* RouteGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometry.swift; sourceTree = "<group>"; };
 		BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayDashboardDelegate.swift; sourceTree = "<group>"; };
+		BC40EBECC2D5A14FFFB4F991 /* DaysOfWeekPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaysOfWeekPicker.swift; sourceTree = "<group>"; };
 		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
 		BF8849F63A69650A3821B776 /* SteddiLiveActivity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteddiLiveActivity.entitlements; sourceTree = "<group>"; };
 		C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMSpeedLimitService.swift; sourceTree = "<group>"; };
@@ -480,7 +486,10 @@
 		42FAB8BA9A51A05F1BCB2276 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				BC40EBECC2D5A14FFFB4F991 /* DaysOfWeekPicker.swift */,
+				8AFF04B1D7EC87A1F88EC0BB /* HourRangePicker.swift */,
 				335291BA198DC1134B9072E8 /* LocationPickerView.swift */,
+				AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */,
 				857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */,
 			);
 			path = Components;
@@ -836,6 +845,7 @@
 				BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */,
 				10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */,
 				C4A0314513C0EDA3FFC980BB /* CustomRouteBuilder.swift in Sources */,
+				0E09441FE050C20774C8887E /* DaysOfWeekPicker.swift in Sources */,
 				CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */,
 				62F76345C827AE0B9E53CD23 /* DisplayModeService.swift in Sources */,
 				D5D2CC709306B626B120D222 /* DonationView.swift in Sources */,
@@ -849,6 +859,7 @@
 				1D066AD0A3A7A14D582B0CE1 /* GeocodingService.swift in Sources */,
 				30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */,
 				84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */,
+				23F49DE2D7799CE634E0B517 /* HourRangePicker.swift in Sources */,
 				C82ABB3F146D9326DAA1EA06 /* LiveActivityService.swift in Sources */,
 				CB8399E0D7039A2522B8B305 /* LocalNormsProvider.swift in Sources */,
 				FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */,
@@ -856,6 +867,7 @@
 				13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */,
 				26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */,
 				D649B2DE89F3D939E458A826 /* MeasurementUnit.swift in Sources */,
+				97B5BB006220978DA3693CDA /* ModeButtonStyle.swift in Sources */,
 				FA7C506C7D917FBF5EDAE6EE /* ModelStoreLocator.swift in Sources */,
 				5822FFAEECCEC7E5E31C3D1C /* NavPoseInterpolator.swift in Sources */,
 				8C42BC8E8487C5F21A0D7EA4 /* NavigationAttributes.swift in Sources */,
