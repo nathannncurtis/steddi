@@ -13,7 +13,7 @@ struct BinaryHeapTests {
         var heap = BinaryHeap<Double>()
         #expect(heap.isEmpty)
         #expect(heap.count == 0)
-        #expect(heap.popMin() == nil)
+        do { let __r = heap.popMin(); #expect(__r == nil) }
         #expect(heap.peek() == nil)
         #expect(!heap.contains(0))
     }
@@ -54,22 +54,22 @@ struct BinaryHeapTests {
         // Pull id 2 to the front.
         heap.decreaseKey(2, to: 1)
         #expect(heap.peek()?.id == 2)
-        #expect(heap.popMin()?.id == 2)
-        #expect(heap.popMin()?.id == 0)
-        #expect(heap.popMin()?.id == 1)
+        do { let __r = heap.popMin()?.id; #expect(__r == 2) }
+        do { let __r = heap.popMin()?.id; #expect(__r == 0) }
+        do { let __r = heap.popMin()?.id; #expect(__r == 1) }
     }
 
     @Test("push inserts when absent and lowers when present")
     func pushUpsert() {
         var heap = BinaryHeap<Double>()
-        #expect(heap.push(5, priority: 100))   // inserts
+        do { let __r = heap.push(5, priority: 100); #expect(__r) }   // inserts
         #expect(heap.contains(5))
         #expect(heap.priority(of: 5) == 100)
 
-        #expect(heap.push(5, priority: 40))    // lowers
+        do { let __r = heap.push(5, priority: 40); #expect(__r) }    // lowers
         #expect(heap.priority(of: 5) == 40)
 
-        #expect(!heap.push(5, priority: 80))   // higher: ignored
+        do { let __r = heap.push(5, priority: 80); #expect(!__r) }   // higher: ignored
         #expect(heap.priority(of: 5) == 40)
         #expect(heap.count == 1)
     }
