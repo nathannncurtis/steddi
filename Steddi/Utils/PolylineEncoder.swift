@@ -26,6 +26,21 @@ enum PolylineEncoder {
         return output
     }
 
+    /// Decode a polyline string, returning nil if any decoded coordinate falls
+    /// outside valid lat/lon bounds. The whole app encodes at precision 6; a
+    /// string encoded at a different precision (e.g. 5) decoded here produces
+    /// coordinates scaled ~10x off. A precision-6 line decoded at 5 lands well
+    /// outside ±90/±180, so this catches that class of mismatch instead of
+    /// silently mis-aligning corridor buffers / polygon tests. (A precision-5
+    /// line decoded at 6 collapses toward 0 and can't be distinguished by bounds
+    /// alone — but the app never emits precision-5 lines, so the asymmetric guard
+    /// covers the realistic failure mode.)
+    static func decodeValidated(_ encoded: String, precision: Int = 6) -> [CLLocationCoordinate2D]? {
+        let coords = decode(encoded, precision: precision)
+        guard coords.allSatisfy({ CLLocationCoordinate2DIsValid($0) }) else { return nil }
+        return coords
+    }
+
     /// Decode a polyline string to coordinates.
     static func decode(_ encoded: String, precision: Int = 6) -> [CLLocationCoordinate2D] {
         let factor = pow(10.0, Double(precision))

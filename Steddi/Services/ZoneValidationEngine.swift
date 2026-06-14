@@ -53,8 +53,11 @@ final class ZoneValidationEngine {
             return nil
 
         case .corridor(let encodedPolyline, let bufferMeters):
-            let centerline = PolylineEncoder.decode(encodedPolyline, precision: 6)
-            guard !centerline.isEmpty else { return nil }
+            // decodeValidated guards against a precision-mismatched polyline
+            // silently misaligning the buffer; an out-of-bounds decode is
+            // skipped rather than mis-tested.
+            guard let centerline = PolylineEncoder.decodeValidated(encodedPolyline, precision: 6),
+                  !centerline.isEmpty else { return nil }
             var nearest = Double.greatestFiniteMagnitude
             for coord in routeCoords {
                 let d = RouteGeometry.distance(from: coord, toPolyline: centerline)
@@ -63,7 +66,7 @@ final class ZoneValidationEngine {
             return nearest <= bufferMeters ? .corridorViolation(distanceMeters: nearest) : nil
 
         case .polygon(let encodedPolyline):
-            let polygon = PolylineEncoder.decode(encodedPolyline, precision: 6)
+            guard let polygon = PolylineEncoder.decodeValidated(encodedPolyline, precision: 6) else { return nil }
             for coord in routeCoords {
                 if RouteGeometry.isPoint(coord, insidePolygon: polygon) {
                     return .polygonViolation
@@ -75,8 +78,11 @@ final class ZoneValidationEngine {
 
     /// Among candidate routes (encoded polylines), the index of the one with
     /// the fewest violations — the "least-violation" fallback when every route
-    /// passes through an excluded area. Ties break toward the earlier index
-    /// (typically the fastest route). nil when there are no candidates.
+    /// passes through an excluded area. This predicate has no duration data, so
+    /// ties on violation count break toward the earlier index only; callers that
+    /// can compare travel time (e.g. `DirectionsService.fetchRouteWithExclusions`)
+    /// should break ties by duration to honor "only reroute if it saves time".
+    /// nil when there are no candidates.
     func leastViolatingRouteIndex(
         candidates: [String],
         againstZones zones: [NoGoZone],
