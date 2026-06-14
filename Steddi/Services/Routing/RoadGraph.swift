@@ -215,7 +215,14 @@ struct RoadGraph: Sendable {
                     cumulative += RouteGeometry.haversineDistance(from: a, to: b)
                     continue
                 }
-                if perp < (best?.distanceMeters ?? .infinity) {
+                // Deterministic tie-break: strictly closer wins; on a near-tie
+                // (candidates iterate from a Set, so order is otherwise
+                // nondeterministic), prefer the lower edge index so routes are
+                // reproducible run-to-run.
+                let currentBest = best?.distanceMeters ?? .infinity
+                let strictlyCloser = perp < currentBest - 1e-6
+                let tiedButLowerIndex = abs(perp - currentBest) <= 1e-6 && (best.map { edgeIndex < $0.edge } ?? true)
+                if strictlyCloser || tiedButLowerIndex {
                     let segLen = RouteGeometry.haversineDistance(from: a, to: b)
                     let along = cumulative + segLen * t
                     let total = Double(edges[Int(edgeIndex)].lengthMeters)
