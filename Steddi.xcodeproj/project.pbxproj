@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04087916791CAF8B1AFD67AA /* TripProgression.swift */; };
+		060FD9747D8AFA4FD3A8E008 /* PlaceCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B14495FE74113349D84A50 /* PlaceCategory.swift */; };
 		06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */; };
 		0786561020231240135F9738 /* TripPlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD8704B61414025699515828 /* TripPlannerView.swift */; };
 		080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */; };
@@ -102,6 +103,7 @@
 		A5334D5D6A4798480F20DAC1 /* ZoneValidationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DB2867732B7B04A13ECC99 /* ZoneValidationEngine.swift */; };
 		A780066C24DF0AD042F0B658 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C25F38675758DD0FE5C92BE /* Trip.swift */; };
 		ADE93A5C25BF03FD9C09DA8C /* NoGoZoneGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 686B69CCF442D219E251586F /* NoGoZoneGeometryTests.swift */; };
+		B15142D572255FF13A24D7D1 /* ReviewURLs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27D80F6C8C3FC05676314FFB /* ReviewURLs.swift */; };
 		B697491FBDB6DEAA201BF5FC /* ThemePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777F9439E5905A75A1BBDB95 /* ThemePalette.swift */; };
 		B72EA015CC0BDA5C9464DFAD /* ZoneValidationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11174913BB8D28369D82EC58 /* ZoneValidationEngineTests.swift */; };
 		B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */; };
@@ -211,6 +213,7 @@
 		247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolatorTests.swift; sourceTree = "<group>"; };
 		24F1F21786B81D853B9E61B6 /* EmergencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmergencyView.swift; sourceTree = "<group>"; };
 		262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceService.swift; sourceTree = "<group>"; };
+		27D80F6C8C3FC05676314FFB /* ReviewURLs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewURLs.swift; sourceTree = "<group>"; };
 		27FB85CBF3D500E916BCF5B8 /* ZoneDrawingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneDrawingService.swift; sourceTree = "<group>"; };
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
 		2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiWidgetBundle.swift; sourceTree = "<group>"; };
@@ -268,6 +271,7 @@
 		816FF4F6A26EA4AE4AECA534 /* TripArrivalPromptSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripArrivalPromptSheet.swift; sourceTree = "<group>"; };
 		82950853F7696A66EC5389FA /* CommuteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDetailView.swift; sourceTree = "<group>"; };
 		83E69E8FABE683A4030C5E2B /* StatCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatCard.swift; sourceTree = "<group>"; };
+		84B14495FE74113349D84A50 /* PlaceCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceCategory.swift; sourceTree = "<group>"; };
 		84E610B8A29F73B013FB139D /* TunnelDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDetectionService.swift; sourceTree = "<group>"; };
 		857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneMapV2.swift; sourceTree = "<group>"; };
 		87B14BD0B681BFF888417808 /* CommuteNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationService.swift; sourceTree = "<group>"; };
@@ -393,6 +397,7 @@
 				67B27E56129045AE269369A6 /* NavigationAttributes.swift */,
 				4CDEFFA656C308FF61D985BF /* NoGoZone.swift */,
 				8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */,
+				84B14495FE74113349D84A50 /* PlaceCategory.swift */,
 				CADE3A03C008B4BD3D0FE2E6 /* Report.swift */,
 				F2113E7A877B78A7BF8CF75C /* Route.swift */,
 				5C25F38675758DD0FE5C92BE /* Trip.swift */,
@@ -434,6 +439,7 @@
 				1B08229D7455DAC8B35B5E17 /* Models */,
 				34A4E68B6B8AAE6EC8E32D7F /* Resources */,
 				DBB5363525293A92F0312314 /* Services */,
+				5E3966DD23F05E8071CE5F7A /* Utilities */,
 				FF31CEBB3E9CBFBF76A9DADA /* Utils */,
 				DE5E9CA7570793F43392E1B5 /* Views */,
 			);
@@ -524,6 +530,14 @@
 				E319751B2B97D0465371DA38 /* ZoneBadgeView.swift */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+		5E3966DD23F05E8071CE5F7A /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				27D80F6C8C3FC05676314FFB /* ReviewURLs.swift */,
+			);
+			path = Utilities;
 			sourceTree = "<group>";
 		};
 		92185840C3B254DF92B2AF8F /* Settings */ = {
@@ -925,11 +939,13 @@
 				588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */,
 				E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */,
 				1F1675054BF9424119D03938 /* PinnedLocation.swift in Sources */,
+				060FD9747D8AFA4FD3A8E008 /* PlaceCategory.swift in Sources */,
 				E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */,
 				6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */,
 				FCE1679710D8DE18A9FDC517 /* Report.swift in Sources */,
 				A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */,
 				9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */,
+				B15142D572255FF13A24D7D1 /* ReviewURLs.swift in Sources */,
 				E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */,
 				F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */,
 				CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */,
