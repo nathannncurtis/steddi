@@ -255,6 +255,24 @@ struct RoutePlannerView: View {
         // Build waypoints list: origin + user waypoints + destination
         let allPoints = [origin.coordinate] + waypoints + [dest.coordinate]
 
+        // Custom routing seam: when the developer flag is on, generate through the
+        // selector (custom road-graph router, auto-falling-back to MapKit). When
+        // off, the existing MapKit/OSRM path runs verbatim so behavior is
+        // unchanged. The selector returns nil only if MapKit itself also failed.
+        if CustomRoutingFlag.isEnabled() {
+            let request = RouteRequest(
+                origin: origin.coordinate,
+                destination: dest.coordinate,
+                waypoints: waypoints,
+                preferences: RoutePreferences.resolve(commute: commute)
+            )
+            if let generated = await RouteProviderFactory.makeSelector().generateRoute(request) {
+                apply(generated.asDirectionsRoute())
+                isCalculating = false
+                return
+            }
+        }
+
         do {
             if waypoints.isEmpty {
                 // Single destination: Apple routing

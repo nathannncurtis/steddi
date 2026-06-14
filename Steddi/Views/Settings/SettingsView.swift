@@ -53,6 +53,11 @@ struct SettingsView: View {
     @AppStorage("steddi.voiceNavDuckingEnabled") private var voiceNavDuckingEnabled: Bool = true
     @AppStorage("steddi.alertDuckingEnabled") private var alertDuckingEnabled: Bool = true
 
+    // Developer: custom road-graph router (default OFF — MapKit stays the
+    // user-facing path until this is flipped). Falls back to MapKit automatically
+    // whenever the custom router can't serve a request.
+    @AppStorage(CustomRoutingDefaultsKey.enabled) private var useCustomRouter: Bool = false
+
     @State private var showNoGoEditor = false
     @State private var showThresholdExplainer = false
     @State private var showDonation = false
@@ -277,6 +282,15 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 } header: {
                     Text("Units")
+                }
+
+                // MARK: - Developer
+                Section {
+                    Toggle("Custom routing engine", isOn: $useCustomRouter)
+                } header: {
+                    Text("Developer")
+                } footer: {
+                    Text("Generate routes with Steddi's own road-graph router instead of Apple Maps. Experimental — falls back to Apple Maps automatically when the custom router can't produce a route. Apple Maps still owns live traffic and ETA.")
                 }
 
                 // MARK: - About
