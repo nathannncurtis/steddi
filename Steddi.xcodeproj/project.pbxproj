@@ -24,6 +24,7 @@
 		10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */; };
 		1195A6B4AA8844C44A30EDA2 /* CommuteWeatherServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B58DA0D8FE1B16173737797A /* CommuteWeatherServiceTests.swift */; };
 		121FED02C620392521C39F13 /* RoadGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F4DF3CEF0AD3014468BAD09 /* RoadGraph.swift */; };
+		12C3C164F315A312B5800385 /* RoadGraphSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 606E2B1E8ACBBC8DBB951219 /* RoadGraphSource.swift */; };
 		13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4F33590D3CEB7AA217E684 /* LocationService.swift */; };
 		139B1E17264CCF63189264A6 /* SteddiShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */; };
 		17102F8E25229F5112CEAF35 /* NowPlayingMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD3458B0B5C9B20BC65519CC /* NowPlayingMiniBar.swift */; };
@@ -290,6 +291,7 @@
 		5C25F38675758DD0FE5C92BE /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trip.swift; sourceTree = "<group>"; };
 		5F1A30250323ADAE79B65516 /* DisplayModeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayModeService.swift; sourceTree = "<group>"; };
 		5FD7FD0CA7EFBCBD7F77B96F /* SteddiWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteddiWidget.entitlements; sourceTree = "<group>"; };
+		606E2B1E8ACBBC8DBB951219 /* RoadGraphSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadGraphSource.swift; sourceTree = "<group>"; };
 		60B620B91EBE2D984AD636A9 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
 		622A4EBF2DCE91568A12E937 /* ThemeEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEngineTests.swift; sourceTree = "<group>"; };
 		6284ADAB45E23AF8893D2CC2 /* NavigationAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationAttributes.swift; sourceTree = "<group>"; };
@@ -696,6 +698,7 @@
 				8F4DF3CEF0AD3014468BAD09 /* RoadGraph.swift */,
 				942A3B6981E7B85F855A4276 /* RoadGraphBuilder.swift */,
 				B5B1D9F685121E1DE09756F5 /* RoadGraphSerializer.swift */,
+				606E2B1E8ACBBC8DBB951219 /* RoadGraphSource.swift */,
 			);
 			path = Routing;
 			sourceTree = "<group>";
@@ -1064,6 +1067,7 @@
 				121FED02C620392521C39F13 /* RoadGraph.swift in Sources */,
 				7E32DA2B3210AC9C231EB76A /* RoadGraphBuilder.swift in Sources */,
 				A931B34FA42864F04AF2C173 /* RoadGraphSerializer.swift in Sources */,
+				12C3C164F315A312B5800385 /* RoadGraphSource.swift in Sources */,
 				E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */,
 				F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */,
 				CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */,
