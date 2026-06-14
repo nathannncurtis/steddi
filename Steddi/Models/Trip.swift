@@ -54,14 +54,34 @@ final class Trip {
     }
 
     /// Ordinal of the stop being navigated to (0 when not started).
+    ///
+    /// Always resolves safely from the persisted `currentStopId`, even when
+    /// `orderedStops` was mutated outside `removeStop`/`reorderStops` (e.g. a
+    /// stop deleted directly through the model context). The result is clamped
+    /// to the current bounds, so it can never index past the end.
     var currentStopIndex: Int {
-        progression.currentIndex
+        let ordered = orderedStops
+        guard !ordered.isEmpty else { return 0 }
+        let resolved = progression.currentIndex
+        return min(max(0, resolved), ordered.count - 1)
     }
 
-    /// Current stop being navigated to (nil if the trip has no stops).
+    /// Current stop being navigated to.
+    ///
+    /// Resolved by `currentStopId` directly so the persisted position always
+    /// maps to the *actual* stop it names — not whatever currently sits at a
+    /// stale ordinal. Returns nil only when there are no stops or the trip has
+    /// not started; a `currentStopId` orphaned by external mutation safely
+    /// falls back to the clamped current stop rather than a wrong one.
     var currentStop: TripStop? {
         let ordered = orderedStops
-        guard currentStopIndex < ordered.count else { return nil }
+        guard !ordered.isEmpty else { return nil }
+        if let currentStopId, let match = ordered.first(where: { $0.id == currentStopId }) {
+            return match
+        }
+        guard currentStopId != nil else { return nil }
+        // currentStopId set but orphaned by external mutation: resolve to the
+        // clamped current index so navigation never points past the end.
         return ordered[currentStopIndex]
     }
 
