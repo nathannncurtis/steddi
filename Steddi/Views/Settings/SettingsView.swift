@@ -48,6 +48,11 @@ struct SettingsView: View {
     @AppStorage("steddi.passengerMode") private var passengerMode: Bool = false
     @AppStorage("steddi.accessibilityMode") private var accessibilityMode: Bool = false
 
+    // Music & Audio — see music-ducking spec. Defaults all on.
+    @AppStorage("steddi.showNowPlayingBar") private var showNowPlayingBar: Bool = true
+    @AppStorage("steddi.voiceNavDuckingEnabled") private var voiceNavDuckingEnabled: Bool = true
+    @AppStorage("steddi.alertDuckingEnabled") private var alertDuckingEnabled: Bool = true
+
     @State private var showNoGoEditor = false
     @State private var showThresholdExplainer = false
     @State private var showDonation = false
@@ -194,6 +199,17 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Navigation Defaults")
+                }
+
+                // MARK: - Music & Audio
+                Section {
+                    Toggle("Show now playing mini-bar", isOn: $showNowPlayingBar)
+                    Toggle("Duck media for voice guidance", isOn: $voiceNavDuckingEnabled)
+                    Toggle("Duck media for alerts", isOn: $alertDuckingEnabled)
+                } header: {
+                    Text("Music & Audio")
+                } footer: {
+                    Text("Steddi lowers music and podcast volume instead of pausing it. Voice guidance and alerts duck independently. Title and artwork show only for Apple Music; other apps show a generic Now Playing bar.")
                 }
 
                 // MARK: - Display Modes
