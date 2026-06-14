@@ -275,17 +275,25 @@ final class DirectionsService {
             engine.validateRoute($0.encodedPolyline, againstZones: noGoZones, now: now)
         }
 
-        // Prefer the first fully-clear candidate (candidates arrive
-        // fastest-first from MKDirections).
-        if let clearIndex = validations.firstIndex(where: { $0.isValid }) {
+        // Prefer the fastest fully-clear candidate. MKDirections returns
+        // candidates fastest-first, but we select explicitly by duration rather
+        // than relying on arrival order so "only suggest reroutes that save
+        // time" holds even if alternates arrive out of order.
+        let clearIndices = validations.indices.filter { validations[$0].isValid }
+        if let clearIndex = clearIndices.min(by: { candidates[$0].duration < candidates[$1].duration }) {
             return (candidates[clearIndex], validations[clearIndex])
         }
 
         // All routes violate — fall back to the least-violating candidate.
-        var bestIndex = 0
-        for i in validations.indices where validations[i].violationCount < validations[bestIndex].violationCount {
-            bestIndex = i
-        }
+        // Ties on violation count break toward the FASTEST route (lowest
+        // duration) so the fallback we surface is the best available on time,
+        // not merely the earliest in the candidate list.
+        let bestIndex = validations.indices.min { a, b in
+            let va = validations[a].violationCount
+            let vb = validations[b].violationCount
+            if va != vb { return va < vb }
+            return candidates[a].duration < candidates[b].duration
+        } ?? 0
         return (candidates[bestIndex], validations[bestIndex])
     }
 
