@@ -177,7 +177,9 @@ struct HomeView: View {
                         navStateManager.stopObserving()
                         LiveActivityService.shared.endActivity()
                         is3DNav = true
-                        isNavigating = false
+                        withAnimation(TransitionKit.standardEntrance) {
+                            isNavigating = false
+                        }
                         navigationRoute = nil
                         activeSavedPolyline = nil
                         activeRoadConditions = []
@@ -237,6 +239,7 @@ struct HomeView: View {
                     direction: activeDirection,
                     tripContext: tripNavContext(engine: engine)
                 )
+                .transition(TransitionKit.steddiSheet)
             }
 
             // Trip arrival moment — floats above the nav overlay during the
@@ -639,7 +642,7 @@ struct HomeView: View {
         // Start Live Activity
         LiveActivityService.shared.startActivity(destinationName: destName, tripContext: liveActivityTripContext)
 
-        withAnimation(.easeInOut(duration: 0.4)) {
+        withAnimation(TransitionKit.standardEntrance) {
             isNavigating = true
         }
     }
@@ -1084,7 +1087,7 @@ struct HomeView: View {
         // Start Live Activity
         LiveActivityService.shared.startActivity(destinationName: destName, tripContext: liveActivityTripContext)
 
-        withAnimation(.easeInOut(duration: 0.4)) {
+        withAnimation(TransitionKit.standardEntrance) {
             isNavigating = true
         }
     }
@@ -1492,7 +1495,7 @@ struct HomeView: View {
         navStateManager.stopObserving()
         LiveActivityService.shared.endActivity()
         is3DNav = true
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(TransitionKit.standardEntrance) {
             isNavigating = false
         }
         navigationRoute = nil

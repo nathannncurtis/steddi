@@ -39,6 +39,12 @@ struct SteddiNavOverlay: View {
     // engine publishes its first valid travel bearing
     @State private var compassSector: Int? = nil
 
+    // Floating-button spring entrance — flips true a beat after the overlay
+    // appears so the buttons spring in behind the sheet/banner.
+    @State private var floatingButtonsAppeared = false
+    // Arrival celebration — drives the one-shot maneuver-icon bounce.
+    @State private var arrivalCelebrating = false
+
     // Display modes — stored here so SwiftUI re-renders when Settings toggles
     // them; the derived scales/flags stay owned by DisplayModeService
     @AppStorage("steddi.passengerMode") private var isPassengerMode: Bool = false
@@ -94,12 +100,19 @@ struct SteddiNavOverlay: View {
         .onAppear {
             VoiceGuidanceService.shared.enabled = isVoiceOn
             nowPlaying.startObserving()
+            // Spring the floating buttons in behind the sheet/banner.
+            withAnimation(TransitionKit.floatingButtonEntrance) {
+                floatingButtonsAppeared = true
+            }
         }
         .onDisappear {
             nowPlaying.stopObserving()
         }
         .onChange(of: engine.headingDegrees, initial: true) { _, newValue in
             updateCompassSector(for: newValue)
+        }
+        .onChange(of: engine.hasArrived) { _, arrived in
+            if arrived { triggerArrivalCelebration() }
         }
         .task {
             startRerouteLoop()
@@ -157,7 +170,7 @@ struct SteddiNavOverlay: View {
                 bottomBar
             }
 
-            // Floating buttons — right side
+            // Floating buttons — right side. Spring in behind the sheet/banner.
             VStack(spacing: 12) {
                 compassIndicator
                 voiceButton
@@ -167,6 +180,8 @@ struct SteddiNavOverlay: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .padding(.trailing, 16)
             .padding(.top, 270)
+            .scaleEffect(floatingButtonsAppeared ? 1.0 : 0.6)
+            .opacity(floatingButtonsAppeared ? 1.0 : 0.0)
         }
     }
 
@@ -302,12 +317,17 @@ struct SteddiNavOverlay: View {
 
     private var topBanner: some View {
         HStack(spacing: 16) {
-            // Maneuver icon — large and prominent
+            // Maneuver icon — large and prominent. Bounces once on arrival.
             Image(systemName: engine.maneuverType)
                 .font(.system(size: 40 * iconScale, weight: .bold))
                 .foregroundStyle(SteddiTheme.accent)
                 .frame(width: 72 * iconScale, height: 72 * iconScale)
-                .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 18))
+                .background(
+                    engine.hasArrived ? SteddiTheme.accent.opacity(0.28) : SteddiTheme.accentSubtle,
+                    in: RoundedRectangle(cornerRadius: 18)
+                )
+                .scaleEffect(arrivalCelebrating ? 1.3 : 1.0)
+                .animation(TransitionKit.arrivalBounce, value: arrivalCelebrating)
 
             VStack(alignment: .leading, spacing: 6) {
                 // Distance — LARGE mono for glanceability
@@ -466,6 +486,18 @@ struct SteddiNavOverlay: View {
         compassSector = Int(((normalized + 22.5).truncatingRemainder(dividingBy: 360)) / 45.0) % 8
     }
 
+    /// One-shot arrival celebration: the maneuver icon springs 1.0 → 1.3 → 1.0.
+    /// The engine already fires the arrival haptic and swaps the icon to a flag;
+    /// this is the visual flourish on top. No-op under Reduce Motion (the spring
+    /// resolves to nil), so the icon just settles at full size.
+    private func triggerArrivalCelebration() {
+        guard SteddiMotion.shouldAnimate else { return }
+        withAnimation(TransitionKit.arrivalBounce) { arrivalCelebrating = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + TransitionKit.springArrival.response) {
+            withAnimation(TransitionKit.arrivalBounce) { arrivalCelebrating = false }
+        }
+    }
+
     private var voiceButton: some View {
         Button {
             isVoiceOn.toggle()
@@ -477,18 +509,21 @@ struct SteddiNavOverlay: View {
                 isActive: isVoiceOn
             )
         }
+        .buttonStyle(.steddiPress)
     }
 
     private var viewToggleButton: some View {
         Button {
             is3DView.toggle()
             onToggleView(is3DView)
+            HapticService.shared.fire(.uiToggle)
         } label: {
             floatingButtonCircle(
                 symbol: is3DView ? "cube" : "square",
                 isActive: is3DView
             )
         }
+        .buttonStyle(.steddiPress)
     }
 
     private var reportButton: some View {
@@ -500,6 +535,7 @@ struct SteddiNavOverlay: View {
                 isActive: false
             )
         }
+        .buttonStyle(.steddiPress)
     }
 
     private var landscapeCompassIndicator: some View {
