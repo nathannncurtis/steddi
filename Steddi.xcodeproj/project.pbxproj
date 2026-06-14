@@ -85,6 +85,7 @@
 		6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62156E1FDD078D989A2441A /* OfflineCacheService.swift */; };
 		6DB89B04850A99CB2A59A98A /* AStarSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75D80501CDFFA0CFCCA74216 /* AStarSearch.swift */; };
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
+		6F4890693C129F912D294152 /* LearnedWeightsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A563FC81AD7AEC2AFCF76C10 /* LearnedWeightsStore.swift */; };
 		7132E610C067CB033EF4B8F8 /* SteddiLiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */; };
 		72DD5D3842C50C4BEA5B5D44 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */; };
 		73DCCB458D54BAA367DB7502 /* DefaultCostModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F16028B16E55D125568971 /* DefaultCostModelTests.swift */; };
@@ -134,6 +135,7 @@
 		A780066C24DF0AD042F0B658 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C25F38675758DD0FE5C92BE /* Trip.swift */; };
 		A931B34FA42864F04AF2C173 /* RoadGraphSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B1D9F685121E1DE09756F5 /* RoadGraphSerializer.swift */; };
 		ADE93A5C25BF03FD9C09DA8C /* NoGoZoneGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 686B69CCF442D219E251586F /* NoGoZoneGeometryTests.swift */; };
+		B0541610F5744E370D400A2E /* PreferenceLearner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850B39F7F33A77AC75421D3E /* PreferenceLearner.swift */; };
 		B15142D572255FF13A24D7D1 /* ReviewURLs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27D80F6C8C3FC05676314FFB /* ReviewURLs.swift */; };
 		B18FC0A307B656BBD7096743 /* BinaryHeapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D83B764A6EC175443541145 /* BinaryHeapTests.swift */; };
 		B697491FBDB6DEAA201BF5FC /* ThemePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777F9439E5905A75A1BBDB95 /* ThemePalette.swift */; };
@@ -346,6 +348,7 @@
 		84B14495FE74113349D84A50 /* PlaceCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceCategory.swift; sourceTree = "<group>"; };
 		84BB3073ACC1430E3C7BDBAC /* RouteRendererAnimations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRendererAnimations.swift; sourceTree = "<group>"; };
 		84E610B8A29F73B013FB139D /* TunnelDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDetectionService.swift; sourceTree = "<group>"; };
+		850B39F7F33A77AC75421D3E /* PreferenceLearner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceLearner.swift; sourceTree = "<group>"; };
 		857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneMapV2.swift; sourceTree = "<group>"; };
 		87B14BD0B681BFF888417808 /* CommuteNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationService.swift; sourceTree = "<group>"; };
 		8AFF04B1D7EC87A1F88EC0BB /* HourRangePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HourRangePicker.swift; sourceTree = "<group>"; };
@@ -361,6 +364,7 @@
 		94C0D76787187AFA4D836876 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingHeroView.swift; sourceTree = "<group>"; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		A563FC81AD7AEC2AFCF76C10 /* LearnedWeightsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnedWeightsStore.swift; sourceTree = "<group>"; };
 		A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometryTests.swift; sourceTree = "<group>"; };
 		A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManager.swift; sourceTree = "<group>"; };
 		AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeButtonStyle.swift; sourceTree = "<group>"; };
@@ -730,7 +734,9 @@
 				7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */,
 				77FDA01EA3986E1BFD4347DE /* CustomRouter.swift */,
 				2DFB098646F43016ACE60B9F /* DefaultCostModel.swift */,
+				A563FC81AD7AEC2AFCF76C10 /* LearnedWeightsStore.swift */,
 				BC9D08E3026C7F5520ACED2C /* OSMTagParsing.swift */,
+				850B39F7F33A77AC75421D3E /* PreferenceLearner.swift */,
 				8F4DF3CEF0AD3014468BAD09 /* RoadGraph.swift */,
 				942A3B6981E7B85F855A4276 /* RoadGraphBuilder.swift */,
 				B5B1D9F685121E1DE09756F5 /* RoadGraphSerializer.swift */,
@@ -1065,6 +1071,7 @@
 				84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */,
 				23F49DE2D7799CE634E0B517 /* HourRangePicker.swift in Sources */,
 				29D50A254B65DCCEDE9BD86E /* IconPickerView.swift in Sources */,
+				6F4890693C129F912D294152 /* LearnedWeightsStore.swift in Sources */,
 				C82ABB3F146D9326DAA1EA06 /* LiveActivityService.swift in Sources */,
 				CB8399E0D7039A2522B8B305 /* LocalNormsProvider.swift in Sources */,
 				FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */,
@@ -1099,6 +1106,7 @@
 				060FD9747D8AFA4FD3A8E008 /* PlaceCategory.swift in Sources */,
 				E82C34CE24541FA9B645C1BE /* PolylineEncoder.swift in Sources */,
 				6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */,
+				B0541610F5744E370D400A2E /* PreferenceLearner.swift in Sources */,
 				FCE1679710D8DE18A9FDC517 /* Report.swift in Sources */,
 				A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */,
 				9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */,
