@@ -9,8 +9,6 @@ import SwiftUI
 /// When-In-Use authorization through `LocationService`; "Not now" defers without
 /// asking. Either choice advances — this beat has no top-level Skip, by design.
 struct OnboardingPermissionsView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     /// Triggers the system location prompt.
     var onContinue: () -> Void
     /// Defers the prompt and advances.
@@ -82,10 +80,14 @@ struct OnboardingPermissionsView: View {
     }
 
     private func animateIn() {
-        guard !reduceMotion else { cardVisible = true; return }
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+        // Card entrance collapses to an instant change under Reduce Motion.
+        withAnimation(SteddiMotion.resolve(.spring(response: 0.5, dampingFraction: 0.8))) {
             cardVisible = true
         }
+        // The looping icon pulse is purely decorative: never start the
+        // `repeatForever` animation under Reduce Motion, and leave `pulse`
+        // false so the icon stays at full opacity rather than frozen dimmed.
+        guard SteddiMotion.shouldAnimate else { return }
         withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
             pulse = true
         }
