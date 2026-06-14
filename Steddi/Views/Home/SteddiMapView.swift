@@ -66,6 +66,15 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     private var smoothedBearing: Double = 0
     private var routeOverlay: MKPolyline?
 
+    // MARK: - Route draw-on animation
+    /// Short-lived link that drives the route line's trace-on (0->1 over ~1.2s)
+    /// when navigation starts. Self-invalidates on completion; cancelled the
+    /// moment the pose loop starts following so an early fix never fights it.
+    private var drawOnLink: CADisplayLink?
+    private var drawOnStart: TimeInterval = 0
+    /// The renderer currently tracing the active route, if any.
+    private weak var activeRouteRenderer: RouteDrawRenderer?
+
     /// Engine whose published pose drives the puck, camera, and compass.
     weak var navigationEngine: NavigationEngine?
 
@@ -413,6 +422,7 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         }
 
         beginPoseDrivenFollowing()
+        scheduleRouteDrawOn()
     }
 
     /// Start navigation with just a polyline (no MKRoute). Used for saved/custom routes.
@@ -434,6 +444,17 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         }
 
         beginPoseDrivenFollowing()
+        scheduleRouteDrawOn()
+    }
+
+    /// Kick the draw-on after MapKit has had a runloop turn to build the route
+    /// renderer (rendererFor captures it). The pose loop runs in parallel and
+    /// cancels the trace once the puck starts genuinely advancing.
+    private func scheduleRouteDrawOn() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.isInNavigation else { return }
+            self.beginRouteDrawOn()
+        }
     }
 
     func stopNavigation() {
@@ -441,6 +462,8 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         isInNavigation = false
         isFreeLook = false
         recenterButton?.isHidden = true
+        endRouteDrawOn()
+        activeRouteRenderer = nil
         endPoseDrivenFollowing()
         endCustomPuck()
 
@@ -480,6 +503,40 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         displayLink?.invalidate()
         displayLink = nil
         routeCumulativeDistances = []
+    }
+
+    // MARK: - Route Draw-On
+
+    /// Trace the route line on from the user toward the destination over ~1.2s.
+    /// Reduce Motion (or a missing renderer) jumps straight to the full line.
+    private func beginRouteDrawOn() {
+        endRouteDrawOn()
+        guard SteddiMotion.shouldAnimate, let renderer = activeRouteRenderer else {
+            activeRouteRenderer?.animationProgress = 1
+            return
+        }
+        renderer.animationProgress = 0
+        drawOnStart = CACurrentMediaTime()
+        let link = CADisplayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.drawOnTick(_:)))
+        link.add(to: .main, forMode: .common)
+        drawOnLink = link
+    }
+
+    /// Finish the trace immediately (route render complete) and tear down the
+    /// link. Called on completion, on nav stop, and the moment the pose loop
+    /// takes over so an early GPS fix never strokes a half-drawn line.
+    private func endRouteDrawOn() {
+        drawOnLink?.invalidate()
+        drawOnLink = nil
+        activeRouteRenderer?.animationProgress = 1
+    }
+
+    fileprivate func drawOnTick(_ link: CADisplayLink) {
+        guard let renderer = activeRouteRenderer else { endRouteDrawOn(); return }
+        let elapsed = CACurrentMediaTime() - drawOnStart
+        let t = min(1, elapsed / TransitionKit.routeDrawDuration)
+        renderer.animationProgress = CGFloat(RouteDrawGeometry.easeOut(t))
+        if t >= 1 { endRouteDrawOn() }
     }
 
     /// Every nav start hands the map and the engine the same polyline, but an
@@ -545,6 +602,12 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
             maxDistance = min(maxDistance, total)
         }
         guard let distance = interpolator.distanceAlongRoute(at: now, maxDistance: maxDistance) else { return }
+
+        // Cancel the route trace-on the moment the driver starts moving — the
+        // line should be whole before the puck overtakes the drawn tip.
+        if drawOnLink != nil, distance > 5 {
+            endRouteDrawOn()
+        }
 
         // Walk the polyline back to a coordinate — stays on the line through curves
         var displayCoord = RouteGeometry.coordinate(
@@ -619,6 +682,10 @@ private final class DisplayLinkProxy {
     @objc func tick(_ link: CADisplayLink) {
         container?.displayLinkFired(link)
     }
+
+    @objc func drawOnTick(_ link: CADisplayLink) {
+        container?.drawOnTick(link)
+    }
 }
 
 // MARK: - MKMapViewDelegate
@@ -667,6 +734,14 @@ extension SteddiMapContainer: MKMapViewDelegate {
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        // The active nav route gets the trace-on renderer; capture it so the
+        // draw-on link can drive its progress.
+        if let polyline = overlay as? MKPolyline, polyline === routeOverlay {
+            let renderer = RouteDrawRenderer(polyline: polyline)
+            renderer.strokeColor = SteddiTheme.accentUIColor
+            activeRouteRenderer = renderer
+            return renderer
+        }
         if let polyline = overlay as? MKPolyline {
             let renderer = MKPolylineRenderer(polyline: polyline)
             renderer.strokeColor = SteddiTheme.accentUIColor
