@@ -114,4 +114,63 @@ struct OnboardingCoordinatorTests {
         #expect(SteddiTheme.AccentOption.allCases.contains(c.selectedAccent))
         #expect(ThemeModeEx.allCases.contains(c.selectedTheme))
     }
+
+    // MARK: - Adversarial edge cases
+
+    @Test("Beat order is exactly hero → permissions → theme → emergency")
+    func beatOrderIsStable() {
+        // primaryLabel and skipToCompletion both lean on this order; pin it so a
+        // future reorder can't silently move "Get Started" off the last beat.
+        #expect(OnboardingCoordinator.OnboardingBeat.allCases == [.hero, .permissions, .theme, .emergency])
+        #expect(OnboardingCoordinator.OnboardingBeat.allCases.first == .hero)
+        #expect(OnboardingCoordinator.OnboardingBeat.allCases.last == .emergency)
+    }
+
+    @Test("Advancing repeatedly past the end is idempotent")
+    func advancePastEndIsIdempotent() {
+        let c = OnboardingCoordinator()
+        c.skipToCompletion()
+        #expect(c.advance() == false)
+        #expect(c.advance() == false)
+        #expect(c.advance() == false)
+        #expect(c.currentBeat == .emergency)
+        #expect(c.hasNextBeat == false)
+    }
+
+    @Test("skipToCompletion is idempotent and never overshoots")
+    func skipToCompletionIdempotent() {
+        let c = OnboardingCoordinator()
+        c.skipToCompletion()
+        c.skipToCompletion()
+        #expect(c.currentBeat == .emergency)
+    }
+
+    @Test("Contact trimming preserves internal whitespace")
+    func contactPreservesInternalWhitespace() {
+        let c = OnboardingCoordinator()
+        c.setEmergencyContact("  +1 (555) 867 5309  ")
+        // Only the leading/trailing whitespace is stripped; the number's own
+        // spacing survives so it round-trips to the dialer untouched.
+        #expect(c.emergencyContact == "+1 (555) 867 5309")
+    }
+
+    @Test("Tab/newline-only contact input clears")
+    func contactTabNewlineClears() {
+        let c = OnboardingCoordinator()
+        c.setEmergencyContact("555-1234")
+        c.setEmergencyContact("\t\n  \n")
+        #expect(c.emergencyContact == nil)
+    }
+
+    @Test("Re-clearing after a valid value still clears")
+    func contactReClearAfterValid() {
+        let c = OnboardingCoordinator()
+        c.setEmergencyContact("555-1234")
+        #expect(c.emergencyContact == "555-1234")
+        c.setEmergencyContact("")
+        #expect(c.emergencyContact == nil)
+        // And a fresh valid value sets cleanly after the clear.
+        c.setEmergencyContact("555-9999")
+        #expect(c.emergencyContact == "555-9999")
+    }
 }
