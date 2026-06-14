@@ -1132,13 +1132,15 @@ struct HomeView: View {
                                 icon: location.icon,
                                 etaMinutes: nil,
                                 delayMinutes: nil,
+                                category: location.resolvedCategory,
                                 onTap: {
                                     navigateTo(
                                         name: location.name,
                                         coordinate: location.coordinate,
                                         address: location.address
                                     )
-                                }
+                                },
+                                trailingMenu: { placeCardMenu(location) }
                             )
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -1186,6 +1188,40 @@ struct HomeView: View {
                     .padding(.vertical, 8)
                     .background(SteddiTheme.accentSubtle, in: Capsule())
             }
+        }
+    }
+
+    /// Overflow menu for a pinned place card: review link-outs (Yelp, Google,
+    /// Apple Maps) plus delete. All review actions open URLs in the browser /
+    /// Maps app — no embed, no API.
+    @ViewBuilder
+    private func placeCardMenu(_ location: PinnedLocation) -> some View {
+        if let url = ReviewURLs.yelpSearchURL(name: location.name, coordinate: location.coordinate) {
+            Button {
+                UIApplication.shared.open(url)
+            } label: {
+                Label("View Reviews (Yelp)", systemImage: "star.fill")
+            }
+        }
+        if let url = ReviewURLs.googleMapsURL(name: location.name, coordinate: location.coordinate) {
+            Button {
+                UIApplication.shared.open(url)
+            } label: {
+                Label("View on Google Maps", systemImage: "map.fill")
+            }
+        }
+        if let url = ReviewURLs.appleMapsURL(name: location.name, coordinate: location.coordinate) {
+            Button {
+                UIApplication.shared.open(url)
+            } label: {
+                Label("View in Apple Maps", systemImage: "map")
+            }
+        }
+        Divider()
+        Button(role: .destructive) {
+            modelContext.delete(location)
+        } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 

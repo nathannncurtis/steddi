@@ -1,11 +1,15 @@
 import SwiftUI
 
-struct LocationCardView: View {
+struct LocationCardView<Menu: View>: View {
     let name: String
     let icon: String
     let etaMinutes: Int?
     let delayMinutes: Int?
+    /// Optional category for the color/label chip. nil hides the chip.
+    var category: PlaceCategory? = nil
     let onTap: () -> Void
+    /// Optional trailing overflow menu (review links, delete, etc.).
+    @ViewBuilder var trailingMenu: () -> Menu
     @AppStorage("accentColor") private var accentColor = "lavender"
 
     private var trafficStatus: SteddiTheme.TrafficStatus {
@@ -27,9 +31,20 @@ struct LocationCardView: View {
                     .background(SteddiTheme.accentSubtle, in: RoundedRectangle(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .font(SteddiTheme.heading(15))
-                        .foregroundStyle(SteddiTheme.textPrimary)
+                    HStack(spacing: 6) {
+                        Text(name)
+                            .font(SteddiTheme.heading(15))
+                            .foregroundStyle(SteddiTheme.textPrimary)
+
+                        if let category, category != .other {
+                            Text(category.displayName)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(category.themeColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(category.themeColor.opacity(0.15), in: Capsule())
+                        }
+                    }
 
                     if let eta = etaMinutes {
                         HStack(spacing: 6) {
@@ -51,10 +66,23 @@ struct LocationCardView: View {
 
                 Spacer(minLength: 4)
 
-                // Subtle chevron
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(SteddiTheme.textMuted)
+                // Trailing overflow menu (review links, delete) or a chevron.
+                if Menu.self != EmptyView.self {
+                    SwiftUI.Menu {
+                        trailingMenu()
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(SteddiTheme.textMuted)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SteddiTheme.textMuted)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -68,6 +96,29 @@ struct LocationCardView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+extension LocationCardView where Menu == EmptyView {
+    /// Convenience initializer for cards without a trailing menu — keeps the
+    /// existing chevron-only call sites unchanged.
+    init(
+        name: String,
+        icon: String,
+        etaMinutes: Int?,
+        delayMinutes: Int?,
+        category: PlaceCategory? = nil,
+        onTap: @escaping () -> Void
+    ) {
+        self.init(
+            name: name,
+            icon: icon,
+            etaMinutes: etaMinutes,
+            delayMinutes: delayMinutes,
+            category: category,
+            onTap: onTap,
+            trailingMenu: { EmptyView() }
+        )
     }
 }
 
