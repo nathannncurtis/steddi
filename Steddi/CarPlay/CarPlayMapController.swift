@@ -24,6 +24,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
     deinit {
         displayLink?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Lifecycle
@@ -163,6 +164,14 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         lastPoseTimestamp = nil
         removeRouteLine()
         showRouteLine(coords)
+    }
+
+    /// The user's current coordinate from the CarPlay map's authorized location
+    /// tracking (nil until the first fix or if invalid). Used by route preview
+    /// instead of a fresh CLLocationManager, which is always nil.
+    var currentUserCoordinate: CLLocationCoordinate2D? {
+        guard let c = mapView?.userLocation.location?.coordinate, CLLocationCoordinate2DIsValid(c) else { return nil }
+        return c
     }
 
     // MARK: - Display Link
