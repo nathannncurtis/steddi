@@ -550,6 +550,29 @@ struct HomeView: View {
         }
     }
 
+    /// Hook road-condition memory into the engine: a grid-indexed proximity
+    /// lookup per fix plus a subtle haptic + voice heads-up on first approach.
+    /// Only wired for saved routes, since conditions are route-scoped — ad-hoc
+    /// MKRoute navigation has no Route model to anchor remembered conditions.
+    private func wireRoadConditions(for engine: NavigationEngine, route: Route?) {
+        guard let route else { return }
+        let conditions = RoadConditionService.shared.fetchConditionsOnRoute(route)
+        guard !conditions.isEmpty else { return }
+
+        engine.roadConditionProvider = { coordinate in
+            RoadConditionService.checkProximityToConditions(
+                currentCoord: coordinate,
+                routeConditions: conditions,
+                proximityThresholdMeters: 100
+            )
+        }
+        engine.onRoadConditionApproaching = { condition in
+            HapticService.shared.fire(.roadConditionAlert)
+            let road = condition.route?.name.map { " on \($0)" } ?? ""
+            VoiceGuidanceService.shared.speak("\(condition.kind.spokenName) ahead\(road)")
+        }
+    }
+
     private func beginNavigation(with route: MKRoute) {
         locationService.enableNavigationMode()
         locationService.startRecording()
@@ -956,7 +979,7 @@ struct HomeView: View {
             }
 
             isCalculatingRoute = false
-            beginCustomNavigation(polyline: savedCoords, steps: navSteps, expectedTravelTime: savedRoute.typicalDurationSeconds)
+            beginCustomNavigation(polyline: savedCoords, steps: navSteps, expectedTravelTime: savedRoute.typicalDurationSeconds, route: savedRoute)
             migrateInflatedPlannedDuration(savedRoute, coords: savedCoords)
         }
     }
@@ -992,7 +1015,7 @@ struct HomeView: View {
     }
 
     /// Start navigation with custom polyline and steps (no MKRoute).
-    private func beginCustomNavigation(polyline: [CLLocationCoordinate2D], steps: [NavStep], expectedTravelTime: TimeInterval? = nil) {
+    private func beginCustomNavigation(polyline: [CLLocationCoordinate2D], steps: [NavStep], expectedTravelTime: TimeInterval? = nil, route: Route? = nil) {
         print("[STEDDI-NAV] beginCustomNavigation: polyline=\(polyline.count) coords, steps=\(steps.count), eta=\(expectedTravelTime ?? 0)s")
         locationService.enableNavigationMode()
         locationService.startRecording()
@@ -1004,6 +1027,7 @@ struct HomeView: View {
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
         self.navigationEngine = engine
         wireSpeedLimits(for: engine)
+        wireRoadConditions(for: engine, route: route)
 
         engine.onOffRoute = { event in
             Task { @MainActor [self] in

@@ -59,6 +59,21 @@ final class NavigationEngine {
     /// the engine free of service dependencies and unit-testable.
     @ObservationIgnored
     var speedLimitProvider: ((CLLocationCoordinate2D, Double?) -> (mph: Double, isEstimated: Bool)?)? = nil
+
+    /// Injected road-condition proximity lookup. Given the current snapped
+    /// position it returns the highest-priority active condition within the
+    /// alert range, or nil. Kept as a closure so the engine never imports the
+    /// RoadConditionService — same decoupling as `speedLimitProvider`.
+    @ObservationIgnored
+    var roadConditionProvider: ((CLLocationCoordinate2D) -> RoadCondition?)? = nil
+    /// Fired once when the engine first comes within range of a condition this
+    /// session. The wiring side does the haptic + voice; the engine only owns
+    /// the detection and debounce.
+    @ObservationIgnored
+    var onRoadConditionApproaching: ((RoadCondition) -> Void)? = nil
+    /// Condition ids already announced this session, so passing a single pothole
+    /// fires exactly one heads-up instead of one per fix while in range.
+    private var alertedConditionIDs: Set<UUID> = []
     /// Smoothed travel bearing. nil until the first valid bearing — never a
     /// due-north sentinel, and held (not reset) when no new bearing is available.
     var headingDegrees: Double? = nil
@@ -124,6 +139,7 @@ final class NavigationEngine {
         isRecoveringOffRoute = false
         locationUpdateCount = 0
         navigationToken = UUID()
+        alertedConditionIDs.removeAll()
         routePolylineCoordinates = polyline
 
         projector = polyline.count >= 2
@@ -208,6 +224,7 @@ final class NavigationEngine {
         offRouteCount = 0
         isRecoveringOffRoute = false
         locationUpdateCount = 0
+        alertedConditionIDs.removeAll()
     }
 
     // MARK: - Location Updates
@@ -245,6 +262,7 @@ final class NavigationEngine {
 
         updateHeading(location: location, projection: projection, speedMPS: speedMPS)
         updateSpeedLimit(location: location)
+        checkRoadConditionProximity()
 
         if speedMPS > 1.0 {
             speedSampleCount += 1
@@ -281,6 +299,20 @@ final class NavigationEngine {
         } else {
             headingDegrees = target
         }
+    }
+
+    /// Heads-up when approaching a known road condition. Uses the snapped
+    /// position (puck on the polyline) so the lookup tracks the route, not GPS
+    /// scatter. Debounced per condition for the session so a single pothole
+    /// announces once. The actual haptic/voice is delegated to the wiring via
+    /// `onRoadConditionApproaching`.
+    private func checkRoadConditionProximity() {
+        guard let provider = roadConditionProvider else { return }
+        let probe = snappedCoordinate ?? currentCoordinate
+        guard let probe, let condition = provider(probe) else { return }
+        guard !alertedConditionIDs.contains(condition.id) else { return }
+        alertedConditionIDs.insert(condition.id)
+        onRoadConditionApproaching?(condition)
     }
 
     /// Position-based speed limit from the injected provider (OSM data),

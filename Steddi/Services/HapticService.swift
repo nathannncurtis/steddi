@@ -7,6 +7,7 @@ enum HapticEvent: String, CaseIterable, Identifiable {
     case arrival
     case uiToggle
     case alert
+    case roadConditionAlert
 
     var id: String { rawValue }
 
@@ -17,6 +18,7 @@ enum HapticEvent: String, CaseIterable, Identifiable {
         case .arrival: return "Arrival"
         case .uiToggle: return "UI Interactions"
         case .alert: return "Alerts"
+        case .roadConditionAlert: return "Road Condition Alert"
         }
     }
 
@@ -28,6 +30,7 @@ enum HapticEvent: String, CaseIterable, Identifiable {
         case .arrival: return 1.0
         case .uiToggle: return 0.2
         case .alert: return 0.7
+        case .roadConditionAlert: return 0.5  // subtle but attention-getting
         }
     }
 }
