@@ -51,19 +51,27 @@ enum VoiceOption: String, CaseIterable, Identifiable {
 }
 
 /// Speaks turn-by-turn navigation instructions using AVSpeechSynthesizer.
-final class VoiceGuidanceService {
+///
+/// Owns the audio lifecycle for voice guidance: it delegates AVAudioSession
+/// category/duck management to `AudioDuckingService` so media DUCKS (never
+/// pauses) while speaking and restores cleanly when the prompt ends. NSObject
+/// so it can be the synthesizer delegate and learn when an utterance finishes.
+final class VoiceGuidanceService: NSObject, AVSpeechSynthesizerDelegate {
     static let shared = VoiceGuidanceService()
 
     private let synthesizer = AVSpeechSynthesizer()
     private var isEnabled = true
     private var currentVoice: AVSpeechSynthesisVoice?
 
-    private init() {
+    private override init() {
         let savedId = UserDefaults.standard.string(forKey: "steddi.voiceIdentifier") ?? VoiceOption.ava.rawValue
         let option = VoiceOption(rawValue: savedId) ?? .ava
         currentVoice = option.resolve()
-
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+        super.init()
+        synthesizer.delegate = self
+        // AVAudioSession category is now configured per-utterance by
+        // AudioDuckingService so the duck reflects the current toggle and is
+        // torn down (restoring media volume) when speech ends.
     }
 
     var enabled: Bool {
@@ -97,7 +105,9 @@ final class VoiceGuidanceService {
         utterance.volume = 1.0
         utterance.preUtteranceDelay = 0.2
 
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // Duck media (respecting the voice-nav-ducking toggle) and activate the
+        // session before speaking.
+        MainActor.assumeIsolated { AudioDuckingService.shared.activateForVoiceGuidance() }
         synthesizer.speak(utterance)
     }
 
@@ -131,5 +141,21 @@ final class VoiceGuidanceService {
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
+        MainActor.assumeIsolated { AudioDuckingService.shared.deactivateVoiceGuidance() }
+    }
+
+    // MARK: - AVSpeechSynthesizerDelegate
+
+    /// Speech finished naturally — un-duck media (unless an alert still holds
+    /// the duck). AVSpeechSynthesizer fires delegate callbacks on the main queue.
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        MainActor.assumeIsolated { AudioDuckingService.shared.deactivateVoiceGuidance() }
+    }
+
+    /// Speech was cancelled (e.g. a newer prompt interrupted it). If another
+    /// utterance is starting it will re-activate; otherwise this restores media.
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        guard !synthesizer.isSpeaking else { return }
+        MainActor.assumeIsolated { AudioDuckingService.shared.deactivateVoiceGuidance() }
     }
 }
