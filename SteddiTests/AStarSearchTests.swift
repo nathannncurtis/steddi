@@ -1,0 +1,357 @@
+import Testing
+import Foundation
+import CoreLocation
+@testable import Steddi
+
+// MARK: - Fixture helpers
+
+/// Build an Overpass node element JSON (id + lat/lon + optional tags).
+private func node(_ id: Int64, _ lat: Double, _ lon: Double, tags: [String: String] = [:]) -> String {
+    let tagJSON = tags.map { #""\#($0.key)":"\#($0.value)""# }.joined(separator: ",")
+    let tagPart = tags.isEmpty ? "" : #","tags":{\#(tagJSON)}"#
+    return #"{"type":"node","id":\#(id),"lat":\#(lat),"lon":\#(lon)\#(tagPart)}"#
+}
+
+/// Build an Overpass way element JSON (id + ordered node ids + tags).
+private func way(_ id: Int64, _ nodes: [Int64], tags: [String: String]) -> String {
+    let nodeList = nodes.map(String.init).joined(separator: ",")
+    let tagJSON = tags.map { #""\#($0.key)":"\#($0.value)""# }.joined(separator: ",")
+    return #"{"type":"way","id":\#(id),"nodes":[\#(nodeList)],"tags":{\#(tagJSON)}}"#
+}
+
+private func buildGraph(_ elements: String...) -> RoadGraph {
+    let json = #"{"version":0.6,"elements":[\#(elements.joined(separator: ","))]}"#
+    let response = try! JSONDecoder().decode(OverpassGraphResponse.self, from: Data(json.utf8))
+    return RoadGraphBuilder.buildGraph(from: response)
+}
+
+// MARK: - Brute-force reference
+
+/// A reference Dijkstra over the same edge model the A* search uses, with the
+/// same `SearchCost` (so it's a true differential check, not a different cost).
+/// No heuristic, no closed-set early-exit games — the textbook settling Dijkstra
+/// whose result is the provably-optimal node-to-node cost. Returns the optimal
+/// cost to every node from `source`, plus the came-from edge for path recovery.
+private func dijkstra(
+    from source: NodeIndex,
+    in graph: RoadGraph,
+    cost: SearchCost
+) -> (dist: [Double], cameFrom: [Int32]) {
+    let n = graph.nodes.count
+    var dist = [Double](repeating: .infinity, count: n)
+    var cameFrom = [Int32](repeating: -1, count: n)
+    var done = [Bool](repeating: false, count: n)
+    dist[Int(source)] = 0
+
+    for _ in 0..<n {
+        // Linear-scan the unsettled minimum — n is tiny in these fixtures.
+        var u = -1
+        var best = Double.infinity
+        for v in 0..<n where !done[v] && dist[v] < best {
+            best = dist[v]; u = v
+        }
+        if u < 0 { break }
+        done[u] = true
+
+        let incomingEdgeIndex = cameFrom[u]
+        let incomingEdge: GraphEdge? = incomingEdgeIndex >= 0 ? graph.edges[Int(incomingEdgeIndex)] : nil
+        let node = graph.nodes[u]
+        for e in graph.outEdgeRange(of: NodeIndex(u)) {
+            let edge = graph.edges[Int(e)]
+            let stepEdge = cost.edgeCost(edge, in: graph)
+            guard stepEdge.isFinite else { continue }
+            let stepTurn = cost.turnCost(from: incomingEdge, to: edge, at: node, in: graph)
+            guard stepTurn.isFinite else { continue }
+            let nd = dist[u] + stepEdge + stepTurn
+            if nd < dist[Int(edge.to)] {
+                dist[Int(edge.to)] = nd
+                cameFrom[Int(edge.to)] = e
+            }
+        }
+    }
+    return (dist, cameFrom)
+}
+
+/// The true remaining optimal cost from each node to `target`, computed by a
+/// reverse Dijkstra on the transpose graph. Used to assert heuristic
+/// admissibility (`h ≤ trueRemaining`).
+private func trueRemainingCost(
+    to target: NodeIndex,
+    in graph: RoadGraph,
+    cost: SearchCost
+) -> [Double] {
+    // Build reverse adjacency: for each edge u->v store (v -> [(u, edgeIndex)]).
+    let n = graph.nodes.count
+    var reverse: [[(from: Int, edge: Int32)]] = Array(repeating: [], count: n)
+    for (i, edge) in graph.edges.enumerated() {
+        reverse[Int(edge.to)].append((Int(edge.from), Int32(i)))
+    }
+    var dist = [Double](repeating: .infinity, count: n)
+    var done = [Bool](repeating: false, count: n)
+    dist[Int(target)] = 0
+    for _ in 0..<n {
+        var u = -1
+        var best = Double.infinity
+        for v in 0..<n where !done[v] && dist[v] < best { best = dist[v]; u = v }
+        if u < 0 { break }
+        done[u] = true
+        for (predecessor, edgeIndex) in reverse[u] {
+            let edge = graph.edges[Int(edgeIndex)]
+            let stepEdge = cost.edgeCost(edge, in: graph)
+            guard stepEdge.isFinite else { continue }
+            // Turn cost ignored for the admissibility bound — TravelTimeCost has
+            // zero turn cost so the bound is exact; with penalised models the
+            // heuristic (pure travel time) is still ≤ this edge-only remaining.
+            let nd = dist[u] + stepEdge
+            if nd < dist[predecessor] {
+                dist[predecessor] = nd
+            }
+        }
+    }
+    return dist
+}
+
+// MARK: - Tests
+
+@Suite("AStarSearch")
+struct AStarSearchTests {
+
+    private let search = AStarSearch()
+    private let cost = TravelTimeCost()
+
+    /// A small grid corridor: a 3×3 lattice of residential ways so there are many
+    /// alternate paths, used for the differential check.
+    private func gridGraph() -> RoadGraph {
+        // 9 nodes laid out on a ~111 m grid (0.001°). Connect horizontally and
+        // vertically with bidirectional residential ways.
+        var elements: [String] = []
+        var id: Int64 = 1
+        var coords: [(Int64, Double, Double)] = []
+        for r in 0..<3 {
+            for c in 0..<3 {
+                let lat = Double(r) * 0.001
+                let lon = Double(c) * 0.001
+                elements.append(node(id, lat, lon))
+                coords.append((id, lat, lon))
+                id += 1
+            }
+        }
+        func nid(_ r: Int, _ c: Int) -> Int64 { Int64(r * 3 + c + 1) }
+        var wid: Int64 = 1000
+        for r in 0..<3 {
+            for c in 0..<3 {
+                if c < 2 {
+                    elements.append(way(wid, [nid(r, c), nid(r, c + 1)], tags: ["highway": "residential"])); wid += 1
+                }
+                if r < 2 {
+                    elements.append(way(wid, [nid(r, c), nid(r + 1, c)], tags: ["highway": "residential"])); wid += 1
+                }
+            }
+        }
+        let json = #"{"version":0.6,"elements":[\#(elements.joined(separator: ","))]}"#
+        let response = try! JSONDecoder().decode(OverpassGraphResponse.self, from: Data(json.utf8))
+        return RoadGraphBuilder.buildGraph(from: response)
+    }
+
+    @Test("differential vs brute-force Dijkstra on a grid: identical optimal cost")
+    func differentialAgainstDijkstra() {
+        let graph = gridGraph()
+        // For every (source, target) node pair, A* node→node cost must equal the
+        // settling Dijkstra optimum.
+        for s in 0..<graph.nodes.count {
+            let (dist, _) = dijkstra(from: NodeIndex(s), in: graph, cost: cost)
+            for t in 0..<graph.nodes.count where s != t {
+                let result = search.search(
+                    from: .node(NodeIndex(s)),
+                    to: .node(NodeIndex(t)),
+                    in: graph,
+                    cost: cost
+                )
+                guard let result else { Issue.record("A* found no path \(s)->\(t)"); continue }
+                #expect(abs(result.totalCost - dist[t]) < 1e-6,
+                        "A* \(result.totalCost) vs Dijkstra \(dist[t]) for \(s)->\(t)")
+            }
+        }
+    }
+
+    @Test("A* picks the genuinely faster road even when geometrically longer")
+    func prefersFasterRoad() {
+        // Two paths from A(node1) to D(node4):
+        //  - direct slow residential A-D (one short 25mph edge)
+        //  - longer fast detour A-B-C-D on a primary 45mph road
+        // Lay them out so the fast road's travel time is lower despite the detour.
+        // Slow direct edge: 111 m at ~25 mph (11.2 m/s) ≈ 9.9 s.
+        // Fast detour: three 111 m edges at ~45 mph (20.1 m/s) ≈ 16.5 s total.
+        // Here the DIRECT one is actually faster — flip it: make detour speeds high
+        // enough. Use a long direct residential vs short fast detour.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0005, 0.0),
+            node(3, 0.0005, 0.001),
+            node(4, 0.0, 0.001),
+            // Direct A(1)->D(4): a long residential running the full width.
+            way(100, [1, 4], tags: ["highway": "residential", "maxspeed": "25 mph"]),
+            // Detour A(1)->B(2)->C(3)->D(4) over a motorway.
+            way(101, [1, 2], tags: ["highway": "motorway", "maxspeed": "65 mph"]),
+            way(102, [2, 3], tags: ["highway": "motorway", "maxspeed": "65 mph"]),
+            way(103, [3, 4], tags: ["highway": "motorway", "maxspeed": "65 mph"])
+        )
+        // The direct edge is ~111 m at 25 mph ≈ 9.9 s.
+        // The detour is ~55+111+55 = 221 m at 65 mph ≈ 7.6 s — faster despite longer.
+        let i1 = Int(graph.osmToIndex[1]!)
+        let i4 = Int(graph.osmToIndex[4]!)
+        let result = search.search(from: .node(NodeIndex(i1)), to: .node(NodeIndex(i4)), in: graph, cost: cost)
+        guard let result else { Issue.record("no path"); return }
+        // The faster detour goes through node 2 — verify the path is the 3-edge one.
+        #expect(result.edgePath.count == 3)
+        let (dist, _) = dijkstra(from: NodeIndex(i1), in: graph, cost: cost)
+        #expect(abs(result.totalCost - dist[i4]) < 1e-6)
+    }
+
+    @Test("heuristic is admissible: h ≤ true remaining cost at every node")
+    func heuristicAdmissible() {
+        let graph = gridGraph()
+        // Target = node index 8 (the far corner).
+        let target = NodeIndex(8)
+        let targetCoord = graph.nodes[Int(target)].coordinate
+        let remaining = trueRemainingCost(to: target, in: graph, cost: cost)
+        for v in 0..<graph.nodes.count {
+            let h = cost.heuristic(from: graph.nodes[v].coordinate, to: targetCoord, in: graph)
+            // h is a lower bound; allow a tiny epsilon for float noise.
+            #expect(h <= remaining[v] + 1e-6,
+                    "heuristic \(h) exceeds true remaining \(remaining[v]) at node \(v)")
+        }
+    }
+
+    @Test("no path returns nil (disconnected components)")
+    func noPathReturnsNil() {
+        // Two separate ways with no shared node — disconnected.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.001),
+            node(3, 0.01, 0.01),
+            node(4, 0.01, 0.011),
+            way(100, [1, 2], tags: ["highway": "residential"]),
+            way(101, [3, 4], tags: ["highway": "residential"])
+        )
+        let i1 = Int(graph.osmToIndex[1]!)
+        let i3 = Int(graph.osmToIndex[3]!)
+        let result = search.search(from: .node(NodeIndex(i1)), to: .node(NodeIndex(i3)), in: graph, cost: cost)
+        #expect(result == nil)
+    }
+
+    @Test("oneway prevents wrong-way traversal -> no path")
+    func onewayBlocksReverse() {
+        // A oneway forward 1->2; searching 2->1 must fail (no reverse edge).
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.001),
+            way(100, [1, 2], tags: ["highway": "primary", "oneway": "yes"])
+        )
+        let i1 = Int(graph.osmToIndex[1]!)
+        let i2 = Int(graph.osmToIndex[2]!)
+        #expect(search.search(from: .node(NodeIndex(i1)), to: .node(NodeIndex(i2)), in: graph, cost: cost) != nil)
+        #expect(search.search(from: .node(NodeIndex(i2)), to: .node(NodeIndex(i1)), in: graph, cost: cost) == nil)
+    }
+
+    // MARK: - Snap / mid-edge
+
+    @Test("snap accuracy: arbitrary coord near an edge snaps onto it")
+    func snapAccuracy() {
+        // A single long east-west way; a point ~10 m north of its midpoint snaps
+        // onto the edge with a small perpendicular distance and fraction ~0.5.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.002),
+            way(100, [1, 2], tags: ["highway": "primary"])
+        )
+        // Midpoint is (0, 0.001); offset ~10 m north (~0.00009°).
+        let probe = CLLocationCoordinate2D(latitude: 0.00009, longitude: 0.001)
+        guard let snap = graph.snap(probe, maxDistanceMeters: 50) else {
+            Issue.record("snap failed"); return
+        }
+        #expect(abs(snap.fraction - 0.5) < 0.05)
+        #expect(snap.distanceMeters < 12)
+        #expect(abs(snap.snapped.latitude) < 1e-6)   // snapped back onto the y=0 line
+    }
+
+    @Test("mid-edge start and end produce a partial-cost path")
+    func midEdgeStartEnd() {
+        // A straight 3-edge chain 1-2-3-4 along the equator, each ~111 m primary.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.001),
+            node(3, 0.0, 0.002),
+            node(4, 0.0, 0.003),
+            way(100, [1, 2], tags: ["highway": "primary", "maxspeed": "45 mph"]),
+            way(101, [2, 3], tags: ["highway": "primary", "maxspeed": "45 mph"]),
+            way(102, [3, 4], tags: ["highway": "primary", "maxspeed": "45 mph"])
+        )
+        // Start mid-edge 1-2 (around the midpoint) and end mid-edge 3-4.
+        let start = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0005)
+        let end = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0025)
+        let result = search.search(
+            from: .coordinate(start),
+            to: .coordinate(end),
+            in: graph,
+            cost: cost
+        )
+        guard let result else { Issue.record("no mid-edge path"); return }
+        // Fractions record where on the leading/trailing edges travel begins/ends.
+        #expect(result.startFraction > 0 && result.startFraction < 1)
+        #expect(result.endFraction > 0 && result.endFraction < 1)
+        // The cost must be strictly less than the full node1->node4 cost (we cut
+        // off a partial leading and trailing segment).
+        let i1 = Int(graph.osmToIndex[1]!)
+        let i4 = Int(graph.osmToIndex[4]!)
+        let fullResult = search.search(from: .node(NodeIndex(i1)), to: .node(NodeIndex(i4)), in: graph, cost: cost)
+        #expect(result.totalCost < (fullResult?.totalCost ?? .infinity))
+        // Path should still traverse the middle edge 2-3.
+        #expect(result.edgePath.count >= 1)
+    }
+
+    @Test("mid-edge start and end on the SAME edge")
+    func midEdgeSameEdge() {
+        // One long primary edge; start at 0.25 and end at 0.75 along it.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.004),
+            way(100, [1, 2], tags: ["highway": "primary", "maxspeed": "45 mph"])
+        )
+        let start = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.001)
+        let end = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.003)
+        let result = search.search(from: .coordinate(start), to: .coordinate(end), in: graph, cost: cost)
+        // Same forward edge: start snaps to fraction ~0.25 on edge 1->2, end ~0.75.
+        // The search must reach node 2 then traverse the trailing partial — but
+        // since both snap to the same forward edge, the path is valid and cost > 0.
+        guard let result else { Issue.record("no same-edge path"); return }
+        #expect(result.totalCost > 0)
+    }
+
+    @Test("node-to-same-node degenerate path has zero cost")
+    func sameNode() {
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.001),
+            way(100, [1, 2], tags: ["highway": "residential"])
+        )
+        let i1 = Int(graph.osmToIndex[1]!)
+        let result = search.search(from: .node(NodeIndex(i1)), to: .node(NodeIndex(i1)), in: graph, cost: cost)
+        #expect(result?.totalCost == 0)
+        #expect(result?.edgePath.isEmpty == true)
+    }
+
+    @Test("empty graph returns nil")
+    func emptyGraph() {
+        let graph = RoadGraph(
+            nodes: [], edges: [], geometry: [], osmToIndex: [:],
+            snapIndex: GraphSpatialIndex(grid: [:]), graphMaxSpeedMPS: 0
+        )
+        let result = search.search(
+            from: .coordinate(CLLocationCoordinate2D(latitude: 0, longitude: 0)),
+            to: .coordinate(CLLocationCoordinate2D(latitude: 1, longitude: 1)),
+            in: graph, cost: cost
+        )
+        #expect(result == nil)
+    }
+}
