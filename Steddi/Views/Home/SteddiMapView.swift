@@ -12,6 +12,8 @@ struct SteddiMapView: UIViewControllerRepresentable {
     let navigationRoute: MKRoute?
     var savedRoutePolyline: [CLLocationCoordinate2D]?
     var engine: NavigationEngine?
+    /// Active conditions for the displayed route, rendered as map badges.
+    var roadConditions: [RoadCondition] = []
     let onLongPress: (CLLocationCoordinate2D) -> Void
     let onArrival: () -> Void
     let onCancelled: () -> Void
@@ -25,6 +27,7 @@ struct SteddiMapView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: SteddiMapContainer, context: Context) {
         vc.navigationEngine = engine
+        vc.setRoadConditions(roadConditions)
         if isNavigating, let route = navigationRoute {
             // MKRoute path (dumb nav / search)
             print("[STEDDI-MAP] updateUI: MKRoute path, isInNav=\(vc.isInNavigation)")
@@ -69,6 +72,13 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     /// Steddi's own navigation puck — driven by the engine's snapped pose, so
     /// it rides the route polyline instead of MapKit's raw-GPS user dot.
     private var puckAnnotation: SteddiPuckAnnotation?
+
+    /// Road-condition badge annotations currently on the map, keyed by id so
+    /// re-syncs are diffed instead of churning the whole set.
+    private var roadConditionAnnotations: [UUID: RoadConditionAnnotation] = [:]
+    /// Last conditions handed to `setRoadConditions`, retained so toggling out of
+    /// FreeLook can restore badges that were suppressed while panning freely.
+    private var pendingRoadConditions: [RoadCondition] = []
 
     // Per-frame pose interpolation — one clock for puck AND camera
     private var displayLink: CADisplayLink?
@@ -266,16 +276,61 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         if gesture.state == .began {
             isFreeLook = true
             recenterButton?.isHidden = false
+            // Free-looking: pull badges so they don't churn while panning.
+            syncRoadConditionAnnotations()
         }
     }
 
     @objc private func recenterTapped() {
         isFreeLook = false
         recenterButton?.isHidden = true
+        // Restore any badges that were suppressed while panning freely.
+        syncRoadConditionAnnotations()
         // Snap back to the last interpolated pose position
         let coord = lastDisplayCoordinate ?? mapView.userLocation.location?.coordinate
         if let coord, CLLocationCoordinate2DIsValid(coord) {
             applyCameraForNav(at: coord, course: smoothedBearing, animated: true)
+        }
+    }
+
+    // MARK: - Road Condition Badges
+
+    /// Update the route-scoped condition badges shown on the map. Diffs against
+    /// what's already displayed so unchanged badges aren't recreated.
+    func setRoadConditions(_ conditions: [RoadCondition]) {
+        guard mapView != nil else { return }
+        pendingRoadConditions = conditions
+        syncRoadConditionAnnotations()
+    }
+
+    /// Reconcile on-map condition annotations with `pendingRoadConditions`.
+    /// Suppressed entirely while the user is free-looking so badges don't pop in
+    /// and out as they pan; restored on recenter.
+    private func syncRoadConditionAnnotations() {
+        guard mapView != nil else { return }
+
+        if isFreeLook {
+            if !roadConditionAnnotations.isEmpty {
+                mapView.removeAnnotations(Array(roadConditionAnnotations.values))
+                roadConditionAnnotations.removeAll()
+            }
+            return
+        }
+
+        let desired = Dictionary(uniqueKeysWithValues: pendingRoadConditions.map { ($0.id, $0) })
+
+        // Remove badges no longer present.
+        let stale = roadConditionAnnotations.filter { desired[$0.key] == nil }
+        if !stale.isEmpty {
+            mapView.removeAnnotations(Array(stale.values))
+            for key in stale.keys { roadConditionAnnotations[key] = nil }
+        }
+
+        // Add badges not yet on the map.
+        for (id, condition) in desired where roadConditionAnnotations[id] == nil {
+            let annotation = RoadConditionAnnotation(condition: condition)
+            roadConditionAnnotations[id] = annotation
+            mapView.addAnnotation(annotation)
         }
     }
 
@@ -583,6 +638,18 @@ extension SteddiMapContainer: MKMapViewDelegate {
             puckView.centerOffset = CGPoint(x: 0, y: -6)
             puckView.zPriority = .max
             return puckView
+        }
+
+        if annotation is RoadConditionAnnotation {
+            let view = mapView.dequeueReusableAnnotationView(
+                withIdentifier: RoadConditionMarkerView.reuseIdentifier
+            ) as? RoadConditionMarkerView
+                ?? RoadConditionMarkerView(
+                    annotation: annotation,
+                    reuseIdentifier: RoadConditionMarkerView.reuseIdentifier
+                )
+            view.annotation = annotation
+            return view
         }
 
         guard annotation is MKUserLocation else { return nil }

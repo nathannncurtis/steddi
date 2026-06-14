@@ -34,6 +34,8 @@ struct HomeView: View {
 
     // Saved route polyline for map rendering
     @State private var activeSavedPolyline: [CLLocationCoordinate2D]?
+    /// Active road conditions for the route being navigated, shown as map badges.
+    @State private var activeRoadConditions: [RoadCondition] = []
 
     // Route preview state
     @State private var showRoutePreview = false
@@ -139,6 +141,7 @@ struct HomeView: View {
                 navigationRoute: navigationRoute,
                 savedRoutePolyline: activeSavedPolyline,
                 engine: navigationEngine,
+                roadConditions: activeRoadConditions,
                 onLongPress: { coord in
                     longPressCoordinate = coord
                     showAddLocation = true
@@ -171,6 +174,7 @@ struct HomeView: View {
                         isNavigating = false
                         navigationRoute = nil
                         activeSavedPolyline = nil
+                        activeRoadConditions = []
 
                         // Save the raw drive record
                         if points.count >= 2 {
@@ -555,8 +559,12 @@ struct HomeView: View {
     /// Only wired for saved routes, since conditions are route-scoped — ad-hoc
     /// MKRoute navigation has no Route model to anchor remembered conditions.
     private func wireRoadConditions(for engine: NavigationEngine, route: Route?) {
-        guard let route else { return }
+        guard let route else {
+            activeRoadConditions = []
+            return
+        }
         let conditions = RoadConditionService.shared.fetchConditionsOnRoute(route)
+        activeRoadConditions = conditions
         guard !conditions.isEmpty else { return }
 
         engine.roadConditionProvider = { coordinate in
@@ -578,6 +586,7 @@ struct HomeView: View {
         locationService.startRecording()
 
         self.activeSavedPolyline = nil
+        self.activeRoadConditions = []
         self.navigationRoute = route
         let engine = NavigationEngine()
         engine.startNavigation(route: route)
@@ -1463,6 +1472,7 @@ struct HomeView: View {
         }
         navigationRoute = nil
         activeSavedPolyline = nil
+        activeRoadConditions = []
     }
 
     /// Tear down trip navigation. Completed trips were already archived by
@@ -1481,6 +1491,7 @@ struct HomeView: View {
         isNavigating = false
         navigationRoute = nil
         activeSavedPolyline = nil
+        activeRoadConditions = []
 
         if !completed {
             activeTrip?.lastNavigatedAt = Date()

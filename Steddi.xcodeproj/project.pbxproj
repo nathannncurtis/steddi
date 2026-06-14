@@ -47,6 +47,7 @@
 		4BD69219F4033B5D7DD61286 /* SteddiWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */; };
 		4BD906E8F1CE5635D024B12D /* CommuteNotificationCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */; };
 		4D4EA23D419752C08D4929B2 /* DriveRowCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798937A1E2AA43874413C040 /* DriveRowCard.swift */; };
+		50989228583DD9AF1BBEE55D /* RoadConditionAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4E84E4C9DD265359EFD1EE /* RoadConditionAnnotation.swift */; };
 		516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */; };
 		534D40A3F52FDDA9AE84C20C /* TripStop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B99A3381CC68B028C99DD0E /* TripStop.swift */; };
 		571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7111C46770386A928275F35 /* SettingsView.swift */; };
@@ -234,6 +235,7 @@
 		3380F79E0670137420A0A6AC /* OSMSpeedLimitServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMSpeedLimitServiceTests.swift; sourceTree = "<group>"; };
 		37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiTheme.swift; sourceTree = "<group>"; };
 		3AE4512ED735A6D3CD409755 /* VoicePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePicker.swift; sourceTree = "<group>"; };
+		3B4E84E4C9DD265359EFD1EE /* RoadConditionAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadConditionAnnotation.swift; sourceTree = "<group>"; };
 		3B4F33590D3CEB7AA217E684 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		3B70B7427245EDC2DFDCA33F /* POIDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POIDiscoveryTests.swift; sourceTree = "<group>"; };
 		3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SteddiLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -542,6 +544,7 @@
 				335291BA198DC1134B9072E8 /* LocationPickerView.swift */,
 				AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */,
 				857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */,
+				3B4E84E4C9DD265359EFD1EE /* RoadConditionAnnotation.swift */,
 				EBD2CEE6BF282A7424D54D6E /* SearchResultActionCard.swift */,
 				E319751B2B97D0465371DA38 /* ZoneBadgeView.swift */,
 			);
@@ -966,6 +969,7 @@
 				9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */,
 				B15142D572255FF13A24D7D1 /* ReviewURLs.swift in Sources */,
 				A477A072BF5B7865AC486AF0 /* RoadCondition.swift in Sources */,
+				50989228583DD9AF1BBEE55D /* RoadConditionAnnotation.swift in Sources */,
 				D16092362319596FA139A0F1 /* RoadConditionReconfirmSheet.swift in Sources */,
 				780E1D35A4D611FD450D82CE /* RoadConditionService.swift in Sources */,
 				E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */,
