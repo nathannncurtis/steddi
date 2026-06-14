@@ -244,10 +244,10 @@ final class RoadGraphSource {
         guard let data = try? Data(contentsOf: fileURL), data.count > timestampHeaderBytes else { return nil }
         let fetchedAt = readTimestamp(data)
         if !ignoreTTL {
-            guard now.timeIntervalSince(fetchedAt) < Tuning.cacheTTL else {
-                try? FileManager.default.removeItem(at: fileURL)
-                return nil
-            }
+            // An expired blob is NOT deleted: a successful refetch overwrites it
+            // atomically, and if the network is down it is the stale-fallback
+            // source (graceful degradation — an old corridor graph still routes).
+            guard now.timeIntervalSince(fetchedAt) < Tuning.cacheTTL else { return nil }
         }
         let blob = data.subdata(in: (data.startIndex + timestampHeaderBytes)..<data.endIndex)
         return RoadGraphSerializer.deserialize(blob)
