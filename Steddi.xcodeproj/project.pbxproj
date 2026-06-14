@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		002CBA9EE9036CA76E78CFFC /* BinaryHeap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */; };
 		018EE0B492C8F3A3866BEB7B /* RoadGraphBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA2D7C2DA35A6ABC14E3F1A /* RoadGraphBuilderTests.swift */; };
 		0347B79FA08BA6D1CF34E5C9 /* AccessibilityAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA0E2C23211EDCF54BC1F47D /* AccessibilityAnimations.swift */; };
 		0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04087916791CAF8B1AFD67AA /* TripProgression.swift */; };
@@ -79,6 +80,7 @@
 		6B9DC98F7D40C65476C5882C /* OSMTagParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DF2357BC61FE13D4126E3D0 /* OSMTagParsingTests.swift */; };
 		6C0862A6626424EBC6622731 /* Commute.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */; };
 		6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62156E1FDD078D989A2441A /* OfflineCacheService.swift */; };
+		6DB89B04850A99CB2A59A98A /* AStarSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75D80501CDFFA0CFCCA74216 /* AStarSearch.swift */; };
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
 		7132E610C067CB033EF4B8F8 /* SteddiLiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */; };
 		72DD5D3842C50C4BEA5B5D44 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */; };
@@ -314,10 +316,12 @@
 		72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiMapView.swift; sourceTree = "<group>"; };
 		7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDirectionResolver.swift; sourceTree = "<group>"; };
 		7583BEE7230D81C23D5FC1A7 /* DynamicThemeComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicThemeComponents.swift; sourceTree = "<group>"; };
+		75D80501CDFFA0CFCCA74216 /* AStarSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AStarSearch.swift; sourceTree = "<group>"; };
 		7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayModeServiceTests.swift; sourceTree = "<group>"; };
 		770C65D4283DB277ED143EA4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		777F9439E5905A75A1BBDB95 /* ThemePalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePalette.swift; sourceTree = "<group>"; };
 		798937A1E2AA43874413C040 /* DriveRowCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveRowCard.swift; sourceTree = "<group>"; };
+		7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryHeap.swift; sourceTree = "<group>"; };
 		7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedHapticsView.swift; sourceTree = "<group>"; };
 		7E2AD9EEDA9797E406B435ED /* TripListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripListView.swift; sourceTree = "<group>"; };
 		80E59AB1F96A5750EF1F970E /* MeasurementUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementUnit.swift; sourceTree = "<group>"; };
@@ -700,6 +704,8 @@
 		B1BB168267A1DA76C921B805 /* Routing */ = {
 			isa = PBXGroup;
 			children = (
+				75D80501CDFFA0CFCCA74216 /* AStarSearch.swift */,
+				7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */,
 				BC9D08E3026C7F5520ACED2C /* OSMTagParsing.swift */,
 				8F4DF3CEF0AD3014468BAD09 /* RoadGraph.swift */,
 				942A3B6981E7B85F855A4276 /* RoadGraphBuilder.swift */,
@@ -987,6 +993,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6DB89B04850A99CB2A59A98A /* AStarSearch.swift in Sources */,
 				0347B79FA08BA6D1CF34E5C9 /* AccessibilityAnimations.swift in Sources */,
 				A22CFFF0BDE370AB28985EC8 /* AdvancedHapticsView.swift in Sources */,
 				0A72D4673A9DC592DE1BDC01 /* AggregateStatsCards.swift in Sources */,
@@ -994,6 +1001,7 @@
 				87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */,
 				99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */,
 				8FFA00BD6370747C969692D5 /* AudioDuckingService.swift in Sources */,
+				002CBA9EE9036CA76E78CFFC /* BinaryHeap.swift in Sources */,
 				C6239C9F7BFB618596CD3D33 /* CameraReport.swift in Sources */,
 				64A4B0737C28DA81734CD449 /* CarPlayDashboardDelegate.swift in Sources */,
 				60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */,
