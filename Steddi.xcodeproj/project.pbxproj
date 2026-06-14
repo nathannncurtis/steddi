@@ -76,6 +76,7 @@
 		6403E0888CD891BDBC0939E3 /* RouteDrawAnimationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC186A20EADF968F64AF5C3B /* RouteDrawAnimationTests.swift */; };
 		64A4B0737C28DA81734CD449 /* CarPlayDashboardDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */; };
 		650E6F734C0E0EFE2B9BEBBF /* CommuteWeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 315032BDB9A34CDCE94D686D /* CommuteWeatherService.swift */; };
+		6B9DC98F7D40C65476C5882C /* OSMTagParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DF2357BC61FE13D4126E3D0 /* OSMTagParsingTests.swift */; };
 		6C0862A6626424EBC6622731 /* Commute.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */; };
 		6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62156E1FDD078D989A2441A /* OfflineCacheService.swift */; };
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
@@ -95,6 +96,7 @@
 		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
 		85A049022E0338B7E5E8B084 /* CommuteETAWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */; };
 		863EC5C3A2B5B58404659A8E /* CommuteNotificationCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A0E3F3AA6904204FBFAD41 /* CommuteNotificationCenter.swift */; };
+		864AD9FD6F0D23B680D497CC /* RoadGraphSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E89BF47747ABB352861055 /* RoadGraphSourceTests.swift */; };
 		87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64DED98F409553C18FBECB6 /* AppDelegate.swift */; };
 		87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */; };
 		8841973A7B427AF7CDAAEF1F /* TripEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD469486D86528327AFC385D /* TripEditorView.swift */; };
@@ -225,6 +227,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		02E89BF47747ABB352861055 /* RoadGraphSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadGraphSourceTests.swift; sourceTree = "<group>"; };
 		03670FA5EF8B8CA954F816D1 /* RouteRecoveryEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRecoveryEngine.swift; sourceTree = "<group>"; };
 		03B614E4431FE25A25512707 /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiNavOverlay.swift; sourceTree = "<group>"; };
@@ -242,6 +245,7 @@
 		13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiShortcuts.swift; sourceTree = "<group>"; };
 		16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManagerTests.swift; sourceTree = "<group>"; };
 		1D932805B66B86200A9B9645 /* CommuteAnalyticsAggregate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteAnalyticsAggregate.swift; sourceTree = "<group>"; };
+		1DF2357BC61FE13D4126E3D0 /* OSMTagParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMTagParsingTests.swift; sourceTree = "<group>"; };
 		215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeRevisionTrait.swift; sourceTree = "<group>"; };
 		247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolatorTests.swift; sourceTree = "<group>"; };
 		24F1F21786B81D853B9E61B6 /* EmergencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmergencyView.swift; sourceTree = "<group>"; };
@@ -562,12 +566,14 @@
 				EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */,
 				459630C573F0A9D783D34A94 /* OnboardingCoordinatorTests.swift */,
 				3380F79E0670137420A0A6AC /* OSMSpeedLimitServiceTests.swift */,
+				1DF2357BC61FE13D4126E3D0 /* OSMTagParsingTests.swift */,
 				3B70B7427245EDC2DFDCA33F /* POIDiscoveryTests.swift */,
 				3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */,
 				5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */,
 				33742A2E837A5F87965C89FA /* RoadConditionServiceTests.swift */,
 				6AA2D7C2DA35A6ABC14E3F1A /* RoadGraphBuilderTests.swift */,
 				41A765371F7D3E908A2FB941 /* RoadGraphSerializerTests.swift */,
+				02E89BF47747ABB352861055 /* RoadGraphSourceTests.swift */,
 				CC186A20EADF968F64AF5C3B /* RouteDrawAnimationTests.swift */,
 				A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */,
 				31B70EAA3BE8D424563A79EB /* RoutePreferenceActiveTests.swift */,
@@ -1142,6 +1148,7 @@
 				ADE93A5C25BF03FD9C09DA8C /* NoGoZoneGeometryTests.swift in Sources */,
 				5950C1B577E6BD5476A0FBB9 /* NowPlayingServiceTests.swift in Sources */,
 				B89C3A80892FD0596BAA0543 /* OSMSpeedLimitServiceTests.swift in Sources */,
+				6B9DC98F7D40C65476C5882C /* OSMTagParsingTests.swift in Sources */,
 				516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */,
 				1FF72605649C41DE725CA997 /* OnboardingCoordinatorTests.swift in Sources */,
 				0B4B8A0683044E51CD7D29AE /* POIDiscoveryTests.swift in Sources */,
@@ -1150,6 +1157,7 @@
 				5E824FC4DFBAD777E796CB8B /* RoadConditionServiceTests.swift in Sources */,
 				018EE0B492C8F3A3866BEB7B /* RoadGraphBuilderTests.swift in Sources */,
 				99DE3604ED59FC3E66B7D6FB /* RoadGraphSerializerTests.swift in Sources */,
+				864AD9FD6F0D23B680D497CC /* RoadGraphSourceTests.swift in Sources */,
 				6403E0888CD891BDBC0939E3 /* RouteDrawAnimationTests.swift in Sources */,
 				7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */,
 				99EEC9FDF103CFA359D55326 /* RoutePreferenceActiveTests.swift in Sources */,
