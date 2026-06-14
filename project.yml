@@ -29,6 +29,10 @@ targets:
         UIBackgroundModes:
           - audio
           - location
+          - fetch
+          - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - to.nathancurtis.steddi.commutecheck
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
           UISceneConfigurations:

@@ -24,6 +24,7 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             .modelContainer(container)
             .environment(appDelegate.locationService)
             .environment(appDelegate.offlineCacheService)
+            .environment(appDelegate.commuteNotificationService)
             .environment(NavigationStateManager.shared)
 
         let window = UIWindow(windowScene: windowScene)

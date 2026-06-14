@@ -23,6 +23,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let locationService = LocationService()
     let offlineCacheService = OfflineCacheService()
 
+    /// Smart-commute notification orchestrator. Lazily built so it shares the
+    /// app's ModelContainer and reads the live location fix.
+    lazy var commuteNotificationService: CommuteNotificationService = {
+        CommuteNotificationService(
+            modelContainer: modelContainer,
+            locationProvider: { [weak self] in self?.locationService.currentLocation }
+        )
+    }()
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -32,6 +41,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             appLog.fault("UNCAUGHT EXCEPTION: \(exception.name.rawValue): \(exception.reason ?? "no reason")\n\(exception.callStackSymbols.joined(separator: "\n"))")
         }
 
+        // ArrivalNotificationService keeps its own permission/category flow; the
+        // SAVE_ROUTE prompt fires post-arrival, not at launch.
         ArrivalNotificationService.shared.requestPermissionIfNeeded()
         ArrivalNotificationService.shared.registerCategory()
         ArrivalNotificationService.shared.setupDelegate()
@@ -45,6 +56,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // CarPlay both route steering-wheel + Control Center input to the active
         // audio app (music-ducking spec).
         MainActor.assumeIsolated { NowPlayingService.shared.registerCommands() }
+
+        // Register the commute-check background task BEFORE launch finishes —
+        // BGTaskScheduler requires handlers be registered during launch. We do
+        // NOT request notification permission here (spec: never at first launch);
+        // that happens from Settings or the first scheduled commute.
+        commuteNotificationService.registerBackgroundTask()
+        Task {
+            // Register the COMMUTE_ALERT category and arm the first refresh if
+            // the user already granted permission in a prior session.
+            await CommuteNotificationCenter.shared.registerCategory()
+            await commuteNotificationService.refreshAuthorizationStatus()
+            if commuteNotificationService.authorizationStatus == .authorized {
+                commuteNotificationService.scheduleBackgroundRefresh()
+            }
+        }
 
         _ = NavigationStateManager.shared
 

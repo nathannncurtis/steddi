@@ -13,9 +13,10 @@ struct CommuteNotificationsSettingsView: View {
     @State private var authStatus: UNAuthorizationStatus = .notDetermined
     @State private var showPermissionExplainer = false
 
-    /// Optional orchestrator — when present we drive the real permission request
-    /// and reschedule. When nil (e.g. previews) we degrade to status display.
-    var service: CommuteNotificationService?
+    /// Optional orchestrator from the environment — when present we drive the
+    /// real permission request and reschedule. When absent (e.g. previews) we
+    /// degrade to status display + a bare permission request.
+    @Environment(CommuteNotificationService.self) private var service: CommuteNotificationService?
 
     private var sensitivity: Binding<WeatherSensitivity> {
         Binding(
