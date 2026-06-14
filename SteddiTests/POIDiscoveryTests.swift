@@ -66,6 +66,83 @@ struct ReviewURLsTests {
         #expect(url.absoluteString.contains("a%20b%20c"))
         #expect(!url.absoluteString.contains("a+b+c"))
     }
+
+    @Test("Literal + and / in a name are escaped, not passed through")
+    func plusAndSlashEscaped() throws {
+        let url = try #require(ReviewURLs.yelpSearchURL(name: "Rock+Roll A/B", latitude: 0, longitude: 0))
+        let s = url.absoluteString
+        #expect(s.contains("%2B"))  // +
+        #expect(s.contains("%2F"))  // /
+        #expect(!s.contains("Rock+Roll"))
+        #expect(!s.contains("A/B"))
+        #expect(URL(string: s) != nil)
+    }
+
+    @Test("Negative coordinates keep their sign and fixed precision")
+    func negativeCoordinates() throws {
+        let url = try #require(ReviewURLs.yelpSearchURL(name: "X", latitude: -33.868820, longitude: 151.209290))
+        let s = url.absoluteString
+        #expect(s.contains("-33.868820"))
+        #expect(s.contains("151.209290"))
+    }
+
+    @Test("Coordinates are rounded to six decimal places")
+    func coordinateRounding() throws {
+        // 0.1234567 rounds to 0.123457 at %.6f.
+        let url = try #require(ReviewURLs.appleMapsURL(name: "X", latitude: 0.1234567, longitude: -0.9999995))
+        let s = url.absoluteString
+        #expect(s.contains("0.123457"))
+        #expect(s.contains("-1.000000"))  // -0.9999995 rounds to -1.000000
+    }
+
+    @Test("Zero coordinates format as 0.000000")
+    func zeroCoordinates() throws {
+        let url = try #require(ReviewURLs.appleMapsURL(name: "Null Island", latitude: 0, longitude: 0))
+        let s = url.absoluteString
+        #expect(s.contains("ll=0.000000%2C0.000000"))
+    }
+
+    @Test("Unicode place names are percent-encoded and stay parseable")
+    func unicodeName() throws {
+        let url = try #require(ReviewURLs.googleMapsURL(name: "Café 北京 🍕", latitude: 1, longitude: 2))
+        let s = url.absoluteString
+        #expect(URL(string: s) != nil)
+        // No raw multibyte scalars leak into the URL string.
+        #expect(!s.contains("北京"))
+        #expect(!s.contains("🍕"))
+        #expect(s.contains("%"))
+    }
+
+    @Test("Empty name still yields a valid URL with empty query value")
+    func emptyName() throws {
+        let url = try #require(ReviewURLs.yelpSearchURL(name: "", latitude: 1, longitude: 2))
+        let s = url.absoluteString
+        #expect(s.contains("find_desc=&") || s.hasSuffix("find_desc="))
+        #expect(s.contains("find_loc=1.000000%2C2.000000"))
+    }
+
+    @Test("Google and Apple builders also escape structural characters")
+    func googleAppleSpecialChars() throws {
+        let google = try #require(ReviewURLs.googleMapsURL(name: "A&B?C#D", latitude: 0, longitude: 0))
+        let apple = try #require(ReviewURLs.appleMapsURL(name: "A&B?C#D", latitude: 0, longitude: 0))
+        for s in [google.absoluteString, apple.absoluteString] {
+            #expect(s.contains("%26"))  // &
+            #expect(s.contains("%3F"))  // ?
+            #expect(s.contains("%23"))  // #
+            #expect(URL(string: s) != nil)
+        }
+    }
+
+    @Test("All three builders agree on their coordinate overloads")
+    func allOverloadsConsistent() throws {
+        let c = CLLocationCoordinate2D(latitude: -1.5, longitude: 100.25)
+        let g1 = try #require(ReviewURLs.googleMapsURL(name: "P", coordinate: c))
+        let g2 = try #require(ReviewURLs.googleMapsURL(name: "P", latitude: -1.5, longitude: 100.25))
+        #expect(g1.absoluteString == g2.absoluteString)
+        let a1 = try #require(ReviewURLs.appleMapsURL(name: "P", coordinate: c))
+        let a2 = try #require(ReviewURLs.appleMapsURL(name: "P", latitude: -1.5, longitude: 100.25))
+        #expect(a1.absoluteString == a2.absoluteString)
+    }
 }
 
 // MARK: - PlaceCategory
@@ -109,6 +186,54 @@ struct PlaceCategoryTests {
         let options = PlaceCategory.iconOptions(for: nil)
         #expect(options.count == PlaceCategory.allCases.count)
     }
+
+    @Test("Every category round-trips through key and category(for:)")
+    func keyRoundTrip() {
+        for category in PlaceCategory.allCases {
+            #expect(PlaceCategory.category(for: category.key) == category)
+        }
+    }
+
+    @Test("Category raw values are unique")
+    func uniqueRawValues() {
+        let raws = PlaceCategory.allCases.map(\.rawValue)
+        #expect(Set(raws).count == raws.count)
+    }
+
+    @Test("inferred(fromIcon:) results always resolve back to that category")
+    func inferredResolves() {
+        for category in PlaceCategory.allCases {
+            // The category's own symbol must infer back to itself (so a pin
+            // saved with the default icon migrates to the matching category).
+            if let inferred = PlaceCategory.inferred(fromIcon: category.symbol) {
+                #expect(inferred == category)
+            }
+        }
+    }
+
+    @Test("inferred(fromIcon:) returns nil for an unknown symbol")
+    func inferredUnknownNil() {
+        #expect(PlaceCategory.inferred(fromIcon: "sparkles") == nil)
+        #expect(PlaceCategory.inferred(fromIcon: "") == nil)
+    }
+
+    @Test("iconOptions for a category contains every category symbol exactly once")
+    func iconOptionsCoverage() {
+        for category in PlaceCategory.allCases {
+            let symbols = PlaceCategory.iconOptions(for: category).map(\.symbol)
+            #expect(symbols.count == PlaceCategory.allCases.count)
+            #expect(Set(symbols).count == symbols.count) // no duplicates
+            // Promotion does not drop any category symbol.
+            for c in PlaceCategory.allCases {
+                #expect(symbols.contains(c.symbol))
+            }
+        }
+    }
+
+    @Test("allCategories matches allCases order")
+    func allCategoriesOrder() {
+        #expect(PlaceCategory.allCategories == PlaceCategory.allCases)
+    }
 }
 
 // MARK: - Category Migration
@@ -148,6 +273,21 @@ struct CategoryMigrationTests {
             // No key should resolve to a non-other fallback unexpectedly — but
             // every key must be a real category.
             #expect(PlaceCategory(rawValue: key) != nil)
+        }
+    }
+
+    @Test("Each category's default symbol migrates to its own key")
+    func defaultSymbolMigrates() {
+        for category in PlaceCategory.allCases {
+            let key = PinnedLocationCategoryMigration.inferredKey(forIcon: category.symbol)
+            #expect(key == category.key)
+        }
+    }
+
+    @Test("Inferred key is never empty")
+    func neverEmpty() {
+        for icon in ["", "sparkles", "house.fill", "🚗", "fork.knife"] {
+            #expect(!PinnedLocationCategoryMigration.inferredKey(forIcon: icon).isEmpty)
         }
     }
 }
