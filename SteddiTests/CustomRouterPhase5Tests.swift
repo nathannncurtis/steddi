@@ -115,6 +115,49 @@ struct GeneratedRouteAdapterTests {
         let generated = GeneratedRoute.from(directionsRoute: directions, source: .mapKit)
         #expect(generated.steps.count >= 2)   // builder produced steps
     }
+
+    @Test("from(directionsRoute:) with a single step also falls back to builder")
+    func fromDirectionsRouteSingleStepFallsBack() {
+        // The fallback guard is `steps.count < 2`, so a lone step (not just zero)
+        // must also trigger geometric synthesis — covers the boundary the
+        // empty-legs test leaves open.
+        let coords = [
+            CLLocationCoordinate2D(latitude: 34.0, longitude: -118.0),
+            CLLocationCoordinate2D(latitude: 34.0, longitude: -118.003),
+            CLLocationCoordinate2D(latitude: 34.003, longitude: -118.003),
+        ]
+        let directions = DirectionsRoute(
+            encodedPolyline: PolylineEncoder.encode(coords, precision: 6),
+            distance: 600, duration: 120,
+            legs: [DirectionsLeg(steps: [
+                DirectionsStep(instructions: "Head east", distance: 100, maneuverType: "location.fill", coordinate: coords[0]),
+            ])]
+        )
+        let generated = GeneratedRoute.from(directionsRoute: directions, source: .mapKit)
+        #expect(generated.steps.count >= 2)
+    }
+
+    @Test("from(directionsRoute:) classifies symbol from text when maneuverType empty")
+    func fromDirectionsRouteEmptyManeuverTypeClassified() {
+        // A two-step route whose steps carry no maneuverType: the adapter must
+        // backfill the SF Symbol via sfSymbolFromInstruction rather than ship an
+        // empty symbol (which the nav UI/voice layer can't render).
+        let coords = [
+            CLLocationCoordinate2D(latitude: 34.0, longitude: -118.0),
+            CLLocationCoordinate2D(latitude: 34.0, longitude: -118.001),
+        ]
+        let directions = DirectionsRoute(
+            encodedPolyline: PolylineEncoder.encode(coords, precision: 6),
+            distance: 100, duration: 30,
+            legs: [DirectionsLeg(steps: [
+                DirectionsStep(instructions: "Turn left", distance: 100, maneuverType: "", coordinate: coords[0]),
+                DirectionsStep(instructions: "Arrive at your destination", distance: 0, maneuverType: "", coordinate: coords[1]),
+            ])]
+        )
+        let generated = GeneratedRoute.from(directionsRoute: directions, source: .mapKit)
+        #expect(generated.steps.first?.maneuverSymbol == "arrow.turn.up.left")
+        #expect(generated.steps.last?.maneuverSymbol == "flag.fill")
+    }
 }
 
 // MARK: - RoutePreferences -> RoutingContext mapping
@@ -170,6 +213,60 @@ struct RoutingContextMappingTests {
         #expect(context.hardZones.count == 1)
         #expect(context.softZones.isEmpty)
     }
+
+    @Test("a time-windowed zone inactive at departure is actually dropped")
+    func inactiveTimeWindowedZoneDropped() {
+        // Departure is a Tuesday (2026-06-09, weekday 3). The zone's window only
+        // fires on Sunday (weekday 1), so it is inactive at departure and must
+        // NOT become a hard exclusion — guards the isActive(now:) filter in
+        // routingContext, which the existing always-active test never exercised.
+        var components = DateComponents()
+        components.year = 2026; components.month = 6; components.day = 9
+        components.hour = 8; components.minute = 0
+        let tuesday = Calendar.current.date(from: components)!
+
+        let windowedZone = NoGoZone(
+            geometry: .circle(
+                center: CLLocationCoordinate2D(latitude: 0.0, longitude: 0.005),
+                radiusMeters: 150
+            ),
+            isGlobal: true,
+            timeWindow: TimeWindow(daysOfWeek: [1], startHour: 0, endHour: 24)
+        )
+        // Sanity: the model itself agrees the zone is inactive on this Tuesday.
+        #expect(windowedZone.isActive(now: tuesday) == false)
+
+        let request = RouteRequest(
+            origin: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            destination: CLLocationCoordinate2D(latitude: 0, longitude: 0.01),
+            preferences: RoutePreferences(avoidsTolls: false, avoidsHighways: false),
+            noGoZones: [windowedZone],
+            departureDate: tuesday
+        )
+        let context = CustomRouter.routingContext(for: request)
+        #expect(context.hardZones.isEmpty)
+        #expect(context.softZones.isEmpty)
+    }
+
+    @Test("off-rush departure hour yields isRushHour false")
+    func offRushHourMapped() {
+        // 13:00 is outside both default rush windows (6...9, 16...19), so the
+        // mapped context must not flag rush hour — the complement of the
+        // departureHourMapped test's 8am case.
+        var components = DateComponents()
+        components.year = 2026; components.month = 6; components.day = 9
+        components.hour = 13; components.minute = 0
+        let date = Calendar.current.date(from: components)!
+        let request = RouteRequest(
+            origin: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            destination: CLLocationCoordinate2D(latitude: 0, longitude: 0.01),
+            preferences: RoutePreferences(avoidsTolls: false, avoidsHighways: false),
+            departureDate: date
+        )
+        let context = CustomRouter.routingContext(for: request)
+        #expect(context.departureHour == 13)
+        #expect(context.isRushHour == false)
+    }
 }
 
 // MARK: - NoGoZone -> RoutedZone conversion
@@ -224,6 +321,19 @@ struct RoutedZoneConversionTests {
     func degenerateCorridorNil() {
         let single = [CLLocationCoordinate2D(latitude: 34.0, longitude: -118.0)]
         let zone = NoGoZone(geometry: .corridor(encodedPolyline: PolylineEncoder.encode(single, precision: 6), bufferMeters: 50), isGlobal: true)
+        #expect(CustomRouter.routedZone(from: zone) == nil)
+    }
+
+    @Test("degenerate polygon (fewer than 3 vertices) yields nil")
+    func degeneratePolygonNil() {
+        // routedZone requires >= 3 vertices for a polygon; a 2-point polyline
+        // can't bound an area, so it must drop to nil rather than feed the cost
+        // model an unintersectable shape.
+        let twoPoints = [
+            CLLocationCoordinate2D(latitude: 34.0, longitude: -118.0),
+            CLLocationCoordinate2D(latitude: 34.001, longitude: -118.0),
+        ]
+        let zone = NoGoZone(geometry: .polygon(encodedPolyline: PolylineEncoder.encode(twoPoints, precision: 6)), isGlobal: true)
         #expect(CustomRouter.routedZone(from: zone) == nil)
     }
 }
@@ -329,6 +439,44 @@ struct CustomRouterEndToEndTests {
         #expect(corridor.first?.longitude == origin.longitude)
         #expect(corridor.last?.longitude == destination.longitude)
         #expect(corridor.count > 2)
+    }
+
+    @Test("corridor of a short leg keeps just the two endpoints")
+    func corridorShortLegNotDensified() {
+        // A leg under the spacing threshold gets no intermediate vertices, so the
+        // loader isn't handed redundant corridor points for near-trips.
+        let origin = CLLocationCoordinate2D(latitude: 34.0, longitude: -118.0)
+        let destination = CLLocationCoordinate2D(latitude: 34.0, longitude: -118.0005)  // ~46 m
+        let corridor = CustomRouter.corridor(
+            origin: origin, waypoints: [], destination: destination, spacingMeters: 1000
+        )
+        #expect(corridor.count == 2)
+    }
+
+    @Test("freeFlowDuration scales distance by the urban free-flow speed")
+    func freeFlowDurationScales() {
+        // 1340 m at the model's 13.4 m/s baseline == 100 s. Honest, traffic-free
+        // (the displayed/reroute ETA stays on MKDirections — §6).
+        let duration = CustomRouter.freeFlowDuration(of: [], fallbackDistance: 1340)
+        #expect(abs(duration - 100) < 0.001)
+    }
+
+    @Test("freeFlowDuration of zero distance is zero (no divide-by-zero)")
+    func freeFlowDurationZero() {
+        #expect(CustomRouter.freeFlowDuration(of: [], fallbackDistance: 0) == 0)
+    }
+
+    @Test("freeFlowDuration falls back to polyline length when no distance given")
+    func freeFlowDurationFromPolyline() {
+        // fallbackDistance <= 0 forces it to measure the polyline itself.
+        let coords = [
+            CLLocationCoordinate2D(latitude: 34.0, longitude: -118.0),
+            CLLocationCoordinate2D(latitude: 34.0, longitude: -118.001),
+        ]
+        let measured = RouteGeometry.cumulativeDistances(coords).last ?? 0
+        let duration = CustomRouter.freeFlowDuration(of: coords, fallbackDistance: 0)
+        #expect(measured > 0)
+        #expect(abs(duration - measured / 13.4) < 0.001)
     }
 }
 
