@@ -91,6 +91,7 @@
 		CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE4512ED735A6D3CD409755 /* VoicePicker.swift */; };
 		CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B385FB734BECC176514917FB /* RoutePlannerView.swift */; };
 		CE0E87101839B1C3153234A1 /* VoiceGuidanceServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */; };
+		AA02000000000000000000A2 /* ThemeEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02000000000000000000B2 /* ThemeEngineTests.swift */; };
 		D458D1FFCB26A8CB84EE42C6 /* NowPlayingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B614E4431FE25A25512707 /* NowPlayingService.swift */; };
 		D5D2CC709306B626B120D222 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4892145CE55DFF9FF13FC7 /* DonationView.swift */; };
 		D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */; };
@@ -251,6 +252,7 @@
 		CADE3A03C008B4BD3D0FE2E6 /* Report.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report.swift; sourceTree = "<group>"; };
 		CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoder.swift; sourceTree = "<group>"; };
 		CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceServiceTests.swift; sourceTree = "<group>"; };
+		AA02000000000000000000B2 /* ThemeEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEngineTests.swift; sourceTree = "<group>"; };
 		CE8C721636439033B457CA4E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalNotificationService.swift; sourceTree = "<group>"; };
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
@@ -406,6 +408,7 @@
 				A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */,
 				5B7D3F80DC55A1A5E68D3DA5 /* RouteRecoveryEngineTests.swift */,
 				CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */,
+				AA02000000000000000000B2 /* ThemeEngineTests.swift */,
 			);
 			path = SteddiTests;
 			sourceTree = "<group>";
@@ -867,6 +870,7 @@
 				7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */,
 				F37B3C0B2FD46D546EB6BE9B /* RouteRecoveryEngineTests.swift in Sources */,
 				CE0E87101839B1C3153234A1 /* VoiceGuidanceServiceTests.swift in Sources */,
+				AA02000000000000000000A2 /* ThemeEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

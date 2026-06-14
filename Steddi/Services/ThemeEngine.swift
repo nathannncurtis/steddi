@@ -360,13 +360,19 @@ final class ThemeEngine {
         smoothstep(elevation, from: Tuning.nightElevation, to: Tuning.dayElevation)
     }
 
-    /// Golden-hour warmth factor: peaks at the horizon, fades to zero by −8°
-    /// (dusk has settled) and +10° (sun well clear). Continuous everywhere.
+    /// Golden-hour warmth factor in [0, 1]: peaks (1) at the horizon, fades to
+    /// zero by +10° (sun well clear) and at/below −8° (dusk has settled),
+    /// monotonic and continuous in between. Both branches are clamped to [0, 1]
+    /// — without the upper clamp the negative branch ran above 1 below −8°
+    /// (e.g. 2.25 at −10°), over-driving the warmth tint into deep twilight.
     nonisolated static func goldenHourFactor(forSolarElevation elevation: Double) -> Double {
+        let factor: Double
         if elevation >= 0 {
-            return max(0, 1 - elevation / Tuning.goldenUpperElevation)
+            factor = 1 - elevation / Tuning.goldenUpperElevation
+        } else {
+            factor = 1 + elevation / -Tuning.goldenLowerElevation
         }
-        return max(0, 1 + elevation / -Tuning.goldenLowerElevation)
+        return min(1, max(0, factor))
     }
 
     /// No-location fallback: 7am–7pm daytime with 45-minute ramps at each edge.
