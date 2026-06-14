@@ -26,17 +26,40 @@ final class CustomRouter: RouteProvider {
     /// polyline density. The loader applies its own 1500 m buffer; this only
     /// affects how many waypoints we densify the centerline with.
     private let corridorSampleSpacingMeters: Double
+    /// Per-driver learned weights store (Phase 7). When present, the router reads
+    /// the most specific learned `CostWeights` for the request's scope and uses it
+    /// in place of the injected `weights`; absent (or no stored set) it falls back
+    /// to `weights` (which defaults to `CostWeights.default`). Learning is purely
+    /// additive — it never strands a route.
+    private let learnedWeightsStore: LearnedWeightsStore?
+    /// Maps a `RouteRequest` to a learned-weights scope (e.g. a commute id +
+    /// direction). Returns nil to use only the global learned set. Injected so the
+    /// router stays decoupled from how scopes are derived.
+    private let scope: @Sendable (RouteRequest) -> String?
 
     init(
         graphSource: RoadGraphSource,
         search: AStarSearch = AStarSearch(),
         weights: CostWeights = .default,
-        corridorSampleSpacingMeters: Double = 1000
+        corridorSampleSpacingMeters: Double = 1000,
+        learnedWeightsStore: LearnedWeightsStore? = nil,
+        scope: @escaping @Sendable (RouteRequest) -> String? = { _ in nil }
     ) {
         self.graphSource = graphSource
         self.search = search
         self.weights = weights
         self.corridorSampleSpacingMeters = corridorSampleSpacingMeters
+        self.learnedWeightsStore = learnedWeightsStore
+        self.scope = scope
+    }
+
+    /// The weights to route with for a request: the most specific learned set
+    /// available (per-scope, then global), else the injected base `weights`
+    /// (`CostWeights.default` by default). Pure given the store's contents; the
+    /// Phase-7 hook and tests read it directly.
+    func resolvedWeights(for request: RouteRequest) -> CostWeights {
+        guard let store = learnedWeightsStore else { return weights }
+        return store.loadBest(scope: scope(request)) ?? weights
     }
 
     // MARK: - RouteProvider
@@ -61,9 +84,11 @@ final class CustomRouter: RouteProvider {
             return nil
         }
 
-        // 3. Build the routing context from preferences + departure + zones.
+        // 3. Build the routing context from preferences + departure + zones, and
+        //    resolve the cost weights — the driver's learned set when one exists
+        //    for this scope (Phase 7), else the injected base weights.
         let context = Self.routingContext(for: request)
-        let cost = DefaultCostModel(weights: weights, context: context)
+        let cost = DefaultCostModel(weights: resolvedWeights(for: request), context: context)
 
         // 4. Search the corridor leg-by-leg so waypoints are honored as
         //    pass-throughs (one A* per leg, stitched). The search + synthesis are
