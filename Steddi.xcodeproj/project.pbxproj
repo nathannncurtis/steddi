@@ -12,6 +12,7 @@
 		0786561020231240135F9738 /* TripPlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD8704B61414025699515828 /* TripPlannerView.swift */; };
 		080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */; };
 		0A72D4673A9DC592DE1BDC01 /* AggregateStatsCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9342593EFE74CD157A9C4854 /* AggregateStatsCards.swift */; };
+		0A7AF0449A2474692CB7DC6F /* CommuteNotificationDecisionEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */; };
 		0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */; };
 		0E09441FE050C20774C8887E /* DaysOfWeekPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC40EBECC2D5A14FFFB4F991 /* DaysOfWeekPicker.swift */; };
 		0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */; };
@@ -31,6 +32,7 @@
 		2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */; };
 		2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
+		3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */; };
 		3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335291BA198DC1134B9072E8 /* LocationPickerView.swift */; };
 		43C4CC9A502866B2BE5E5A35 /* ThemeRevisionTrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = 215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */; };
 		441AC263D0497D1AA6E95964 /* SteddiLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -205,6 +207,7 @@
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
 		2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiWidgetBundle.swift; sourceTree = "<group>"; };
 		2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsServiceTests.swift; sourceTree = "<group>"; };
+		2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngineTests.swift; sourceTree = "<group>"; };
 		30A628B67F551F51F4AEBEE8 /* LocalNormsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNormsProvider.swift; sourceTree = "<group>"; };
 		335291BA198DC1134B9072E8 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		3380F79E0670137420A0A6AC /* OSMSpeedLimitServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMSpeedLimitServiceTests.swift; sourceTree = "<group>"; };
@@ -263,6 +266,7 @@
 		8F657EB3BAF59F5A88D66FA5 /* FuzzyRouteParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzyRouteParser.swift; sourceTree = "<group>"; };
 		9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteAnalyticsView.swift; sourceTree = "<group>"; };
 		9342593EFE74CD157A9C4854 /* AggregateStatsCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AggregateStatsCards.swift; sourceTree = "<group>"; };
+		93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngine.swift; sourceTree = "<group>"; };
 		94C0D76787187AFA4D836876 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometryTests.swift; sourceTree = "<group>"; };
@@ -457,6 +461,7 @@
 				2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */,
 				DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */,
 				6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */,
+				2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */,
 				7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */,
 				08B46BB7337E920209A89889 /* HapticServiceTests.swift */,
 				E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */,
@@ -621,6 +626,7 @@
 				D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */,
 				D30598BF220C0E6199379B02 /* AudioDuckingService.swift */,
 				7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */,
+				93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */,
 				D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */,
 				57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */,
 				5F1A30250323ADAE79B65516 /* DisplayModeService.swift */,
@@ -852,6 +858,7 @@
 				8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */,
 				9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */,
 				BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */,
+				3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */,
 				10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */,
 				C4A0314513C0EDA3FFC980BB /* CustomRouteBuilder.swift in Sources */,
 				0E09441FE050C20774C8887E /* DaysOfWeekPicker.swift in Sources */,
@@ -953,6 +960,7 @@
 				06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */,
 				5D8C6D53390B98A19A081299 /* AudioDuckingServiceTests.swift in Sources */,
 				B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */,
+				0A7AF0449A2474692CB7DC6F /* CommuteNotificationDecisionEngineTests.swift in Sources */,
 				A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */,
 				8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */,
 				9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */,
