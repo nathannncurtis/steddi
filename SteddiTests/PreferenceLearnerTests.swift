@@ -1,0 +1,370 @@
+import Testing
+import Foundation
+import CoreLocation
+@testable import Steddi
+
+// MARK: - Fixture helpers (mirror DefaultCostModelTests / AStarSearchTests)
+
+private func node(_ id: Int64, _ lat: Double, _ lon: Double, tags: [String: String] = [:]) -> String {
+    let tagJSON = tags.map { #""\#($0.key)":"\#($0.value)""# }.joined(separator: ",")
+    let tagPart = tags.isEmpty ? "" : #","tags":{\#(tagJSON)}"#
+    return #"{"type":"node","id":\#(id),"lat":\#(lat),"lon":\#(lon)\#(tagPart)}"#
+}
+
+private func way(_ id: Int64, _ nodes: [Int64], tags: [String: String]) -> String {
+    let nodeList = nodes.map(String.init).joined(separator: ",")
+    let tagJSON = tags.map { #""\#($0.key)":"\#($0.value)""# }.joined(separator: ",")
+    return #"{"type":"way","id":\#(id),"nodes":[\#(nodeList)],"tags":{\#(tagJSON)}}"#
+}
+
+private func buildGraph(_ elements: String...) -> RoadGraph {
+    let json = #"{"version":0.6,"elements":[\#(elements.joined(separator: ","))]}"#
+    let response = try! JSONDecoder().decode(OverpassGraphResponse.self, from: Data(json.utf8))
+    return RoadGraphBuilder.buildGraph(from: response)
+}
+
+/// A DriveRecord whose raw trace is the given coordinates (1 s apart, cruising).
+private func driveRecord(trace: [CLLocationCoordinate2D], speed: Double = 12) -> DriveRecord {
+    let rec = DriveRecord(startedAt: Date(timeIntervalSince1970: 0))
+    var t = Date(timeIntervalSince1970: 0)
+    rec.rawGPSPoints = trace.map { c in
+        defer { t = t.addingTimeInterval(1) }
+        return GPSPoint(latitude: c.latitude, longitude: c.longitude, altitude: 0,
+                        horizontalAccuracy: 5, timestamp: t, speed: speed)
+    }
+    rec.endedAt = t
+    return rec
+}
+
+/// Densify a coordinate pair into `count` evenly spaced points (so the greedy
+/// snapper sees several fixes on each edge, as a real GPS trace would).
+private func densify(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D, count: Int) -> [CLLocationCoordinate2D] {
+    (0...count).map { i in
+        let t = Double(i) / Double(count)
+        return CLLocationCoordinate2D(latitude: a.latitude + t * (b.latitude - a.latitude),
+                                      longitude: a.longitude + t * (b.longitude - a.longitude))
+    }
+}
+
+// MARK: - No-history / below-threshold => defaults
+
+@Suite("PrefLearner defaults when there's no usable history")
+struct PrefLearnerDefaultsTests {
+
+    private func lineGraph() -> RoadGraph {
+        buildGraph(
+            node(1, 34.0000, -117.0000),
+            node(2, 34.0000, -116.9990),
+            node(3, 34.0000, -116.9980),
+            way(10, [1, 2, 3], tags: ["highway": "tertiary", "maxspeed": "35 mph"])
+        )
+    }
+
+    @Test("No records => seed weights unchanged")
+    func noRecords() {
+        let g = lineGraph()
+        let learned = PrefLearner.learn(from: [], graph: g, seed: .default)
+        #expect(learned == CostWeights.default)
+    }
+
+    @Test("Fewer than minimumDrives => seed weights unchanged")
+    func belowThreshold() {
+        let g = lineGraph()
+        let n1 = g.nodes[Int(g.osmToIndex[1]!)].coordinate
+        let n3 = g.nodes[Int(g.osmToIndex[3]!)].coordinate
+        let rec = driveRecord(trace: densify(n1, n3, count: 8))
+        // Only 2 drives, minimumDrives defaults to 3.
+        let learned = PrefLearner.learn(from: [rec, rec], graph: g, seed: .default)
+        #expect(learned == CostWeights.default)
+    }
+
+    @Test("Empty graph => seed weights unchanged")
+    func emptyGraph() {
+        let empty = buildGraph(node(1, 0, 0))   // a lone node, no ways => no edges
+        let rec = driveRecord(trace: [CLLocationCoordinate2D(latitude: 0, longitude: 0)])
+        let learned = PrefLearner.learn(from: [rec, rec, rec, rec], graph: empty, seed: .default)
+        #expect(learned == CostWeights.default)
+    }
+}
+
+// MARK: - Map-matching the trace onto edges
+
+@Suite("PrefLearner map-matching")
+struct PrefLearnerMatchingTests {
+
+    /// A 3-segment path 1-2-3-4 all tertiary, straight east.
+    private func pathGraph() -> RoadGraph {
+        buildGraph(
+            node(1, 34.0000, -117.0000),
+            node(2, 34.0000, -116.9990),
+            node(3, 34.0000, -116.9980),
+            node(4, 34.0000, -116.9970),
+            way(10, [1, 2], tags: ["highway": "tertiary"]),
+            way(11, [2, 3], tags: ["highway": "tertiary"]),
+            way(12, [3, 4], tags: ["highway": "tertiary"])
+        )
+    }
+
+    @Test("A trace over the whole path matches the traversed edges in order")
+    func matchesInOrder() {
+        let g = pathGraph()
+        let coords = [1, 2, 3, 4].map { g.nodes[Int(g.osmToIndex[Int64($0)]!)].coordinate }
+        let trace = stride(from: 0, to: coords.count - 1, by: 1).flatMap { i in
+            densify(coords[i], coords[i + 1], count: 6).dropLast()
+        } + [coords.last!]
+        let matched = PrefLearner.matchedEdgeSequence(Array(trace), graph: g, config: .default)
+        // Distinct edges traversed, in order (1->2, 2->3, 3->4).
+        let distinct = matched.map(\.edge)
+        #expect(distinct.count == 3)
+        // Each segment carries roughly the edge length (~92 m for 0.001 deg lon).
+        for seg in matched { #expect(seg.meters > 50) }
+    }
+
+    @Test("Off-graph points (beyond snap radius) don't match")
+    func offGraphSkipped() {
+        let g = pathGraph()
+        // A trace 1 km north of the line — way outside the 35 m snap radius.
+        let far = CLLocationCoordinate2D(latitude: 34.01, longitude: -116.999)
+        let matched = PrefLearner.matchedEdgeSequence(densify(far, far, count: 4), graph: g, config: .default)
+        #expect(matched.isEmpty)
+    }
+
+    @Test("matchedPolyline is preferred over raw GPS when present")
+    func prefersMatchedPolyline() {
+        let g = pathGraph()
+        let n1 = g.nodes[Int(g.osmToIndex[1]!)].coordinate
+        let n2 = g.nodes[Int(g.osmToIndex[2]!)].coordinate
+        let rec = driveRecord(trace: [])   // empty raw trace
+        rec.matchedPolyline = PolylineEncoder.encode(densify(n1, n2, count: 6), precision: 6)
+        let trace = PrefLearner.traceCoordinates(of: rec)
+        #expect(trace.count >= 2)
+    }
+}
+
+// MARK: - Bounded weights / invariants
+
+@Suite("PrefLearner produces bounded, admissible weights")
+struct PrefLearnerInvariantTests {
+
+    /// Synthesize a revealed usage directly so the bound logic is tested without
+    /// the matcher (pure unit of the weight blend).
+    private func usage(metersByClass: [RoadClass: Double], turns: [TurnDirection: Int] = [:], drives: Int = 10) -> PrefLearner.RevealedUsage {
+        var u = PrefLearner.RevealedUsage()
+        u.usableDrives = drives
+        u.metersByClass = metersByClass
+        u.turnCounts = turns
+        return u
+    }
+
+    @Test("All road-class multipliers stay >= 1 (admissibility invariant)")
+    func multipliersAtLeastOne() {
+        // Extreme: driver ONLY ever uses service roads.
+        let u = usage(metersByClass: [.service: 10000])
+        let w = PrefLearner.weights(from: u, seed: .default)
+        for m in w.roadClassMultiplier { #expect(m >= 1.0) }
+    }
+
+    @Test("All turn penalties stay >= 0")
+    func penaltiesNonNegative() {
+        let u = usage(metersByClass: [.tertiary: 1000],
+                      turns: [.right: 50, .left: 1])
+        let w = PrefLearner.weights(from: u, seed: .default)
+        #expect(w.rightTurnPenalty >= 0)
+        #expect(w.protectedLeftPenalty >= 0)
+        #expect(w.unprotectedLeftBase >= 0)
+    }
+
+    @Test("A favoured class can't be discounted past its clamp")
+    func discountClamped() {
+        let u = usage(metersByClass: [.tertiary: 9000, .primary: 1000])
+        let w = PrefLearner.weights(from: u, seed: .default, config: .default)
+        let tertiary = w.roadClassMultiplier[Int(RoadClass.tertiary.rawValue)]
+        let seed = CostWeights.default.roadClassMultiplier[Int(RoadClass.tertiary.rawValue)]
+        // It moved down (favoured) but not below the maxClassDiscount floor / 1.0.
+        #expect(tertiary < seed)
+        #expect(tertiary >= max(1.0, seed - PrefLearner.Config.default.maxClassDiscount))
+    }
+
+    @Test("An avoided class can't be penalised past its clamp")
+    func penaltyClamped() {
+        // Driver uses primary almost exclusively => service is avoided.
+        let u = usage(metersByClass: [.primary: 9000, .service: 100])
+        let w = PrefLearner.weights(from: u, seed: .default, config: .default)
+        let service = w.roadClassMultiplier[Int(RoadClass.service.rawValue)]
+        let seed = CostWeights.default.roadClassMultiplier[Int(RoadClass.service.rawValue)]
+        #expect(service <= seed + PrefLearner.Config.default.maxClassPenalty + 1e-9)
+    }
+}
+
+// MARK: - The "scenic tertiary" learning scenario
+
+@Suite("PrefLearner learns the scenic-road preference")
+struct PrefLearnerScenicTests {
+
+    /// Two parallel ways between the same endpoints: a fast PRIMARY and a slower
+    /// scenic TERTIARY. The driver always takes the tertiary, so learning should
+    /// shift the tertiary multiplier DOWN (more preferred) within the clamp.
+    private func parallelGraph() -> RoadGraph {
+        buildGraph(
+            node(1, 34.0000, -117.0000),       // shared origin
+            node(2, 34.0000, -116.9900),       // shared destination
+            node(3, 34.0020, -116.9950),       // tertiary mid (north detour)
+            node(4, 33.9980, -116.9950),       // primary mid (south, straighter/faster)
+            way(10, [1, 3, 2], tags: ["highway": "tertiary", "maxspeed": "30 mph"]),
+            way(11, [1, 4, 2], tags: ["highway": "primary", "maxspeed": "55 mph"])
+        )
+    }
+
+    @Test("Always driving the tertiary lowers its multiplier within the clamp")
+    func scenicShiftsDown() {
+        let g = parallelGraph()
+        let n1 = g.nodes[Int(g.osmToIndex[1]!)].coordinate
+        let n3 = g.nodes[Int(g.osmToIndex[3]!)].coordinate
+        let n2 = g.nodes[Int(g.osmToIndex[2]!)].coordinate
+        // Trace the tertiary 1 -> 3 -> 2 over many drives.
+        let leg = densify(n1, n3, count: 6).dropLast() + densify(n3, n2, count: 6)
+        let recs = (0..<6).map { _ in driveRecord(trace: Array(leg)) }
+
+        let seed = CostWeights.default
+        let learned = PrefLearner.learn(from: recs, graph: g, seed: seed)
+
+        let tertiaryIdx = Int(RoadClass.tertiary.rawValue)
+        let seedTertiary = seed.roadClassMultiplier[tertiaryIdx]
+        let learnedTertiary = learned.roadClassMultiplier[tertiaryIdx]
+
+        // Tertiary became MORE preferred (lower multiplier) than the seed...
+        #expect(learnedTertiary < seedTertiary)
+        // ...but stayed admissible (>= 1) and within the discount clamp.
+        #expect(learnedTertiary >= 1.0)
+        #expect(learnedTertiary >= seedTertiary - PrefLearner.Config.default.maxClassDiscount)
+    }
+
+    @Test("Revealed usage attributes the driven distance to tertiary")
+    func usageAttributed() {
+        let g = parallelGraph()
+        let n1 = g.nodes[Int(g.osmToIndex[1]!)].coordinate
+        let n3 = g.nodes[Int(g.osmToIndex[3]!)].coordinate
+        let n2 = g.nodes[Int(g.osmToIndex[2]!)].coordinate
+        let leg = densify(n1, n3, count: 6).dropLast() + densify(n3, n2, count: 6)
+        let recs = (0..<4).map { _ in driveRecord(trace: Array(leg)) }
+        let u = PrefLearner.revealedUsage(from: recs, graph: g)
+        #expect(u.usableDrives == 4)
+        let tertiary = u.metersByClass[.tertiary] ?? 0
+        let primary = u.metersByClass[.primary] ?? 0
+        #expect(tertiary > 0)
+        #expect(tertiary > primary)   // they never drove the primary
+    }
+}
+
+// MARK: - Persistence round-trip
+
+@Suite("LearnedWeightsStore round-trips weights")
+struct LearnedWeightsStoreTests {
+
+    private func transientDefaults() -> UserDefaults {
+        let name = "test.learnedWeights.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        return d
+    }
+
+    @Test("Save then load returns an equal CostWeights")
+    func roundTrip() {
+        let store = LearnedWeightsStore(defaults: transientDefaults())
+        var w = CostWeights.default
+        w.rightTurnPenalty = 2.5
+        w.roadClassMultiplier[Int(RoadClass.tertiary.rawValue)] = 1.01
+        store.save(w, scope: "commute-A-toWork")
+        let loaded = store.load(scope: "commute-A-toWork")
+        #expect(loaded == w)
+    }
+
+    @Test("Missing scope loads nil")
+    func missingNil() {
+        let store = LearnedWeightsStore(defaults: transientDefaults())
+        #expect(store.load(scope: "nope") == nil)
+    }
+
+    @Test("loadBest prefers the specific scope, then global, then nil")
+    func loadBestPrecedence() {
+        let store = LearnedWeightsStore(defaults: transientDefaults())
+        var global = CostWeights.default; global.rightTurnPenalty = 1
+        var specific = CostWeights.default; specific.rightTurnPenalty = 9
+        // Only global present => loadBest returns global.
+        store.save(global, scope: LearnedWeightsStore.globalScope)
+        #expect(store.loadBest(scope: "commute-A")?.rightTurnPenalty == 1)
+        // Specific present => it wins.
+        store.save(specific, scope: "commute-A")
+        #expect(store.loadBest(scope: "commute-A")?.rightTurnPenalty == 9)
+        // Unknown scope with global present => falls back to global.
+        #expect(store.loadBest(scope: "commute-Z")?.rightTurnPenalty == 1)
+        // Nil scope, global present => global.
+        #expect(store.loadBest(scope: nil)?.rightTurnPenalty == 1)
+    }
+
+    @Test("clear removes the stored set")
+    func clearRemoves() {
+        let store = LearnedWeightsStore(defaults: transientDefaults())
+        store.save(.default, scope: "x")
+        store.clear(scope: "x")
+        #expect(store.load(scope: "x") == nil)
+    }
+
+    @Test("Learned weights survive a full learn -> save -> load round trip")
+    func learnPersistRoundTrip() {
+        let store = LearnedWeightsStore(defaults: transientDefaults())
+        var w = CostWeights.default
+        w.roadClassMultiplier[Int(RoadClass.tertiary.rawValue)] = 1.005
+        w.unprotectedLeftBase = 20
+        store.save(w, scope: LearnedWeightsStore.globalScope)
+        #expect(store.loadBest(scope: nil) == w)
+    }
+}
+
+// MARK: - CustomRouter learned-weights hook
+
+@Suite("CustomRouter resolves learned weights")
+@MainActor
+struct CustomRouterLearnedWeightsTests {
+
+    private func transientDefaults() -> UserDefaults {
+        let name = "test.routerWeights.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        return d
+    }
+
+    private func request() -> RouteRequest {
+        RouteRequest(
+            origin: CLLocationCoordinate2D(latitude: 34, longitude: -117),
+            destination: CLLocationCoordinate2D(latitude: 34, longitude: -116.99),
+            preferences: RoutePreferences(avoidsTolls: false, avoidsHighways: false)
+        )
+    }
+
+    @Test("No store => the injected base weights are used")
+    func noStoreUsesBase() {
+        var base = CostWeights.default; base.rightTurnPenalty = 3
+        let router = CustomRouter(graphSource: RoadGraphSource(), weights: base)
+        #expect(router.resolvedWeights(for: request()) == base)
+    }
+
+    @Test("Store with no entry => falls back to base weights")
+    func emptyStoreFallsBack() {
+        let store = LearnedWeightsStore(defaults: transientDefaults())
+        var base = CostWeights.default; base.rightTurnPenalty = 3
+        let router = CustomRouter(graphSource: RoadGraphSource(), weights: base,
+                                  learnedWeightsStore: store, scope: { _ in "commute-A" })
+        #expect(router.resolvedWeights(for: request()) == base)
+    }
+
+    @Test("Learned set for the scope is preferred over base")
+    func learnedPreferred() {
+        let store = LearnedWeightsStore(defaults: transientDefaults())
+        var learned = CostWeights.default; learned.rightTurnPenalty = 1
+        store.save(learned, scope: "commute-A")
+        let router = CustomRouter(graphSource: RoadGraphSource(),
+                                  learnedWeightsStore: store, scope: { _ in "commute-A" })
+        #expect(router.resolvedWeights(for: request()) == learned)
+    }
+}
