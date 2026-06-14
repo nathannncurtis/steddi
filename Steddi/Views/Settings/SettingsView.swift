@@ -238,6 +238,9 @@ struct SettingsView: View {
                     Text("Commutes")
                 }
 
+                // MARK: - Commute Notifications
+                CommuteNotificationsSettingsView()
+
                 // MARK: - No-Go Zones
                 Section {
                     ForEach(globalNoGoZones) { zone in
