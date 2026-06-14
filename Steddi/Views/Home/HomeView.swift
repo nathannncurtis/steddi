@@ -1988,7 +1988,8 @@ struct HomeView: View {
         request.destination = MKMapItem(location: CLLocation(latitude: destination.latitude, longitude: destination.longitude), address: nil)
         request.transportType = .automobile
         request.requestsAlternateRoutes = true
-        RoutePreferences.resolve(commute: activeCommute).apply(to: request)
+        let resolvedPreferences = RoutePreferences.resolve(commute: activeCommute, in: .standard)
+        resolvedPreferences.apply(to: request)
 
         do {
             let response = try await MKDirections(request: request).calculate()
