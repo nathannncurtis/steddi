@@ -78,6 +78,12 @@ enum PrefLearner {
         var metersByClass: [RoadClass: Double] = [:]
         /// Count of each turn category the driver actually made at graph nodes.
         var turnCounts: [TurnDirection: Int] = [:]
+        /// The distinct drivable classes the CORRIDOR offers (not just the ones the
+        /// driver used). This is the reference set for affinity: a driver who pours
+        /// all their distance into tertiary while primary is *available* reveals a
+        /// preference, even though they touched only one class. Without this, a
+        /// single-class driver would have zero affinity and learning would no-op.
+        var availableClasses: Set<RoadClass> = []
 
         /// Total matched distance across all classes (denominator for shares).
         var totalMeters: Double { metersByClass.values.reduce(0, +) }
@@ -120,6 +126,11 @@ enum PrefLearner {
     ) -> RevealedUsage {
         var usage = RevealedUsage()
         guard !graph.edges.isEmpty else { return usage }
+
+        // Reference set: every drivable class the corridor offers.
+        for edge in graph.edges where edge.roadClass != .unknown {
+            usage.availableClasses.insert(edge.roadClass)
+        }
 
         for record in records {
             let trace = traceCoordinates(of: record)
@@ -228,12 +239,17 @@ enum PrefLearner {
         // --- Road-class multipliers ---
         // A class the driver uses MORE than its "expected" even share gets a
         // discount (toward, never below, 1.0); a class they use LESS gets a small
-        // penalty. The reference is an even share across the classes the driver
-        // actually touched, so "always takes the scenic tertiary" reveals tertiary
-        // as over-represented and shifts its multiplier down within the clamp.
+        // penalty. The reference is an even share across the classes the CORRIDOR
+        // offers (`availableClasses`), not just the ones touched — so a driver who
+        // pours all their distance into tertiary while primary is *available*
+        // reveals a real preference and tertiary shifts down within the clamp,
+        // even though only one class was driven.
         let touched = usage.metersByClass.filter { $0.value > 0 }
-        if !touched.isEmpty {
-            let evenShare = 1.0 / Double(touched.count)
+        // Reference size: the corridor's drivable classes, falling back to the
+        // touched set if the graph carried none (defensive — shouldn't happen).
+        let referenceCount = max(usage.availableClasses.count, touched.count)
+        if !touched.isEmpty, referenceCount > 0 {
+            let evenShare = 1.0 / Double(referenceCount)
             for (cls, meters) in touched {
                 let idx = Int(cls.rawValue)
                 guard idx >= 0, idx < tuned.roadClassMultiplier.count else { continue }

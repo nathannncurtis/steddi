@@ -215,12 +215,16 @@ struct PrefLearnerScenicTests {
         )
     }
 
+    // Node 3 (tertiary mid) and node 4 (primary mid) are degree-2 through-points
+    // interior to a single way, so they become edge GEOMETRY, not graph nodes —
+    // they aren't in osmToIndex. Reference their literal coordinates instead.
+    private let n1 = CLLocationCoordinate2D(latitude: 34.0000, longitude: -117.0000)
+    private let n2 = CLLocationCoordinate2D(latitude: 34.0000, longitude: -116.9900)
+    private let n3 = CLLocationCoordinate2D(latitude: 34.0020, longitude: -116.9950)
+
     @Test("Always driving the tertiary lowers its multiplier within the clamp")
     func scenicShiftsDown() {
         let g = parallelGraph()
-        let n1 = g.nodes[Int(g.osmToIndex[1]!)].coordinate
-        let n3 = g.nodes[Int(g.osmToIndex[3]!)].coordinate
-        let n2 = g.nodes[Int(g.osmToIndex[2]!)].coordinate
         // Trace the tertiary 1 -> 3 -> 2 over many drives.
         let leg = densify(n1, n3, count: 6).dropLast() + densify(n3, n2, count: 6)
         let recs = (0..<6).map { _ in driveRecord(trace: Array(leg)) }
@@ -242,9 +246,6 @@ struct PrefLearnerScenicTests {
     @Test("Revealed usage attributes the driven distance to tertiary")
     func usageAttributed() {
         let g = parallelGraph()
-        let n1 = g.nodes[Int(g.osmToIndex[1]!)].coordinate
-        let n3 = g.nodes[Int(g.osmToIndex[3]!)].coordinate
-        let n2 = g.nodes[Int(g.osmToIndex[2]!)].coordinate
         let leg = densify(n1, n3, count: 6).dropLast() + densify(n3, n2, count: 6)
         let recs = (0..<4).map { _ in driveRecord(trace: Array(leg)) }
         let u = PrefLearner.revealedUsage(from: recs, graph: g)
