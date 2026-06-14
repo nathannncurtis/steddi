@@ -30,7 +30,8 @@ enum ModelStoreLocator {
             Report.self,
             CommuteAnalyticsAggregate.self,
             Trip.self,
-            TripStop.self
+            TripStop.self,
+            RoadCondition.self
         ])
     }
 

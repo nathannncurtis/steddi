@@ -19,6 +19,11 @@ final class Route {
     @Relationship(deleteRule: .cascade)
     var noGoZones: [NoGoZone]?
 
+    /// Remembered road surface / construction conditions on this route.
+    /// Cascade-deletes with the route: forgetting a route forgets its conditions.
+    @Relationship(deleteRule: .cascade, inverse: \RoadCondition.route)
+    var roadConditions: [RoadCondition]?
+
     /// Whether this route overrides global no-go zones
     var overridesGlobalNoGoZones: Bool
 

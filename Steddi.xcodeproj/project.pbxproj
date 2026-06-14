@@ -102,6 +102,7 @@
 		A22CFFF0BDE370AB28985EC8 /* AdvancedHapticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */; };
 		A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */; };
 		A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */; };
+		A477A072BF5B7865AC486AF0 /* RoadCondition.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC2E5727AB85A25415DB0AAD /* RoadCondition.swift */; };
 		A5334D5D6A4798480F20DAC1 /* ZoneValidationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DB2867732B7B04A13ECC99 /* ZoneValidationEngine.swift */; };
 		A780066C24DF0AD042F0B658 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C25F38675758DD0FE5C92BE /* Trip.swift */; };
 		ADE93A5C25BF03FD9C09DA8C /* NoGoZoneGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 686B69CCF442D219E251586F /* NoGoZoneGeometryTests.swift */; };
@@ -325,6 +326,7 @@
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
 		D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomRouteBuilder.swift; sourceTree = "<group>"; };
 		DA765EC74CF76F5C912157D4 /* HapticService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticService.swift; sourceTree = "<group>"; };
+		DC2E5727AB85A25415DB0AAD /* RoadCondition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadCondition.swift; sourceTree = "<group>"; };
 		DD3458B0B5C9B20BC65519CC /* NowPlayingMiniBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingMiniBar.swift; sourceTree = "<group>"; };
 		DD469486D86528327AFC385D /* TripEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripEditorView.swift; sourceTree = "<group>"; };
 		DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDuckingServiceTests.swift; sourceTree = "<group>"; };
@@ -405,6 +407,7 @@
 				8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */,
 				84B14495FE74113349D84A50 /* PlaceCategory.swift */,
 				CADE3A03C008B4BD3D0FE2E6 /* Report.swift */,
+				DC2E5727AB85A25415DB0AAD /* RoadCondition.swift */,
 				F2113E7A877B78A7BF8CF75C /* Route.swift */,
 				5C25F38675758DD0FE5C92BE /* Trip.swift */,
 				0B99A3381CC68B028C99DD0E /* TripStop.swift */,
@@ -956,6 +959,7 @@
 				A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */,
 				9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */,
 				B15142D572255FF13A24D7D1 /* ReviewURLs.swift in Sources */,
+				A477A072BF5B7865AC486AF0 /* RoadCondition.swift in Sources */,
 				E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */,
 				F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */,
 				CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */,
