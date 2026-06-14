@@ -75,6 +75,14 @@ struct SteddiNavOverlay: View {
             : engine.followOnInstruction
     }
 
+    /// "Avoiding tolls"/"Avoiding highways" for whichever preference is shaping
+    /// this route — resolved per-commute over global, empty when none is active.
+    /// Drives the route-preference badge so the driver knows a choice reshaped
+    /// where they're being sent.
+    private var activePreferenceLabels: [String] {
+        RoutePreferences.resolve(commute: commute).activeLabels
+    }
+
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
@@ -147,6 +155,16 @@ struct SteddiNavOverlay: View {
                 if !engine.roadName.isEmpty {
                     streetNameCapsule
                         .padding(.top, 10)
+                }
+
+                if !activePreferenceLabels.isEmpty {
+                    SteddiRoutePrefBadge(
+                        labels: activePreferenceLabels,
+                        textScale: textScale,
+                        iconScale: iconScale,
+                        highContrast: highContrast
+                    )
+                    .padding(.top, 10)
                 }
 
                 if showNowPlayingBar && nowPlaying.hasNowPlaying {
@@ -250,6 +268,16 @@ struct SteddiNavOverlay: View {
                     .padding(.vertical, 8)
                     .frame(width: landscapeCardWidth, alignment: .leading)
                     .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.85, highContrast: highContrast)), in: RoundedRectangle(cornerRadius: 12))
+                }
+
+                if !activePreferenceLabels.isEmpty {
+                    SteddiRoutePrefBadge(
+                        labels: activePreferenceLabels,
+                        textScale: textScale,
+                        iconScale: iconScale,
+                        highContrast: highContrast
+                    )
+                    .frame(width: landscapeCardWidth, alignment: .leading)
                 }
 
                 Spacer()
