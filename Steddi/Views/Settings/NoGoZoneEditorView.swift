@@ -496,6 +496,7 @@ struct NoGoZoneEditorView: View {
             timeWindow: window
         )
         modelContext.insert(zone)
+        try? modelContext.save()
         dismiss()
     }
 
