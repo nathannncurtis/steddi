@@ -110,6 +110,7 @@
 		D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */; };
 		D649B2DE89F3D939E458A826 /* MeasurementUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80E59AB1F96A5750EF1F970E /* MeasurementUnit.swift */; };
 		D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */; };
+		DB8D7F440F67304A517F6790 /* NoGoZoneMapV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */; };
 		DF73C0BF9350C7CA1709AC80 /* TripProgressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42C53B70A81A76FE0196BE90 /* TripProgressionTests.swift */; };
 		E0EA434384C8E29419756D75 /* SteddiNavigationActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD3684A653CCA35C0F4BAC7 /* SteddiNavigationActivity.swift */; };
 		E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */; };
@@ -246,6 +247,7 @@
 		82950853F7696A66EC5389FA /* CommuteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDetailView.swift; sourceTree = "<group>"; };
 		83E69E8FABE683A4030C5E2B /* StatCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatCard.swift; sourceTree = "<group>"; };
 		84E610B8A29F73B013FB139D /* TunnelDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDetectionService.swift; sourceTree = "<group>"; };
+		857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneMapV2.swift; sourceTree = "<group>"; };
 		8B17DD42334CC352C81C1B71 /* Steddi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Steddi.entitlements; sourceTree = "<group>"; };
 		8BE4BDC3D34AA72DCC88B8D4 /* PinnedLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedLocation.swift; sourceTree = "<group>"; };
 		8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneEditorView.swift; sourceTree = "<group>"; };
@@ -479,6 +481,7 @@
 			isa = PBXGroup;
 			children = (
 				335291BA198DC1134B9072E8 /* LocationPickerView.swift */,
+				857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -860,6 +863,7 @@
 				F988967C38892DF7EE141166 /* NavigationStateManager.swift in Sources */,
 				967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */,
 				57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */,
+				DB8D7F440F67304A517F6790 /* NoGoZoneMapV2.swift in Sources */,
 				17102F8E25229F5112CEAF35 /* NowPlayingMiniBar.swift in Sources */,
 				D458D1FFCB26A8CB84EE42C6 /* NowPlayingService.swift in Sources */,
 				2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */,
