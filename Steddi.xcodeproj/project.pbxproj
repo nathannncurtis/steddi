@@ -75,6 +75,7 @@
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
 		7132E610C067CB033EF4B8F8 /* SteddiLiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */; };
 		72DD5D3842C50C4BEA5B5D44 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */; };
+		7503DC7D7F5D917A2B5FE289 /* OnboardingThemeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30D7349058BD69D002F9FBF1 /* OnboardingThemeView.swift */; };
 		7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */; };
 		755CA9609153C6BBD3833D97 /* CheckCommuteETAIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */; };
 		7563ED49C5D46457AD882CA4 /* ZoneDrawingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27FB85CBF3D500E916BCF5B8 /* ZoneDrawingService.swift */; };
@@ -237,6 +238,7 @@
 		2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngineTests.swift; sourceTree = "<group>"; };
 		2DA34462C207C379281EC748 /* IconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPickerView.swift; sourceTree = "<group>"; };
 		30A628B67F551F51F4AEBEE8 /* LocalNormsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNormsProvider.swift; sourceTree = "<group>"; };
+		30D7349058BD69D002F9FBF1 /* OnboardingThemeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingThemeView.swift; sourceTree = "<group>"; };
 		3130157560032FDA76FED435 /* RoadConditionReconfirmSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadConditionReconfirmSheet.swift; sourceTree = "<group>"; };
 		315032BDB9A34CDCE94D686D /* CommuteWeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteWeatherService.swift; sourceTree = "<group>"; };
 		33471F234A8AF73EC6B62F93 /* CommuteNotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationsSettingsView.swift; sourceTree = "<group>"; };
@@ -628,6 +630,7 @@
 				C6291CE98BB2552CD248E6CB /* OnboardingCoordinator.swift */,
 				9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */,
 				0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */,
+				30D7349058BD69D002F9FBF1 /* OnboardingThemeView.swift */,
 				72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */,
 			);
 			path = Onboarding;
@@ -985,6 +988,7 @@
 				BC2BE54BE878F0FF9889AC8D /* OnboardingCoordinator.swift in Sources */,
 				9E6E05AF740C80220B638E58 /* OnboardingHeroView.swift in Sources */,
 				2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */,
+				7503DC7D7F5D917A2B5FE289 /* OnboardingThemeView.swift in Sources */,
 				87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */,
 				588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */,
 				E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */,
