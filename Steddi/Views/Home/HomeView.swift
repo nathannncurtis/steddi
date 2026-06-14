@@ -540,6 +540,7 @@ struct HomeView: View {
             engine: engine,
             commute: activeCommute,
             direction: activeDirection,
+            trip: activeTrip,
             destinationName: destName
         )
 
@@ -983,6 +984,7 @@ struct HomeView: View {
             engine: engine,
             commute: activeCommute,
             direction: activeDirection,
+            trip: activeTrip,
             destinationName: destName
         )
 

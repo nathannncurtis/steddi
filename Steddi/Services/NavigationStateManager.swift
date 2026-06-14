@@ -43,6 +43,11 @@ final class NavigationStateManager {
     var activeCommute: Commute? = nil
     var activeDirection: CommuteDirection? = nil
 
+    /// Active multi-stop trip, when the session is a trip leg. CarPlay and
+    /// the Live Activity read leg context (leg N of M, next stop) from here
+    /// instead of reaching into HomeView state.
+    var activeTrip: Trip? = nil
+
     var rerouteSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)? = nil
     var currentRemainingETA: TimeInterval = 0
 
@@ -72,6 +77,7 @@ final class NavigationStateManager {
         engine: NavigationEngine,
         commute: Commute? = nil,
         direction: CommuteDirection? = nil,
+        trip: Trip? = nil,
         destinationName: String? = nil
     ) {
         stopObserving()
@@ -80,6 +86,7 @@ final class NavigationStateManager {
         activeEngine = engine
         activeCommute = commute
         activeDirection = direction
+        activeTrip = trip
 
         writeWidgetSession(commute: commute, direction: direction, destinationName: destinationName)
 
@@ -227,6 +234,7 @@ final class NavigationStateManager {
         hasArrived = false
         activeCommute = nil
         activeDirection = nil
+        activeTrip = nil
         activeEngine = nil
         activeRouteCoords = []
         rerouteSuggestion = nil
