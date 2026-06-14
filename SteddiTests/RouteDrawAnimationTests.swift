@@ -136,6 +136,116 @@ struct RouteDrawGeometryTests {
     }
 }
 
+// MARK: - RouteDrawGeometry adversarial edge cases
+
+@Suite("RouteDrawGeometry edge cases")
+struct RouteDrawGeometryEdgeTests {
+
+    private var straightLine: [CLLocationCoordinate2D] {
+        [
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 1),
+            CLLocationCoordinate2D(latitude: 0, longitude: 2),
+        ]
+    }
+
+    @Test("Tiny positive progress yields origin + interpolated tip on first segment")
+    func tinyProgress() {
+        let coords = straightLine
+        let cumulative = RouteGeometry.cumulativeDistances(coords)
+        let path = RouteDrawGeometry.partialPath(coords: coords, cumulative: cumulative, progress: 0.0001)
+        // First vertex retained, plus a tip barely past it — never empty for p > 0.
+        #expect(path.count == 2)
+        #expect(path.first!.longitude == 0)
+        #expect(path.last!.longitude > 0)
+        #expect(path.last!.longitude < 0.01)
+    }
+
+    @Test("Progress just below 1 retains all vertices and a near-end tip")
+    func progressJustBelowOne() {
+        let coords = straightLine
+        let cumulative = RouteGeometry.cumulativeDistances(coords)
+        let path = RouteDrawGeometry.partialPath(coords: coords, cumulative: cumulative, progress: 0.999999)
+        // Every real vertex plus the interpolated tip on the last segment.
+        #expect(path.count == coords.count)
+        #expect(path.last!.longitude > 1.99)
+        #expect(path.last!.longitude < 2.0)
+    }
+
+    @Test("Zero-length leading segment (duplicate coords) does not divide by zero")
+    func zeroLengthSegment() {
+        // Vertices 0 and 1 are identical -> first segment length 0.
+        let coords = [
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 2),
+        ]
+        let cumulative = [0.0, 0.0, 222_000.0]
+        let path = RouteDrawGeometry.partialPath(coords: coords, cumulative: cumulative, progress: 0.5)
+        // Half the (only real) length lands at longitude 1; no NaN/crash.
+        #expect(path.last!.longitude.isFinite)
+        #expect(abs(path.last!.longitude - 1.0) < 0.01)
+    }
+
+    @Test("Target landing exactly on a middle vertex keeps that vertex as the tip")
+    func exactVertexBoundary() {
+        let coords = straightLine
+        let cumulative = RouteGeometry.cumulativeDistances(coords)
+        // progress chosen so target == cumulative[1] exactly.
+        let progress = cumulative[1] / cumulative[2]
+        let path = RouteDrawGeometry.partialPath(coords: coords, cumulative: cumulative, progress: progress)
+        #expect(abs(path.last!.longitude - 1.0) < 1e-6)
+        #expect(path.last!.latitude == 0)
+    }
+
+    @Test("Empty coords returns empty (degenerate, no crash)")
+    func emptyCoords() {
+        let path = RouteDrawGeometry.partialPath(coords: [], cumulative: [], progress: 0.5)
+        #expect(path.isEmpty)
+    }
+
+    @Test("Two-coord polyline interpolates a single tip at progress < 1")
+    func twoCoordTip() {
+        let coords = [
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 10),
+        ]
+        let cumulative = RouteGeometry.cumulativeDistances(coords)
+        let path = RouteDrawGeometry.partialPath(coords: coords, cumulative: cumulative, progress: 0.3)
+        #expect(path.count == 2)
+        #expect(path.first!.longitude == 0)
+        #expect(abs(path.last!.longitude - 3.0) < 0.1)
+    }
+
+    @Test("Zero total distance (all coincident) returns input unchanged")
+    func zeroTotalDistance() {
+        let coords = [
+            CLLocationCoordinate2D(latitude: 1, longitude: 1),
+            CLLocationCoordinate2D(latitude: 1, longitude: 1),
+        ]
+        let cumulative = [0.0, 0.0]
+        let path = RouteDrawGeometry.partialPath(coords: coords, cumulative: cumulative, progress: 0.5)
+        // total == 0 -> guard returns the input untouched (no draw-on possible).
+        #expect(path.count == coords.count)
+    }
+
+    @Test("easeOut is strictly increasing on the open interval")
+    func easeOutStrictlyIncreasing() {
+        var last = RouteDrawGeometry.easeOut(0)
+        for t in stride(from: 0.05, through: 1.0, by: 0.05) {
+            let v = RouteDrawGeometry.easeOut(t)
+            #expect(v > last)
+            last = v
+        }
+    }
+
+    @Test("easeOut midpoint sits above linear (ease-out shape)")
+    func easeOutMidpointAboveLinear() {
+        // 1 - 0.5^3 = 0.875, comfortably ahead of linear 0.5.
+        #expect(abs(RouteDrawGeometry.easeOut(0.5) - 0.875) < 1e-9)
+    }
+}
+
 // MARK: - TransitionKit timing params
 
 @Suite("TransitionKit")
