@@ -182,7 +182,9 @@ final class WeatherKitService {
             return .partlyCloudy
         case .cloudy:
             return .overcast
-        case .foggy, .haze, .smoky:
+        case .foggy, .haze, .smoky, .blowingDust:
+            // All reduced-visibility, particulate-in-air conditions read as fog
+            // for theming (grey pull, no precipitation tint).
             return .fog
         case .drizzle, .rain, .heavyRain, .freezingDrizzle, .freezingRain, .sunShowers:
             return .rain
@@ -192,6 +194,13 @@ final class WeatherKitService {
              .hurricane, .tropicalStorm, .hail, .windy, .breezy:
             return condition == .windy || condition == .breezy ? .clear : .storm
         @unknown default:
+            // Intentional forward-compat catch-all: WeatherCondition is a
+            // framework enum Apple can extend in future OSes. Every case known
+            // at compile time is handled explicitly above (the compiler enforces
+            // that — see the `.blowingDust` addition), so this only ever fires
+            // for cases that did not exist when this built. Mapping the truly
+            // unknown to `.unknown` lets the solar layer carry the look rather
+            // than guessing a weather mood.
             return .unknown
         }
     }
