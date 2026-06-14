@@ -209,6 +209,29 @@ struct TimeWindowTests {
         let w = TimeWindow(daysOfWeek: [2], startHour: 9, endHour: 9)
         #expect(!w.isActive(now: date(weekday: 2, hour: 9), calendar: utc))
     }
+
+    @Test("Same-day window ending at hour 24 covers the late evening hours")
+    func endsAtMidnight() {
+        // start < end (18 < 24) is the same-day branch; hour 23 must be inside.
+        let w = TimeWindow(daysOfWeek: [2], startHour: 18, endHour: 24)
+        #expect(w.isActive(now: date(weekday: 2, hour: 23), calendar: utc))
+        #expect(w.isActive(now: date(weekday: 2, hour: 18), calendar: utc))
+        #expect(!w.isActive(now: date(weekday: 2, hour: 17), calendar: utc))
+    }
+
+    @Test("Wrapping window is active at midnight (hour 0) on the morning side")
+    func wrappingAtMidnight() {
+        // 22 -> 6 active Monday; Tuesday 0:00 is the prev-day (Monday) morning side.
+        let w = TimeWindow(daysOfWeek: [2], startHour: 22, endHour: 6)
+        #expect(w.isActive(now: date(weekday: 3, hour: 0), calendar: utc))   // Tue midnight
+        #expect(w.isActive(now: date(weekday: 2, hour: 22), calendar: utc))  // Mon 10pm (inclusive start)
+    }
+
+    @Test("Empty day set is never active even within the hour range")
+    func emptyDaySet() {
+        let w = TimeWindow(daysOfWeek: [], startHour: 0, endHour: 23)
+        #expect(!w.isActive(now: date(weekday: 2, hour: 12), calendar: utc))
+    }
 }
 
 // MARK: - Geometry Codable round-trip

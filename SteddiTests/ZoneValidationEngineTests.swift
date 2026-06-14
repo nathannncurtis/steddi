@@ -140,6 +140,70 @@ struct ZoneValidationEngineTests {
         )
         #expect(index == 2)
     }
+
+    @Test("Empty candidate list yields no least-violating index")
+    func leastViolatingEmpty() {
+        let z = NoGoZone(latitude: 0, longitude: 0, radiusMeters: 100)
+        #expect(engine.leastViolatingRouteIndex(candidates: [], againstZones: [z]) == nil)
+    }
+
+    @Test("Least-violating ties break toward the earlier (fastest) candidate")
+    func leastViolatingTieBreak() {
+        let z = NoGoZone(latitude: 0, longitude: 0, radiusMeters: 300)
+        // Two candidates with the identical violation count (both clear) — the
+        // earlier index must win so the fastest route is preferred.
+        let a = polyline([
+            CLLocationCoordinate2D(latitude: 30, longitude: 30),
+            CLLocationCoordinate2D(latitude: 30, longitude: 30.01),
+        ])
+        let b = polyline([
+            CLLocationCoordinate2D(latitude: 40, longitude: 40),
+            CLLocationCoordinate2D(latitude: 40, longitude: 40.01),
+        ])
+        #expect(engine.leastViolatingRouteIndex(candidates: [a, b], againstZones: [z]) == 0)
+    }
+
+    @Test("No zones means every route is valid")
+    func emptyZones() {
+        let route = polyline([
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0.5, longitude: 0.5),
+        ])
+        let result = engine.validateRoute(route, againstZones: [])
+        #expect(result.isValid)
+        #expect(result.violationCount == 0)
+    }
+
+    @Test("Empty route polyline never violates a zone")
+    func emptyRoute() {
+        let z = NoGoZone(latitude: 0, longitude: 0, radiusMeters: 1_000_000)
+        let result = engine.validateRoute("", againstZones: [z])
+        #expect(result.isValid)
+    }
+
+    @Test("A point exactly on the corridor centerline is a violation")
+    func corridorOnCenterline() {
+        let centerline = [
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 0.01),
+        ]
+        let zone = NoGoZone(geometry: .corridor(
+            encodedPolyline: PolylineEncoder.encode(centerline, precision: 6),
+            bufferMeters: 10
+        ))
+        // Route point coincident with the centerline midpoint -> ~0m distance.
+        let route = polyline([
+            CLLocationCoordinate2D(latitude: 0, longitude: 0.005),
+            CLLocationCoordinate2D(latitude: 0, longitude: 0.006),
+        ])
+        let result = engine.validateRoute(route, againstZones: [zone])
+        #expect(!result.isValid)
+        if case .corridorViolation(let d) = result.violations.first?.violationType {
+            #expect(d < 1)
+        } else {
+            Issue.record("expected corridor violation on the centerline")
+        }
+    }
 }
 
 // MARK: - Migration
