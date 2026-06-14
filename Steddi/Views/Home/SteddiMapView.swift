@@ -75,6 +75,18 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     /// The renderer currently tracing the active route, if any.
     private weak var activeRouteRenderer: RouteDrawRenderer?
 
+    // MARK: - Traveled-portion fade
+    /// Behind the puck: the already-driven segment, stroked dimmed.
+    private var traveledOverlay: MKPolyline?
+    /// Ahead of the puck: the remaining route, stroked at full accent.
+    private var remainingOverlay: MKPolyline?
+    /// Last split distance (meters along route) we rebuilt the overlays at; the
+    /// pair is only rebuilt when the puck advances past it by `splitThreshold` to
+    /// avoid per-frame overlay churn (redraw storms).
+    private var lastSplitDistance: Double = -1
+    /// Minimum advance before the traveled/remaining split is rebuilt.
+    private let splitThreshold: Double = 50
+
     /// Engine whose published pose drives the puck, camera, and compass.
     weak var navigationEngine: NavigationEngine?
 
@@ -271,10 +283,22 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
             puckView.image = Self.makePuckImage()
         }
 
-        // Refresh route line if showing
-        if isInNavigation, let overlay = routeOverlay {
-            if let renderer = mapView.renderer(for: overlay) as? MKPolylineRenderer {
+        // Refresh route line if showing — the single overlay and either half of
+        // the traveled/remaining split.
+        if isInNavigation {
+            if let overlay = routeOverlay,
+               let renderer = mapView.renderer(for: overlay) as? MKPolylineRenderer {
                 renderer.strokeColor = SteddiTheme.accentUIColor
+                renderer.setNeedsDisplay()
+            }
+            if let overlay = remainingOverlay,
+               let renderer = mapView.renderer(for: overlay) as? MKPolylineRenderer {
+                renderer.strokeColor = SteddiTheme.accentUIColor
+                renderer.setNeedsDisplay()
+            }
+            if let overlay = traveledOverlay,
+               let renderer = mapView.renderer(for: overlay) as? MKPolylineRenderer {
+                renderer.strokeColor = SteddiTheme.accentUIColor.withAlphaComponent(0.3)
                 renderer.setNeedsDisplay()
             }
         }
@@ -464,6 +488,7 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         recenterButton?.isHidden = true
         endRouteDrawOn()
         activeRouteRenderer = nil
+        clearTraveledSplit()
         endPoseDrivenFollowing()
         endCustomPuck()
 
@@ -539,6 +564,56 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         if t >= 1 { endRouteDrawOn() }
     }
 
+    // MARK: - Traveled-Portion Fade
+
+    /// Split the route into a dimmed traveled segment (start -> puck) and a
+    /// bright remaining segment (puck -> end). Threshold-gated so the overlay
+    /// pair is only rebuilt when the puck has advanced enough — never per frame.
+    /// Skipped under Reduce Motion and while the draw-on is still tracing.
+    private func updateTraveledSplit(distance: Double) {
+        guard SteddiMotion.shouldAnimate, isInNavigation, drawOnLink == nil,
+              navRouteCoords.count >= 2,
+              let total = routeCumulativeDistances.last, total > 0 else { return }
+
+        // Only rebuild when the split has moved past the threshold.
+        if lastSplitDistance >= 0, abs(distance - lastSplitDistance) < splitThreshold { return }
+        lastSplitDistance = distance
+
+        let split = min(max(distance, 0), total)
+        let traveled = RouteDrawGeometry.partialPath(
+            coords: navRouteCoords, cumulative: routeCumulativeDistances,
+            progress: split / total
+        )
+        // Remaining = the rest of the line, anchored on the same split tip.
+        var remaining: [CLLocationCoordinate2D] = []
+        if let tip = traveled.last { remaining.append(tip) }
+        for (i, dist) in routeCumulativeDistances.enumerated() where dist > split {
+            remaining.append(navRouteCoords[i])
+        }
+
+        // Remove the prior pair (and the original single overlay) before re-adding.
+        if let o = traveledOverlay { mapView.removeOverlay(o); traveledOverlay = nil }
+        if let o = remainingOverlay { mapView.removeOverlay(o); remainingOverlay = nil }
+        if let o = routeOverlay { mapView.removeOverlay(o); routeOverlay = nil }
+
+        if traveled.count >= 2 {
+            let poly = MKPolyline(coordinates: traveled, count: traveled.count)
+            traveledOverlay = poly
+            mapView.addOverlay(poly, level: .aboveRoads)
+        }
+        if remaining.count >= 2 {
+            let poly = MKPolyline(coordinates: remaining, count: remaining.count)
+            remainingOverlay = poly
+            mapView.addOverlay(poly, level: .aboveRoads)
+        }
+    }
+
+    private func clearTraveledSplit() {
+        if let o = traveledOverlay { mapView.removeOverlay(o); traveledOverlay = nil }
+        if let o = remainingOverlay { mapView.removeOverlay(o); remainingOverlay = nil }
+        lastSplitDistance = -1
+    }
+
     /// Every nav start hands the map and the engine the same polyline, but an
     /// automatic off-route reroute restarts only the engine. When the engine's
     /// route no longer matches ours, adopt it: overlay, cumulative distances,
@@ -560,9 +635,12 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         interpolator.reset()
         lastPoseTimestamp = nil
 
+        // A reroute replaces the line entirely — drop the old single overlay and
+        // any traveled/remaining split so the fresh route renders bright.
         if let overlay = routeOverlay {
             mapView.removeOverlay(overlay)
         }
+        clearTraveledSplit()
         let polyline = MKPolyline(coordinates: engineCoords, count: engineCoords.count)
         routeOverlay = polyline
         mapView.addOverlay(polyline, level: .aboveRoads)
@@ -608,6 +686,9 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         if drawOnLink != nil, distance > 5 {
             endRouteDrawOn()
         }
+
+        // Dim the segment already driven (threshold-gated, no redraw storm).
+        updateTraveledSplit(distance: distance)
 
         // Walk the polyline back to a coordinate — stays on the line through curves
         var displayCoord = RouteGeometry.coordinate(
@@ -734,6 +815,24 @@ extension SteddiMapContainer: MKMapViewDelegate {
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        // Traveled (behind the puck): a dimmed breadcrumb trail.
+        if let polyline = overlay as? MKPolyline, polyline === traveledOverlay {
+            let renderer = MKPolylineRenderer(polyline: polyline)
+            renderer.strokeColor = SteddiTheme.accentUIColor.withAlphaComponent(0.3)
+            renderer.lineWidth = 6
+            renderer.lineCap = .round
+            renderer.lineJoin = .round
+            return renderer
+        }
+        // Remaining (ahead of the puck): full-accent bright line.
+        if let polyline = overlay as? MKPolyline, polyline === remainingOverlay {
+            let renderer = MKPolylineRenderer(polyline: polyline)
+            renderer.strokeColor = SteddiTheme.accentUIColor
+            renderer.lineWidth = 6
+            renderer.lineCap = .round
+            renderer.lineJoin = .round
+            return renderer
+        }
         // The active nav route gets the trace-on renderer; capture it so the
         // draw-on link can drive its progress.
         if let polyline = overlay as? MKPolyline, polyline === routeOverlay {

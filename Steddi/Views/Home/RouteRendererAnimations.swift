@@ -59,17 +59,16 @@ enum RouteDrawGeometry {
     }
 }
 
-/// Custom polyline renderer for the active navigation route.
+/// Custom polyline renderer for the route draw-on (trace-on) animation.
 ///
-/// Two roles, one renderer per overlay:
-/// 1. **Draw-on**: while `animationProgress < 1`, only the eased prefix of the
-///    line is stroked, so the route traces from the user toward the destination.
-///    `SteddiMapContainer` drives `animationProgress` 0→1 over ~1.2s on a
-///    CADisplayLink and calls `setNeedsDisplay()` per tick. Reduce Motion jumps
-///    straight to 1.
-/// 2. **Traveled fade** (set later via the split overlays): a `dimmed` renderer
-///    strokes the already-driven segment at reduced opacity.
+/// While `animationProgress < 1`, only the eased prefix of the line is stroked,
+/// so the route traces from the user toward the destination. `SteddiMapContainer`
+/// drives `animationProgress` 0→1 over ~1.2s on a CADisplayLink; each set calls
+/// `setNeedsDisplay()`. At `1` it falls back to `MKPolylineRenderer`'s optimized
+/// path. Reduce Motion jumps straight to 1.
 ///
+/// The traveled-portion fade is handled separately by the map container, which
+/// swaps this single overlay for a dimmed/bright split pair once tracing ends.
 /// Keep the role surgical — this is a drop-in replacement for the plain
 /// `MKPolylineRenderer` the map used before, returned from the rendererFor
 /// delegate only for the active nav route overlay.
@@ -82,10 +81,6 @@ final class RouteDrawRenderer: MKPolylineRenderer {
             setNeedsDisplay()
         }
     }
-
-    /// When true this renderer strokes the traveled (behind) segment at the
-    /// dimmed alpha; the remaining segment renderer leaves it false.
-    var isTraveledSegment: Bool = false
 
     private let coords: [CLLocationCoordinate2D]
     private let cumulative: [Double]
