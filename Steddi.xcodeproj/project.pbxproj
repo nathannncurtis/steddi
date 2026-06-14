@@ -73,6 +73,7 @@
 		755CA9609153C6BBD3833D97 /* CheckCommuteETAIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */; };
 		7563ED49C5D46457AD882CA4 /* ZoneDrawingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27FB85CBF3D500E916BCF5B8 /* ZoneDrawingService.swift */; };
 		75C718A237AFFBD58B0D2195 /* ThemeEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C62D85ED65451F0DD7CCB4E5 /* ThemeEngine.swift */; };
+		780E1D35A4D611FD450D82CE /* RoadConditionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1AE691DFF004DD951C416A /* RoadConditionService.swift */; };
 		7A02746BE36AE68D66022B5A /* TemperatureNorms.json in Resources */ = {isa = PBXBuildFile; fileRef = 50D3C8B274D86BDFE1B49206 /* TemperatureNorms.json */; };
 		7AC6366691401A8DB28223A8 /* NavigationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */; };
 		8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */; };
@@ -351,6 +352,7 @@
 		F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdExplainerView.swift; sourceTree = "<group>"; };
 		FA8461A623AD14BABDF3FAE8 /* ModelStoreLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStoreLocator.swift; sourceTree = "<group>"; };
 		FB617B2433C68EF5E24A503F /* TripArrivalCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripArrivalCard.swift; sourceTree = "<group>"; };
+		FE1AE691DFF004DD951C416A /* RoadConditionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadConditionService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -692,6 +694,7 @@
 				F62156E1FDD078D989A2441A /* OfflineCacheService.swift */,
 				C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */,
 				0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */,
+				FE1AE691DFF004DD951C416A /* RoadConditionService.swift */,
 				BA9033EAA004A2509272285E /* RouteGeometry.swift */,
 				03670FA5EF8B8CA954F816D1 /* RouteRecoveryEngine.swift */,
 				C62D85ED65451F0DD7CCB4E5 /* ThemeEngine.swift */,
@@ -960,6 +963,7 @@
 				9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */,
 				B15142D572255FF13A24D7D1 /* ReviewURLs.swift in Sources */,
 				A477A072BF5B7865AC486AF0 /* RoadCondition.swift in Sources */,
+				780E1D35A4D611FD450D82CE /* RoadConditionService.swift in Sources */,
 				E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */,
 				F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */,
 				CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */,
