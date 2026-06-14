@@ -2052,32 +2052,35 @@ private struct ExpandedSearchView: View {
 
 private struct AddLocationSheet: View {
     let coordinate: CLLocationCoordinate2D?
+    /// Reverse-geocoded address shown as context (e.g. from current-location flow).
+    var prefilledAddress: String? = nil
+    /// Suggested name to seed the field (e.g. a search result's name).
+    var prefilledName: String? = nil
+    /// Pre-selected category (e.g. inferred from a search result or save flow).
+    var initialCategory: PlaceCategory = .other
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var name = ""
     @State private var selectedIcon = "mappin.circle.fill"
-
-    private static let iconOptions: [(symbol: String, label: String)] = [
-        ("house.fill", "Home"),
-        ("building.2.fill", "Work"),
-        ("figure.run", "Gym"),
-        ("cart.fill", "Shopping"),
-        ("fork.knife", "Food"),
-        ("cup.and.saucer.fill", "Coffee"),
-        ("airplane", "Airport"),
-        ("cross.fill", "Hospital"),
-        ("book.fill", "School"),
-        ("mappin.circle.fill", "Other"),
-    ]
+    @State private var selectedCategory: PlaceCategory = .other
+    @State private var didSeed = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section { TextField("Location name", text: $name) }
-                Section("Icon") {
-                    iconPicker
+                Section("Category") {
+                    categoryPicker
                 }
-                if let coord = coordinate {
+                Section("Icon") {
+                    PlaceIconPickerView(selectedIcon: $selectedIcon, category: selectedCategory)
+                }
+                if let address = prefilledAddress, !address.isEmpty {
+                    Section("Address") {
+                        Text(address).foregroundStyle(.secondary)
+                    }
+                } else if let coord = coordinate {
                     Section {
                         HStack { Text("Latitude"); Spacer(); Text(String(format: "%.4f", coord.latitude)).foregroundStyle(.secondary) }
                         HStack { Text("Longitude"); Spacer(); Text(String(format: "%.4f", coord.longitude)).foregroundStyle(.secondary) }
@@ -2094,39 +2097,40 @@ private struct AddLocationSheet: View {
                         .disabled(name.isEmpty || coordinate == nil)
                 }
             }
+            .onAppear {
+                guard !didSeed else { return }
+                didSeed = true
+                if let prefilledName, name.isEmpty { name = prefilledName }
+                selectedCategory = initialCategory
+                selectedIcon = initialCategory.symbol
+            }
         }
     }
 
-    private var iconPicker: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
-            ForEach(Self.iconOptions, id: \.symbol) { option in
-                let isSelected = selectedIcon == option.symbol
-                Button {
-                    selectedIcon = option.symbol
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: option.symbol)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(isSelected ? .white : SteddiTheme.accent)
-                            .frame(width: 44, height: 44)
-                            .background(
-                                Circle()
-                                    .fill(isSelected ? SteddiTheme.accent : SteddiTheme.accentSubtle)
-                            )
-                        Text(option.label)
-                            .font(.caption2)
-                            .foregroundStyle(isSelected ? SteddiTheme.textPrimary : SteddiTheme.textMuted)
-                    }
-                }
-                .buttonStyle(.plain)
+    private var categoryPicker: some View {
+        Picker("Category", selection: $selectedCategory) {
+            ForEach(PlaceCategory.allCategories) { category in
+                Label(category.displayName, systemImage: category.symbol)
+                    .tag(category)
             }
         }
-        .padding(.vertical, 4)
+        .onChange(of: selectedCategory) { _, newValue in
+            // Default the icon to the category's symbol when the user hasn't
+            // deliberately picked one outside the new category's set.
+            selectedIcon = newValue.symbol
+        }
     }
 
     private func save() {
         guard let coord = coordinate else { return }
-        modelContext.insert(PinnedLocation(name: name, latitude: coord.latitude, longitude: coord.longitude, icon: selectedIcon))
+        modelContext.insert(PinnedLocation(
+            name: name,
+            latitude: coord.latitude,
+            longitude: coord.longitude,
+            address: prefilledAddress,
+            icon: selectedIcon,
+            category: selectedCategory.key
+        ))
     }
 }
 

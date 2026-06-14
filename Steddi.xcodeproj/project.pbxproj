@@ -33,6 +33,7 @@
 		23F49DE2D7799CE634E0B517 /* HourRangePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AFF04B1D7EC87A1F88EC0BB /* HourRangePicker.swift */; };
 		26B2BAF699EB63D725B978D1 /* MapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */; };
 		2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */; };
+		29D50A254B65DCCEDE9BD86E /* IconPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DA34462C207C379281EC748 /* IconPickerView.swift */; };
 		2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
 		3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */; };
@@ -219,6 +220,7 @@
 		2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiWidgetBundle.swift; sourceTree = "<group>"; };
 		2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsServiceTests.swift; sourceTree = "<group>"; };
 		2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngineTests.swift; sourceTree = "<group>"; };
+		2DA34462C207C379281EC748 /* IconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPickerView.swift; sourceTree = "<group>"; };
 		30A628B67F551F51F4AEBEE8 /* LocalNormsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNormsProvider.swift; sourceTree = "<group>"; };
 		315032BDB9A34CDCE94D686D /* CommuteWeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteWeatherService.swift; sourceTree = "<group>"; };
 		33471F234A8AF73EC6B62F93 /* CommuteNotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationsSettingsView.swift; sourceTree = "<group>"; };
@@ -524,6 +526,7 @@
 			children = (
 				BC40EBECC2D5A14FFFB4F991 /* DaysOfWeekPicker.swift */,
 				8AFF04B1D7EC87A1F88EC0BB /* HourRangePicker.swift */,
+				2DA34462C207C379281EC748 /* IconPickerView.swift */,
 				335291BA198DC1134B9072E8 /* LocationPickerView.swift */,
 				AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */,
 				857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */,
@@ -915,6 +918,7 @@
 				30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */,
 				84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */,
 				23F49DE2D7799CE634E0B517 /* HourRangePicker.swift in Sources */,
+				29D50A254B65DCCEDE9BD86E /* IconPickerView.swift in Sources */,
 				C82ABB3F146D9326DAA1EA06 /* LiveActivityService.swift in Sources */,
 				CB8399E0D7039A2522B8B305 /* LocalNormsProvider.swift in Sources */,
 				FBA3C51E00266796DD7BD6F7 /* LocationCardView.swift in Sources */,
