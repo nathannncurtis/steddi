@@ -71,6 +71,7 @@
 		8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B46BB7337E920209A89889 /* HapticServiceTests.swift */; };
 		8C42BC8E8487C5F21A0D7EA4 /* NavigationAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B27E56129045AE269369A6 /* NavigationAttributes.swift */; };
 		8C6902233D467F3E4CC209D5 /* CarPlay.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 536F40426EDB0B72A580D76E /* CarPlay.framework */; };
+		8FFA00BD6370747C969692D5 /* AudioDuckingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30598BF220C0E6199379B02 /* AudioDuckingService.swift */; };
 		9275C4BC68051B778B8E32C5 /* WeatherKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */; };
 		943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */; };
 		967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDEFFA656C308FF61D985BF /* NoGoZone.swift */; };
@@ -272,6 +273,7 @@
 		CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoder.swift; sourceTree = "<group>"; };
 		CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceServiceTests.swift; sourceTree = "<group>"; };
 		CE8C721636439033B457CA4E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D30598BF220C0E6199379B02 /* AudioDuckingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDuckingService.swift; sourceTree = "<group>"; };
 		D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalNotificationService.swift; sourceTree = "<group>"; };
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
 		D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomRouteBuilder.swift; sourceTree = "<group>"; };
@@ -583,6 +585,7 @@
 			children = (
 				60B620B91EBE2D984AD636A9 /* AnalyticsService.swift */,
 				D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */,
+				D30598BF220C0E6199379B02 /* AudioDuckingService.swift */,
 				7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */,
 				D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */,
 				57F39AB0487FF4D4EFC987B3 /* DirectionsService.swift */,
@@ -802,6 +805,7 @@
 				E461BE1525A0D183307D8F9D /* AnalyticsService.swift in Sources */,
 				87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */,
 				99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */,
+				8FFA00BD6370747C969692D5 /* AudioDuckingService.swift in Sources */,
 				64A4B0737C28DA81734CD449 /* CarPlayDashboardDelegate.swift in Sources */,
 				60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */,
 				D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */,
