@@ -105,6 +105,7 @@ private extension HapticEvent {
         case .uiToggle: return "hand.tap"
         case .alert: return "exclamationmark.triangle.fill"
         case .roadConditionAlert: return "road.lanes"
+        case .speedCameraAlert: return "camera.fill"
         }
     }
 }

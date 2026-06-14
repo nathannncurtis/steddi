@@ -8,6 +8,7 @@ enum HapticEvent: String, CaseIterable, Identifiable {
     case uiToggle
     case alert
     case roadConditionAlert
+    case speedCameraAlert
 
     var id: String { rawValue }
 
@@ -19,6 +20,7 @@ enum HapticEvent: String, CaseIterable, Identifiable {
         case .uiToggle: return "UI Interactions"
         case .alert: return "Alerts"
         case .roadConditionAlert: return "Road Condition Alert"
+        case .speedCameraAlert: return "Speed Camera Alert"
         }
     }
 
@@ -31,6 +33,7 @@ enum HapticEvent: String, CaseIterable, Identifiable {
         case .uiToggle: return 0.2
         case .alert: return 0.7
         case .roadConditionAlert: return 0.5  // subtle but attention-getting
+        case .speedCameraAlert: return 0.5    // clean nudge, not a Waze klaxon
         }
     }
 }
