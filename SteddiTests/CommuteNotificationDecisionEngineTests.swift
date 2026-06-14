@@ -379,4 +379,178 @@ struct DecisionEngineDelayMathTests {
     func minutesValue() {
         #expect(CommuteNotificationDecisionEngine.delayMinutes(eta: 1200, typical: 600) == 10)
     }
+
+    @Test("Negative delay (faster than typical) yields negative fraction and minutes")
+    func fasterThanTypical() throws {
+        // ETA 8 min vs 10 min typical => -20% / -2 min. Used to prove a faster
+        // trip can never satisfy the >=20% traffic threshold.
+        let frac = try #require(CommuteNotificationDecisionEngine.delayFraction(eta: 480, typical: 600))
+        #expect(abs(frac - (-0.2)) < 0.0001)
+        #expect(CommuteNotificationDecisionEngine.delayMinutes(eta: 480, typical: 600) == -2)
+    }
+}
+
+// MARK: - Adversarial Edge Cases
+
+@Suite("DecisionEngine adversarial edges")
+struct DecisionEngineAdversarialTests {
+
+    @Test("ETA faster than typical never triggers traffic — skips")
+    func fasterTripSkips() throws {
+        // 20 min typical, 12 min ETA (-40%). No weather. Must skip, never notify
+        // and certainly never produce a negative-minute message.
+        let input = baseInput(currentETA: 12 * 60, now: try at(hour: 6, minute: 50))
+        guard case .skip(let reason) = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected skip on a faster-than-typical trip"); return
+        }
+        #expect(reason.contains("no traffic delay"))
+    }
+
+    @Test("Harsh weather but faster trip suppresses weather (ETA fails 15% gate)")
+    func harshWeatherFasterTripSkips() throws {
+        // Snow but the ETA shows a -40% (faster) trip => weatherETAConfirms false.
+        let weather = WeatherCondition(severity: .harsh, summary: "Snow expected", available: true)
+        let input = baseInput(currentETA: 12 * 60, weather: weather, now: try at(hour: 6, minute: 50))
+        guard case .skip = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected skip — faster ETA should gate harsh weather"); return
+        }
+    }
+
+    @Test("Cooldown at exactly 2h boundary is NOT suppressed")
+    func cooldownExactBoundary() throws {
+        // 7am departure; place 'now' late enough that the 2h-ago timestamp still
+        // falls inside the approaching-departure window.
+        let now = try at(hour: 7, minute: 0)
+        let exactly2hAgo = now.addingTimeInterval(-CommuteNotificationDecisionEngine.cooldownSeconds)
+        let input = baseInput(currentETA: 40 * 60, lastNotificationTime: exactly2hAgo, now: now)
+        // Strict `<` cooldown means exactly 2h elapsed is allowed through.
+        guard case .notify = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected notify at the exact 2h cooldown boundary"); return
+        }
+    }
+
+    @Test("Cooldown one second under 2h IS suppressed")
+    func cooldownJustUnderBoundary() throws {
+        let now = try at(hour: 7, minute: 0)
+        let justUnder = now.addingTimeInterval(-(CommuteNotificationDecisionEngine.cooldownSeconds - 1))
+        let input = baseInput(currentETA: 40 * 60, lastNotificationTime: justUnder, now: now)
+        guard case .skip(let reason) = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected skip just under the cooldown boundary"); return
+        }
+        #expect(reason.contains("cooldown"))
+    }
+
+    @Test("Future-dated lastNotification (clock skew) treated as within cooldown")
+    func futureLastNotificationSuppresses() throws {
+        let now = try at(hour: 6, minute: 50)
+        let future = try at(hour: 6, minute: 55)  // same day, ahead of now
+        let input = baseInput(currentETA: 40 * 60, lastNotificationTime: future, now: now)
+        guard case .skip(let reason) = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected skip for a future-dated last notification"); return
+        }
+        #expect(reason.contains("cooldown"))
+    }
+
+    @Test("isApproachingDeparture is inclusive at the exact departure instant")
+    func approachingInclusiveAtDeparture() throws {
+        let cal = Calendar.current
+        #expect(CommuteNotificationDecisionEngine.isApproachingDeparture(
+            hour: 7, now: try at(hour: 7, minute: 0), departureHours: [7], leadMinutes: 15, calendar: cal))
+    }
+
+    @Test("isApproachingDeparture excludes one minute past departure")
+    func approachingExcludesPastDeparture() throws {
+        let cal = Calendar.current
+        #expect(!CommuteNotificationDecisionEngine.isApproachingDeparture(
+            hour: 7, now: try at(hour: 7, minute: 1), departureHours: [7], leadMinutes: 15, calendar: cal))
+    }
+
+    @Test("Second of multiple departure hours can put us in window")
+    func multipleDepartureHoursSecondMatches() throws {
+        // Departures at 7 and 17. now 16:40 is in the 17:00 window (15 lead + 30 slack opens 16:15).
+        let input = baseInput(
+            expectedDepartureHours: [7, 17], currentETA: 40 * 60, now: try at(hour: 16, minute: 40))
+        guard case .notify = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected notify inside the second departure window"); return
+        }
+    }
+
+    @Test("None of multiple departure hours in window skips")
+    func multipleDepartureHoursNoneMatch() throws {
+        // Departures at 7 and 17; now 12:00 is in neither window.
+        let input = baseInput(
+            expectedDepartureHours: [7, 17], currentETA: 40 * 60, now: try at(hour: 12, minute: 0))
+        guard case .skip(let reason) = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected skip outside all departure windows"); return
+        }
+        #expect(reason.contains("approaching"))
+    }
+
+    @Test("Combined message carries both the delay minutes and destination")
+    func combinedMessageContents() throws {
+        let weather = WeatherCondition(severity: .harsh, summary: "Heavy snow", available: true)
+        // 20 min typical, 38 min ETA => 18 min over.
+        let input = baseInput(
+            leadMinutes: 20, currentETA: 38 * 60, weather: weather,
+            now: try at(hour: 6, minute: 40), destinationName: "Downtown")
+        guard case .notify(let msg, let action, _) = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected combined notify"); return
+        }
+        #expect(action == .combinedDelay)
+        #expect(msg.contains("18"))           // delay minutes
+        #expect(msg.contains("Downtown"))     // destination
+        #expect(msg.lowercased().contains("snow"))
+        #expect(!msg.contains("-"))           // never a negative minute
+    }
+
+    @Test("Combined with empty weather summary falls back to 'rough weather'")
+    func combinedEmptySummaryFallback() throws {
+        // Harsh severity but blank summary (defensive: shouldn't happen, but copy must not break).
+        let weather = WeatherCondition(severity: .harsh, summary: "", available: true)
+        let input = baseInput(leadMinutes: 15, currentETA: 40 * 60, weather: weather, now: try at(hour: 6, minute: 50))
+        guard case .notify(let msg, let action, _) = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected combined notify"); return
+        }
+        #expect(action == .combinedDelay)
+        #expect(msg.lowercased().contains("rough weather"))
+    }
+
+    @Test("Traffic exactly at the 20% threshold and 6-min floor notifies")
+    func trafficExactlyAtThreshold() throws {
+        // 30 min typical, 36 min ETA => exactly 20% and exactly 6 min over.
+        let input = baseInput(currentETA: 36 * 60, typicalDuration: 30 * 60, now: try at(hour: 6, minute: 50))
+        guard case .notify(_, let action, _) = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected notify at the exact traffic threshold"); return
+        }
+        #expect(action == .leaveEarly)
+    }
+
+    @Test("Traffic at 20% but exactly one minute under the floor skips")
+    func trafficAtPercentButUnderFloor() throws {
+        // 25 min typical, 30 min ETA => 20% but only 5 min over (< 6 floor).
+        let input = baseInput(currentETA: 30 * 60, typicalDuration: 25 * 60, now: try at(hour: 6, minute: 50))
+        guard case .skip = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected skip — 5 min is under the 6-min floor"); return
+        }
+    }
+
+    @Test("Quiet hours hour equal to start is suppressed (inclusive start)")
+    func quietHoursInclusiveStart() {
+        #expect(CommuteNotificationDecisionEngine.isWithinQuietHours(hour: 22, start: 22, end: 7))
+    }
+
+    @Test("Quiet hours hour equal to end is allowed (exclusive end)")
+    func quietHoursExclusiveEnd() {
+        #expect(!CommuteNotificationDecisionEngine.isWithinQuietHours(hour: 7, start: 22, end: 7))
+    }
+
+    @Test("Lead below 15 is clamped up even on a weather-only notify")
+    func weatherNotifyClampsLowLead() throws {
+        let weather = WeatherCondition(severity: .harsh, summary: "Snow expected", available: true)
+        let input = baseInput(leadMinutes: 5, currentETA: nil, weather: weather, now: try at(hour: 6, minute: 50))
+        guard case .notify(_, _, let lead) = CommuteNotificationDecisionEngine.evaluate(input) else {
+            Issue.record("expected weather notify"); return
+        }
+        #expect(lead == 15)
+    }
 }
