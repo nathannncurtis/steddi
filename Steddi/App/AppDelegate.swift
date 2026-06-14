@@ -41,6 +41,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         ThemeModeEx.migrateLegacyIfNeeded()
         _ = ThemeEngine.shared
 
+        // Register media remote commands (play/pause/skip/seek) so phone nav and
+        // CarPlay both route steering-wheel + Control Center input to the active
+        // audio app (music-ducking spec).
+        MainActor.assumeIsolated { NowPlayingService.shared.registerCommands() }
+
         _ = NavigationStateManager.shared
 
         return true
