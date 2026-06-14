@@ -17,6 +17,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var isShowingNavigation = false
     private var modelContainer: ModelContainer?
     private var liveUpdateTask: Task<Void, Never>?
+    private var phoneNavWatchTask: Task<Void, Never>?
 
     private var stateManager: NavigationStateManager { NavigationStateManager.shared }
 
@@ -89,6 +90,10 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         didDisconnect interfaceController: CPInterfaceController,
         from window: CPWindow
     ) {
+        phoneNavWatchTask?.cancel()
+        phoneNavWatchTask = nil
+        liveUpdateTask?.cancel()
+        liveUpdateTask = nil
         dismissNavigation()
         NowPlayingService.shared.unregisterCommands()
         mapController = nil
@@ -247,16 +252,18 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     // MARK: - Watch Phone Navigation
 
     private func watchPhoneNavigation() {
-        Task { @MainActor in
-            var wasNavigating = stateManager.isNavigating
-            while interfaceController != nil {
+        phoneNavWatchTask?.cancel()
+        phoneNavWatchTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            var wasNavigating = self.stateManager.isNavigating
+            while !Task.isCancelled, self.interfaceController != nil {
                 try? await Task.sleep(for: .seconds(1))
-                let isNav = stateManager.isNavigating
+                let isNav = self.stateManager.isNavigating
 
                 if isNav && !wasNavigating {
-                    showNavigationUI()
+                    self.showNavigationUI()
                 } else if !isNav && wasNavigating {
-                    dismissNavigation()
+                    self.dismissNavigation()
                 }
 
                 wasNavigating = isNav
@@ -403,13 +410,13 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private func showRoutePreview(name: String, coordinate: CLLocationCoordinate2D) async {
         guard let interfaceController else { return }
 
-        guard let currentLoc = CLLocationManager().location else {
+        guard let origin = mapController?.currentUserCoordinate else {
             showError("Unable to determine your location.")
             return
         }
 
         let request = MKDirections.Request()
-        request.source = MKMapItem(location: CLLocation(latitude: currentLoc.coordinate.latitude, longitude: currentLoc.coordinate.longitude), address: nil)
+        request.source = MKMapItem(location: CLLocation(latitude: origin.latitude, longitude: origin.longitude), address: nil)
         request.destination = MKMapItem(location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude), address: nil)
         request.transportType = .automobile
 
