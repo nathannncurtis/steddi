@@ -325,7 +325,7 @@ struct DecisionEngineCombinedTests {
     @Test("Traffic + harsh weather uses combinedDelay and higher lead")
     func combined() throws {
         let weather = WeatherCondition(severity: .harsh, summary: "Heavy snow", available: true)
-        let input = baseInput(currentETA: 40 * 60, weather: weather, leadMinutes: 20, now: try at(hour: 6, minute: 40))
+        let input = baseInput(leadMinutes: 20, currentETA: 40 * 60, weather: weather, now: try at(hour: 6, minute: 40))
         guard case .notify(let msg, let action, let lead) = CommuteNotificationDecisionEngine.evaluate(input) else {
             Issue.record("expected notify"); return
         }
@@ -338,7 +338,7 @@ struct DecisionEngineCombinedTests {
     @Test("Combined lead clamps to 120 max")
     func combinedLeadClamps() throws {
         let weather = WeatherCondition(severity: .harsh, summary: "Snow", available: true)
-        let input = baseInput(currentETA: 60 * 60, weather: weather, leadMinutes: 120, now: try at(hour: 4, minute: 30))
+        let input = baseInput(leadMinutes: 120, currentETA: 60 * 60, weather: weather, now: try at(hour: 4, minute: 30))
         guard case .notify(_, _, let lead) = CommuteNotificationDecisionEngine.evaluate(input) else {
             Issue.record("expected notify"); return
         }

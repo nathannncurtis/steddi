@@ -297,11 +297,13 @@ final class CommuteNotificationService {
         guard relevant.count >= learnedConfidenceMinTrips else { return [] }
 
         // Count departures per hour; keep hours seen on >= 20% of matching days
-        // so a one-off outlier doesn't create a phantom window.
+        // so a one-off outlier doesn't create a phantom window. Compared as a
+        // double so a single occurrence in a large sample (e.g. 1 of 9 ≈ 11%)
+        // is correctly dropped rather than rounded up to the floor.
         var counts: [Int: Int] = [:]
         for trip in relevant { counts[trip.hourOfDay, default: 0] += 1 }
-        let floor = max(1, Int(Double(relevant.count) * 0.2))
-        return counts.filter { $0.value >= floor }.keys.sorted()
+        let floor = Double(relevant.count) * 0.2
+        return counts.filter { Double($0.value) >= floor }.keys.sorted()
     }
 
     /// Schedule-rule departure hours for the given direction (zero-history
