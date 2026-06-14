@@ -74,6 +74,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         _ = NavigationStateManager.shared
 
+        // Wire the road-condition memory service to the shared store and run the
+        // 90-day decay sweep on launch so aged-out conditions never accumulate.
+        MainActor.assumeIsolated {
+            RoadConditionService.shared.configure(container: modelContainer)
+            RoadConditionService.shared.sweepExpiredConditions()
+        }
+
         return true
     }
 
