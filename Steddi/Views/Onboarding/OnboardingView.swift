@@ -158,7 +158,6 @@ struct OnboardingView: View {
     /// prompt floats over beat 3, and any grant flows into the map later.
     private func requestLocation() {
         locationService.requestPermission()
-        coordinator.locationGranted = true
         advance()
     }
 

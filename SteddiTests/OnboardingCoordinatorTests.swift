@@ -73,16 +73,6 @@ struct OnboardingCoordinatorTests {
         #expect(OnboardingCoordinator.OnboardingBeat.emergency.primaryLabel == "Get Started")
     }
 
-    // MARK: - Permission state
-
-    @Test("Location grant flag defaults off and flips on")
-    func locationGrantFlag() {
-        let c = OnboardingCoordinator()
-        #expect(c.locationGranted == false)
-        c.locationGranted = true
-        #expect(c.locationGranted == true)
-    }
-
     // MARK: - Emergency contact
 
     @Test("Setting a contact stores the trimmed number")

@@ -4,8 +4,8 @@ import Observation
 /// Drives Steddi's first-run flow: a small, ordered set of "beats" the user
 /// steps through, plus the selections they make along the way.
 ///
-/// The coordinator owns *flow* state only — beat advancement, whether location
-/// was granted, and the in-progress accent/theme/emergency picks. Persistence
+/// The coordinator owns *flow* state only — beat advancement and the
+/// in-progress accent/theme/emergency picks. Persistence
 /// lives in `@AppStorage`/the theme engine; the coordinator never writes those
 /// directly so a mid-flow `steddi://reset-onboarding` can rebuild a fresh
 /// coordinator without leaving partial writes behind. `OnboardingView` reads
@@ -38,10 +38,6 @@ final class OnboardingCoordinator {
 
     /// The beat currently on screen.
     private(set) var currentBeat: OnboardingBeat = .hero
-
-    /// True once the user resolves the location prompt (grant *or* defer). The
-    /// hero map and permissions copy key off the grant, not just the timer.
-    var locationGranted: Bool = false
 
     /// Set when the hero's draw-on finishes (or immediately under Reduce Motion),
     /// so the footer's primary button can pop in on cue.
