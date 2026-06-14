@@ -166,6 +166,7 @@
 		E0EA434384C8E29419756D75 /* SteddiNavigationActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD3684A653CCA35C0F4BAC7 /* SteddiNavigationActivity.swift */; };
 		E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */; };
 		E461BE1525A0D183307D8F9D /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60B620B91EBE2D984AD636A9 /* AnalyticsService.swift */; };
+		E566271D07B108A193F239AD /* DefaultCostModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DFB098646F43016ACE60B9F /* DefaultCostModel.swift */; };
 		E60E5CF51F15E749FB8C9708 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94C0D76787187AFA4D836876 /* SwiftUI.framework */; };
 		E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2113E7A877B78A7BF8CF75C /* Route.swift */; };
 		E7FD013198226D25A6927A6B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 770C65D4283DB277ED143EA4 /* Assets.xcassets */; };
@@ -262,6 +263,7 @@
 		2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngineTests.swift; sourceTree = "<group>"; };
 		2BCA75D43D11EA6F5D4123D8 /* CameraReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraReport.swift; sourceTree = "<group>"; };
 		2DA34462C207C379281EC748 /* IconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPickerView.swift; sourceTree = "<group>"; };
+		2DFB098646F43016ACE60B9F /* DefaultCostModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultCostModel.swift; sourceTree = "<group>"; };
 		30A628B67F551F51F4AEBEE8 /* LocalNormsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNormsProvider.swift; sourceTree = "<group>"; };
 		30D7349058BD69D002F9FBF1 /* OnboardingThemeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingThemeView.swift; sourceTree = "<group>"; };
 		3130157560032FDA76FED435 /* RoadConditionReconfirmSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadConditionReconfirmSheet.swift; sourceTree = "<group>"; };
@@ -712,6 +714,7 @@
 			children = (
 				75D80501CDFFA0CFCCA74216 /* AStarSearch.swift */,
 				7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */,
+				2DFB098646F43016ACE60B9F /* DefaultCostModel.swift */,
 				BC9D08E3026C7F5520ACED2C /* OSMTagParsing.swift */,
 				8F4DF3CEF0AD3014468BAD09 /* RoadGraph.swift */,
 				942A3B6981E7B85F855A4276 /* RoadGraphBuilder.swift */,
@@ -1027,6 +1030,7 @@
 				650E6F734C0E0EFE2B9BEBBF /* CommuteWeatherService.swift in Sources */,
 				C4A0314513C0EDA3FFC980BB /* CustomRouteBuilder.swift in Sources */,
 				0E09441FE050C20774C8887E /* DaysOfWeekPicker.swift in Sources */,
+				E566271D07B108A193F239AD /* DefaultCostModel.swift in Sources */,
 				CBF93A0F5EBE517C5D93628F /* DirectionsService.swift in Sources */,
 				62F76345C827AE0B9E53CD23 /* DisplayModeService.swift in Sources */,
 				D5D2CC709306B626B120D222 /* DonationView.swift in Sources */,
