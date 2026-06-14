@@ -231,6 +231,84 @@ enum RouteGeometry {
         let snapped = interpolate(from: segStart, to: segEnd, t: t)
         return (snapped, t, haversineDistance(from: point, to: snapped))
     }
+
+    // MARK: - Zone Containment
+
+    /// Whether a point lies within `radiusMeters` of `center`.
+    static func isPoint(
+        _ point: CLLocationCoordinate2D,
+        withinCircleCenter center: CLLocationCoordinate2D,
+        radiusMeters: Double
+    ) -> Bool {
+        haversineDistance(from: center, to: point) <= radiusMeters
+    }
+
+    /// Shortest distance, in meters, from a point to a polyline (perpendicular
+    /// to its nearest segment — not merely the nearest vertex). Returns
+    /// `.infinity` for an empty polyline; the point-to-point distance for a
+    /// single-vertex polyline.
+    static func distance(
+        from point: CLLocationCoordinate2D,
+        toPolyline polyline: [CLLocationCoordinate2D]
+    ) -> Double {
+        guard !polyline.isEmpty else { return .infinity }
+        guard polyline.count >= 2 else { return haversineDistance(from: point, to: polyline[0]) }
+
+        var best = Double.greatestFiniteMagnitude
+        for i in 0..<(polyline.count - 1) {
+            let d = projectOntoSegment(point: point, segStart: polyline[i], segEnd: polyline[i + 1]).distance
+            if d < best { best = d }
+        }
+        return best
+    }
+
+    /// Whether a point lies within `bufferMeters` of a corridor centerline.
+    static func isPoint(
+        _ point: CLLocationCoordinate2D,
+        withinCorridor centerline: [CLLocationCoordinate2D],
+        bufferMeters: Double
+    ) -> Bool {
+        distance(from: point, toPolyline: centerline) <= bufferMeters
+    }
+
+    /// Ray-casting point-in-polygon test in lat/lon space. The polygon may be
+    /// open or explicitly closed (a trailing vertex equal to the first is
+    /// tolerated). Points exactly on an edge are treated consistently but their
+    /// inclusion is undefined, as is standard for ray casting. Returns false
+    /// for degenerate polygons (< 3 vertices).
+    static func isPoint(
+        _ point: CLLocationCoordinate2D,
+        insidePolygon polygon: [CLLocationCoordinate2D]
+    ) -> Bool {
+        // Drop a duplicated closing vertex so the wrap-around edge isn't
+        // double-counted.
+        var ring = polygon
+        if ring.count >= 2, let first = ring.first, let last = ring.last,
+           first.latitude == last.latitude, first.longitude == last.longitude {
+            ring.removeLast()
+        }
+        guard ring.count >= 3 else { return false }
+
+        let x = point.longitude
+        let y = point.latitude
+        var inside = false
+        var j = ring.count - 1
+        for i in 0..<ring.count {
+            let xi = ring[i].longitude
+            let yi = ring[i].latitude
+            let xj = ring[j].longitude
+            let yj = ring[j].latitude
+
+            // Edge straddles the horizontal ray, and the crossing is to the
+            // right of the test point.
+            if ((yi > y) != (yj > y)),
+               x < (xj - xi) * (y - yi) / (yj - yi) + xi {
+                inside.toggle()
+            }
+            j = i
+        }
+        return inside
+    }
 }
 
 // MARK: - Route Projection

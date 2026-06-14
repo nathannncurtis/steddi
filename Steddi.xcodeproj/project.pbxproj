@@ -87,6 +87,7 @@
 		A22CFFF0BDE370AB28985EC8 /* AdvancedHapticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */; };
 		A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */; };
 		A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */; };
+		A5334D5D6A4798480F20DAC1 /* ZoneValidationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DB2867732B7B04A13ECC99 /* ZoneValidationEngine.swift */; };
 		A780066C24DF0AD042F0B658 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C25F38675758DD0FE5C92BE /* Trip.swift */; };
 		B697491FBDB6DEAA201BF5FC /* ThemePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777F9439E5905A75A1BBDB95 /* ThemePalette.swift */; };
 		B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */; };
@@ -298,6 +299,7 @@
 		F2113E7A877B78A7BF8CF75C /* Route.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Route.swift; sourceTree = "<group>"; };
 		F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiApp.swift; sourceTree = "<group>"; };
 		F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeModeEx.swift; sourceTree = "<group>"; };
+		F3DB2867732B7B04A13ECC99 /* ZoneValidationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneValidationEngine.swift; sourceTree = "<group>"; };
 		F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartCommuteIntent.swift; sourceTree = "<group>"; };
 		F62156E1FDD078D989A2441A /* OfflineCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCacheService.swift; sourceTree = "<group>"; };
 		F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteCardView.swift; sourceTree = "<group>"; };
@@ -624,6 +626,7 @@
 				262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */,
 				544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */,
 				27FB85CBF3D500E916BCF5B8 /* ZoneDrawingService.swift */,
+				F3DB2867732B7B04A13ECC99 /* ZoneValidationEngine.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -903,6 +906,7 @@
 				CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */,
 				9275C4BC68051B778B8E32C5 /* WeatherKitService.swift in Sources */,
 				7563ED49C5D46457AD882CA4 /* ZoneDrawingService.swift in Sources */,
+				A5334D5D6A4798480F20DAC1 /* ZoneValidationEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
