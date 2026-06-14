@@ -49,6 +49,14 @@ struct HomeView: View {
     @State private var showSettings = false
     @State private var showSearch = false
     @State private var showAddLocation = false
+    // Add Place save flow — seeds AddLocationSheet from a search result or
+    // the current location (reverse-geocoded).
+    @State private var addPlaceCoordinate: CLLocationCoordinate2D?
+    @State private var addPlaceName: String?
+    @State private var addPlaceAddress: String?
+    @State private var addPlaceCategory: PlaceCategory = .other
+    @State private var showAddPlaceFlow = false
+    @State private var isResolvingCurrentLocation = false
     @State private var showCommuteList = false
     @State private var showTripList = false
     @State private var showPostArrival = false
@@ -309,6 +317,15 @@ struct HomeView: View {
         .sheet(isPresented: $showAddLocation) {
             AddLocationSheet(coordinate: longPressCoordinate)
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showAddPlaceFlow) {
+            AddLocationSheet(
+                coordinate: addPlaceCoordinate,
+                prefilledAddress: addPlaceAddress,
+                prefilledName: addPlaceName,
+                initialCategory: addPlaceCategory
+            )
+            .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showCommuteList) {
             NavigationStack {
@@ -1853,14 +1870,52 @@ struct HomeView: View {
         return points
     }
 
+    /// Save a searched place: open the category + icon picker seeded from the
+    /// result rather than inserting blindly, so every saved place gets a
+    /// category.
     private func pinLocation(from result: GeocodingResult) {
-        let location = PinnedLocation(
-            name: result.name,
-            latitude: result.coordinate.latitude,
-            longitude: result.coordinate.longitude,
-            address: result.address
-        )
-        modelContext.insert(location)
+        addPlaceCoordinate = result.coordinate
+        addPlaceName = result.name
+        addPlaceAddress = result.address.isEmpty ? nil : result.address
+        addPlaceCategory = .other
+        showAddPlaceFlow = true
+    }
+
+    /// "Use Current Location" flow: reverse-geocode the user's position, then
+    /// open the category + icon picker seeded with the resolved address. Falls
+    /// back to raw coordinates if geocoding fails.
+    private func startCurrentLocationAddFlow() {
+        guard !isResolvingCurrentLocation else { return }
+        isResolvingCurrentLocation = true
+        Task {
+            // Wait briefly for a fix if we don't have one yet.
+            locationService.startUpdating()
+            var location = locationService.currentLocation
+            for _ in 0..<10 where location == nil {
+                try? await Task.sleep(for: .milliseconds(300))
+                location = locationService.currentLocation
+            }
+            defer { isResolvingCurrentLocation = false }
+            guard let location else { return }
+
+            let coord = location.coordinate
+            var resolvedAddress: String?
+            var resolvedName = "Current Location"
+            if let placemark = try? await CLGeocoder().reverseGeocodeLocation(location).first {
+                let parts = [
+                    placemark.subThoroughfare, placemark.thoroughfare,
+                    placemark.locality, placemark.administrativeArea
+                ].compactMap { $0 }
+                if !parts.isEmpty { resolvedAddress = parts.joined(separator: " ") }
+                if let name = placemark.name, !name.isEmpty { resolvedName = name }
+            }
+
+            addPlaceCoordinate = coord
+            addPlaceName = resolvedName
+            addPlaceAddress = resolvedAddress
+            addPlaceCategory = .other
+            showAddPlaceFlow = true
+        }
     }
 
     // MARK: - Category Migration
@@ -1902,6 +1957,7 @@ private struct ExpandedSearchView: View {
     @State private var query = ""
     @State private var results: [GeocodingResult] = []
     @State private var searchTask: Task<Void, Never>?
+    @State private var selectedResult: GeocodingResult?
     @FocusState private var isSearchFocused: Bool
 
     private let geocodingService = GeocodingService()
@@ -1944,11 +2000,27 @@ private struct ExpandedSearchView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
 
-            if !results.isEmpty {
+            if let selected = selectedResult {
+                SearchResultActionCard(
+                    name: selected.name,
+                    address: selected.address,
+                    distanceText: formattedDistance(to: selected),
+                    onNavigate: { onSelectResult(selected) },
+                    onSave: { onPinResult(selected) },
+                    onCancel: {
+                        withAnimation(.easeOut(duration: 0.2)) { selectedResult = nil }
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            } else if !results.isEmpty {
                 ScrollView {
                     VStack(spacing: 2) {
                         ForEach(results) { result in
-                            Button { onSelectResult(result) } label: {
+                            Button {
+                                withAnimation(.easeOut(duration: 0.2)) { selectedResult = result }
+                            } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: "mappin")
                                         .font(.body)
