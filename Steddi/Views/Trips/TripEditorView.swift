@@ -11,6 +11,8 @@ struct TripEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("accentColor") private var accentColor = "lavender"
 
+    @State private var showDeleteInProgressConfirm = false
+
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
         Form {
@@ -57,14 +59,36 @@ struct TripEditorView: View {
                     if !trip.isArchived { trip.completedAt = nil }
                 }
                 Button("Delete Trip", role: .destructive) {
-                    modelContext.delete(trip)
-                    dismiss()
+                    if trip.isInProgress {
+                        // Deleting mid-trip would orphan navigation state — confirm
+                        // first, then end the active session before removing.
+                        showDeleteInProgressConfirm = true
+                    } else {
+                        deleteTrip()
+                    }
                 }
             }
         }
         .navigationTitle(trip.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { EditButton() }
+        .alert("Delete trip in progress?", isPresented: $showDeleteInProgressConfirm) {
+            Button("Delete", role: .destructive) { deleteTrip() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This trip is being navigated. Deleting it will end the active trip session.")
+        }
+    }
+
+    /// Remove the trip, first tearing down the active trip session if this is
+    /// the one being navigated — so no dangling activeTrip or nav state remains.
+    private func deleteTrip() {
+        let navState = NavigationStateManager.shared
+        if navState.activeTrip?.id == trip.id {
+            navState.endActiveTripSession()
+        }
+        modelContext.delete(trip)
+        dismiss()
     }
 
     private func stopRow(_ stop: TripStop) -> some View {
