@@ -87,6 +87,22 @@ final class NoGoZone {
         timeWindow?.isActive(now: now) ?? true
     }
 
+    /// Human-readable, geometry-appropriate description for list rows. Circles
+    /// report their radius; corridors report their buffer width; polygons report
+    /// an area label. Avoids the misleading "0m radius" that legacy radius-based
+    /// formatting produces for corridor/polygon zones (whose `radiusMeters` is 0
+    /// by design).
+    var displayLabel: String {
+        switch geometry {
+        case .circle(_, let radiusMeters):
+            return "\(Int(radiusMeters))m radius"
+        case .corridor(_, let bufferMeters):
+            return "Road corridor · \(Int(bufferMeters))m buffer"
+        case .polygon:
+            return "Custom area"
+        }
+    }
+
     /// Legacy circle initializer — preserved so existing call sites compile
     /// unchanged.
     init(
@@ -229,9 +245,27 @@ struct TimeWindow: Codable, Equatable {
     var endHour: Int
 
     init(daysOfWeek: Set<Int>, startHour: Int, endHour: Int) {
-        self.daysOfWeek = daysOfWeek
-        self.startHour = startHour
-        self.endHour = endHour
+        // The UI (HourRangePicker) already constrains these, but the model type
+        // guards itself so a malformed window never silently misbehaves: hours
+        // are clamped into [0, 24] and weekdays into Calendar's 1...7 range.
+        self.daysOfWeek = daysOfWeek.filter { (1...7).contains($0) }
+        self.startHour = min(max(startHour, 0), 24)
+        self.endHour = min(max(endHour, 0), 24)
+    }
+
+    // Route decoding through the validating initializer so persisted windows are
+    // clamped on read too, not just on construction.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            daysOfWeek: try c.decode(Set<Int>.self, forKey: .daysOfWeek),
+            startHour: try c.decode(Int.self, forKey: .startHour),
+            endHour: try c.decode(Int.self, forKey: .endHour)
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case daysOfWeek, startHour, endHour
     }
 
     /// Whether the window is active at `now`. Handles windows that wrap past

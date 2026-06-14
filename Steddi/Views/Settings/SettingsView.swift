@@ -245,7 +245,7 @@ struct SettingsView: View {
                             VStack(alignment: .leading) {
                                 Text(zone.name ?? "Unnamed zone")
                                     .font(.body)
-                                Text("\(Int(zone.radiusMeters))m radius")
+                                Text(zone.displayLabel)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
