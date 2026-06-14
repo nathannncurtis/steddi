@@ -35,6 +35,12 @@ final class RoadConditionService {
     private var index: RoadConditionGridIndex?
     private var indexedRouteID: UUID?
 
+    /// One long-lived context for all operations, created at `configure`. A
+    /// single context keeps route relationships and fetches consistent (a
+    /// per-call context would put a created condition and its route in different
+    /// contexts, and the launch sweep wouldn't see in-flight edits).
+    private var sharedContext: ModelContext?
+
     init(now: @escaping () -> Date = { Date() }) {
         self.now = now
     }
@@ -42,12 +48,15 @@ final class RoadConditionService {
     /// Wire up the shared container at launch. Idempotent.
     func configure(container: ModelContainer) {
         self.modelContainer = container
+        self.sharedContext = ModelContext(container)
     }
 
-    private var context: ModelContext? {
-        guard let modelContainer else { return nil }
-        return ModelContext(modelContainer)
-    }
+    private var context: ModelContext? { sharedContext }
+
+    /// The context the service reads and writes. Exposed for tests so they can
+    /// insert routes into the same context the service uses, keeping
+    /// relationship-backed queries consistent.
+    var testContext: ModelContext? { sharedContext }
 
     // MARK: - Lifecycle (CRUD)
 
