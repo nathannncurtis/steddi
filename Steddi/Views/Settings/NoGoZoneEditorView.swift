@@ -3,156 +3,302 @@ import SwiftData
 import MapKit
 import CoreLocation
 
-/// Full-screen no-go zone editor — tap the map to place a zone, adjust radius, save.
+/// Multi-mode no-go zone editor. Pick a drawing mode (pin / route / draw /
+/// shape / road), build a geometry on the map (or by name), optionally attach a
+/// time window, and save. Legacy circle zones remain fully supported via the
+/// pin mode.
 struct NoGoZoneEditorView: View {
+    /// Re-exported so the spec's `NoGoZoneEditorView.EditorMode` spelling and
+    /// the shared `ZoneEditorMode` refer to the same type.
+    typealias EditorMode = ZoneEditorMode
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(LocationService.self) private var locationService
     @AppStorage("accentColor") private var accentColor = "lavender"
 
+    @State private var selectedMode: ZoneEditorMode = .circlePin
     @State private var name = ""
     @State private var radiusMeters: Double = 200
-    @State private var selectedCoordinate: CLLocationCoordinate2D?
-    @State private var mapViewRef: MKMapView?
 
-    // Search
+    // Resolved + preview geometry
+    @State private var selectedGeometry: ZoneGeometry?
+    @State private var previewGeometry: ZoneGeometry?
+    @State private var isSnapping = false
+    @State private var drawError: String?
+
+    // Per-mode input state
+    @State private var circleCenter: CLLocationCoordinate2D?
+    @State private var dotWaypoints: [CLLocationCoordinate2D] = []
+    @State private var polygonTaps: [CLLocationCoordinate2D] = []
+    @State private var roadName = ""
+    @State private var roadStart = ""
+    @State private var roadEnd = ""
+
+    // Time window
+    @State private var hasTimeWindow = false
+    @State private var selectedDays: Set<Int> = [2, 3, 4, 5, 6]  // Mon–Fri
+    @State private var startHour = 7
+    @State private var endHour = 18
+
+    // Map + search
+    @State private var mapViewRef: MKMapView?
     @State private var showSearch = false
     @State private var searchQuery = ""
     @State private var searchResults: [GeocodingResult] = []
     @State private var searchTask: Task<Void, Never>?
 
     private let geocodingService = GeocodingService()
+    private let drawingService = ZoneDrawingService()
 
     var body: some View {
-        let _ = accentColor // force SwiftUI re-render on accent change
+        let _ = accentColor // force re-render on accent change
         ZStack {
-            // Full-screen map
-            NoGoZoneMap(
-                selectedCoordinate: selectedCoordinate,
-                radiusMeters: radiusMeters,
-                onTapMap: { coord in
-                    selectedCoordinate = coord
-                },
+            NoGoZoneMapV2(
+                previewGeometry: previewGeometry ?? selectedGeometry,
+                mode: selectedMode,
+                inProgressPoints: inProgressGuide,
+                onTapMap: handleMapTap,
+                onDrawStroke: handleDrawStroke,
                 mapViewRef: $mapViewRef
             )
             .ignoresSafeArea()
 
-            VStack {
-                // Top bar
-                HStack {
-                    Button("Cancel") { dismiss() }
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(SteddiTheme.textPrimary)
-                        .padding(10)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Capsule())
-
-                    Spacer()
-
-                    // Search button
-                    Button {
-                        showSearch.toggle()
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(SteddiTheme.accent)
-                            .padding(10)
-                            .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Circle())
-                    }
-
-                    Spacer()
-
-                    Button("Save") { save() }
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(selectedCoordinate != nil ? SteddiTheme.accent : SteddiTheme.textMuted)
-                        .padding(10)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Capsule())
-                        .disabled(selectedCoordinate == nil)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
-                // Search overlay
-                if showSearch {
-                    searchOverlay
-                }
-
-                // Tap hint
-                if selectedCoordinate == nil && !showSearch {
-                    Text("Tap the map to place a no-go zone")
-                        .font(SteddiTheme.body(14))
-                        .foregroundStyle(SteddiTheme.textPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Capsule())
-                        .padding(.top, 12)
-                }
-
+            VStack(spacing: 0) {
+                topBar
+                modePickerBar
+                if showSearch { searchOverlay }
                 Spacer()
-
-                // Zoom buttons
-                VStack(spacing: 8) {
-                    Button {
-                        guard let mv = mapViewRef else { return }
-                        var region = mv.region
-                        region.span.latitudeDelta /= 2
-                        region.span.longitudeDelta /= 2
-                        mv.setRegion(region, animated: true)
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(SteddiTheme.textPrimary)
-                            .frame(width: 44, height: 44)
-                            .background(SteddiTheme.surfacePrimary.opacity(0.88), in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    Button {
-                        guard let mv = mapViewRef else { return }
-                        var region = mv.region
-                        region.span.latitudeDelta = min(region.span.latitudeDelta * 2, 180)
-                        region.span.longitudeDelta = min(region.span.longitudeDelta * 2, 360)
-                        mv.setRegion(region, animated: true)
-                    } label: {
-                        Image(systemName: "minus")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(SteddiTheme.textPrimary)
-                            .frame(width: 44, height: 44)
-                            .background(SteddiTheme.surfacePrimary.opacity(0.88), in: RoundedRectangle(cornerRadius: 12))
-                    }
-                }
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.trailing, 16)
-
-                Spacer()
-
-                // Bottom card — only shows after placing a zone
-                if selectedCoordinate != nil {
-                    bottomCard
-                }
+                if isSnapping { snappingIndicator }
+                if let drawError { errorBanner(drawError) }
+                bottomControlCard
             }
         }
     }
 
-    // MARK: - Search Overlay
+    // MARK: - Top bar
+
+    private var topBar: some View {
+        HStack {
+            Button("Cancel") { dismiss() }
+                .font(.body.weight(.medium))
+                .foregroundStyle(SteddiTheme.textPrimary)
+                .padding(10)
+                .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Capsule())
+
+            Spacer()
+
+            Button { showSearch.toggle() } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(SteddiTheme.accent)
+                    .padding(10)
+                    .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Circle())
+            }
+
+            Spacer()
+
+            Button("Save") { saveZone() }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(canSave ? SteddiTheme.accent : SteddiTheme.textMuted)
+                .padding(10)
+                .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Capsule())
+                .disabled(!canSave)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
+    // MARK: - Mode picker
+
+    private var modePickerBar: some View {
+        HStack(spacing: 8) {
+            modeButton(.circlePin, "Pin", "location.circle.fill")
+            modeButton(.dotToDot, "Route", "mappin.and.ellipse")
+            modeButton(.freehandDraw, "Draw", "pencil")
+            modeButton(.polygonDraw, "Shape", "pentagon.fill")
+            modeButton(.namedRoad, "Road", "signpost.right.fill")
+        }
+        .padding(10)
+        .background(SteddiTheme.surfacePrimary.opacity(0.9), in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+    }
+
+    private func modeButton(_ mode: ZoneEditorMode, _ title: String, _ symbol: String) -> some View {
+        Button {
+            selectMode(mode)
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: symbol).font(.system(size: 16))
+                Text(title)
+            }
+        }
+        .buttonStyle(ModeButtonStyle(isSelected: selectedMode == mode))
+    }
+
+    // MARK: - Bottom card
+
+    private var bottomControlCard: some View {
+        VStack(spacing: 14) {
+            Text(modeHint)
+                .font(SteddiTheme.body(13))
+                .foregroundStyle(SteddiTheme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if selectedMode == .circlePin && circleCenter != nil {
+                radiusSlider
+            }
+
+            if selectedMode == .namedRoad {
+                namedRoadInputs
+            } else {
+                TextField("Zone name (optional)", text: $name)
+                    .font(SteddiTheme.body(15))
+                    .padding(10)
+                    .background(SteddiTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 10))
+            }
+
+            timeWindowControls
+
+            if selectedMode == .dotToDot || selectedMode == .polygonDraw {
+                actionButtons
+            }
+        }
+        .padding(16)
+        .background(
+            SteddiTheme.surfacePrimary.opacity(0.95)
+                .shadow(color: .black.opacity(0.3), radius: 16, y: -4)
+        )
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
+    }
+
+    private var radiusSlider: some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text("Radius").font(SteddiTheme.body(15)).foregroundStyle(SteddiTheme.textPrimary)
+                Spacer()
+                Text("\(Int(radiusMeters))m").font(SteddiTheme.mono(15)).foregroundStyle(SteddiTheme.textSecondary)
+            }
+            Slider(value: $radiusMeters, in: 100...2000, step: 50)
+                .tint(SteddiTheme.warmRed)
+                .onChange(of: radiusMeters) { _, _ in updateCirclePreview() }
+        }
+    }
+
+    private var namedRoadInputs: some View {
+        VStack(spacing: 10) {
+            TextField("Road name (e.g. 'I-91')", text: $roadName)
+                .font(SteddiTheme.body(15))
+                .padding(10)
+                .background(SteddiTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 10))
+            HStack(spacing: 10) {
+                TextField("From (e.g. 'Main St')", text: $roadStart)
+                    .font(SteddiTheme.body(14))
+                    .padding(10)
+                    .background(SteddiTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 10))
+                TextField("To (e.g. 'Route 15')", text: $roadEnd)
+                    .font(SteddiTheme.body(14))
+                    .padding(10)
+                    .background(SteddiTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 10))
+            }
+            Button {
+                resolveNamedRoad()
+            } label: {
+                Text(isSnapping ? "Finding road…" : "Find road")
+                    .font(SteddiTheme.body(15).weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 10))
+            }
+            .disabled(roadName.isEmpty || roadStart.isEmpty || roadEnd.isEmpty || isSnapping)
+        }
+    }
+
+    private var timeWindowControls: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("Time window")
+                    .font(SteddiTheme.body(15))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+                Spacer()
+                Toggle("", isOn: $hasTimeWindow)
+                    .labelsHidden()
+                    .tint(SteddiTheme.accent)
+            }
+            if hasTimeWindow {
+                DaysOfWeekPicker(selected: $selectedDays)
+                HourRangePicker(start: $startHour, end: $endHour)
+            }
+        }
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            Button {
+                clearDrawing()
+            } label: {
+                Text("Clear")
+                    .font(SteddiTheme.body(15).weight(.medium))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(SteddiTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 10))
+            }
+            if selectedMode == .polygonDraw {
+                Button {
+                    closePolygon()
+                } label: {
+                    Text("Close shape")
+                        .font(SteddiTheme.body(15).weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 10))
+                }
+                .disabled(polygonTaps.count < 3)
+            }
+        }
+    }
+
+    private var snappingIndicator: some View {
+        HStack(spacing: 8) {
+            ProgressView().tint(SteddiTheme.accent)
+            Text("Snapping to roads…")
+                .font(SteddiTheme.body(13))
+                .foregroundStyle(SteddiTheme.textPrimary)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(SteddiTheme.surfacePrimary.opacity(0.92), in: Capsule())
+        .padding(.bottom, 8)
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        Text(message)
+            .font(SteddiTheme.body(13))
+            .foregroundStyle(SteddiTheme.warmRed)
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .background(SteddiTheme.surfacePrimary.opacity(0.92), in: Capsule())
+            .padding(.bottom, 8)
+    }
+
+    // MARK: - Search overlay
 
     private var searchOverlay: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(SteddiTheme.accent)
+                Image(systemName: "magnifyingglass").foregroundStyle(SteddiTheme.accent)
                 TextField("Search a location", text: $searchQuery)
                     .font(SteddiTheme.body(15))
                     .foregroundStyle(SteddiTheme.textPrimary)
                     .autocorrectionDisabled()
-                    .onChange(of: searchQuery) { _, newValue in
-                        debounceSearch(newValue)
-                    }
+                    .onChange(of: searchQuery) { _, newValue in debounceSearch(newValue) }
                 if !searchQuery.isEmpty {
                     Button {
-                        searchQuery = ""
-                        searchResults = []
+                        searchQuery = ""; searchResults = []
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(SteddiTheme.textMuted)
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(SteddiTheme.textMuted)
                     }
                 }
             }
@@ -165,36 +311,18 @@ struct NoGoZoneEditorView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(searchResults) { result in
-                            Button {
-                                selectedCoordinate = result.coordinate
-                                showSearch = false
-                                searchQuery = ""
-                                searchResults = []
-                                // Center map on selected location
-                                if let mv = mapViewRef {
-                                    let region = MKCoordinateRegion(center: result.coordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
-                                    mv.setRegion(region, animated: true)
-                                }
-                            } label: {
+                            Button { selectSearchResult(result) } label: {
                                 HStack {
-                                    Image(systemName: "mappin")
-                                        .foregroundStyle(SteddiTheme.warmRed)
-                                        .frame(width: 24)
+                                    Image(systemName: "mappin").foregroundStyle(SteddiTheme.warmRed).frame(width: 24)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(result.name)
-                                            .font(.body)
-                                            .foregroundStyle(SteddiTheme.textPrimary)
+                                        Text(result.name).font(.body).foregroundStyle(SteddiTheme.textPrimary)
                                         if !result.address.isEmpty && result.address != result.name {
-                                            Text(result.address)
-                                                .font(.caption)
-                                                .foregroundStyle(SteddiTheme.textSecondary)
-                                                .lineLimit(1)
+                                            Text(result.address).font(.caption).foregroundStyle(SteddiTheme.textSecondary).lineLimit(1)
                                         }
                                     }
                                     Spacer()
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
+                                .padding(.horizontal, 16).padding(.vertical, 10)
                             }
                         }
                     }
@@ -207,56 +335,183 @@ struct NoGoZoneEditorView: View {
         }
     }
 
-    // MARK: - Bottom Card
+    // MARK: - Derived
 
-    private var bottomCard: some View {
-        VStack(spacing: 14) {
-            // Radius slider
-            VStack(spacing: 6) {
-                HStack {
-                    Text("Radius")
-                        .font(SteddiTheme.body(15))
-                        .foregroundStyle(SteddiTheme.textPrimary)
-                    Spacer()
-                    Text("\(Int(radiusMeters))m")
-                        .font(SteddiTheme.mono(15))
-                        .foregroundStyle(SteddiTheme.textSecondary)
-                }
-                Slider(value: $radiusMeters, in: 100...2000, step: 50)
-                    .tint(SteddiTheme.warmRed)
-            }
-
-            // Name field
-            TextField("Zone name (optional)", text: $name)
-                .font(SteddiTheme.body(15))
-                .padding(10)
-                .background(SteddiTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 10))
-
-            Text("Routes will avoid this area")
-                .font(SteddiTheme.body(12))
-                .foregroundStyle(SteddiTheme.textMuted)
+    private var modeHint: String {
+        switch selectedMode {
+        case .circlePin: return "Tap the map to place a circular zone."
+        case .dotToDot: return "Tap waypoints; we'll route a corridor between them."
+        case .freehandDraw: return "Drag on the map to trace a road; we'll snap it."
+        case .polygonDraw: return "Tap to add points, then close the shape."
+        case .namedRoad: return "Name a road and its bounds to avoid that stretch."
         }
-        .padding(16)
-        .background(
-            SteddiTheme.surfacePrimary.opacity(0.95)
-                .shadow(color: .black.opacity(0.3), radius: 16, y: -4)
-        )
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
     }
 
-    // MARK: - Actions
+    private var inProgressGuide: [CLLocationCoordinate2D] {
+        switch selectedMode {
+        case .dotToDot: return dotWaypoints
+        case .polygonDraw: return polygonTaps
+        default: return []
+        }
+    }
 
-    private func save() {
-        guard let coord = selectedCoordinate else { return }
+    private var canSave: Bool {
+        selectedGeometry != nil
+    }
+
+    // MARK: - Mode switching
+
+    private func selectMode(_ mode: ZoneEditorMode) {
+        guard mode != selectedMode else { return }
+        selectedMode = mode
+        clearDrawing()
+    }
+
+    private func clearDrawing() {
+        selectedGeometry = nil
+        previewGeometry = nil
+        circleCenter = nil
+        dotWaypoints = []
+        polygonTaps = []
+        drawError = nil
+    }
+
+    // MARK: - Map handlers
+
+    private func handleMapTap(_ coord: CLLocationCoordinate2D) {
+        drawError = nil
+        switch selectedMode {
+        case .circlePin:
+            circleCenter = coord
+            updateCirclePreview()
+        case .dotToDot:
+            dotWaypoints.append(coord)
+            updateDotToDotPreview()
+        case .polygonDraw:
+            // Auto-close when tapping near the first point.
+            if polygonTaps.count >= 3, let first = polygonTaps.first,
+               RouteGeometry.haversineDistance(from: first, to: coord) < 50 {
+                closePolygon()
+            } else {
+                polygonTaps.append(coord)
+                updatePolygonPreview()
+            }
+        case .freehandDraw, .namedRoad:
+            break
+        }
+    }
+
+    private func handleDrawStroke(_ path: [CLLocationCoordinate2D]) {
+        guard selectedMode == .freehandDraw, path.count >= 2 else { return }
+        drawError = nil
+        isSnapping = true
+        Task {
+            defer { isSnapping = false }
+            do {
+                let snapped = try await drawingService.snapFreehandStroke(path)
+                selectedGeometry = snapped.geometry
+                previewGeometry = nil
+            } catch {
+                drawError = (error as? LocalizedError)?.errorDescription ?? "Couldn't snap the drawing."
+            }
+        }
+    }
+
+    // MARK: - Previews
+
+    private func updateCirclePreview() {
+        guard let center = circleCenter else { return }
+        selectedGeometry = .circle(center: center, radiusMeters: radiusMeters)
+        previewGeometry = nil
+    }
+
+    private func updateDotToDotPreview() {
+        guard dotWaypoints.count >= 2 else { return }
+        isSnapping = true
+        Task {
+            defer { isSnapping = false }
+            do {
+                let snapped = try await drawingService.dotToDotCorridor(waypoints: dotWaypoints)
+                selectedGeometry = snapped.geometry
+                previewGeometry = nil
+            } catch {
+                drawError = (error as? LocalizedError)?.errorDescription ?? "Couldn't route a corridor."
+            }
+        }
+    }
+
+    private func updatePolygonPreview() {
+        guard polygonTaps.count >= 2 else { previewGeometry = nil; return }
+        previewGeometry = .polygon(encodedPolyline: PolylineEncoder.encode(polygonTaps, precision: 6))
+    }
+
+    private func closePolygon() {
+        do {
+            selectedGeometry = try drawingService.polygonFromTaps(polygonTaps)
+            previewGeometry = nil
+        } catch {
+            drawError = (error as? LocalizedError)?.errorDescription ?? "Add at least three points."
+        }
+    }
+
+    private func resolveNamedRoad() {
+        drawError = nil
+        isSnapping = true
+        Task {
+            defer { isSnapping = false }
+            do {
+                let geometry = try await drawingService.namedRoadCorridor(
+                    roadName: roadName,
+                    startLocation: roadStart,
+                    endLocation: roadEnd,
+                    proximity: locationService.currentLocation?.coordinate
+                )
+                selectedGeometry = geometry
+                previewGeometry = nil
+                if name.isEmpty { name = roadName }
+                // Frame the resolved corridor.
+                if case .corridor(let polyline, _) = geometry {
+                    frameCoordinates(PolylineEncoder.decode(polyline, precision: 6))
+                }
+            } catch {
+                drawError = (error as? LocalizedError)?.errorDescription ?? "Couldn't find that road."
+            }
+        }
+    }
+
+    // MARK: - Save
+
+    private func saveZone() {
+        guard let geometry = selectedGeometry else { return }
+
+        let window: TimeWindow? = hasTimeWindow
+            ? TimeWindow(daysOfWeek: selectedDays, startHour: startHour, endHour: endHour)
+            : nil
+
         let zone = NoGoZone(
-            latitude: coord.latitude,
-            longitude: coord.longitude,
-            radiusMeters: radiusMeters,
+            geometry: geometry,
             name: name.isEmpty ? nil : name,
-            isGlobal: true
+            isGlobal: true,
+            route: nil,
+            timeWindow: window
         )
         modelContext.insert(zone)
         dismiss()
+    }
+
+    // MARK: - Search helpers
+
+    private func selectSearchResult(_ result: GeocodingResult) {
+        showSearch = false
+        searchQuery = ""
+        searchResults = []
+        if selectedMode == .circlePin {
+            circleCenter = result.coordinate
+            updateCirclePreview()
+        }
+        if let mv = mapViewRef {
+            mv.setRegion(MKCoordinateRegion(center: result.coordinate, latitudinalMeters: 2000, longitudinalMeters: 2000), animated: true)
+        }
     }
 
     private func debounceSearch(_ query: String) {
@@ -274,79 +529,17 @@ struct NoGoZoneEditorView: View {
             } catch {}
         }
     }
-}
 
-// MARK: - No-Go Zone Map
-
-struct NoGoZoneMap: UIViewRepresentable {
-    let selectedCoordinate: CLLocationCoordinate2D?
-    let radiusMeters: Double
-    let onTapMap: (CLLocationCoordinate2D) -> Void
-    @Binding var mapViewRef: MKMapView?
-
-    func makeUIView(context: Context) -> MKMapView {
-        let mapView = MKMapView(frame: .zero)
-        mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
-        mapView.delegate = context.coordinator
-
-        mapView.preferredConfiguration = SteddiTheme.mapConfiguration(traffic: false)
-
-        mapView.showsUserLocation = true
-        mapView.showsCompass = false
-        mapView.showsScale = false
-
-        let region = MKCoordinateRegion(
-            center: mapView.userLocation.coordinate.latitude != 0
-                ? mapView.userLocation.coordinate
-                : CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
-            latitudinalMeters: 5000,
-            longitudinalMeters: 5000
+    private func frameCoordinates(_ coords: [CLLocationCoordinate2D]) {
+        guard let mv = mapViewRef, !coords.isEmpty else { return }
+        let rect = coords.reduce(MKMapRect.null) { acc, coord in
+            let point = MKMapPoint(coord)
+            return acc.union(MKMapRect(x: point.x, y: point.y, width: 0, height: 0))
+        }
+        mv.setVisibleMapRect(
+            rect,
+            edgePadding: UIEdgeInsets(top: 120, left: 60, bottom: 240, right: 60),
+            animated: true
         )
-        mapView.setRegion(region, animated: false)
-
-        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
-        mapView.addGestureRecognizer(tap)
-        context.coordinator.mapView = mapView
-
-        DispatchQueue.main.async { mapViewRef = mapView }
-        return mapView
-    }
-
-    func updateUIView(_ mapView: MKMapView, context: Context) {
-        context.coordinator.onTapMap = onTapMap
-
-        // Remove previous zone circle overlay
-        mapView.removeOverlays(mapView.overlays)
-
-        guard let coord = selectedCoordinate else { return }
-
-        // Draw the no-go zone as an MKCircle
-        let circle = MKCircle(center: coord, radius: radiusMeters)
-        mapView.addOverlay(circle, level: .aboveRoads)
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    class Coordinator: NSObject, MKMapViewDelegate {
-        weak var mapView: MKMapView?
-        var onTapMap: ((CLLocationCoordinate2D) -> Void)?
-
-        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            guard let mapView, gesture.state == .ended else { return }
-            let point = gesture.location(in: mapView)
-            let coord = mapView.convert(point, toCoordinateFrom: mapView)
-            onTapMap?(coord)
-        }
-
-        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            if let circle = overlay as? MKCircle {
-                let renderer = MKCircleRenderer(circle: circle)
-                renderer.fillColor = UIColor(red: 0.91, green: 0.30, blue: 0.24, alpha: 0.2)
-                renderer.strokeColor = UIColor(red: 0.91, green: 0.30, blue: 0.24, alpha: 0.8)
-                renderer.lineWidth = 2
-                return renderer
-            }
-            return MKOverlayRenderer(overlay: overlay)
-        }
     }
 }
