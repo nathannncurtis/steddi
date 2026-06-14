@@ -174,7 +174,7 @@ final class WeatherKitService {
         )
     }
 
-    nonisolated static func kind(for condition: WeatherCondition) -> WeatherConditionSnapshot.Kind {
+    nonisolated static func kind(for condition: WeatherKit.WeatherCondition) -> WeatherConditionSnapshot.Kind {
         switch condition {
         case .clear, .mostlyClear, .hot:
             return .clear
