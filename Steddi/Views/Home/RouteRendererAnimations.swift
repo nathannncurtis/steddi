@@ -98,6 +98,30 @@ final class RouteDrawRenderer: MKPolylineRenderer {
         self.lineJoin = .round
     }
 
+    /// MapKit constructs overlay renderers through the `init(overlay:)`
+    /// designated initializer in some paths (e.g. recreating a renderer for a
+    /// re-added overlay). A Swift subclass with non-optional stored properties
+    /// must implement it or hit the "unimplemented initializer" trap. Recover
+    /// the coordinates when the overlay is a polyline; otherwise degrade to an
+    /// empty draw set (the full-line path falls back to the superclass anyway).
+    override init(overlay: MKOverlay) {
+        if let polyline = overlay as? MKPolyline {
+            var c = [CLLocationCoordinate2D](
+                repeating: CLLocationCoordinate2D(), count: polyline.pointCount
+            )
+            polyline.getCoordinates(&c, range: NSRange(location: 0, length: polyline.pointCount))
+            self.coords = c
+            self.cumulative = RouteGeometry.cumulativeDistances(c)
+        } else {
+            self.coords = []
+            self.cumulative = []
+        }
+        super.init(overlay: overlay)
+        self.lineWidth = 6
+        self.lineCap = .round
+        self.lineJoin = .round
+    }
+
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
         // Full line: defer to MKPolylineRenderer's optimized clipping path.
         guard animationProgress < 1 else {
