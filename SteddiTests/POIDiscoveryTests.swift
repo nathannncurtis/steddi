@@ -38,7 +38,8 @@ struct ReviewURLsTests {
         let url = try #require(ReviewURLs.googleMapsURL(name: "Joe's Diner", latitude: 40.0, longitude: -73.5))
         let s = url.absoluteString
         #expect(s.hasPrefix("https://www.google.com/maps/search/?api=1&query="))
-        #expect(s.contains("Joe%27s%20Diner"))
+        // Apostrophe is a legal query character and stays literal; space is %20.
+        #expect(s.contains("Joe's%20Diner"))
         #expect(s.contains("40.000000"))
     }
 
