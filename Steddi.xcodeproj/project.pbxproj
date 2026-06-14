@@ -85,6 +85,7 @@
 		6E89B61699EAD36C5226A567 /* PostArrivalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */; };
 		7132E610C067CB033EF4B8F8 /* SteddiLiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */; };
 		72DD5D3842C50C4BEA5B5D44 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */; };
+		73DCCB458D54BAA367DB7502 /* DefaultCostModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F16028B16E55D125568971 /* DefaultCostModelTests.swift */; };
 		7503DC7D7F5D917A2B5FE289 /* OnboardingThemeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30D7349058BD69D002F9FBF1 /* OnboardingThemeView.swift */; };
 		7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */; };
 		755CA9609153C6BBD3833D97 /* CheckCommuteETAIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */; };
@@ -400,6 +401,7 @@
 		DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDuckingServiceTests.swift; sourceTree = "<group>"; };
 		DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolator.swift; sourceTree = "<group>"; };
 		E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiLiveActivityBundle.swift; sourceTree = "<group>"; };
+		E0F16028B16E55D125568971 /* DefaultCostModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultCostModelTests.swift; sourceTree = "<group>"; };
 		E319751B2B97D0465371DA38 /* ZoneBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneBadgeView.swift; sourceTree = "<group>"; };
 		E64DED98F409553C18FBECB6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStoreLocatorTests.swift; sourceTree = "<group>"; };
@@ -567,6 +569,7 @@
 				2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */,
 				6AC5299003A0A378AC5AB4BB /* CommuteNotificationServiceTests.swift */,
 				B58DA0D8FE1B16173737797A /* CommuteWeatherServiceTests.swift */,
+				E0F16028B16E55D125568971 /* DefaultCostModelTests.swift */,
 				7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */,
 				08B46BB7337E920209A89889 /* HapticServiceTests.swift */,
 				E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */,
@@ -1159,6 +1162,7 @@
 				0A7AF0449A2474692CB7DC6F /* CommuteNotificationDecisionEngineTests.swift in Sources */,
 				0A97941AFC4A5EBA2F145262 /* CommuteNotificationServiceTests.swift in Sources */,
 				1195A6B4AA8844C44A30EDA2 /* CommuteWeatherServiceTests.swift in Sources */,
+				73DCCB458D54BAA367DB7502 /* DefaultCostModelTests.swift in Sources */,
 				A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */,
 				8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */,
 				9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */,
