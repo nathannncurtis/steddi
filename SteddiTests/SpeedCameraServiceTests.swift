@@ -151,6 +151,33 @@ struct CameraParsingTests {
             _ = try SpeedCameraService.parseOverpassResponse(Data("not json".utf8))
         }
     }
+
+    @Test("A non-node element (way) carrying camera tags is skipped")
+    func nonNodeTypeSkipped() throws {
+        // Overpass can return way/relation elements; only point nodes are cameras.
+        let way = #"{"type":"way","id":7,"lat":34.05,"lon":-118.24,"tags":{"highway":"speed_camera"}}"#
+        let cameras = try SpeedCameraService.parseOverpassResponse(overpassData(way))
+        #expect(cameras.isEmpty)
+    }
+
+    @Test("Node with no tags object is skipped")
+    func nodeWithoutTags() throws {
+        let untagged = #"{"type":"node","id":8,"lat":34.05,"lon":-118.24}"#
+        let cameras = try SpeedCameraService.parseOverpassResponse(overpassData(untagged))
+        #expect(cameras.isEmpty)
+    }
+
+    @Test("average_speed enforcement and a combined signals;speed mix both parse")
+    func averageAndCombinedParse() throws {
+        let data = overpassData(
+            nodeJSON(id: 9, lat: 34.05, lon: -118.24, tags: ["enforcement": "average_speed"]),
+            nodeJSON(id: 10, lat: 34.06, lon: -118.25, tags: ["enforcement": "traffic_signals;maxspeed"])
+        )
+        let cameras = try SpeedCameraService.parseOverpassResponse(data)
+        #expect(cameras.count == 2)
+        #expect(cameras.first { $0.nodeID == 9 }?.kind == .speedCamera)
+        #expect(cameras.first { $0.nodeID == 10 }?.kind == .redLightCamera)
+    }
 }
 
 // MARK: - Overpass query
@@ -221,6 +248,30 @@ struct CameraGridIndexTests {
         let expired = CameraReport(kind: .speedCamera, coordinate: downtown, status: .expired)
         let index = SpeedCameraGridIndex(osmCameras: [], reports: [expired])
         #expect(index.cameraCount == 0)
+    }
+
+    @Test("Two cameras in the same cell both surface as candidates")
+    func multipleInSameCell() {
+        // ~20m apart -> same ~278m cell; both must be returned.
+        let a = node(1, .speedCamera, at: downtown)
+        let b = node(2, .redLightCamera, at: north(of: downtown, meters: 20))
+        let index = SpeedCameraGridIndex(osmCameras: [a, b], reports: [])
+        let found = index.candidates(near: downtown)
+        #expect(found.contains { $0.alertID == "osm-1" })
+        #expect(found.contains { $0.alertID == "osm-2" })
+    }
+
+    @Test("Alert IDs are namespaced so an OSM node and a report can't collide")
+    func alertIDsNamespaced() {
+        let report = CameraReport(kind: .speedCamera, coordinate: downtown)
+        let index = SpeedCameraGridIndex(
+            osmCameras: [node(42, .speedCamera, at: downtown)],
+            reports: [report]
+        )
+        let ids = Set(index.candidates(near: downtown).map(\.alertID))
+        #expect(ids.contains("osm-42"))
+        #expect(ids.contains("report-\(report.id.uuidString)"))
+        #expect(ids.count == 2)
     }
 }
 
@@ -317,6 +368,38 @@ struct CameraProximityTests {
         )
         #expect(result == nil)
     }
+
+    @Test("The threshold is exclusive — a camera exactly at the radius is excluded")
+    func thresholdIsExclusive() {
+        // Place a camera ~200m north and use 200m as the exact threshold. The
+        // haversine distance lands fractionally under/over 200; assert the
+        // comparison is the strict `<` the implementation documents by using a
+        // threshold just below the measured distance.
+        let coord = north(of: downtown, meters: 200)
+        let measured = RouteGeometry.haversineDistance(from: downtown, to: coord)
+        let cam = alert("edge", .speedCamera, at: coord)
+        // Threshold equal to the measured distance -> excluded (strict <).
+        let atEdge = SpeedCameraService.closestAlert(
+            currentCoord: downtown, heading: 0, candidates: [cam], proximityThresholdMeters: measured
+        )
+        #expect(atEdge == nil)
+        // A hair above -> included.
+        let justInside = SpeedCameraService.closestAlert(
+            currentCoord: downtown, heading: 0, candidates: [cam], proximityThresholdMeters: measured + 0.01
+        )
+        #expect(justInside?.alertID == "edge")
+    }
+
+    @Test("Mobile trap loses to an equidistant speed camera on priority")
+    func mobileLosesToSpeedCamera() throws {
+        let here = north(of: downtown, meters: 150)
+        let mobile = alert("mob", .mobileSpeedTrap, at: here)
+        let speed = alert("spd", .speedCamera, at: here)
+        let result = SpeedCameraService.closestAlert(
+            currentCoord: downtown, heading: 0, candidates: [mobile, speed], proximityThresholdMeters: 350
+        )
+        #expect(result?.alertID == "spd")
+    }
 }
 
 // MARK: - isAhead heading gate
@@ -356,6 +439,22 @@ struct CameraIsAheadTests {
     func pointBlankBypass() {
         let target = north(of: downtown, meters: 10) // within aheadBypassMeters
         #expect(SpeedCameraService.isAhead(from: downtown, to: target, heading: 180))
+    }
+
+    @Test("Heading wraparound near 360/0 is handled (camera N, heading 350)")
+    func wraparoundHeading() {
+        // Camera due north (bearing 0); heading 350 is only 10 deg off, inside cone.
+        let target = north(of: downtown, meters: 200)
+        #expect(SpeedCameraService.isAhead(from: downtown, to: target, heading: 350))
+    }
+
+    @Test("Just inside the cone edge is ahead; just outside is not")
+    func coneBoundary() {
+        // East-ish target: bearing ~90 from the origin. Heading 20 -> 70 deg off
+        // (inside the 75 cone); heading 10 -> 80 deg off (outside).
+        let target = east(of: downtown, meters: 300)
+        #expect(SpeedCameraService.isAhead(from: downtown, to: target, heading: 20))
+        #expect(!SpeedCameraService.isAhead(from: downtown, to: target, heading: 10))
     }
 }
 
@@ -424,6 +523,36 @@ struct CameraReportCRUDTests {
         service.confirmReport(report)
         #expect(report.confirmationCount == 1)
         #expect(report.lastConfirmedAt == clock)
+    }
+
+    @Test("A confirmed-recently mobile trap survives the sweep (decay timer reset)")
+    func confirmKeepsMobileTrapAlive() throws {
+        var clock = Date(timeIntervalSince1970: 3_000_000)
+        let service = try makeService(now: { clock })
+        let trap = try #require(service.reportCamera(kind: .mobileSpeedTrap, coordinate: downtown))
+
+        // Drive 5 hours, reconfirm, then drive 5 more (10h total since creation
+        // but only 5h since last confirm -> still inside the 6h window).
+        clock = clock.addingTimeInterval(5 * 3_600)
+        service.confirmReport(trap)
+        clock = clock.addingTimeInterval(5 * 3_600)
+        let deleted = service.sweepExpiredReports()
+        #expect(deleted == 0)
+        #expect(service.fetchActiveReports().count == 1)
+    }
+
+    @Test("Sweep hard-deletes a soft-expired mobile trap once past its window")
+    func sweepCollectsSoftExpired() throws {
+        var clock = Date(timeIntervalSince1970: 4_000_000)
+        let service = try makeService(now: { clock })
+        let trap = try #require(service.reportCamera(kind: .mobileSpeedTrap, coordinate: downtown))
+        service.dismissReport(trap) // soft-expire now
+        #expect(service.fetchActiveReports().isEmpty) // hidden immediately
+
+        // Still present as a row until past the decay window.
+        #expect(service.sweepExpiredReports() == 0)
+        clock = clock.addingTimeInterval(7 * 3_600)
+        #expect(service.sweepExpiredReports() == 1)
     }
 
     @Test("Sweep removes stale mobile traps but keeps fixed cameras")
