@@ -25,7 +25,7 @@ final class Route {
     var roadConditions: [RoadCondition]?
 
     /// Whether this route overrides global no-go zones
-    var overridesGlobalNoGoZones: Bool
+    var overridesGlobalNoGoZones: Bool = false
 
     init(
         rank: Int,
