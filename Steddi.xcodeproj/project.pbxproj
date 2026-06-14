@@ -45,6 +45,7 @@
 		43C4CC9A502866B2BE5E5A35 /* ThemeRevisionTrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = 215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */; };
 		441AC263D0497D1AA6E95964 /* SteddiLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */; };
+		4786241496BB09CF9AD53A97 /* OnboardingEmergencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71155E230D450D007980A661 /* OnboardingEmergencyView.swift */; };
 		4A0898B3E04DFD141E0808AD /* EmergencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F1F21786B81D853B9E61B6 /* EmergencyView.swift */; };
 		4A8A3A9A1BA94ADE882306D9 /* ThemeModeEx.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */; };
 		4BD69219F4033B5D7DD61286 /* SteddiWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */; };
@@ -280,6 +281,7 @@
 		6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDirectionResolverTests.swift; sourceTree = "<group>"; };
 		7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
 		7072F1B4A4ECF3043E6462BF /* SteddiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SteddiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		71155E230D450D007980A661 /* OnboardingEmergencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingEmergencyView.swift; sourceTree = "<group>"; };
 		7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiMapView.swift; sourceTree = "<group>"; };
@@ -631,6 +633,7 @@
 				EF4892145CE55DFF9FF13FC7 /* DonationView.swift */,
 				C2EA338482C352BF2C39164B /* OnboardingContactPicker.swift */,
 				C6291CE98BB2552CD248E6CB /* OnboardingCoordinator.swift */,
+				71155E230D450D007980A661 /* OnboardingEmergencyView.swift */,
 				9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */,
 				0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */,
 				30D7349058BD69D002F9FBF1 /* OnboardingThemeView.swift */,
@@ -990,6 +993,7 @@
 				6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */,
 				51F52614D8D7DF5D5058304E /* OnboardingContactPicker.swift in Sources */,
 				BC2BE54BE878F0FF9889AC8D /* OnboardingCoordinator.swift in Sources */,
+				4786241496BB09CF9AD53A97 /* OnboardingEmergencyView.swift in Sources */,
 				9E6E05AF740C80220B638E58 /* OnboardingHeroView.swift in Sources */,
 				2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */,
 				7503DC7D7F5D917A2B5FE289 /* OnboardingThemeView.swift in Sources */,
