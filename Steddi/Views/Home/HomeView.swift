@@ -248,6 +248,7 @@ struct HomeView: View {
         .onAppear {
             locationService.requestPermission()
             locationService.startUpdating()
+            migrateExistingPinsToCategories()
             checkMilestoneDonation()
             LiveActivityService.shared.cleanupOrphanedActivities()
         }
@@ -1860,6 +1861,33 @@ struct HomeView: View {
             address: result.address
         )
         modelContext.insert(location)
+    }
+
+    // MARK: - Category Migration
+
+    /// One-time backfill: pins created before the `category` field existed
+    /// arrive with an empty category. Infer one from the pin's icon, defaulting
+    /// to "other". Idempotent — only empty categories are touched, so it's a
+    /// no-op on subsequent launches.
+    private func migrateExistingPinsToCategories() {
+        var changed = false
+        for pin in pinnedLocations where pin.category.isEmpty {
+            pin.category = PinnedLocationCategoryMigration.inferredKey(forIcon: pin.icon)
+            changed = true
+        }
+        if changed { try? modelContext.save() }
+    }
+}
+
+// MARK: - Category Migration (testable)
+
+/// Pure mapping from a legacy pin's SF Symbol to a category key. Lives outside
+/// the view so it can be unit-tested without a SwiftData context.
+enum PinnedLocationCategoryMigration {
+    /// Category key inferred from an icon, defaulting to "other" for unmapped
+    /// symbols.
+    static func inferredKey(forIcon icon: String) -> String {
+        (PlaceCategory.inferred(fromIcon: icon) ?? .other).key
     }
 }
 

@@ -10,6 +10,12 @@ final class PinnedLocation {
     var longitude: Double
     var address: String?
     var icon: String // SF Symbol name
+    /// Category key (see `PlaceCategory`). Stored as a String so the category
+    /// set can grow without a SwiftData migration. Default "other"; existing
+    /// pins are backfilled by `HomeView.migrateExistingPinsToCategories()`.
+    /// SwiftData supplies "" for pins persisted before this property existed —
+    /// that empty value is the migration's trigger.
+    var category: String = PlaceCategory.other.key
     var createdAt: Date
     var sortOrder: Int
 
@@ -29,6 +35,7 @@ final class PinnedLocation {
         longitude: Double,
         address: String? = nil,
         icon: String = "mappin.circle.fill",
+        category: String = PlaceCategory.other.key,
         sortOrder: Int = 0
     ) {
         self.id = UUID()
@@ -37,7 +44,13 @@ final class PinnedLocation {
         self.longitude = longitude
         self.address = address
         self.icon = icon
+        self.category = category
         self.createdAt = Date()
         self.sortOrder = sortOrder
+    }
+
+    /// Resolved category enum for this pin (falls back to `.other`).
+    var resolvedCategory: PlaceCategory {
+        PlaceCategory.category(for: category)
     }
 }
