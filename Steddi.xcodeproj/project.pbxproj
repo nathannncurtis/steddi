@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		018EE0B492C8F3A3866BEB7B /* RoadGraphBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA2D7C2DA35A6ABC14E3F1A /* RoadGraphBuilderTests.swift */; };
 		0347B79FA08BA6D1CF34E5C9 /* AccessibilityAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA0E2C23211EDCF54BC1F47D /* AccessibilityAnimations.swift */; };
 		0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04087916791CAF8B1AFD67AA /* TripProgression.swift */; };
 		060FD9747D8AFA4FD3A8E008 /* PlaceCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B14495FE74113349D84A50 /* PlaceCategory.swift */; };
@@ -107,6 +108,7 @@
 		943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */; };
 		967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDEFFA656C308FF61D985BF /* NoGoZone.swift */; };
 		97B5BB006220978DA3693CDA /* ModeButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */; };
+		99DE3604ED59FC3E66B7D6FB /* RoadGraphSerializerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A765371F7D3E908A2FB941 /* RoadGraphSerializerTests.swift */; };
 		99EEC9FDF103CFA359D55326 /* RoutePreferenceActiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31B70EAA3BE8D424563A79EB /* RoutePreferenceActiveTests.swift */; };
 		99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */; };
 		9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */; };
@@ -268,6 +270,7 @@
 		3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SteddiLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoderTests.swift; sourceTree = "<group>"; };
 		40841EB3367948433AC5D433 /* SpeedCameraAlertTone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedCameraAlertTone.swift; sourceTree = "<group>"; };
+		41A765371F7D3E908A2FB941 /* RoadGraphSerializerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadGraphSerializerTests.swift; sourceTree = "<group>"; };
 		42C53B70A81A76FE0196BE90 /* TripProgressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripProgressionTests.swift; sourceTree = "<group>"; };
 		42F23569BC6150BE5BD50BB7 /* SpeedCameraService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedCameraService.swift; sourceTree = "<group>"; };
 		459630C573F0A9D783D34A94 /* OnboardingCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCoordinatorTests.swift; sourceTree = "<group>"; };
@@ -294,6 +297,7 @@
 		671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		67B27E56129045AE269369A6 /* NavigationAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationAttributes.swift; sourceTree = "<group>"; };
 		686B69CCF442D219E251586F /* NoGoZoneGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneGeometryTests.swift; sourceTree = "<group>"; };
+		6AA2D7C2DA35A6ABC14E3F1A /* RoadGraphBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadGraphBuilderTests.swift; sourceTree = "<group>"; };
 		6AC5299003A0A378AC5AB4BB /* CommuteNotificationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationServiceTests.swift; sourceTree = "<group>"; };
 		6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDirectionResolverTests.swift; sourceTree = "<group>"; };
 		7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
@@ -560,6 +564,8 @@
 				3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */,
 				5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */,
 				33742A2E837A5F87965C89FA /* RoadConditionServiceTests.swift */,
+				6AA2D7C2DA35A6ABC14E3F1A /* RoadGraphBuilderTests.swift */,
+				41A765371F7D3E908A2FB941 /* RoadGraphSerializerTests.swift */,
 				CC186A20EADF968F64AF5C3B /* RouteDrawAnimationTests.swift */,
 				A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */,
 				31B70EAA3BE8D424563A79EB /* RoutePreferenceActiveTests.swift */,
@@ -1138,6 +1144,8 @@
 				44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */,
 				F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */,
 				5E824FC4DFBAD777E796CB8B /* RoadConditionServiceTests.swift in Sources */,
+				018EE0B492C8F3A3866BEB7B /* RoadGraphBuilderTests.swift in Sources */,
+				99DE3604ED59FC3E66B7D6FB /* RoadGraphSerializerTests.swift in Sources */,
 				6403E0888CD891BDBC0939E3 /* RouteDrawAnimationTests.swift in Sources */,
 				7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */,
 				99EEC9FDF103CFA359D55326 /* RoutePreferenceActiveTests.swift in Sources */,
