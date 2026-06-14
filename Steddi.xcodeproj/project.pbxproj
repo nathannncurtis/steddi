@@ -38,6 +38,7 @@
 		2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */; };
 		29D50A254B65DCCEDE9BD86E /* IconPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DA34462C207C379281EC748 /* IconPickerView.swift */; };
 		2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */; };
+		2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
 		3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */; };
 		3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335291BA198DC1134B9072E8 /* LocationPickerView.swift */; };
@@ -218,6 +219,7 @@
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0B99A3381CC68B028C99DD0E /* TripStop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripStop.swift; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
+		0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingPermissionsView.swift; sourceTree = "<group>"; };
 		11174913BB8D28369D82EC58 /* ZoneValidationEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneValidationEngineTests.swift; sourceTree = "<group>"; };
 		139001D61F9DF7A2C5C5060C /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiShortcuts.swift; sourceTree = "<group>"; };
@@ -625,6 +627,7 @@
 				EF4892145CE55DFF9FF13FC7 /* DonationView.swift */,
 				C6291CE98BB2552CD248E6CB /* OnboardingCoordinator.swift */,
 				9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */,
+				0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */,
 				72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */,
 			);
 			path = Onboarding;
@@ -981,6 +984,7 @@
 				6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */,
 				BC2BE54BE878F0FF9889AC8D /* OnboardingCoordinator.swift in Sources */,
 				9E6E05AF740C80220B638E58 /* OnboardingHeroView.swift in Sources */,
+				2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */,
 				87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */,
 				588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */,
 				E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */,
