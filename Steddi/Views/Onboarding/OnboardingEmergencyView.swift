@@ -9,7 +9,8 @@ import SwiftUI
 /// confirmation with a spring checkmark. "Skip for now" proceeds. Either way the
 /// footer's final button reads "Get Started".
 struct OnboardingEmergencyView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Animations here route through `SteddiMotion.resolve()`, which gates on
+    // Reduce Motion globally, so no per-view environment read is needed.
     @Bindable var coordinator: OnboardingCoordinator
 
     @State private var showPicker = false
