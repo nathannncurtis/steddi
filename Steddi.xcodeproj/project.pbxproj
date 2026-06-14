@@ -13,6 +13,7 @@
 		080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */; };
 		0A72D4673A9DC592DE1BDC01 /* AggregateStatsCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9342593EFE74CD157A9C4854 /* AggregateStatsCards.swift */; };
 		0A7AF0449A2474692CB7DC6F /* CommuteNotificationDecisionEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */; };
+		0A97941AFC4A5EBA2F145262 /* CommuteNotificationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AC5299003A0A378AC5AB4BB /* CommuteNotificationServiceTests.swift */; };
 		0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F735B06DB38089CDE99806B /* NavigationEngineTests.swift */; };
 		0E09441FE050C20774C8887E /* DaysOfWeekPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC40EBECC2D5A14FFFB4F991 /* DaysOfWeekPicker.swift */; };
 		0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */; };
@@ -248,6 +249,7 @@
 		671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		67B27E56129045AE269369A6 /* NavigationAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationAttributes.swift; sourceTree = "<group>"; };
 		686B69CCF442D219E251586F /* NoGoZoneGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZoneGeometryTests.swift; sourceTree = "<group>"; };
+		6AC5299003A0A378AC5AB4BB /* CommuteNotificationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationServiceTests.swift; sourceTree = "<group>"; };
 		6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDirectionResolverTests.swift; sourceTree = "<group>"; };
 		7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
 		7072F1B4A4ECF3043E6462BF /* SteddiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SteddiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -475,6 +477,7 @@
 				6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */,
 				D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */,
 				2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */,
+				6AC5299003A0A378AC5AB4BB /* CommuteNotificationServiceTests.swift */,
 				B58DA0D8FE1B16173737797A /* CommuteWeatherServiceTests.swift */,
 				7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */,
 				08B46BB7337E920209A89889 /* HapticServiceTests.swift */,
@@ -984,6 +987,7 @@
 				B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */,
 				4BD906E8F1CE5635D024B12D /* CommuteNotificationCenterTests.swift in Sources */,
 				0A7AF0449A2474692CB7DC6F /* CommuteNotificationDecisionEngineTests.swift in Sources */,
+				0A97941AFC4A5EBA2F145262 /* CommuteNotificationServiceTests.swift in Sources */,
 				1195A6B4AA8844C44A30EDA2 /* CommuteWeatherServiceTests.swift in Sources */,
 				A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */,
 				8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */,
