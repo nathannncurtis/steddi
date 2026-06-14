@@ -11,6 +11,10 @@ struct TripListView: View {
     @State private var showPlanner = false
     @State private var showArchived = false
 
+    /// Trips a swipe-delete targeted that are mid-navigation — held until the
+    /// confirmation alert resolves so deleting them can't orphan nav state.
+    @State private var pendingInProgressDeletes: [Trip] = []
+
     private var visibleTrips: [Trip] {
         trips.filter { $0.isArchived == showArchived }
     }
@@ -60,6 +64,21 @@ struct TripListView: View {
         .fullScreenCover(isPresented: $showPlanner) {
             TripPlannerView()
         }
+        .alert(
+            "Delete trip in progress?",
+            isPresented: Binding(
+                get: { !pendingInProgressDeletes.isEmpty },
+                set: { if !$0 { pendingInProgressDeletes = [] } }
+            )
+        ) {
+            Button("Delete", role: .destructive) {
+                for trip in pendingInProgressDeletes { delete(trip) }
+                pendingInProgressDeletes = []
+            }
+            Button("Cancel", role: .cancel) { pendingInProgressDeletes = [] }
+        } message: {
+            Text("This trip is being navigated. Deleting it will end the active trip session.")
+        }
     }
 
     private func tripRow(_ trip: Trip) -> some View {
@@ -94,9 +113,30 @@ struct TripListView: View {
     }
 
     private func deleteTrips(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(visibleTrips[index])
+        // Delete idle trips immediately; defer any in-progress trip to a
+        // confirmation alert so its active nav session is ended cleanly first.
+        let targets = offsets.map { visibleTrips[$0] }
+        var deferred: [Trip] = []
+        for trip in targets {
+            if trip.isInProgress {
+                deferred.append(trip)
+            } else {
+                delete(trip)
+            }
         }
+        if !deferred.isEmpty {
+            pendingInProgressDeletes = deferred
+        }
+    }
+
+    /// Delete one trip, tearing down the active trip session first when this is
+    /// the trip currently being navigated — leaving no dangling nav state.
+    private func delete(_ trip: Trip) {
+        let navState = NavigationStateManager.shared
+        if navState.activeTrip?.id == trip.id {
+            navState.endActiveTripSession()
+        }
+        modelContext.delete(trip)
     }
 }
 
