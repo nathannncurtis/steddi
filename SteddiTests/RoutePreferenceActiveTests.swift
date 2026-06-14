@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import MapKit
 @testable import Steddi
 
 /// Covers the preference-active detection that drives the nav-overlay and
@@ -112,5 +113,77 @@ struct RoutePreferenceActiveTests {
         #expect(prefs.avoidsTolls == false)
         #expect(prefs.avoidsHighways)
         #expect(prefs.activeLabels == ["Avoiding highways"])
+    }
+
+    @Test("An explicit commute opt-out beats a global default that avoids")
+    func commuteOptOutBeatsGlobalAvoidance() {
+        // Global says avoid both; this commute explicitly opts back in to both.
+        // `false ?? true` must resolve to the explicit false, not the global.
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: RoutePreferenceDefaultsKey.avoidsTolls)
+        defaults.set(true, forKey: RoutePreferenceDefaultsKey.avoidsHighways)
+
+        let commute = Commute(name: "Test")
+        commute.avoidsTolls = false      // explicit opt-out
+        commute.avoidsHighways = false   // explicit opt-out
+
+        let prefs = RoutePreferences.resolve(commute: commute, in: defaults)
+        #expect(prefs.avoidsTolls == false)
+        #expect(prefs.avoidsHighways == false)
+        #expect(prefs.isActive == false)
+        #expect(prefs.activeLabels.isEmpty)
+    }
+
+    @Test("A commute override beats the global default for highways")
+    func commuteOverrideBeatsGlobalHighways() {
+        let defaults = makeDefaults()
+        defaults.set(false, forKey: RoutePreferenceDefaultsKey.avoidsTolls)
+        defaults.set(false, forKey: RoutePreferenceDefaultsKey.avoidsHighways)
+
+        let commute = Commute(name: "Test")
+        commute.avoidsHighways = true
+
+        let prefs = RoutePreferences.resolve(commute: commute, in: defaults)
+        #expect(prefs.avoidsTolls == false)
+        #expect(prefs.avoidsHighways)
+        #expect(prefs.activeLabels == ["Avoiding highways"])
+    }
+
+    @Test("Both global defaults set resolves both, tolls before highways")
+    func resolvesBothGlobalDefaultsOrdered() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: RoutePreferenceDefaultsKey.avoidsTolls)
+        defaults.set(true, forKey: RoutePreferenceDefaultsKey.avoidsHighways)
+
+        let prefs = RoutePreferences.resolve(commute: nil, in: defaults)
+        #expect(prefs.isActive)
+        #expect(prefs.activeLabels == ["Avoiding tolls", "Avoiding highways"])
+    }
+
+    @Test("A nil commute argument resolves purely from the global defaults")
+    func nilCommuteArgumentUsesGlobals() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: RoutePreferenceDefaultsKey.avoidsTolls)
+        defaults.set(false, forKey: RoutePreferenceDefaultsKey.avoidsHighways)
+
+        // The whole commute is nil (not just a field) — both come from globals.
+        let prefs = RoutePreferences.resolve(commute: nil, in: defaults)
+        #expect(prefs.avoidsTolls)
+        #expect(prefs.avoidsHighways == false)
+    }
+
+    // MARK: - apply(to:) mapping
+
+    @Test("apply maps avoidance flags onto an MKDirections request")
+    func applyMapsAvoidanceToRequest() {
+        let request = MKDirections.Request()
+
+        RoutePreferences(avoidsTolls: true, avoidsHighways: false).apply(to: request)
+        #expect(request.tollPreference == .avoid)
+        #expect(request.highwayPreference == .any)
+
+        RoutePreferences(avoidsTolls: false, avoidsHighways: true).apply(to: request)
+        #expect(request.tollPreference == .any)
+        #expect(request.highwayPreference == .avoid)
     }
 }
