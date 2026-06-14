@@ -136,6 +136,7 @@ enum RoadGraphBuilder {
             let osmWayID: OSMNodeID
             let roadClass: RoadClass
             let attrs: EdgeAttributes
+            let oncomingLanes: UInt8
         }
         var pending: [PendingEdge] = []
 
@@ -152,6 +153,13 @@ enum RoadGraphBuilder {
                 highway: (tags["highway"] ?? "").lowercased()
             ) ?? 0)
             let attrs = edgeAttributes(tags: tags, direction: direction, roadClass: roadClass)
+            // Oncoming-lane count a driver crossing this way faces on an
+            // unprotected left, precomputed once per way (§5.1). Capped to a byte.
+            let oncoming = UInt8(min(255, OSMTagParsing.oncomingLaneCount(
+                lanes: tags["lanes"],
+                lanesForward: tags["lanes:forward"],
+                oneway: direction
+            )))
 
             // Walk the node list, accumulating geometry between graph nodes.
             var segmentCoords: [CLLocationCoordinate2D] = []
@@ -176,14 +184,16 @@ enum RoadGraphBuilder {
                             pending.append(PendingEdge(
                                 from: fromIdx, to: toIdx, coords: segmentCoords,
                                 lengthMeters: length, freeFlowSpeedMPS: speedMPS,
-                                osmWayID: way.id, roadClass: roadClass, attrs: attrs
+                                osmWayID: way.id, roadClass: roadClass, attrs: attrs,
+                                oncomingLanes: oncoming
                             ))
                         }
                         if direction.allowsReverse {
                             pending.append(PendingEdge(
                                 from: toIdx, to: fromIdx, coords: Array(segmentCoords.reversed()),
                                 lengthMeters: length, freeFlowSpeedMPS: speedMPS,
-                                osmWayID: way.id, roadClass: roadClass, attrs: attrs
+                                osmWayID: way.id, roadClass: roadClass, attrs: attrs,
+                                oncomingLanes: oncoming
                             ))
                         }
                     }
@@ -222,7 +232,8 @@ enum RoadGraphBuilder {
                     freeFlowSpeedMPS: p.freeFlowSpeedMPS,
                     osmWayID: p.osmWayID,
                     roadClass: p.roadClass,
-                    attrs: p.attrs
+                    attrs: p.attrs,
+                    oncomingLanes: p.oncomingLanes
                 ))
                 maxSpeed = max(maxSpeed, p.freeFlowSpeedMPS)
                 count += 1
@@ -285,6 +296,14 @@ enum RoadGraphBuilder {
         case .restricted: attrs.insert(.privateAccess)
         case .destinationOnly: attrs.insert(.destinationOnly)
         case .allowed: break
+        }
+
+        // A dedicated left-turn pocket (a left-only `turn:lanes` cell) implies a
+        // protected left phase in most US signals (§5.1). `turn:lanes:forward`
+        // takes precedence for two-way ways where the bare tag is ambiguous.
+        let turnLanes = OSMTagParsing.parseTurnLanes(tags["turn:lanes:forward"] ?? tags["turn:lanes"])
+        if turnLanes.contains(where: { $0.isDedicatedLeft }) {
+            attrs.insert(.dedicatedLeftLane)
         }
         return attrs
     }

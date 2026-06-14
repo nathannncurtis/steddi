@@ -11,7 +11,7 @@ enum RoadGraphSerializer {
 
     /// Bump when the on-disk layout changes; an older/newer byte makes
     /// `deserialize` return nil so the loader re-fetches rather than misreads.
-    static let formatVersion: UInt8 = 1
+    static let formatVersion: UInt8 = 2
 
     /// 4-byte magic ("SRG1") so a truncated/foreign file is rejected fast.
     private static let magic: [UInt8] = [0x53, 0x52, 0x47, 0x31]
@@ -66,6 +66,7 @@ enum RoadGraphSerializer {
             writer.writeI64(edge.osmWayID)
             writer.writeU8(edge.roadClass.rawValue)
             writer.writeU16(edge.attrs.rawValue)
+            writer.writeU8(edge.oncomingLanes)
         }
 
         // --- graphMaxSpeedMPS ---
@@ -136,7 +137,8 @@ enum RoadGraphSerializer {
                   let speed = reader.readF32(),
                   let wayID = reader.readI64(),
                   let classRaw = reader.readU8(),
-                  let attrsRaw = reader.readU16() else { return nil }
+                  let attrsRaw = reader.readU16(),
+                  let oncoming = reader.readU8() else { return nil }
             edges.append(GraphEdge(
                 from: from,
                 to: to,
@@ -145,7 +147,8 @@ enum RoadGraphSerializer {
                 freeFlowSpeedMPS: speed,
                 osmWayID: wayID,
                 roadClass: RoadClass(rawValue: classRaw) ?? .unknown,
-                attrs: EdgeAttributes(rawValue: attrsRaw)
+                attrs: EdgeAttributes(rawValue: attrsRaw),
+                oncomingLanes: oncoming
             ))
         }
 

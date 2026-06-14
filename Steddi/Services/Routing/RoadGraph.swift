@@ -34,7 +34,12 @@ struct EdgeAttributes: OptionSet, Sendable, Hashable, Codable {
     static let isService       = EdgeAttributes(rawValue: 1 << 8)
     static let privateAccess   = EdgeAttributes(rawValue: 1 << 9)   // access=private/no
     static let destinationOnly = EdgeAttributes(rawValue: 1 << 10)  // access=destination
-    // Bits 11..15 reserved for future flags.
+    /// The way carries a dedicated left-turn lane (a `turn:lanes` cell that is
+    /// left-only). A left-turn pocket implies a protected left phase in most US
+    /// signals, so the Phase-4 cost model treats a signalized left off such an
+    /// edge as protected (§5.1).
+    static let dedicatedLeftLane = EdgeAttributes(rawValue: 1 << 11)
+    // Bits 12..15 reserved for future flags.
 }
 
 /// A graph node — an OSM intersection or way endpoint. Through-points (degree-2
@@ -84,6 +89,11 @@ struct GraphEdge: Sendable, Equatable {
     let osmWayID: OSMNodeID
     let roadClass: RoadClass
     let attrs: EdgeAttributes
+    /// Estimated count of oncoming lanes a driver crossing INTO this edge's
+    /// `from` node would face, precomputed from `lanes`/`lanes:forward`/`oneway`
+    /// (§5.1). 0 for a oneway edge (no oncoming). The Phase-4 cost model scales
+    /// the unprotected-left penalty by this. Capped at 255 (one byte).
+    let oncomingLanes: UInt8
 }
 
 /// Spatial-hash index over edge geometry, mirroring `OSMSpeedLimitService`'s
