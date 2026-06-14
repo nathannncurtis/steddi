@@ -51,6 +51,9 @@ struct HomeView: View {
     @State private var previewAlternates: [MKRoute] = []
     @State private var previewDestinationName: String = ""
     @State private var previewIsCommute = false
+    /// The toll/highway preferences that shaped the previewed route, surfaced
+    /// as an "Avoiding…" indicator in the preview card.
+    @State private var previewPreferences = RoutePreferences(avoidsTolls: false, avoidsHighways: false)
 
     // Camera state
     @State private var is3DNav = true
@@ -317,6 +320,7 @@ struct HomeView: View {
                     route: route,
                     destinationName: previewDestinationName,
                     alternateRoutes: previewAlternates,
+                    preferences: previewPreferences,
                     onStart: { selectedRoute in
                         showRoutePreview = false
                         beginNavigation(with: selectedRoute)
@@ -525,7 +529,8 @@ struct HomeView: View {
             request.source = MKMapItem(location: CLLocation(latitude: currentLocation.coordinate.latitude, longitude: currentLocation.coordinate.longitude), address: nil)
             request.destination = MKMapItem(location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude), address: nil)
             request.transportType = .automobile
-            (preferences ?? RoutePreferences.resolve(commute: activeCommute)).apply(to: request)
+            let resolvedPreferences = preferences ?? RoutePreferences.resolve(commute: activeCommute)
+            resolvedPreferences.apply(to: request)
 
             let directions = MKDirections(request: request)
 
@@ -548,6 +553,7 @@ struct HomeView: View {
                     previewAlternates = Array(alternates.prefix(2))
                     previewDestinationName = name
                     previewIsCommute = false
+                    previewPreferences = resolvedPreferences
                     showRoutePreview = true
                 }
             } catch {

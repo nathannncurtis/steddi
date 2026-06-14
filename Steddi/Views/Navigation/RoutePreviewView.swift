@@ -7,6 +7,9 @@ struct RoutePreviewView: View {
     let route: MKRoute
     let destinationName: String
     let alternateRoutes: [MKRoute]
+    /// The toll/highway avoidance shaping these routes — surfaced as an
+    /// "Avoiding…" indicator so the preview matches the in-nav badge.
+    var preferences = RoutePreferences(avoidsTolls: false, avoidsHighways: false)
     let onStart: (MKRoute) -> Void
     let onCancel: () -> Void
 
@@ -59,20 +62,14 @@ struct RoutePreviewView: View {
                         }
                     }
 
-                    // Toll / highway indicators
-                    if activeRoute.hasTolls || activeRoute.hasHighways {
-                        HStack(spacing: 12) {
-                            if activeRoute.hasTolls {
-                                Label("Tolls", systemImage: "dollarsign.circle")
-                                    .font(SteddiTheme.body(13))
-                                    .foregroundStyle(SteddiTheme.accent)
-                            }
-                            if activeRoute.hasHighways {
-                                Label("Highways", systemImage: "road.lanes")
-                                    .font(SteddiTheme.body(13))
-                                    .foregroundStyle(SteddiTheme.textMuted)
+                    // Route-content + active-preference indicators
+                    if !routeIndicators.isEmpty {
+                        HStack(spacing: 8) {
+                            ForEach(routeIndicators) { indicator in
+                                indicatorChip(indicator)
                             }
                         }
+                        .frame(maxWidth: .infinity)
                     }
 
                     // Route options (if alternates exist)
@@ -125,6 +122,52 @@ struct RoutePreviewView: View {
         }
     }
 
+    // MARK: - Route Indicators
+
+    /// One badge for the preview: route-content presence (this route has tolls
+    /// or highways) plus, when a preference is shaping the route, the matching
+    /// "Avoiding…" indicator. Active-avoidance indicators lead — they're the
+    /// driver's own choice — and a content badge is suppressed when its
+    /// avoidance is on (the route can't both avoid tolls and carry them).
+    private var routeIndicators: [RoutePreviewIndicator] {
+        var indicators: [RoutePreviewIndicator] = []
+
+        if preferences.avoidsTolls {
+            indicators.append(.init(symbol: "checkmark.shield.fill", label: "Avoiding tolls", tone: .active))
+        } else if activeRoute.hasTolls {
+            indicators.append(.init(symbol: "dollarsign.circle.fill", label: "Tolls", tone: .content))
+        }
+
+        if preferences.avoidsHighways {
+            indicators.append(.init(symbol: "checkmark.shield.fill", label: "Avoiding highways", tone: .active))
+        } else if activeRoute.hasHighways {
+            indicators.append(.init(symbol: "road.lanes", label: "Highways", tone: .content))
+        }
+
+        return indicators
+    }
+
+    private func indicatorChip(_ indicator: RoutePreviewIndicator) -> some View {
+        let isActive = indicator.tone == .active
+        return HStack(spacing: 6) {
+            Image(systemName: indicator.symbol)
+                .font(.system(size: 12, weight: .semibold))
+            Text(indicator.label)
+                .font(SteddiTheme.body(13))
+        }
+        .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textSecondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(
+            Capsule()
+                .fill(isActive ? SteddiTheme.accentSubtle : SteddiTheme.surfaceSecondary)
+        )
+        .overlay(
+            Capsule()
+                .stroke(isActive ? SteddiTheme.accent.opacity(0.25) : .clear, lineWidth: 1)
+        )
+    }
+
     private func routeChip(_ route: MKRoute, label: String, isSelected: Bool) -> some View {
         Button {
             selectedRoute = route
@@ -148,6 +191,19 @@ struct RoutePreviewView: View {
             )
         }
     }
+}
+
+/// A single toll/highway badge in the route preview — either route content
+/// ("Tolls"/"Highways") or an active avoidance ("Avoiding…"). Unit-prefixed to
+/// avoid cross-pillar collisions.
+private struct RoutePreviewIndicator: Identifiable {
+    enum Tone: Equatable { case content, active }
+
+    let symbol: String
+    let label: String
+    let tone: Tone
+
+    var id: String { "\(label)-\(tone)" }
 }
 
 /// Map view for route preview — shows the full route fitted to screen.
