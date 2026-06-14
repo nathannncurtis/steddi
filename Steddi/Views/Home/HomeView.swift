@@ -36,6 +36,12 @@ struct HomeView: View {
     @State private var activeSavedPolyline: [CLLocationCoordinate2D]?
     /// Active road conditions for the route being navigated, shown as map badges.
     @State private var activeRoadConditions: [RoadCondition] = []
+    /// Saved route currently (or just) navigated, so the post-arrival flow can
+    /// check it for conditions due for reconfirmation.
+    @State private var navigatedSavedRoute: Route?
+    /// Stale conditions queued for the post-arrival "still there?" prompt.
+    @State private var reconfirmConditions: [RoadCondition] = []
+    @State private var showRoadConditionReconfirm = false
 
     // Route preview state
     @State private var showRoutePreview = false
@@ -381,7 +387,7 @@ struct HomeView: View {
                 Button("Cancel", role: .cancel) {}
             }
         }
-        .sheet(isPresented: $showPostArrival) {
+        .sheet(isPresented: $showPostArrival, onDismiss: presentRoadConditionReconfirmIfNeeded) {
             PostArrivalSheet(
                 recordedPoints: recordedPoints,
                 commute: arrivalCommute,
@@ -397,6 +403,10 @@ struct HomeView: View {
                 preMatchedPolyline: recordedPoints.count < 20 ? mockPolyline : nil
             )
             .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showRoadConditionReconfirm) {
+            RoadConditionReconfirmSheet(conditions: reconfirmConditions)
+                .presentationDetents([.medium])
         }
         .fullScreenCover(isPresented: $showRoutePlanner) {
             if let commute = routePlannerCommute {
@@ -559,6 +569,7 @@ struct HomeView: View {
     /// Only wired for saved routes, since conditions are route-scoped — ad-hoc
     /// MKRoute navigation has no Route model to anchor remembered conditions.
     private func wireRoadConditions(for engine: NavigationEngine, route: Route?) {
+        navigatedSavedRoute = route
         guard let route else {
             activeRoadConditions = []
             return
@@ -578,6 +589,20 @@ struct HomeView: View {
             HapticService.shared.fire(.roadConditionAlert)
             let road = condition.route?.name.map { " on \($0)" } ?? ""
             VoiceGuidanceService.shared.speak("\(condition.kind.spokenName) ahead\(road)")
+        }
+    }
+
+    /// After the post-arrival sheet closes, offer to reconfirm any condition on
+    /// the just-driven route that's past the 14-day window. One-time per
+    /// arrival; skippable and never blocking. A small delay lets the
+    /// post-arrival sheet finish dismissing before this sheet presents.
+    private func presentRoadConditionReconfirmIfNeeded() {
+        guard let route = navigatedSavedRoute else { return }
+        let stale = RoadConditionService.shared.staleConditionsOnRoute(route)
+        guard !stale.isEmpty else { return }
+        reconfirmConditions = stale
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            showRoadConditionReconfirm = true
         }
     }
 
