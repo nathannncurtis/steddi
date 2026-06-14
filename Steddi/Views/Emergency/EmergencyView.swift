@@ -227,7 +227,7 @@ struct EmergencyView: View {
 
     private func callContact() {
         // Defensive: if the saved contact was cleared elsewhere, prompt instead
-        // of dialing an empty number (TODO: prompt on first emergency use).
+        // of dialing an empty number — routes through presentContactSetup().
         let cleaned = emergencyContact
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "-", with: "")
