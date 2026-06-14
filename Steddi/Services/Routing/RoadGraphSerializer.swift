@@ -1,0 +1,274 @@
+import Foundation
+import CoreLocation
+
+/// Versioned binary (de)serializer for `RoadGraph`. JSON-encoding the graph at
+/// corridor scale is slow and huge (§3.8); instead we write the flat arrays
+/// (`nodes`, `edges`, packed attrs/class, the geometry coord pool) with a
+/// versioned header. Coordinates are stored as precision-6 `Int32` deltas
+/// (PolylineEncoder proves precision-6 is enough), which both shrinks the blob
+/// and keeps it endian-defined. Pure and fully unit-testable (round-trip).
+enum RoadGraphSerializer {
+
+    /// Bump when the on-disk layout changes; an older/newer byte makes
+    /// `deserialize` return nil so the loader re-fetches rather than misreads.
+    static let formatVersion: UInt8 = 1
+
+    /// 4-byte magic ("SRG1") so a truncated/foreign file is rejected fast.
+    private static let magic: [UInt8] = [0x53, 0x52, 0x47, 0x31]
+
+    /// Fixed-point factor for precision-6 coordinates.
+    private static let coordFactor = 1_000_000.0
+
+    // MARK: - Serialize
+
+    static func serialize(_ graph: RoadGraph) -> Data {
+        var writer = ByteWriter()
+        writer.writeBytes(magic)
+        writer.writeU8(formatVersion)
+
+        // --- Geometry pool (delta-encoded precision-6 ints) ---
+        writer.writeU32(UInt32(graph.geometry.count))
+        var prevLat: Int32 = 0
+        var prevLon: Int32 = 0
+        for coord in graph.geometry {
+            let lat = Int32((coord.latitude * coordFactor).rounded())
+            let lon = Int32((coord.longitude * coordFactor).rounded())
+            writer.writeVarintSigned(Int64(lat) - Int64(prevLat))
+            writer.writeVarintSigned(Int64(lon) - Int64(prevLon))
+            prevLat = lat
+            prevLon = lon
+        }
+
+        // --- Nodes ---
+        writer.writeU32(UInt32(graph.nodes.count))
+        for node in graph.nodes {
+            writer.writeI64(node.osmID)
+            writer.writeI32(Int32((node.coordinate.latitude * coordFactor).rounded()))
+            writer.writeI32(Int32((node.coordinate.longitude * coordFactor).rounded()))
+            writer.writeI32(node.firstEdge)
+            writer.writeI32(node.edgeCount)
+            var flags: UInt8 = 0
+            if node.isIntersection { flags |= 1 << 0 }
+            if node.hasTrafficSignal { flags |= 1 << 1 }
+            if node.hasStopSign { flags |= 1 << 2 }
+            writer.writeU8(flags)
+        }
+
+        // --- Edges ---
+        writer.writeU32(UInt32(graph.edges.count))
+        for edge in graph.edges {
+            writer.writeI32(edge.from)
+            writer.writeI32(edge.to)
+            writer.writeI32(edge.geometryRange.lowerBound)
+            writer.writeI32(edge.geometryRange.upperBound)
+            writer.writeF32(edge.lengthMeters)
+            writer.writeF32(edge.freeFlowSpeedMPS)
+            writer.writeI64(edge.osmWayID)
+            writer.writeU8(edge.roadClass.rawValue)
+            writer.writeU16(edge.attrs.rawValue)
+        }
+
+        // --- graphMaxSpeedMPS ---
+        writer.writeF32(graph.graphMaxSpeedMPS)
+
+        // `osmToIndex` and `snapIndex` are derived; rebuilt on deserialize.
+        return writer.data
+    }
+
+    // MARK: - Deserialize
+
+    static func deserialize(_ data: Data) -> RoadGraph? {
+        var reader = ByteReader(data)
+        guard let head = reader.readBytes(4), head == magic else { return nil }
+        guard let version = reader.readU8(), version == formatVersion else { return nil }
+
+        guard let geomCount = reader.readU32() else { return nil }
+        var geometry: [CLLocationCoordinate2D] = []
+        geometry.reserveCapacity(Int(geomCount))
+        var prevLat: Int32 = 0
+        var prevLon: Int32 = 0
+        for _ in 0..<geomCount {
+            guard let dLat = reader.readVarintSigned(), let dLon = reader.readVarintSigned() else { return nil }
+            prevLat = Int32(truncatingIfNeeded: Int64(prevLat) + dLat)
+            prevLon = Int32(truncatingIfNeeded: Int64(prevLon) + dLon)
+            geometry.append(CLLocationCoordinate2D(
+                latitude: Double(prevLat) / coordFactor,
+                longitude: Double(prevLon) / coordFactor
+            ))
+        }
+
+        guard let nodeCount = reader.readU32() else { return nil }
+        var nodes: [GraphNode] = []
+        nodes.reserveCapacity(Int(nodeCount))
+        var osmToIndex: [OSMNodeID: NodeIndex] = [:]
+        osmToIndex.reserveCapacity(Int(nodeCount))
+        for index in 0..<nodeCount {
+            guard let osmID = reader.readI64(),
+                  let lat = reader.readI32(),
+                  let lon = reader.readI32(),
+                  let firstEdge = reader.readI32(),
+                  let edgeCount = reader.readI32(),
+                  let flags = reader.readU8() else { return nil }
+            osmToIndex[osmID] = NodeIndex(index)
+            nodes.append(GraphNode(
+                osmID: osmID,
+                coordinate: CLLocationCoordinate2D(
+                    latitude: Double(lat) / coordFactor,
+                    longitude: Double(lon) / coordFactor
+                ),
+                firstEdge: firstEdge,
+                edgeCount: edgeCount,
+                isIntersection: flags & (1 << 0) != 0,
+                hasTrafficSignal: flags & (1 << 1) != 0,
+                hasStopSign: flags & (1 << 2) != 0
+            ))
+        }
+
+        guard let edgeCount = reader.readU32() else { return nil }
+        var edges: [GraphEdge] = []
+        edges.reserveCapacity(Int(edgeCount))
+        for _ in 0..<edgeCount {
+            guard let from = reader.readI32(),
+                  let to = reader.readI32(),
+                  let lower = reader.readI32(),
+                  let upper = reader.readI32(),
+                  let length = reader.readF32(),
+                  let speed = reader.readF32(),
+                  let wayID = reader.readI64(),
+                  let classRaw = reader.readU8(),
+                  let attrsRaw = reader.readU16() else { return nil }
+            edges.append(GraphEdge(
+                from: from,
+                to: to,
+                geometryRange: lower..<upper,
+                lengthMeters: length,
+                freeFlowSpeedMPS: speed,
+                osmWayID: wayID,
+                roadClass: RoadClass(rawValue: classRaw) ?? .unknown,
+                attrs: EdgeAttributes(rawValue: attrsRaw)
+            ))
+        }
+
+        guard let maxSpeed = reader.readF32() else { return nil }
+
+        let snapIndex = RoadGraphBuilder.buildSnapIndex(edges: edges, geometry: geometry)
+        return RoadGraph(
+            nodes: nodes,
+            edges: edges,
+            geometry: geometry,
+            osmToIndex: osmToIndex,
+            snapIndex: snapIndex,
+            graphMaxSpeedMPS: maxSpeed
+        )
+    }
+}
+
+// MARK: - Byte primitives (little-endian, varint zig-zag for deltas)
+
+/// Minimal little-endian byte writer. Fixed-width ints for record fields;
+/// zig-zag varints for geometry deltas (most deltas are tiny → 1-2 bytes).
+private struct ByteWriter {
+    private(set) var data = Data()
+
+    mutating func writeBytes(_ bytes: [UInt8]) { data.append(contentsOf: bytes) }
+    mutating func writeU8(_ v: UInt8) { data.append(v) }
+
+    mutating func writeU16(_ v: UInt16) {
+        data.append(UInt8(v & 0xff))
+        data.append(UInt8((v >> 8) & 0xff))
+    }
+
+    mutating func writeU32(_ v: UInt32) {
+        for shift in stride(from: 0, to: 32, by: 8) { data.append(UInt8((v >> shift) & 0xff)) }
+    }
+
+    mutating func writeI32(_ v: Int32) { writeU32(UInt32(bitPattern: v)) }
+
+    mutating func writeI64(_ v: Int64) {
+        let u = UInt64(bitPattern: v)
+        for shift in stride(from: 0, to: 64, by: 8) { data.append(UInt8((u >> shift) & 0xff)) }
+    }
+
+    mutating func writeF32(_ v: Float) { writeU32(v.bitPattern) }
+
+    /// Zig-zag + LEB128 varint for a signed delta.
+    mutating func writeVarintSigned(_ v: Int64) {
+        var zig = UInt64(bitPattern: (v << 1) ^ (v >> 63))
+        while zig >= 0x80 {
+            data.append(UInt8((zig & 0x7f) | 0x80))
+            zig >>= 7
+        }
+        data.append(UInt8(zig))
+    }
+}
+
+/// Companion reader. Every read is bounds-checked and returns nil on underrun
+/// so a truncated/corrupt blob fails cleanly into a re-fetch.
+private struct ByteReader {
+    private let data: Data
+    private var offset: Int
+
+    init(_ data: Data) {
+        self.data = data
+        self.offset = data.startIndex
+    }
+
+    private mutating func next() -> UInt8? {
+        guard offset < data.endIndex else { return nil }
+        defer { offset += 1 }
+        return data[offset]
+    }
+
+    mutating func readBytes(_ count: Int) -> [UInt8]? {
+        var out: [UInt8] = []
+        out.reserveCapacity(count)
+        for _ in 0..<count {
+            guard let b = next() else { return nil }
+            out.append(b)
+        }
+        return out
+    }
+
+    mutating func readU8() -> UInt8? { next() }
+
+    mutating func readU16() -> UInt16? {
+        guard let b0 = next(), let b1 = next() else { return nil }
+        return UInt16(b0) | (UInt16(b1) << 8)
+    }
+
+    mutating func readU32() -> UInt32? {
+        var v: UInt32 = 0
+        for shift in stride(from: 0, to: 32, by: 8) {
+            guard let b = next() else { return nil }
+            v |= UInt32(b) << shift
+        }
+        return v
+    }
+
+    mutating func readI32() -> Int32? { readU32().map { Int32(bitPattern: $0) } }
+
+    mutating func readI64() -> Int64? {
+        var v: UInt64 = 0
+        for shift in stride(from: 0, to: 64, by: 8) {
+            guard let b = next() else { return nil }
+            v |= UInt64(b) << shift
+        }
+        return Int64(bitPattern: v)
+    }
+
+    mutating func readF32() -> Float? { readU32().map { Float(bitPattern: $0) } }
+
+    mutating func readVarintSigned() -> Int64? {
+        var result: UInt64 = 0
+        var shift: UInt64 = 0
+        while true {
+            guard let b = next() else { return nil }
+            result |= UInt64(b & 0x7f) << shift
+            if b & 0x80 == 0 { break }
+            shift += 7
+            if shift >= 64 { return nil }
+        }
+        // un-zig-zag
+        return Int64(bitPattern: (result >> 1) ^ (~(result & 1) &+ 1))
+    }
+}

@@ -1,0 +1,243 @@
+import Foundation
+import CoreLocation
+
+/// Compact OSM node id. OSM node ids are `Int64`; the graph keeps them for
+/// diagnostics/learning but routes against dense `NodeIndex`/`EdgeIndex` for
+/// cache locality during search.
+typealias OSMNodeID = Int64
+/// Dense index into `RoadGraph.nodes`.
+typealias NodeIndex = Int32
+/// Dense index into `RoadGraph.edges`.
+typealias EdgeIndex = Int32
+
+/// Road classification, shared with `OSMTagParsing` so the loader and the cost
+/// model agree on a single coarse class enum. Kept as a typealias rather than a
+/// second declaration to avoid a divergent copy.
+typealias RoadClass = OSMTagParsing.RoadClass
+
+/// Packed routing-relevant boolean tags. A struct of bit flags, not a
+/// `[String: String]` dictionary — the search reads these millions of times, so
+/// they live inline in the dense edge record.
+struct EdgeAttributes: OptionSet, Sendable, Hashable, Codable {
+    let rawValue: UInt16
+
+    init(rawValue: UInt16) { self.rawValue = rawValue }
+
+    static let oneway          = EdgeAttributes(rawValue: 1 << 0)
+    static let tunnel          = EdgeAttributes(rawValue: 1 << 1)
+    static let bridge          = EdgeAttributes(rawValue: 1 << 2)
+    static let toll            = EdgeAttributes(rawValue: 1 << 3)
+    static let roundabout      = EdgeAttributes(rawValue: 1 << 4)
+    static let link            = EdgeAttributes(rawValue: 1 << 5)   // *_link ramp
+    static let isMotorway      = EdgeAttributes(rawValue: 1 << 6)
+    static let isResidential   = EdgeAttributes(rawValue: 1 << 7)
+    static let isService       = EdgeAttributes(rawValue: 1 << 8)
+    static let privateAccess   = EdgeAttributes(rawValue: 1 << 9)   // access=private/no
+    static let destinationOnly = EdgeAttributes(rawValue: 1 << 10)  // access=destination
+    // Bits 11..15 reserved for future flags.
+}
+
+/// A graph node — an OSM intersection or way endpoint. Through-points (degree-2
+/// nodes interior to a single way) are NOT graph nodes; they become edge
+/// geometry instead (see `RoadGraphBuilder`).
+struct GraphNode: Sendable, Equatable {
+    let osmID: OSMNodeID
+    let coordinate: CLLocationCoordinate2D
+    /// CSR adjacency: the node's out-edges are `edges[firstEdge ..< firstEdge + edgeCount]`.
+    let firstEdge: EdgeIndex
+    let edgeCount: Int32
+    /// Precomputed at build time so the cost model never recomputes degree:
+    /// a node where >2 distinct ways meet is an intersection.
+    let isIntersection: Bool
+    /// `traffic_signals` tagged on this node (OSM tags signals on the NODE).
+    let hasTrafficSignal: Bool
+    /// `highway=stop` (or `give_way`) tagged on this node.
+    let hasStopSign: Bool
+
+    static func == (lhs: GraphNode, rhs: GraphNode) -> Bool {
+        lhs.osmID == rhs.osmID
+            && lhs.coordinate.latitude == rhs.coordinate.latitude
+            && lhs.coordinate.longitude == rhs.coordinate.longitude
+            && lhs.firstEdge == rhs.firstEdge
+            && lhs.edgeCount == rhs.edgeCount
+            && lhs.isIntersection == rhs.isIntersection
+            && lhs.hasTrafficSignal == rhs.hasTrafficSignal
+            && lhs.hasStopSign == rhs.hasStopSign
+    }
+}
+
+/// A directed, routable segment between two graph nodes. One physical OSM way
+/// segment yields one edge in each permitted direction; a reverse edge reuses
+/// the same geometry, reversed.
+struct GraphEdge: Sendable, Equatable {
+    let from: NodeIndex
+    let to: NodeIndex
+    /// Slice into `RoadGraph.geometry` (the flat coord pool), already in travel
+    /// direction. The step synthesizer stitches these into the route polyline.
+    /// The slice includes both endpoint coordinates, so a straight edge is 2
+    /// coords and `geometryRange.count >= 2` always holds.
+    let geometryRange: Range<Int32>
+    let lengthMeters: Float
+    /// Free-flow speed in m/s from `maxspeed`, or the highway-class default.
+    let freeFlowSpeedMPS: Float
+    /// Source OSM way id — stable identity for learning (§5.4) and diagnostics.
+    let osmWayID: OSMNodeID
+    let roadClass: RoadClass
+    let attrs: EdgeAttributes
+}
+
+/// Spatial-hash index over edge geometry, mirroring `OSMSpeedLimitService`'s
+/// grid: a coordinate snaps to the nearest point on the nearest edge.
+struct GraphSpatialIndex: Sendable {
+    /// Cell size in degrees (~110 m latitude), matching the speed-limit grid.
+    static let cellSizeDegrees = 0.001
+    /// A segment spanning more than this many cells on one axis is corrupt data
+    /// or an antimeridian crossing; skip it rather than enumerate ~360k cells.
+    static let maxCellSpanPerSegment = 1000
+
+    struct Cell: Hashable, Sendable {
+        let lat: Int
+        let lon: Int
+    }
+
+    /// cell -> edge indices whose geometry passes through that cell.
+    let grid: [Cell: [EdgeIndex]]
+
+    static func cellIndex(_ degrees: Double) -> Int {
+        Int(floor(degrees / cellSizeDegrees))
+    }
+
+    static func cellRange(_ a: Double, _ b: Double) -> ClosedRange<Int> {
+        cellIndex(min(a, b))...cellIndex(max(a, b))
+    }
+}
+
+/// The result of snapping an arbitrary coordinate onto the graph: which edge,
+/// where along it, the snapped coordinate, and the perpendicular distance.
+/// Shaped like `RouteProjection` so the search overlay can splice mid-edge.
+struct GraphSnap: Sendable, Equatable {
+    let edge: EdgeIndex
+    /// Fractional position along the edge geometry (0...1) by arc length.
+    let fraction: Double
+    let snapped: CLLocationCoordinate2D
+    let distanceMeters: Double
+
+    static func == (lhs: GraphSnap, rhs: GraphSnap) -> Bool {
+        lhs.edge == rhs.edge
+            && lhs.fraction == rhs.fraction
+            && lhs.snapped.latitude == rhs.snapped.latitude
+            && lhs.snapped.longitude == rhs.snapped.longitude
+            && lhs.distanceMeters == rhs.distanceMeters
+    }
+}
+
+/// The road graph: dense, value-typed, CSR adjacency. Built off-main by
+/// `RoadGraphBuilder`, cached as a binary blob by `RoadGraphSerializer`, and
+/// searched by Phase 3's A*. Immutable and `Sendable` so it can be shared.
+struct RoadGraph: Sendable {
+    /// Dense — `NodeIndex` is the position.
+    let nodes: [GraphNode]
+    /// Dense, sorted so each node's out-edges are contiguous (CSR).
+    let edges: [GraphEdge]
+    /// Flat coord pool; edges slice into it via `geometryRange`.
+    let geometry: [CLLocationCoordinate2D]
+    /// Build/diagnostic-time map; kept resident for snap diagnostics and the
+    /// learner's edge identity. Droppable post-build if memory bites (§3.9).
+    let osmToIndex: [OSMNodeID: NodeIndex]
+    let snapIndex: GraphSpatialIndex
+    /// Max `freeFlowSpeedMPS` over all edges, precomputed for the A* heuristic
+    /// (`h = haversine / graphMaxSpeedMPS`). 0 for an empty graph.
+    let graphMaxSpeedMPS: Float
+
+    /// The out-edges of a node, as a half-open index range into `edges`.
+    func outEdgeRange(of node: NodeIndex) -> Range<EdgeIndex> {
+        let n = nodes[Int(node)]
+        return n.firstEdge ..< (n.firstEdge + EdgeIndex(n.edgeCount))
+    }
+
+    /// The geometry coordinates of an edge, in travel direction.
+    func geometry(of edge: EdgeIndex) -> ArraySlice<CLLocationCoordinate2D> {
+        let range = edges[Int(edge)].geometryRange
+        return geometry[Int(range.lowerBound)..<Int(range.upperBound)]
+    }
+
+    /// Snap a coordinate to the nearest point on the nearest edge. Scans the
+    /// cell containing `coord` plus its 8 neighbors (3×3), gated to
+    /// `maxDistanceMeters`. `heading`, when given, prefers edges whose local
+    /// bearing aligns (mod 180) within `headingToleranceDegrees`.
+    func snap(
+        _ coord: CLLocationCoordinate2D,
+        heading: Double? = nil,
+        maxDistanceMeters: Double = 50,
+        headingToleranceDegrees: Double = 50
+    ) -> GraphSnap? {
+        guard !edges.isEmpty else { return nil }
+        let centerLat = GraphSpatialIndex.cellIndex(coord.latitude)
+        let centerLon = GraphSpatialIndex.cellIndex(coord.longitude)
+
+        var candidates = Set<EdgeIndex>()
+        for dLat in -1...1 {
+            for dLon in -1...1 {
+                if let cell = snapIndex.grid[GraphSpatialIndex.Cell(lat: centerLat + dLat, lon: centerLon + dLon)] {
+                    candidates.formUnion(cell)
+                }
+            }
+        }
+
+        var best: GraphSnap?
+        for edgeIndex in candidates {
+            let coords = geometry(of: edgeIndex)
+            guard coords.count >= 2 else { continue }
+            let base = coords.startIndex
+            var cumulative: Double = 0
+            for i in 0..<(coords.count - 1) {
+                let a = coords[base + i]
+                let b = coords[base + i + 1]
+                if let heading {
+                    let segBearing = RouteGeometry.bearing(from: a, to: b)
+                    if OSMSpeedLimitService.bearingDelta(segBearing, heading) > headingToleranceDegrees {
+                        cumulative += RouteGeometry.haversineDistance(from: a, to: b)
+                        continue
+                    }
+                }
+                let (snapped, t, perp) = Self.projectOntoSegment(coord, a, b)
+                guard perp <= maxDistanceMeters else {
+                    cumulative += RouteGeometry.haversineDistance(from: a, to: b)
+                    continue
+                }
+                if perp < (best?.distanceMeters ?? .infinity) {
+                    let segLen = RouteGeometry.haversineDistance(from: a, to: b)
+                    let along = cumulative + segLen * t
+                    let total = Double(edges[Int(edgeIndex)].lengthMeters)
+                    let fraction = total > 0 ? min(1, max(0, along / total)) : 0
+                    best = GraphSnap(edge: edgeIndex, fraction: fraction, snapped: snapped, distanceMeters: perp)
+                }
+                cumulative += RouteGeometry.haversineDistance(from: a, to: b)
+            }
+        }
+        return best
+    }
+
+    /// Project a point onto a segment, returning the snapped coordinate, the
+    /// fractional position t (0...1), and the perpendicular distance in meters.
+    /// Equirectangular at street scale, identical to the speed service's math.
+    static func projectOntoSegment(
+        _ point: CLLocationCoordinate2D,
+        _ a: CLLocationCoordinate2D,
+        _ b: CLLocationCoordinate2D
+    ) -> (snapped: CLLocationCoordinate2D, t: Double, distanceMeters: Double) {
+        let cosLat = cos(point.latitude * .pi / 180)
+        let px = (point.longitude - a.longitude) * cosLat
+        let py = point.latitude - a.latitude
+        let dx = (b.longitude - a.longitude) * cosLat
+        let dy = b.latitude - a.latitude
+        let segLenSq = dx * dx + dy * dy
+        var t: Double = 0
+        if segLenSq > 0 { t = max(0, min(1, (px * dx + py * dy) / segLenSq)) }
+        let snapped = CLLocationCoordinate2D(
+            latitude: a.latitude + t * (b.latitude - a.latitude),
+            longitude: a.longitude + t * (b.longitude - a.longitude)
+        )
+        return (snapped, t, RouteGeometry.haversineDistance(from: point, to: snapped))
+    }
+}
