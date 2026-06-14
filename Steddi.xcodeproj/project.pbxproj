@@ -169,6 +169,7 @@
 		E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */; };
 		E461BE1525A0D183307D8F9D /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60B620B91EBE2D984AD636A9 /* AnalyticsService.swift */; };
 		E566271D07B108A193F239AD /* DefaultCostModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DFB098646F43016ACE60B9F /* DefaultCostModel.swift */; };
+		E57B119F4519657429765563 /* StepSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 823F9B108F21D37EC6585E30 /* StepSynthesizer.swift */; };
 		E60E5CF51F15E749FB8C9708 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94C0D76787187AFA4D836876 /* SwiftUI.framework */; };
 		E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2113E7A877B78A7BF8CF75C /* Route.swift */; };
 		E7FD013198226D25A6927A6B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 770C65D4283DB277ED143EA4 /* Assets.xcassets */; };
@@ -334,6 +335,7 @@
 		7E2AD9EEDA9797E406B435ED /* TripListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripListView.swift; sourceTree = "<group>"; };
 		80E59AB1F96A5750EF1F970E /* MeasurementUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementUnit.swift; sourceTree = "<group>"; };
 		816FF4F6A26EA4AE4AECA534 /* TripArrivalPromptSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripArrivalPromptSheet.swift; sourceTree = "<group>"; };
+		823F9B108F21D37EC6585E30 /* StepSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StepSynthesizer.swift; sourceTree = "<group>"; };
 		82950853F7696A66EC5389FA /* CommuteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDetailView.swift; sourceTree = "<group>"; };
 		83E69E8FABE683A4030C5E2B /* StatCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatCard.swift; sourceTree = "<group>"; };
 		84B14495FE74113349D84A50 /* PlaceCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceCategory.swift; sourceTree = "<group>"; };
@@ -726,6 +728,7 @@
 				B5B1D9F685121E1DE09756F5 /* RoadGraphSerializer.swift */,
 				606E2B1E8ACBBC8DBB951219 /* RoadGraphSource.swift */,
 				4804C43D26E852AC0742468A /* RouteProvider.swift */,
+				823F9B108F21D37EC6585E30 /* StepSynthesizer.swift */,
 			);
 			path = Routing;
 			sourceTree = "<group>";
@@ -1117,6 +1120,7 @@
 				DCC1D471EDEA2EBDAE0FD263 /* SteddiRoutePrefBadge.swift in Sources */,
 				139B1E17264CCF63189264A6 /* SteddiShortcuts.swift in Sources */,
 				C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */,
+				E57B119F4519657429765563 /* StepSynthesizer.swift in Sources */,
 				75C718A237AFFBD58B0D2195 /* ThemeEngine.swift in Sources */,
 				4A8A3A9A1BA94ADE882306D9 /* ThemeModeEx.swift in Sources */,
 				B697491FBDB6DEAA201BF5FC /* ThemePalette.swift in Sources */,
