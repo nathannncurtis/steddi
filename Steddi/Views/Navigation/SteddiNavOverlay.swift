@@ -12,6 +12,10 @@ struct SteddiNavOverlay: View {
     var onToggleView: (Bool) -> Void = { _ in }
     var onSwitchRoute: ((Route) -> Void)? = nil
     var onReport: ((String, CLLocationCoordinate2D) -> Void)? = nil
+    /// Crowdsourced enforcement-camera report. Routed separately from `onReport`
+    /// (which writes generic `Report` rows) so cameras persist as `CameraReport`
+    /// and feed the speed-camera proximity index.
+    var onReportCamera: ((CameraReportKind, CLLocationCoordinate2D) -> Void)? = nil
     var commute: Commute? = nil
     var direction: CommuteDirection? = nil
     /// Set during multi-stop trip navigation — shows the leg counter and
@@ -778,6 +782,9 @@ struct SteddiNavOverlay: View {
                 reportOption(icon: "shield.fill", label: "Police", color: SteddiTheme.accent)
                 reportOption(icon: "car.side.fill", label: "Accident", color: SteddiTheme.warmRed)
                 reportOption(icon: "road.lanes", label: "Road Closure", color: SteddiTheme.warmRed)
+                cameraReportOption(.speedCamera)
+                cameraReportOption(.redLightCamera)
+                cameraReportOption(.mobileSpeedTrap)
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
@@ -816,6 +823,46 @@ struct SteddiNavOverlay: View {
                     .frame(width: 32 * iconScale)
 
                 Text(label)
+                    .font(SteddiTheme.body(17 * textScale, highContrast: highContrast))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
+            }
+            .padding(.vertical, 4 * controlScale)
+        }
+        .listRowBackground(SteddiTheme.surfaceSecondary)
+    }
+
+    /// Report option for an enforcement camera — routes to `onReportCamera` so it
+    /// persists as a `CameraReport` and feeds the proximity index, then shows the
+    /// same confirmation toast as a generic report.
+    private func cameraReportOption(_ kind: CameraReportKind) -> some View {
+        Button {
+            reportedType = kind.displayName
+            showReportSheet = false
+            if let coord = engine.currentCoordinate {
+                onReportCamera?(kind, coord)
+            }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showReportedToast = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showReportedToast = false
+                }
+            }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: kind.icon)
+                    .font(.system(size: 20 * iconScale))
+                    .foregroundStyle(kind.color)
+                    .frame(width: 32 * iconScale)
+
+                Text(kind.displayName)
                     .font(SteddiTheme.body(17 * textScale, highContrast: highContrast))
                     .foregroundStyle(SteddiTheme.textPrimary)
 

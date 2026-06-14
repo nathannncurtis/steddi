@@ -237,6 +237,11 @@ struct HomeView: View {
                         let report = Report(type: type, latitude: coordinate.latitude, longitude: coordinate.longitude)
                         modelContext.insert(report)
                     },
+                    onReportCamera: { kind, coordinate in
+                        // Persist as a CameraReport and rebuild the proximity
+                        // index so the new sighting alerts on the rest of the drive.
+                        SpeedCameraService.shared.reportCamera(kind: kind, coordinate: coordinate)
+                    },
                     commute: activeCommute,
                     direction: activeDirection,
                     tripContext: tripNavContext(engine: engine)
