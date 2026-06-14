@@ -352,3 +352,160 @@ struct RoadConditionServiceLifecycleTests {
         #expect(miss == nil)
     }
 }
+
+// MARK: - Adversarial edge cases
+
+/// Boundary and degradation cases the happy-path suites don't cover: exclusive
+/// proximity threshold, raw-value forward-compat, clock skew, exact-window
+/// reconfirm, priority ties at equal distance, and grid-index status filtering.
+@Suite("RoadCondition adversarial edges")
+struct RoadConditionAdversarialTests {
+
+    // MARK: Raw-value forward compatibility
+
+    @Test("Unknown kind raw value degrades to .other, not a decode failure")
+    func unknownKindDegrades() {
+        let condition = makeCondition()
+        condition.kindRaw = "futureKindFromANewerBuild"
+        #expect(condition.kind == .other)
+    }
+
+    @Test("Unknown status raw value stays visible by degrading to .active")
+    func unknownStatusDegrades() {
+        let condition = makeCondition()
+        condition.statusRaw = "quarantined"
+        #expect(condition.status == .active)
+    }
+
+    @Test("kind setter round-trips through the raw column")
+    func kindSetterRoundTrips() {
+        let condition = makeCondition()
+        condition.kind = .construction
+        #expect(condition.kindRaw == "construction")
+        #expect(condition.kind == .construction)
+    }
+
+    // MARK: Proximity threshold is exclusive
+
+    @Test("A condition exactly at the threshold distance does NOT fire (exclusive <)")
+    func exactThresholdIsExclusive() {
+        // Place the condition exactly 100m north and query with a 100m threshold.
+        // The check uses strict `<`, so the boundary point must not fire.
+        let condition = makeCondition(at: north(of: downtown, meters: 100))
+        let hit = RoadConditionService.checkProximityToConditions(
+            currentCoord: downtown,
+            routeConditions: [condition],
+            proximityThresholdMeters: RouteGeometry.haversineDistance(from: downtown, to: condition.coordinate)
+        )
+        #expect(hit == nil)
+    }
+
+    @Test("A condition fractionally inside the threshold fires")
+    func justInsideThresholdFires() {
+        let condition = makeCondition(at: north(of: downtown, meters: 99))
+        let exact = RouteGeometry.haversineDistance(from: downtown, to: condition.coordinate)
+        let hit = RoadConditionService.checkProximityToConditions(
+            currentCoord: downtown,
+            routeConditions: [condition],
+            proximityThresholdMeters: exact + 0.5
+        )
+        #expect(hit?.id == condition.id)
+    }
+
+    @Test("All-expired list in range still returns nil")
+    func allExpiredInRangeReturnsNil() {
+        let a = makeCondition(kind: .pothole, at: north(of: downtown, meters: 10), status: .expired)
+        let b = makeCondition(kind: .construction, at: north(of: downtown, meters: 20), status: .archived)
+        let hit = RoadConditionService.checkProximityToConditions(
+            currentCoord: downtown,
+            routeConditions: [a, b],
+            proximityThresholdMeters: 100
+        )
+        #expect(hit == nil)
+    }
+
+    @Test("Equal priority and equal distance resolves deterministically without trapping")
+    func equalPriorityEqualDistanceIsStable() {
+        // Two potholes at the identical coordinate: the comparator must form a
+        // valid ordering (no precondition trap) and return one of them.
+        let coord = north(of: downtown, meters: 40)
+        let a = makeCondition(kind: .pothole, at: coord)
+        let b = makeCondition(kind: .pothole, at: coord)
+        let hit = RoadConditionService.checkProximityToConditions(
+            currentCoord: downtown,
+            routeConditions: [a, b],
+            proximityThresholdMeters: 100
+        )
+        #expect(hit != nil)
+        #expect(hit?.id == a.id || hit?.id == b.id)
+    }
+
+    // MARK: Decay window boundaries
+
+    @Test("Exactly 14 days does not yet prompt (window is strictly greater-than)")
+    func exactlyFourteenDaysDoesNotPrompt() {
+        let now = Date()
+        let condition = makeCondition(createdAt: now.addingTimeInterval(-14 * day))
+        #expect(condition.needsReconfirmation(now: now) == false)
+    }
+
+    @Test("A hair past 14 days prompts")
+    func hairPastFourteenPrompts() {
+        let now = Date()
+        let condition = makeCondition(createdAt: now.addingTimeInterval(-14 * day - 1))
+        #expect(condition.needsReconfirmation(now: now) == true)
+    }
+
+    @Test("daysSinceConfirmed never reports a positive count for a future confirmation")
+    func futureConfirmationDoesNotReportPositiveAge() {
+        // Clock skew: lastConfirmedAt is in the future relative to `now`.
+        let now = Date()
+        let condition = makeCondition(createdAt: now.addingTimeInterval(2 * day))
+        #expect(condition.daysSinceConfirmed(now: now) <= 0)
+        // And a future-confirmed condition is never offered for reconfirmation.
+        #expect(condition.needsReconfirmation(now: now) == false)
+    }
+
+    @Test("An archived condition never prompts for reconfirmation")
+    func archivedNeverPrompts() {
+        let now = Date()
+        let condition = makeCondition(status: .archived, createdAt: now.addingTimeInterval(-60 * day))
+        #expect(condition.needsReconfirmation(now: now) == false)
+    }
+
+    // MARK: Grid index status filtering
+
+    @MainActor
+    @Test("Grid-indexed proximity ignores an expired condition sitting on the route")
+    func gridProximityIgnoresExpired() throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ModelStoreLocator.schema, configurations: [config])
+        let service = RoadConditionService(now: { Date() })
+        service.configure(container: container)
+        let context = try #require(service.testContext)
+        let route = Route(rank: 0, encodedPolyline: "abc")
+        context.insert(route)
+
+        let condition = try #require(service.createCondition(
+            kind: .pothole,
+            coordinate: north(of: downtown, meters: 30),
+            route: route
+        ))
+        // Expire it; the index must be invalidated and the next query must miss.
+        service.expireCondition(condition)
+        let hit = service.checkProximity(currentCoord: downtown, on: route, proximityThresholdMeters: 100)
+        #expect(hit == nil)
+    }
+
+    @Test("Co-located conditions across a kind mix still cluster into one cell")
+    func coLocatedMixedKindsOneCell() {
+        let coord = downtown
+        let index = RoadConditionGridIndex(conditions: [
+            makeCondition(kind: .pothole, at: coord),
+            makeCondition(kind: .debris, at: coord),
+            makeCondition(kind: .construction, at: coord)
+        ])
+        #expect(index.occupiedCellCount == 1)
+        #expect(index.candidates(near: coord).count == 3)
+    }
+}
