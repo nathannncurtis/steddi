@@ -66,6 +66,7 @@
 		60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */; };
 		62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */; };
 		62F76345C827AE0B9E53CD23 /* DisplayModeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F1A30250323ADAE79B65516 /* DisplayModeService.swift */; };
+		6403E0888CD891BDBC0939E3 /* RouteDrawAnimationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC186A20EADF968F64AF5C3B /* RouteDrawAnimationTests.swift */; };
 		64A4B0737C28DA81734CD449 /* CarPlayDashboardDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */; };
 		650E6F734C0E0EFE2B9BEBBF /* CommuteWeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 315032BDB9A34CDCE94D686D /* CommuteWeatherService.swift */; };
 		6C0862A6626424EBC6622731 /* Commute.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */; };
@@ -331,6 +332,7 @@
 		CADE3A03C008B4BD3D0FE2E6 /* Report.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report.swift; sourceTree = "<group>"; };
 		CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoder.swift; sourceTree = "<group>"; };
 		CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceServiceTests.swift; sourceTree = "<group>"; };
+		CC186A20EADF968F64AF5C3B /* RouteDrawAnimationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteDrawAnimationTests.swift; sourceTree = "<group>"; };
 		CE8C721636439033B457CA4E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationCenterTests.swift; sourceTree = "<group>"; };
 		D30598BF220C0E6199379B02 /* AudioDuckingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDuckingService.swift; sourceTree = "<group>"; };
@@ -522,6 +524,7 @@
 				3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */,
 				5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */,
 				33742A2E837A5F87965C89FA /* RoadConditionServiceTests.swift */,
+				CC186A20EADF968F64AF5C3B /* RouteDrawAnimationTests.swift */,
 				A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */,
 				5B7D3F80DC55A1A5E68D3DA5 /* RouteRecoveryEngineTests.swift */,
 				622A4EBF2DCE91568A12E937 /* ThemeEngineTests.swift */,
@@ -1061,6 +1064,7 @@
 				44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */,
 				F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */,
 				5E824FC4DFBAD777E796CB8B /* RoadConditionServiceTests.swift in Sources */,
+				6403E0888CD891BDBC0939E3 /* RouteDrawAnimationTests.swift in Sources */,
 				7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */,
 				F37B3C0B2FD46D546EB6BE9B /* RouteRecoveryEngineTests.swift in Sources */,
 				F77FC27F57FDECE474D81093 /* ThemeEngineTests.swift in Sources */,
