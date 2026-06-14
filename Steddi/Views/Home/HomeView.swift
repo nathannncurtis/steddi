@@ -569,6 +569,33 @@ struct HomeView: View {
         }
     }
 
+    /// Hook the speed-camera service into the engine: per-fix grid-indexed
+    /// proximity lookup (OSM cameras + user reports, heading-gated to cameras
+    /// ahead) plus a subtle ducking tone + haptic + voice on first approach.
+    /// Cameras are global (not route-scoped like conditions), so this is wired
+    /// for both ad-hoc and saved-route navigation. OSM cameras prefetch in the
+    /// background off the route corridor.
+    private func wireSpeedCameras(for engine: NavigationEngine) {
+        engine.speedCameraProvider = { coordinate, heading in
+            SpeedCameraService.shared.checkProximity(currentCoord: coordinate, heading: heading)
+        }
+        engine.onSpeedCameraApproaching = { alert in
+            SpeedCameraAlertTone.shared.play()
+            HapticService.shared.fire(.speedCameraAlert)
+            VoiceGuidanceService.shared.speak("\(alert.kind.spokenName) ahead")
+        }
+
+        let corridor = engine.routePolylineCoordinates
+        guard corridor.count >= 2 else { return }
+        let key = "\(corridor.count)-" +
+            String(format: "%.5f,%.5f-%.5f,%.5f",
+                   corridor[0].latitude, corridor[0].longitude,
+                   corridor[corridor.count - 1].latitude, corridor[corridor.count - 1].longitude)
+        Task {
+            await SpeedCameraService.shared.prefetchOSMCameras(for: corridor, routeKey: key)
+        }
+    }
+
     /// Hook road-condition memory into the engine: a grid-indexed proximity
     /// lookup per fix plus a subtle haptic + voice heads-up on first approach.
     /// Only wired for saved routes, since conditions are route-scoped — ad-hoc
@@ -622,6 +649,7 @@ struct HomeView: View {
         engine.startNavigation(route: route)
         self.navigationEngine = engine
         wireSpeedLimits(for: engine)
+        wireSpeedCameras(for: engine)
 
         engine.onOffRoute = { event in
             Task { @MainActor [self] in
@@ -1088,6 +1116,7 @@ struct HomeView: View {
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
         self.navigationEngine = engine
         wireSpeedLimits(for: engine)
+        wireSpeedCameras(for: engine)
         wireRoadConditions(for: engine, route: route)
 
         engine.onOffRoute = { event in

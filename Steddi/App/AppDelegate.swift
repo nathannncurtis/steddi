@@ -79,6 +79,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         MainActor.assumeIsolated {
             RoadConditionService.shared.configure(container: modelContainer)
             RoadConditionService.shared.sweepExpiredConditions()
+            // Wire the speed-camera service to the shared store and sweep aged-out
+            // reports (mobile traps after 6h, fixed cameras after a year).
+            SpeedCameraService.shared.configure(container: modelContainer)
+            SpeedCameraService.shared.sweepExpiredReports()
         }
 
         return true

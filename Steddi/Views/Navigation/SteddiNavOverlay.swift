@@ -153,6 +153,13 @@ struct SteddiNavOverlay: View {
 
                 Spacer()
 
+                if let camera = engine.approachingCamera {
+                    speedCameraBanner(camera)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
                 if let suggestion = rerouteSuggestion {
                     RerouteCardView(
                         routeName: suggestion.route.name ?? "Faster route",
@@ -169,6 +176,7 @@ struct SteddiNavOverlay: View {
 
                 bottomBar
             }
+            .animation(SteddiMotion.shouldAnimate ? .easeInOut(duration: 0.3) : nil, value: engine.approachingCamera)
 
             // Floating buttons — right side. Spring in behind the sheet/banner.
             VStack(spacing: 12) {
@@ -442,6 +450,48 @@ struct SteddiNavOverlay: View {
                             .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.25, highContrast: highContrast)), lineWidth: 1)
                     )
             }
+    }
+
+    // MARK: - Speed Camera Banner
+
+    /// Subtle heads-up for an enforcement camera ahead. Clean and quiet by
+    /// design — a single chip with the camera kind and distance, not a flashing
+    /// klaxon. The tone/haptic fire once via the engine callback; this banner
+    /// just persists while the camera stays in range.
+    private func speedCameraBanner(_ camera: SpeedCameraAlert) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: camera.kind.icon)
+                .font(.system(size: 18 * iconScale, weight: .semibold))
+                .foregroundStyle(camera.kind.color)
+                .frame(width: 34 * iconScale, height: 34 * iconScale)
+                .background(camera.kind.color.opacity(0.16), in: RoundedRectangle(cornerRadius: 10))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(camera.kind.displayName) ahead")
+                    .font(SteddiTheme.body(15 * textScale, highContrast: highContrast))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+                Text(formatDistance(camera.distanceMeters))
+                    .font(SteddiTheme.mono(13 * textScale))
+                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .background {
+            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                        .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.85, highContrast: highContrast)))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                        .stroke(camera.kind.color.opacity(SteddiTheme.navStrokeOpacity(0.35, highContrast: highContrast)), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+        }
     }
 
     // MARK: - Floating Buttons

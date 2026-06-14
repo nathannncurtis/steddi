@@ -55,6 +55,13 @@ final class NavigationEngine {
     var speedLimitMph: Double? = nil
     var speedLimitIsEstimated = false
 
+    /// The enforcement camera currently being approached, for the overlay banner.
+    /// Set when `checkSpeedCameraProximity` first detects a camera ahead, cleared
+    /// once the driver passes it (no longer in range). Observable so the overlay
+    /// re-renders; the one-shot tone/haptic/voice still flows through
+    /// `onSpeedCameraApproaching` and is debounced separately.
+    var approachingCamera: SpeedCameraAlert? = nil
+
     /// Injected position-based speed limit lookup (OSM-backed). Closure keeps
     /// the engine free of service dependencies and unit-testable.
     @ObservationIgnored
@@ -156,6 +163,7 @@ final class NavigationEngine {
         navigationToken = UUID()
         alertedConditionIDs.removeAll()
         alertedCameraIDs.removeAll()
+        approachingCamera = nil
         routePolylineCoordinates = polyline
 
         projector = polyline.count >= 2
@@ -226,6 +234,7 @@ final class NavigationEngine {
         followOnManeuverSymbol = ""
         currentSpeedMph = 0
         speedLimitMph = nil
+        approachingCamera = nil
         headingDegrees = nil
         currentCoordinate = nil
         snappedCoordinate = nil
@@ -241,6 +250,7 @@ final class NavigationEngine {
         isRecoveringOffRoute = false
         locationUpdateCount = 0
         alertedConditionIDs.removeAll()
+        alertedCameraIDs.removeAll()
     }
 
     // MARK: - Location Updates
@@ -339,9 +349,20 @@ final class NavigationEngine {
     /// once. The actual tone/haptic/voice is delegated to the wiring via
     /// `onSpeedCameraApproaching`.
     private func checkSpeedCameraProximity() {
-        guard let provider = speedCameraProvider else { return }
+        guard let provider = speedCameraProvider else {
+            approachingCamera = nil
+            return
+        }
         let probe = snappedCoordinate ?? currentCoordinate
-        guard let probe, let alert = provider(probe, headingDegrees) else { return }
+        guard let probe, let alert = provider(probe, headingDegrees) else {
+            // No camera in range — drop the banner. The debounce set keeps any
+            // already-announced camera from re-chiming if it briefly re-enters.
+            approachingCamera = nil
+            return
+        }
+        // Banner tracks the live nearest camera every fix (distance updates);
+        // the one-shot tone/haptic/voice fires only on the first detection.
+        approachingCamera = alert
         guard !alertedCameraIDs.contains(alert.alertID) else { return }
         alertedCameraIDs.insert(alert.alertID)
         onSpeedCameraApproaching?(alert)
