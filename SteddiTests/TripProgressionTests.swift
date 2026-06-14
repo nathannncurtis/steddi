@@ -382,6 +382,50 @@ struct TripModelLifecycleTests {
         #expect(trip.orderedStops.allSatisfy { $0.arrivalTime == nil })
     }
 
+    @Test("Current stop survives a stop deleted outside removeStop")
+    func currentStopSurvivesExternalDeletion() throws {
+        let (_, context, trip) = try makeTrip(stopCount: 4)
+        trip.start()
+        trip.advanceAfterArrival()
+        trip.advanceAfterArrival()
+        let current = try #require(trip.currentStop)
+        #expect(current.name == "Stop 2")
+
+        // Delete a stop AFTER the current one straight through the context,
+        // bypassing Trip.removeStop entirely (the external-mutation path).
+        context.delete(trip.orderedStops[3])
+        try context.save()
+
+        // Position resolves by id, unaffected by the desynced ordinals.
+        #expect(trip.currentStop?.id == current.id)
+        #expect(trip.currentStopIndex == 2)
+        #expect(trip.remainingStops.isEmpty)
+    }
+
+    @Test("Orphaned current id clamps instead of pointing past the end")
+    func orphanedCurrentIdClampsSafely() throws {
+        let (_, context, trip) = try makeTrip(stopCount: 3)
+        trip.start()
+        trip.advanceAfterArrival()
+        trip.advanceAfterArrival()
+        #expect(trip.currentStopIndex == 2)
+        #expect(trip.currentStop?.name == "Stop 2")
+
+        // Externally delete the stop the position actually names — currentStopId
+        // is now orphaned (points at a stop that no longer exists) without ever
+        // going through removeStop. Index must clamp into bounds and currentStop
+        // must resolve safely, never crash or point past the end.
+        context.delete(trip.orderedStops[2])
+        try context.save()
+
+        #expect(trip.orderedStops.count == 2)
+        #expect(trip.currentStopIndex < trip.orderedStops.count)
+        #expect(trip.currentStopIndex == trip.orderedStops.count - 1)
+        let resolved = try #require(trip.currentStop)
+        #expect(trip.orderedStops.contains { $0.id == resolved.id })
+        #expect(trip.remainingStops.isEmpty)
+    }
+
     @Test("Deleting a trip cascades to its stops")
     func deleteCascadesToStops() throws {
         let (_, context, trip) = try makeTrip(stopCount: 3)
