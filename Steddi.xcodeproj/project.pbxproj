@@ -46,6 +46,7 @@
 		2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */; };
 		2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
+		35F5485D167737BF995FD280 /* CorridorValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3052F1FB67E6754BA5AE313 /* CorridorValidator.swift */; };
 		3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */; };
 		389C5498B6C852FD1ECFC8E6 /* RouteProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4804C43D26E852AC0742468A /* RouteProvider.swift */; };
 		3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335291BA198DC1134B9072E8 /* LocationPickerView.swift */; };
@@ -406,6 +407,7 @@
 		CC186A20EADF968F64AF5C3B /* RouteDrawAnimationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteDrawAnimationTests.swift; sourceTree = "<group>"; };
 		CE8C721636439033B457CA4E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationCenterTests.swift; sourceTree = "<group>"; };
+		D3052F1FB67E6754BA5AE313 /* CorridorValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorridorValidator.swift; sourceTree = "<group>"; };
 		D30598BF220C0E6199379B02 /* AudioDuckingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDuckingService.swift; sourceTree = "<group>"; };
 		D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalNotificationService.swift; sourceTree = "<group>"; };
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
@@ -735,6 +737,7 @@
 			children = (
 				75D80501CDFFA0CFCCA74216 /* AStarSearch.swift */,
 				7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */,
+				D3052F1FB67E6754BA5AE313 /* CorridorValidator.swift */,
 				77FDA01EA3986E1BFD4347DE /* CustomRouter.swift */,
 				2DFB098646F43016ACE60B9F /* DefaultCostModel.swift */,
 				A563FC81AD7AEC2AFCF76C10 /* LearnedWeightsStore.swift */,
@@ -1055,6 +1058,7 @@
 				A0A759065A0F307E3D4BE984 /* CommuteNotificationsSettingsView.swift in Sources */,
 				10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */,
 				650E6F734C0E0EFE2B9BEBBF /* CommuteWeatherService.swift in Sources */,
+				35F5485D167737BF995FD280 /* CorridorValidator.swift in Sources */,
 				C4A0314513C0EDA3FFC980BB /* CustomRouteBuilder.swift in Sources */,
 				61EDBB67DD27445DF1471AC7 /* CustomRouter.swift in Sources */,
 				0E09441FE050C20774C8887E /* DaysOfWeekPicker.swift in Sources */,
