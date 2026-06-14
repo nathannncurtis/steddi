@@ -47,6 +47,7 @@
 		2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
 		3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */; };
+		389C5498B6C852FD1ECFC8E6 /* RouteProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4804C43D26E852AC0742468A /* RouteProvider.swift */; };
 		3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335291BA198DC1134B9072E8 /* LocationPickerView.swift */; };
 		43C4CC9A502866B2BE5E5A35 /* ThemeRevisionTrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = 215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */; };
 		441AC263D0497D1AA6E95964 /* SteddiLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -286,6 +287,7 @@
 		42C53B70A81A76FE0196BE90 /* TripProgressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripProgressionTests.swift; sourceTree = "<group>"; };
 		42F23569BC6150BE5BD50BB7 /* SpeedCameraService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedCameraService.swift; sourceTree = "<group>"; };
 		459630C573F0A9D783D34A94 /* OnboardingCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCoordinatorTests.swift; sourceTree = "<group>"; };
+		4804C43D26E852AC0742468A /* RouteProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteProvider.swift; sourceTree = "<group>"; };
 		4CDEFFA656C308FF61D985BF /* NoGoZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoGoZone.swift; sourceTree = "<group>"; };
 		4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckCommuteETAIntent.swift; sourceTree = "<group>"; };
 		4D83B764A6EC175443541145 /* BinaryHeapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryHeapTests.swift; sourceTree = "<group>"; };
@@ -723,6 +725,7 @@
 				942A3B6981E7B85F855A4276 /* RoadGraphBuilder.swift */,
 				B5B1D9F685121E1DE09756F5 /* RoadGraphSerializer.swift */,
 				606E2B1E8ACBBC8DBB951219 /* RoadGraphSource.swift */,
+				4804C43D26E852AC0742468A /* RouteProvider.swift */,
 			);
 			path = Routing;
 			sourceTree = "<group>";
@@ -1099,6 +1102,7 @@
 				F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */,
 				CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */,
 				C71246A6559A6AC5CE9A73C3 /* RoutePreviewView.swift in Sources */,
+				389C5498B6C852FD1ECFC8E6 /* RouteProvider.swift in Sources */,
 				F487CF1CC6152EF271644653 /* RouteRecoveryEngine.swift in Sources */,
 				BBD8CE5458D4AF8EEC64F0CF /* RouteRendererAnimations.swift in Sources */,
 				F169525C2DB0B5475A9302CF /* SearchResultActionCard.swift in Sources */,
