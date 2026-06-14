@@ -278,6 +278,31 @@ struct OSMTagParsingTurnLanesTests {
         #expect(lanes[0].left)
         #expect(lanes[1].right)
     }
+
+    @Test("reverse and merge tokens map to their nearest cardinal turn")
+    func reverseAndMerge() {
+        // A U-turn pocket: reverse maps to left (the cardinal direction a U-turn
+        // begins in for right-hand traffic).
+        let reverse = OSMTagParsing.parseTurnLanes("reverse")
+        #expect(reverse[0].left)
+        // merge_to_left means traffic moves rightward into the left lane.
+        let mergeLeft = OSMTagParsing.parseTurnLanes("merge_to_left")
+        #expect(mergeLeft[0].right)
+        // merge_to_right moves leftward.
+        let mergeRight = OSMTagParsing.parseTurnLanes("merge_to_right")
+        #expect(mergeRight[0].left)
+    }
+
+    @Test("Trailing empty cell is preserved as an unrestricted lane")
+    func trailingEmptyCellPreserved() {
+        // omittingEmptySubsequences:false keeps the trailing "" cell so lane
+        // count stays aligned with the physical lanes.
+        let lanes = OSMTagParsing.parseTurnLanes("left||right")
+        #expect(lanes.count == 3)
+        #expect(lanes[0].isDedicatedLeft)
+        #expect(lanes[1].through) // empty middle cell → through
+        #expect(lanes[2].isDedicatedRight)
+    }
 }
 
 // MARK: - Oncoming lane count

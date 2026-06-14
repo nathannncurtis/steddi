@@ -157,6 +157,41 @@ struct RoadGraphSerializerTests {
         #expect(restored.geometry.isEmpty)
     }
 
+    /// Coordinates that produce large negative→positive delta swings (e.g. an
+    /// antimeridian-adjacent corridor and southern hemisphere) must survive the
+    /// zig-zag varint delta round-trip without sign or truncation error.
+    @Test("Large-magnitude and sign-flipping coordinates round-trip exactly")
+    func roundTripExtremeCoords() throws {
+        let elements = [
+            nodeJSON(1, -41.288889, 174.777222),    // Wellington, near +180
+            nodeJSON(2, -41.290000, 179.999000),     // just shy of the antimeridian
+            nodeJSON(3, -41.291000, -179.999000),    // just past it (sign flip)
+            wayElementJSON(100, nodes: [1, 2, 3], tags: ["highway": "primary", "maxspeed": "50"])
+        ]
+        let json = #"{"version":0.6,"elements":[\#(elements.joined(separator: ","))]}"#
+        let response = try JSONDecoder().decode(OverpassGraphResponse.self, from: Data(json.utf8))
+        let graph = RoadGraphBuilder.buildGraph(from: response)
+        let restored = try #require(RoadGraphSerializer.deserialize(RoadGraphSerializer.serialize(graph)))
+        #expect(restored.geometry.count == graph.geometry.count)
+        for (original, copy) in zip(graph.geometry, restored.geometry) {
+            #expect(coordsEqual(original, copy, tolerance: 1e-6))
+        }
+        for (original, copy) in zip(graph.nodes, restored.nodes) {
+            #expect(coordsEqual(original.coordinate, copy.coordinate, tolerance: 1e-6))
+        }
+    }
+
+    /// A blob that is byte-for-byte valid header + truncated mid-geometry-varint
+    /// must fail cleanly to nil rather than crash on the varint reader's shift
+    /// overrun guard.
+    @Test("Truncation mid-geometry returns nil, never crashes")
+    func truncatedMidGeometry() {
+        let data = RoadGraphSerializer.serialize(buildSampleGraph())
+        // Keep magic+version+geomCount (4+1+4=9 bytes) but cut the geometry stream.
+        let chopped = data.prefix(11)
+        #expect(RoadGraphSerializer.deserialize(Data(chopped)) == nil)
+    }
+
     @Test("Binary blob is materially smaller than JSON would be")
     func compact() {
         let graph = buildSampleGraph()

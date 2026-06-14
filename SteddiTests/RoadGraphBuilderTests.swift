@@ -397,6 +397,42 @@ struct RoadGraphSnapTests {
         let faraway = CLLocationCoordinate2D(latitude: 40.0, longitude: -100.0)
         #expect(graph.snap(faraway, maxDistanceMeters: 50) == nil)
     }
+
+    /// A heading aligned with the edge (mod 180) keeps the snap; a perpendicular
+    /// heading rejects every segment and the snap misses.
+    @Test("Heading filter keeps an aligned edge and rejects a perpendicular one")
+    func snapHeadingFilter() {
+        // East-running edge along the equator: local bearing ≈ 90°.
+        let graph = buildGraph(
+            nodeJSON(1, 0.0, 0.0),
+            nodeJSON(2, 0.0, 0.001),
+            wayElementJSON(100, nodes: [1, 2], tags: ["highway": "residential"])
+        )
+        let near = CLLocationCoordinate2D(latitude: 0.00001, longitude: 0.0005)
+        // Eastbound (90°) aligns — snap survives.
+        #expect(graph.snap(near, heading: 90, maxDistanceMeters: 50) != nil)
+        // Westbound (270°) is the same line mod 180 — also aligned.
+        #expect(graph.snap(near, heading: 270, maxDistanceMeters: 50) != nil)
+        // Northbound (0°) is perpendicular — every segment rejected → nil.
+        #expect(graph.snap(near, heading: 0, maxDistanceMeters: 50, headingToleranceDegrees: 30) == nil)
+    }
+
+    /// A way whose first and last node are the same OSM id (a closed loop, e.g. a
+    /// cul-de-sac or roundabout drawn as a ring) must not emit a degenerate
+    /// self-edge from a node to itself; the `fromIdx != toIdx` guard drops it.
+    @Test("Closed-loop way does not emit a self-edge")
+    func closedLoopNoSelfEdge() {
+        // Ring 1-2-3-1: node 1 is the only promoted endpoint (start == end),
+        // nodes 2,3 are interior degree-1 within this single way.
+        let graph = buildGraph(
+            nodeJSON(1, 0.0, 0.0),
+            nodeJSON(2, 0.0005, 0.0005),
+            nodeJSON(3, 0.0, 0.001),
+            wayElementJSON(100, nodes: [1, 2, 3, 1], tags: ["highway": "residential"])
+        )
+        // No edge may start and end at the same node.
+        #expect(graph.edges.allSatisfy { $0.from != $0.to })
+    }
 }
 
 // MARK: - Empty / degenerate
@@ -421,5 +457,42 @@ struct RoadGraphBuilderDegenerateTests {
             wayElementJSON(100, nodes: [1, 99], tags: ["highway": "residential"])
         )
         #expect(graph.edges.isEmpty)
+    }
+
+    /// A way with garbage maxspeed + an unrecognized access token must still build
+    /// an edge: speed falls back to the class default and access defaults to
+    /// allowed (no privateAccess / destinationOnly flag).
+    @Test("Malformed maxspeed and unknown access fall back gracefully")
+    func malformedTagsFallBack() {
+        let graph = buildGraph(
+            nodeJSON(1, 0.0, 0.0),
+            nodeJSON(2, 0.0, 0.001),
+            wayElementJSON(100, nodes: [1, 2], tags: [
+                "highway": "secondary",
+                "maxspeed": "fast as you like",
+                "access": "agricultural"
+            ])
+        )
+        #expect(graph.edges.count == 2)
+        // secondary default 40 mph * 0.44704 ≈ 17.88 m/s.
+        #expect(abs(Double(graph.edges[0].freeFlowSpeedMPS) - 40 * 0.44704) < 0.05)
+        #expect(!graph.edges[0].attrs.contains(.privateAccess))
+        #expect(!graph.edges[0].attrs.contains(.destinationOnly))
+    }
+
+    /// A way that references the same node id twice in a row (duplicate
+    /// consecutive node — degenerate OSM data) must not produce a zero-length
+    /// self-edge or crash the splitter.
+    @Test("Duplicate consecutive node id does not crash the builder")
+    func duplicateConsecutiveNode() {
+        let graph = buildGraph(
+            nodeJSON(1, 0.0, 0.0),
+            nodeJSON(2, 0.0, 0.001),
+            wayElementJSON(100, nodes: [1, 1, 2], tags: ["highway": "residential"])
+        )
+        // Node 1 is the start endpoint; the repeated 1 raises its refCount so it
+        // is promoted, but a 1→1 segment is guarded out. A valid 1→2 pair stands.
+        #expect(graph.edges.allSatisfy { $0.from != $0.to })
+        #expect(graph.edges.contains { $0.lengthMeters > 0 })
     }
 }
