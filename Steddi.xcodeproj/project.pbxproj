@@ -17,6 +17,7 @@
 		0E09441FE050C20774C8887E /* DaysOfWeekPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC40EBECC2D5A14FFFB4F991 /* DaysOfWeekPicker.swift */; };
 		0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */; };
 		10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */; };
+		1195A6B4AA8844C44A30EDA2 /* CommuteWeatherServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B58DA0D8FE1B16173737797A /* CommuteWeatherServiceTests.swift */; };
 		13175E335A5C5DB4C2AF71AD /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4F33590D3CEB7AA217E684 /* LocationService.swift */; };
 		139B1E17264CCF63189264A6 /* SteddiShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */; };
 		17102F8E25229F5112CEAF35 /* NowPlayingMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD3458B0B5C9B20BC65519CC /* NowPlayingMiniBar.swift */; };
@@ -40,6 +41,7 @@
 		4A0898B3E04DFD141E0808AD /* EmergencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F1F21786B81D853B9E61B6 /* EmergencyView.swift */; };
 		4A8A3A9A1BA94ADE882306D9 /* ThemeModeEx.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */; };
 		4BD69219F4033B5D7DD61286 /* SteddiWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */; };
+		4BD906E8F1CE5635D024B12D /* CommuteNotificationCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */; };
 		4D4EA23D419752C08D4929B2 /* DriveRowCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798937A1E2AA43874413C040 /* DriveRowCard.swift */; };
 		516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */; };
 		534D40A3F52FDDA9AE84C20C /* TripStop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B99A3381CC68B028C99DD0E /* TripStop.swift */; };
@@ -73,6 +75,7 @@
 		80DA5BC56FE71CEAFF04ACB3 /* TripListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2AD9EEDA9797E406B435ED /* TripListView.swift */; };
 		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
 		85A049022E0338B7E5E8B084 /* CommuteETAWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */; };
+		863EC5C3A2B5B58404659A8E /* CommuteNotificationCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A0E3F3AA6904204FBFAD41 /* CommuteNotificationCenter.swift */; };
 		87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64DED98F409553C18FBECB6 /* AppDelegate.swift */; };
 		87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */; };
 		8841973A7B427AF7CDAAEF1F /* TripEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD469486D86528327AFC385D /* TripEditorView.swift */; };
@@ -191,6 +194,7 @@
 		04087916791CAF8B1AFD67AA /* TripProgression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripProgression.swift; sourceTree = "<group>"; };
 		052C83FEE88416F3FE9DBCCE /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		06413A885CD3CE0E0F09FE8F /* PhoneSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSceneDelegate.swift; sourceTree = "<group>"; };
+		08A0E3F3AA6904204FBFAD41 /* CommuteNotificationCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationCenter.swift; sourceTree = "<group>"; };
 		08B46BB7337E920209A89889 /* HapticServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticServiceTests.swift; sourceTree = "<group>"; };
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0B99A3381CC68B028C99DD0E /* TripStop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripStop.swift; sourceTree = "<group>"; };
@@ -281,6 +285,7 @@
 		B385FB734BECC176514917FB /* RoutePlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlannerView.swift; sourceTree = "<group>"; };
 		B38C089A52E68514BB12E0C0 /* NowPlayingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingServiceTests.swift; sourceTree = "<group>"; };
 		B4D0B9209F9F81F57E555407 /* LiveActivityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityService.swift; sourceTree = "<group>"; };
+		B58DA0D8FE1B16173737797A /* CommuteWeatherServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteWeatherServiceTests.swift; sourceTree = "<group>"; };
 		B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationEngine.swift; sourceTree = "<group>"; };
 		BA9033EAA004A2509272285E /* RouteGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometry.swift; sourceTree = "<group>"; };
 		BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayDashboardDelegate.swift; sourceTree = "<group>"; };
@@ -299,6 +304,7 @@
 		CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoder.swift; sourceTree = "<group>"; };
 		CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceServiceTests.swift; sourceTree = "<group>"; };
 		CE8C721636439033B457CA4E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationCenterTests.swift; sourceTree = "<group>"; };
 		D30598BF220C0E6199379B02 /* AudioDuckingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDuckingService.swift; sourceTree = "<group>"; };
 		D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalNotificationService.swift; sourceTree = "<group>"; };
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
@@ -463,7 +469,9 @@
 				2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */,
 				DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */,
 				6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */,
+				D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */,
 				2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */,
+				B58DA0D8FE1B16173737797A /* CommuteWeatherServiceTests.swift */,
 				7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */,
 				08B46BB7337E920209A89889 /* HapticServiceTests.swift */,
 				E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */,
@@ -628,6 +636,7 @@
 				D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */,
 				D30598BF220C0E6199379B02 /* AudioDuckingService.swift */,
 				7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */,
+				08A0E3F3AA6904204FBFAD41 /* CommuteNotificationCenter.swift */,
 				93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */,
 				315032BDB9A34CDCE94D686D /* CommuteWeatherService.swift */,
 				D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */,
@@ -861,6 +870,7 @@
 				8B109095904F238E4B98D42E /* CommuteDetailView.swift in Sources */,
 				9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */,
 				BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */,
+				863EC5C3A2B5B58404659A8E /* CommuteNotificationCenter.swift in Sources */,
 				3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */,
 				10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */,
 				650E6F734C0E0EFE2B9BEBBF /* CommuteWeatherService.swift in Sources */,
@@ -964,7 +974,9 @@
 				06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */,
 				5D8C6D53390B98A19A081299 /* AudioDuckingServiceTests.swift in Sources */,
 				B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */,
+				4BD906E8F1CE5635D024B12D /* CommuteNotificationCenterTests.swift in Sources */,
 				0A7AF0449A2474692CB7DC6F /* CommuteNotificationDecisionEngineTests.swift in Sources */,
+				1195A6B4AA8844C44A30EDA2 /* CommuteWeatherServiceTests.swift in Sources */,
 				A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */,
 				8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */,
 				9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */,

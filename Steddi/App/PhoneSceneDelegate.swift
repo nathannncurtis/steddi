@@ -109,6 +109,18 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
                     object: nil,
                     userInfo: ["lat": lat, "lng": lng, "name": name]
                 )
+            } else if let commuteIdStr = params["commuteId"] {
+                // Smart-commute notification "Start Commute" deep link:
+                // steddi://navigate?commuteId=<id>&direction=<dir>
+                var userInfo: [String: Any] = ["commuteId": commuteIdStr]
+                if let direction = params["direction"] {
+                    userInfo["direction"] = direction
+                }
+                NotificationCenter.default.post(
+                    name: .steddiStartCommuteFromNotification,
+                    object: nil,
+                    userInfo: userInfo
+                )
             }
         case "search":
             if let query = params["q"] {
