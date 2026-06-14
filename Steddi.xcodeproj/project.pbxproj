@@ -103,6 +103,7 @@
 		9A059EA036C9DACBEDA85328 /* CommuteDirectionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403AC1B01A244170FE6CCEC /* CommuteDirectionResolver.swift */; };
 		9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */; };
 		9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */; };
+		9E6E05AF740C80220B638E58 /* OnboardingHeroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */; };
 		9F54B7F94722C2EE69821F18 /* SteddiWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 534F293CE883ED26D52B0510 /* SteddiWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A0A759065A0F307E3D4BE984 /* CommuteNotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33471F234A8AF73EC6B62F93 /* CommuteNotificationsSettingsView.swift */; };
 		A22CFFF0BDE370AB28985EC8 /* AdvancedHapticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */; };
@@ -303,6 +304,7 @@
 		9342593EFE74CD157A9C4854 /* AggregateStatsCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AggregateStatsCards.swift; sourceTree = "<group>"; };
 		93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngine.swift; sourceTree = "<group>"; };
 		94C0D76787187AFA4D836876 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingHeroView.swift; sourceTree = "<group>"; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometryTests.swift; sourceTree = "<group>"; };
 		A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManager.swift; sourceTree = "<group>"; };
@@ -622,6 +624,7 @@
 			children = (
 				EF4892145CE55DFF9FF13FC7 /* DonationView.swift */,
 				C6291CE98BB2552CD248E6CB /* OnboardingCoordinator.swift */,
+				9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */,
 				72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */,
 			);
 			path = Onboarding;
@@ -977,6 +980,7 @@
 				2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */,
 				6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */,
 				BC2BE54BE878F0FF9889AC8D /* OnboardingCoordinator.swift in Sources */,
+				9E6E05AF740C80220B638E58 /* OnboardingHeroView.swift in Sources */,
 				87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */,
 				588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */,
 				E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */,
