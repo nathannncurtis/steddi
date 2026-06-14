@@ -362,15 +362,20 @@ final class ThemeEngine {
 
     /// Golden-hour warmth factor in [0, 1]: peaks (1) at the horizon, fades to
     /// zero by +10° (sun well clear) and at/below −8° (dusk has settled),
-    /// monotonic and continuous in between. Both branches are clamped to [0, 1]
-    /// — without the upper clamp the negative branch ran above 1 below −8°
-    /// (e.g. 2.25 at −10°), over-driving the warmth tint into deep twilight.
+    /// monotonic and continuous in between.
+    ///
+    /// The negative branch was both unbounded *and* inverted: the old
+    /// `1 + elevation / -goldenLowerElevation` divides by −8, so it rose with
+    /// depth instead of falling (2.0 at −8°, 2.25 at −10° — backwards and out of
+    /// range). Dividing by +goldenLowerElevation gives the intended ramp —
+    /// 1 at the horizon down to 0 at −8° — and clamping pins everything to [0, 1]
+    /// so deeper twilight stays at 0.
     nonisolated static func goldenHourFactor(forSolarElevation elevation: Double) -> Double {
         let factor: Double
         if elevation >= 0 {
             factor = 1 - elevation / Tuning.goldenUpperElevation
         } else {
-            factor = 1 + elevation / -Tuning.goldenLowerElevation
+            factor = 1 + elevation / Tuning.goldenLowerElevation
         }
         return min(1, max(0, factor))
     }
