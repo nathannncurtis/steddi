@@ -251,6 +251,54 @@ struct CommuteDetailView: View {
                 Text("When not near either endpoint, use these rules to pick direction automatically.")
             }
 
+            // MARK: - Notifications
+            Section {
+                Toggle("Leave-early alerts", isOn: $commute.notificationsEnabled)
+
+                if commute.notificationsEnabled {
+                    Stepper(
+                        "Alert \(commute.notificationLeadMinutes) min early",
+                        value: $commute.notificationLeadMinutes,
+                        in: 15...120,
+                        step: 5
+                    )
+
+                    Toggle("Quiet hours", isOn: useQuietHours)
+
+                    if useQuietHours.wrappedValue {
+                        HStack {
+                            Text("From")
+                                .foregroundStyle(.secondary)
+                            Picker("Quiet start", selection: Binding(
+                                get: { commute.quietHoursStart ?? 22 },
+                                set: { commute.quietHoursStart = $0 }
+                            )) {
+                                ForEach(0..<24, id: \.self) { h in
+                                    Text(formatHour(h)).tag(h)
+                                }
+                            }
+                            .labelsHidden()
+
+                            Text("to")
+                                .foregroundStyle(.secondary)
+                            Picker("Quiet end", selection: Binding(
+                                get: { commute.quietHoursEnd ?? 7 },
+                                set: { commute.quietHoursEnd = $0 }
+                            )) {
+                                ForEach(0..<24, id: \.self) { h in
+                                    Text(formatHour(h)).tag(h)
+                                }
+                            }
+                            .labelsHidden()
+                        }
+                    }
+                }
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text("Alerts you to leave early for this commute when traffic or weather slows you down. Quiet hours suppress alerts overnight.")
+            }
+
             // MARK: - Active Toggle
             Section {
                 Toggle("Active", isOn: $commute.isActive)
@@ -297,6 +345,25 @@ struct CommuteDetailView: View {
                 commute.destination = location
             }
         }
+    }
+
+    // MARK: - Notification Helpers
+
+    /// Quiet-hours toggle backed by the optional start/end fields: on when a
+    /// band is set, clearing both when switched off.
+    private var useQuietHours: Binding<Bool> {
+        Binding(
+            get: { commute.quietHoursStart != nil && commute.quietHoursEnd != nil },
+            set: { isOn in
+                if isOn {
+                    if commute.quietHoursStart == nil { commute.quietHoursStart = 22 }
+                    if commute.quietHoursEnd == nil { commute.quietHoursEnd = 7 }
+                } else {
+                    commute.quietHoursStart = nil
+                    commute.quietHoursEnd = nil
+                }
+            }
+        )
     }
 
     // MARK: - Schedule Helpers
