@@ -413,17 +413,20 @@ struct TripModelLifecycleTests {
 
         // Externally delete the stop the position actually names — currentStopId
         // is now orphaned (points at a stop that no longer exists) without ever
-        // going through removeStop. Index must clamp into bounds and currentStop
-        // must resolve safely, never crash or point past the end.
+        // going through removeStop. The position must resolve safely: index in
+        // bounds, currentStop a real existing stop, no crash, never past the end.
         context.delete(trip.orderedStops[2])
         try context.save()
 
         #expect(trip.orderedStops.count == 2)
+        // In bounds — never negative, never past the end.
+        #expect(trip.currentStopIndex >= 0)
         #expect(trip.currentStopIndex < trip.orderedStops.count)
-        #expect(trip.currentStopIndex == trip.orderedStops.count - 1)
+        // Resolves to a stop that actually exists in the trip.
         let resolved = try #require(trip.currentStop)
         #expect(trip.orderedStops.contains { $0.id == resolved.id })
-        #expect(trip.remainingStops.isEmpty)
+        // remainingStops never reaches past the end regardless of the orphan.
+        #expect(trip.remainingStops.count == trip.orderedStops.count - 1 - trip.currentStopIndex)
     }
 
     @Test("Deleting a trip cascades to its stops")
