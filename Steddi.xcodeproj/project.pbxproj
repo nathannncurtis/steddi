@@ -162,6 +162,7 @@
 		E92F9527A2AEDB8A859E6834 /* NavigationAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6284ADAB45E23AF8893D2CC2 /* NavigationAttributes.swift */; };
 		EB572C700ACE8CD2D7EE501D /* StatCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E69E8FABE683A4030C5E2B /* StatCard.swift */; };
 		EE9A99666A053E756399DA66 /* CommuteAnalyticsAggregate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D932805B66B86200A9B9645 /* CommuteAnalyticsAggregate.swift */; };
+		F087ADA9291AE26E7125BD3B /* OSMTagParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9D08E3026C7F5520ACED2C /* OSMTagParsing.swift */; };
 		F169525C2DB0B5475A9302CF /* SearchResultActionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD2CEE6BF282A7424D54D6E /* SearchResultActionCard.swift */; };
 		F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */; };
 		F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA9033EAA004A2509272285E /* RouteGeometry.swift */; };
@@ -342,6 +343,7 @@
 		BA9033EAA004A2509272285E /* RouteGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometry.swift; sourceTree = "<group>"; };
 		BAEBE294A619B1E299A4270E /* CarPlayDashboardDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayDashboardDelegate.swift; sourceTree = "<group>"; };
 		BC40EBECC2D5A14FFFB4F991 /* DaysOfWeekPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaysOfWeekPicker.swift; sourceTree = "<group>"; };
+		BC9D08E3026C7F5520ACED2C /* OSMTagParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMTagParsing.swift; sourceTree = "<group>"; };
 		BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostArrivalSheet.swift; sourceTree = "<group>"; };
 		BF8849F63A69650A3821B776 /* SteddiLiveActivity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteddiLiveActivity.entitlements; sourceTree = "<group>"; };
 		C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMSpeedLimitService.swift; sourceTree = "<group>"; };
@@ -675,6 +677,14 @@
 			path = Navigation;
 			sourceTree = "<group>";
 		};
+		B1BB168267A1DA76C921B805 /* Routing */ = {
+			isa = PBXGroup;
+			children = (
+				BC9D08E3026C7F5520ACED2C /* OSMTagParsing.swift */,
+			);
+			path = Routing;
+			sourceTree = "<group>";
+		};
 		CB28DCE5EA4CE1D184D7CB33 /* SteddiLiveActivity */ = {
 			isa = PBXGroup;
 			children = (
@@ -761,6 +771,7 @@
 				544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */,
 				27FB85CBF3D500E916BCF5B8 /* ZoneDrawingService.swift */,
 				F3DB2867732B7B04A13ECC99 /* ZoneValidationEngine.swift */,
+				B1BB168267A1DA76C921B805 /* Routing */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1012,6 +1023,7 @@
 				17102F8E25229F5112CEAF35 /* NowPlayingMiniBar.swift in Sources */,
 				D458D1FFCB26A8CB84EE42C6 /* NowPlayingService.swift in Sources */,
 				2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */,
+				F087ADA9291AE26E7125BD3B /* OSMTagParsing.swift in Sources */,
 				6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */,
 				51F52614D8D7DF5D5058304E /* OnboardingContactPicker.swift in Sources */,
 				BC2BE54BE878F0FF9889AC8D /* OnboardingCoordinator.swift in Sources */,

@@ -378,37 +378,24 @@ final class OSMSpeedLimitService {
         }
     }
 
-    /// Parse an OSM maxspeed tag value to mph.
-    /// "NN mph" -> NN. Bare "NN" is km/h per OSM convention. Non-numeric values
-    /// ("none", "signals", "walk", garbage) return nil.
+    /// Parse an OSM maxspeed tag value to mph. Forwards to the shared
+    /// `OSMTagParsing` so the speed-limit service and the road-graph loader
+    /// derive identical speeds from identical tags.
     nonisolated static func parseMaxspeed(_ raw: String?) -> Double? {
-        guard let raw = raw?.trimmingCharacters(in: .whitespaces).lowercased(), !raw.isEmpty else { return nil }
-
-        let value: Double?
-        if raw.hasSuffix("mph") {
-            value = Double(raw.dropLast(3).trimmingCharacters(in: .whitespaces))
-        } else if raw.hasSuffix("km/h") {
-            value = Double(raw.dropLast(4).trimmingCharacters(in: .whitespaces)).map { $0 * Tuning.mphPerKmh }
-        } else {
-            value = Double(raw).map { $0 * Tuning.mphPerKmh }
-        }
-
-        guard let value, value > 0 else { return nil }
-        return value
+        OSMTagParsing.parseMaxspeed(raw)
     }
 
-    /// Typical US speed limit for an OSM highway class, used when no maxspeed tag exists.
+    /// Typical US speed limit for an OSM highway class, used when no maxspeed tag
+    /// exists. Restricted to the classes this service queries — the shared
+    /// `OSMTagParsing.defaultSpeedMph` also covers `service`/`living_street`,
+    /// which the speed-limit query deliberately excludes, so they remain nil here
+    /// (a `service` way with no maxspeed is skipped, as before).
     nonisolated static func defaultSpeedMph(forHighwayClass highway: String) -> Double? {
-        if highway.hasSuffix("_link") { return 35 }
         switch highway {
-        case "motorway": return 65
-        case "trunk": return 55
-        case "primary": return 45
-        case "secondary": return 40
-        case "tertiary": return 35
-        case "unclassified": return 35
-        case "residential": return 25
-        default: return nil
+        case "service", "living_street":
+            return nil
+        default:
+            return OSMTagParsing.defaultSpeedMph(forHighwayClass: highway)
         }
     }
 
@@ -576,7 +563,6 @@ private enum Tuning {
     static let maxPointsPerClause = 250
     static let aroundRadiusMeters = 25
     static let cacheTTL: TimeInterval = 30 * 24 * 3600
-    static let mphPerKmh = 0.621371
     static let cellSizeDegrees = 0.001
     /// Bounding-box guard for grid registration: no plausible OSM way segment
     /// spans 1000 cells (~1.1 degrees) on an axis.
