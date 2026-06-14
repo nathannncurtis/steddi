@@ -248,18 +248,63 @@ final class DirectionsService {
             || NavigationEngine.sfSymbolFromInstruction(step.instructions) == "location.fill"
     }
 
-    /// Fetch a route, ignoring exclusion zones.
-    /// Note: MKDirections does not support exclusion zones natively.
-    /// No-go zone checking should be done post-calculation by the caller.
+    /// Fetch the best route honoring no-go zones, with its validation result.
+    ///
+    /// MKDirections can't exclude areas natively, so this requests alternates,
+    /// validates each against the active zones with `ZoneValidationEngine`, and
+    /// returns the fastest fully-clear route. When every candidate violates a
+    /// zone (the all-routes-violate case), it returns the least-violating one
+    /// alongside its (non-clear) validation result so the caller can warn the
+    /// user instead of stopping — better to drive through a zone than nowhere.
     func fetchRouteWithExclusions(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D,
-        excluding noGoZones: [NoGoZone]
-    ) async throws -> DirectionsRoute {
-        // MKDirections has no built-in exclusion zone support.
-        // Fall back to a regular route; callers should validate the result
-        // against no-go zones and warn the user if the route intersects any.
-        return try await fetchRoute(from: origin, to: destination)
+        excluding noGoZones: [NoGoZone],
+        now: Date = Date(),
+        preferences: RoutePreferences = .resolve()
+    ) async throws -> (route: DirectionsRoute, validation: RouteValidationResult) {
+        let candidates = try await fetchRouteCandidates(
+            from: origin,
+            to: destination,
+            preferences: preferences
+        )
+        guard !candidates.isEmpty else { throw DirectionsError.noRoute }
+
+        let engine = ZoneValidationEngine()
+        let validations = candidates.map {
+            engine.validateRoute($0.encodedPolyline, againstZones: noGoZones, now: now)
+        }
+
+        // Prefer the first fully-clear candidate (candidates arrive
+        // fastest-first from MKDirections).
+        if let clearIndex = validations.firstIndex(where: { $0.isValid }) {
+            return (candidates[clearIndex], validations[clearIndex])
+        }
+
+        // All routes violate — fall back to the least-violating candidate.
+        var bestIndex = 0
+        for i in validations.indices where validations[i].violationCount < validations[bestIndex].violationCount {
+            bestIndex = i
+        }
+        return (candidates[bestIndex], validations[bestIndex])
+    }
+
+    /// All MKDirections candidate routes (fastest first), requesting alternates.
+    func fetchRouteCandidates(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
+        preferences: RoutePreferences = .resolve()
+    ) async throws -> [DirectionsRoute] {
+        let request = MKDirections.Request()
+        request.source = MKMapItem(location: CLLocation(latitude: origin.latitude, longitude: origin.longitude), address: nil)
+        request.destination = MKMapItem(location: CLLocation(latitude: destination.latitude, longitude: destination.longitude), address: nil)
+        request.transportType = .automobile
+        request.requestsAlternateRoutes = true
+        preferences.apply(to: request)
+
+        let directions = MKDirections(request: request)
+        let response = try await directions.calculate()
+        return response.routes.map { Self.directionsRoute(from: $0) }
     }
 
     // MARK: - Private
