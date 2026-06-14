@@ -25,6 +25,12 @@ final class Commute {
     var scheduleToOriginStartHour: Int?  // e.g. 15
     var scheduleToOriginEndHour: Int?    // e.g. 19
 
+    // Smart-commute notification settings (defaults enable lightweight migration)
+    var notificationsEnabled: Bool = true
+    var quietHoursStart: Int? = nil        // Hour 0–23, e.g. 22 (10pm)
+    var quietHoursEnd: Int? = nil          // Hour 0–23, e.g. 7 (7am)
+    var notificationLeadMinutes: Int = 15  // How early to alert (15–120 min)
+
     @Relationship(deleteRule: .cascade)
     var routes: [Route]?
 
