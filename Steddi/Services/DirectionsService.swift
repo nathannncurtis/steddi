@@ -2,6 +2,12 @@ import Foundation
 import CoreLocation
 import MapKit
 
+/// UserDefaults keys for the global toll/highway avoidance defaults.
+enum RoutePreferenceDefaultsKey {
+    static let avoidsTolls = "steddi.defaultAvoidsTolls"
+    static let avoidsHighways = "steddi.defaultAvoidsHighways"
+}
+
 /// Route preference overrides for toll/highway avoidance.
 struct RoutePreferences {
     var avoidsTolls: Bool
@@ -9,8 +15,15 @@ struct RoutePreferences {
 
     /// Resolve preferences: per-commute overrides > global defaults.
     static func resolve(commute: Commute? = nil) -> RoutePreferences {
-        let globalTolls = UserDefaults.standard.bool(forKey: "steddi.defaultAvoidsTolls")
-        let globalHighways = UserDefaults.standard.bool(forKey: "steddi.defaultAvoidsHighways")
+        resolve(commute: commute, in: .standard)
+    }
+
+    /// Resolve against an explicit defaults store — same per-commute > global
+    /// layering, with the store injectable so the resolution is unit-testable
+    /// without touching `.standard`.
+    static func resolve(commute: Commute?, in defaults: UserDefaults) -> RoutePreferences {
+        let globalTolls = defaults.bool(forKey: RoutePreferenceDefaultsKey.avoidsTolls)
+        let globalHighways = defaults.bool(forKey: RoutePreferenceDefaultsKey.avoidsHighways)
         return RoutePreferences(
             avoidsTolls: commute?.avoidsTolls ?? globalTolls,
             avoidsHighways: commute?.avoidsHighways ?? globalHighways
@@ -20,6 +33,19 @@ struct RoutePreferences {
     func apply(to request: MKDirections.Request) {
         request.tollPreference = avoidsTolls ? .avoid : .any
         request.highwayPreference = avoidsHighways ? .avoid : .any
+    }
+
+    /// True when any avoidance preference is shaping the route — drives whether
+    /// to surface an active indicator at all.
+    var isActive: Bool { avoidsTolls || avoidsHighways }
+
+    /// Human-facing labels for each active avoidance, in a stable order
+    /// (tolls before highways). Empty when nothing is being avoided.
+    var activeLabels: [String] {
+        var labels: [String] = []
+        if avoidsTolls { labels.append("Avoiding tolls") }
+        if avoidsHighways { labels.append("Avoiding highways") }
+        return labels
     }
 }
 
