@@ -21,6 +21,11 @@ struct PostArrivalSheet: View {
     @State private var routeName = ""
     @State private var isSaving = false
 
+    // Road-condition report step (optional, skippable, never nags).
+    @State private var reportSectionExpanded = false
+    @State private var selectedConditionKind: RoadConditionKind?
+    @State private var pinnedConditionCoordinate: CLLocationCoordinate2D?
+
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
         NavigationStack {
@@ -67,8 +72,15 @@ struct PostArrivalSheet: View {
 
     private func reviewState(_ matched: MatchedRoute) -> some View {
         VStack(spacing: 0) {
-            // Map preview
-            RoutePreviewMap(coordinates: matched.coordinates)
+            // Map preview. Becomes tap-to-pin while reporting a condition so the
+            // user can drop the exact spot; otherwise it stays read-only.
+            RoutePreviewMap(
+                coordinates: matched.coordinates,
+                pinnedCoordinate: selectedConditionKind == nil ? nil : pinnedConditionCoordinate,
+                pinIcon: selectedConditionKind?.icon,
+                allowsTapToPin: selectedConditionKind != nil,
+                onTap: { coordinate in pinnedConditionCoordinate = coordinate }
+            )
                 .frame(maxWidth: .infinity)
                 .frame(height: 300)
                 .clipShape(RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
@@ -107,6 +119,10 @@ struct PostArrivalSheet: View {
                 .font(SteddiTheme.body(15))
                 .padding(12)
                 .background(SteddiTheme.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+            conditionReportSection
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
 
@@ -149,6 +165,86 @@ struct PostArrivalSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
+        }
+    }
+
+    // MARK: - Condition Report Step
+
+    /// Collapsible "anything to report?" section. Collapsed by default with no
+    /// pre-selection, so the primary save flow is untouched unless the user opts
+    /// in. Tapping a chip toggles selection; tapping it again clears it.
+    private var conditionReportSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    reportSectionExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.bubble")
+                        .font(.caption)
+                        .foregroundStyle(SteddiTheme.accent)
+                    Text("Anything to report about this drive?")
+                        .font(SteddiTheme.body(14))
+                        .foregroundStyle(SteddiTheme.textSecondary)
+                    Spacer()
+                    Image(systemName: reportSectionExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(SteddiTheme.textMuted)
+                }
+            }
+
+            if reportSectionExpanded {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 96), spacing: 8)],
+                    spacing: 8
+                ) {
+                    ForEach(RoadConditionKind.allCases) { kind in
+                        conditionChip(kind)
+                    }
+                }
+                .padding(.top, 12)
+
+                if selectedConditionKind != nil {
+                    Text(pinnedConditionCoordinate == nil
+                         ? "Tap the map to pin the spot (optional)"
+                         : "Pinned — tap again to adjust")
+                        .font(SteddiTheme.body(12))
+                        .foregroundStyle(SteddiTheme.textMuted)
+                        .padding(.top, 8)
+                }
+            }
+        }
+    }
+
+    private func conditionChip(_ kind: RoadConditionKind) -> some View {
+        let isSelected = selectedConditionKind == kind
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                if isSelected {
+                    selectedConditionKind = nil
+                    pinnedConditionCoordinate = nil
+                } else {
+                    selectedConditionKind = kind
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: kind.icon)
+                    .font(.caption)
+                Text(kind.displayName)
+                    .font(SteddiTheme.body(13))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 6)
+            .foregroundStyle(isSelected ? .white : SteddiTheme.textSecondary)
+            .background(
+                isSelected ? kind.color : SteddiTheme.surfaceSecondary,
+                in: RoundedRectangle(cornerRadius: 10)
+            )
         }
     }
 
@@ -264,8 +360,33 @@ struct PostArrivalSheet: View {
         modelContext.insert(record)
 
         try? modelContext.save()
+
+        // Opportunistically capture a reported condition, tied to the saved
+        // route. Falls back to the route's midpoint when the user didn't pin a
+        // spot. Uses the sheet's modelContext directly so it lands in the same
+        // store as the route we just saved.
+        if let kind = selectedConditionKind {
+            let coordinate = pinnedConditionCoordinate
+                ?? Self.midpoint(of: matched.coordinates)
+                ?? matched.coordinates.first
+            if let coordinate {
+                let condition = RoadCondition(kind: kind, coordinate: coordinate, route: route)
+                modelContext.insert(condition)
+                if route.roadConditions == nil { route.roadConditions = [] }
+                route.roadConditions?.append(condition)
+                try? modelContext.save()
+            }
+        }
+
         isSaving = false
         dismiss()
+    }
+
+    /// Geometric midpoint of a polyline (the middle vertex) — a reasonable
+    /// default pin when the user reports a condition without tapping the map.
+    private static func midpoint(of coordinates: [CLLocationCoordinate2D]) -> CLLocationCoordinate2D? {
+        guard !coordinates.isEmpty else { return nil }
+        return coordinates[coordinates.count / 2]
     }
 }
 
@@ -273,8 +394,15 @@ struct PostArrivalSheet: View {
 
 private struct RoutePreviewMap: UIViewRepresentable {
     let coordinates: [CLLocationCoordinate2D]
+    /// Pin to render for a reported condition, if any.
+    var pinnedCoordinate: CLLocationCoordinate2D? = nil
+    /// SF Symbol shown on the pin glyph.
+    var pinIcon: String? = nil
+    /// When true a tap on the map drops/moves the condition pin.
+    var allowsTapToPin: Bool = false
+    var onTap: ((CLLocationCoordinate2D) -> Void)? = nil
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { Coordinator(onTap: onTap) }
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView(frame: .zero)
@@ -289,6 +417,15 @@ private struct RoutePreviewMap: UIViewRepresentable {
         mapView.isZoomEnabled = false
         mapView.isRotateEnabled = false
         mapView.isPitchEnabled = false
+
+        // Tap-to-pin recognizer; enabled/disabled in updateUIView per state.
+        let tap = UITapGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleTap(_:))
+        )
+        context.coordinator.mapView = mapView
+        context.coordinator.tapRecognizer = tap
+        mapView.addGestureRecognizer(tap)
 
         // Add route immediately if we have coordinates
         if !coordinates.isEmpty {
@@ -308,21 +445,68 @@ private struct RoutePreviewMap: UIViewRepresentable {
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
-        // Only update if coordinates changed and we haven't drawn yet
-        guard !coordinates.isEmpty, !context.coordinator.didAddRoute else { return }
-        context.coordinator.didAddRoute = true
+        context.coordinator.onTap = onTap
+        context.coordinator.tapRecognizer?.isEnabled = allowsTapToPin
 
-        let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
-        mapView.addOverlay(polyline, level: .aboveRoads)
-        mapView.setVisibleMapRect(
-            polyline.boundingMapRect,
-            edgePadding: UIEdgeInsets(top: 40, left: 40, bottom: 40, right: 40),
-            animated: false
-        )
+        // Draw the route once.
+        if !coordinates.isEmpty, !context.coordinator.didAddRoute {
+            context.coordinator.didAddRoute = true
+            let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+            mapView.addOverlay(polyline, level: .aboveRoads)
+            mapView.setVisibleMapRect(
+                polyline.boundingMapRect,
+                edgePadding: UIEdgeInsets(top: 40, left: 40, bottom: 40, right: 40),
+                animated: false
+            )
+        }
+
+        // Sync the condition pin annotation with current state.
+        syncPin(on: mapView, context: context)
+    }
+
+    private func syncPin(on mapView: MKMapView, context: Context) {
+        let existing = mapView.annotations.compactMap { $0 as? ConditionPinAnnotation }
+        guard let pinnedCoordinate else {
+            mapView.removeAnnotations(existing)
+            return
+        }
+        // Reuse the existing annotation, just move it, to avoid a flash.
+        if let annotation = existing.first {
+            if annotation.coordinate.latitude != pinnedCoordinate.latitude
+                || annotation.coordinate.longitude != pinnedCoordinate.longitude {
+                annotation.coordinate = pinnedCoordinate
+            }
+            annotation.iconName = pinIcon
+            mapView.removeAnnotations(Array(existing.dropFirst()))
+        } else {
+            let annotation = ConditionPinAnnotation()
+            annotation.coordinate = pinnedCoordinate
+            annotation.iconName = pinIcon
+            mapView.addAnnotation(annotation)
+        }
+    }
+
+    final class ConditionPinAnnotation: NSObject, MKAnnotation {
+        @objc dynamic var coordinate = CLLocationCoordinate2D()
+        var iconName: String?
     }
 
     class Coordinator: NSObject, MKMapViewDelegate {
         var didAddRoute = false
+        weak var mapView: MKMapView?
+        weak var tapRecognizer: UITapGestureRecognizer?
+        var onTap: ((CLLocationCoordinate2D) -> Void)?
+
+        init(onTap: ((CLLocationCoordinate2D) -> Void)?) {
+            self.onTap = onTap
+        }
+
+        @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
+            guard let mapView else { return }
+            let point = recognizer.location(in: mapView)
+            let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+            onTap?(coordinate)
+        }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let polyline = overlay as? MKPolyline {
@@ -334,6 +518,17 @@ private struct RoutePreviewMap: UIViewRepresentable {
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
+        }
+
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            guard let pin = annotation as? ConditionPinAnnotation else { return nil }
+            let id = "conditionPin"
+            let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView
+                ?? MKMarkerAnnotationView(annotation: pin, reuseIdentifier: id)
+            view.annotation = pin
+            view.markerTintColor = UIColor(red: 0.91, green: 0.30, blue: 0.24, alpha: 1.0) // SteddiTheme.warmRed
+            view.glyphImage = pin.iconName.flatMap { UIImage(systemName: $0) }
+            return view
         }
     }
 }
