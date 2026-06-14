@@ -202,6 +202,15 @@ final class NavigationStateManager {
         widgetDefaults?.set(engine.isNavigating, forKey: "widget.isNavigating")
     }
 
+    /// Tear down an in-progress trip session cleanly — used when the active
+    /// trip is deleted out from under navigation. Stops the engine first so no
+    /// further ticks fire, then clears all observation state (including
+    /// `activeTrip`) so nothing is left pointing at a deleted model.
+    func endActiveTripSession() {
+        activeEngine?.stopNavigation()
+        stopObserving()
+    }
+
     func stopObserving() {
         pollingTask?.cancel()
         rerouteTask?.cancel()
