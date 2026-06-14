@@ -52,6 +52,7 @@
 		4D4EA23D419752C08D4929B2 /* DriveRowCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798937A1E2AA43874413C040 /* DriveRowCard.swift */; };
 		50989228583DD9AF1BBEE55D /* RoadConditionAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4E84E4C9DD265359EFD1EE /* RoadConditionAnnotation.swift */; };
 		516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */; };
+		51F52614D8D7DF5D5058304E /* OnboardingContactPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2EA338482C352BF2C39164B /* OnboardingContactPicker.swift */; };
 		534D40A3F52FDDA9AE84C20C /* TripStop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B99A3381CC68B028C99DD0E /* TripStop.swift */; };
 		571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7111C46770386A928275F35 /* SettingsView.swift */; };
 		57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */; };
@@ -330,6 +331,7 @@
 		BF8849F63A69650A3821B776 /* SteddiLiveActivity.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteddiLiveActivity.entitlements; sourceTree = "<group>"; };
 		C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMSpeedLimitService.swift; sourceTree = "<group>"; };
 		C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteETAWidget.swift; sourceTree = "<group>"; };
+		C2EA338482C352BF2C39164B /* OnboardingContactPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingContactPicker.swift; sourceTree = "<group>"; };
 		C3B24C7F73BAB34A1C42E122 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C5B17C3D0A429809ADB9CCBA /* TripCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripCardView.swift; sourceTree = "<group>"; };
 		C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commute.swift; sourceTree = "<group>"; };
@@ -627,6 +629,7 @@
 			isa = PBXGroup;
 			children = (
 				EF4892145CE55DFF9FF13FC7 /* DonationView.swift */,
+				C2EA338482C352BF2C39164B /* OnboardingContactPicker.swift */,
 				C6291CE98BB2552CD248E6CB /* OnboardingCoordinator.swift */,
 				9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */,
 				0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */,
@@ -985,6 +988,7 @@
 				D458D1FFCB26A8CB84EE42C6 /* NowPlayingService.swift in Sources */,
 				2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */,
 				6CA33B75D1E1057D2F28B14E /* OfflineCacheService.swift in Sources */,
+				51F52614D8D7DF5D5058304E /* OnboardingContactPicker.swift in Sources */,
 				BC2BE54BE878F0FF9889AC8D /* OnboardingCoordinator.swift in Sources */,
 				9E6E05AF740C80220B638E58 /* OnboardingHeroView.swift in Sources */,
 				2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */,
