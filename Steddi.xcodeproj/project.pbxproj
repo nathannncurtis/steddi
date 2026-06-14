@@ -45,6 +45,7 @@
 		57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */; };
 		5822FFAEECCEC7E5E31C3D1C /* NavPoseInterpolator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */; };
 		588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EB5BD45FD5C3961CFC647C /* PhoneCompanionView.swift */; };
+		59451CAF3B36B885AB85F921 /* ZoneBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E319751B2B97D0465371DA38 /* ZoneBadgeView.swift */; };
 		5950C1B577E6BD5476A0FBB9 /* NowPlayingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38C089A52E68514BB12E0C0 /* NowPlayingServiceTests.swift */; };
 		5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADE05CCCE2E6BA708ED405BF /* TrendInsightCard.swift */; };
 		5D8C6D53390B98A19A081299 /* AudioDuckingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */; };
@@ -298,6 +299,7 @@
 		DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDuckingServiceTests.swift; sourceTree = "<group>"; };
 		DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolator.swift; sourceTree = "<group>"; };
 		E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiLiveActivityBundle.swift; sourceTree = "<group>"; };
+		E319751B2B97D0465371DA38 /* ZoneBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneBadgeView.swift; sourceTree = "<group>"; };
 		E64DED98F409553C18FBECB6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStoreLocatorTests.swift; sourceTree = "<group>"; };
 		EAA8B2837951D77986E1E11A /* Steddi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Steddi.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -491,6 +493,7 @@
 				335291BA198DC1134B9072E8 /* LocationPickerView.swift */,
 				AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */,
 				857611FEA7AB423C6F8CF1BC /* NoGoZoneMapV2.swift */,
+				E319751B2B97D0465371DA38 /* ZoneBadgeView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -921,6 +924,7 @@
 				62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */,
 				CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */,
 				9275C4BC68051B778B8E32C5 /* WeatherKitService.swift in Sources */,
+				59451CAF3B36B885AB85F921 /* ZoneBadgeView.swift in Sources */,
 				7563ED49C5D46457AD882CA4 /* ZoneDrawingService.swift in Sources */,
 				A5334D5D6A4798480F20DAC1 /* ZoneValidationEngine.swift in Sources */,
 			);
