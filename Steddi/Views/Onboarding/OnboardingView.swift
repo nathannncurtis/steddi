@@ -1,219 +1,187 @@
 import SwiftUI
 
+/// Steddi's first-run flow: a cinematic-but-fast 4-beat experience that
+/// communicates quality in seconds rather than teaching a tutorial.
+///
+/// Beats (driven by `OnboardingCoordinator`):
+///   1. hero        — route draws across a dark map (reuses the nav draw-on renderer)
+///   2. permissions — location, framed in-context; notifications deferred to first commute
+///   3. theme       — accent + theme pick, the delight moment
+///   4. emergency   — optional emergency contact (mirrors EmergencyView's storage)
+///
+/// Coexists with the existing `@AppStorage("hasCompletedOnboarding")` gate and
+/// the `steddi://reset-onboarding` hook (both in PhoneSceneDelegate). Theme/accent
+/// selections are persisted and their change notifications posted only on
+/// completion, so the home screen never flashes a stale palette mid-flow. Skip is
+/// available on every beat except permissions, where the user makes an explicit
+/// allow/defer choice.
 struct OnboardingView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @AppStorage("accentColor") private var accentColor = "lavender"
-    @AppStorage("themeMode") private var themeMode = "dynamic"
-    @State private var currentPage = 0
+    @AppStorage("accentColor") private var accentColor = SteddiTheme.AccentOption.lavender.rawValue
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(LocationService.self) private var locationService
+
+    @State private var coordinator = OnboardingCoordinator()
     @State private var showDonation = false
 
-    private let pages: [(icon: String, title: String, subtitle: String, body: String)] = [
-        (
-            "road.lanes",
-            "Welcome to Steddi",
-            "Your route, your rules",
-            "Steddi learns how you drive and only suggests changes when they actually matter."
-        ),
-        (
-            "mappin.and.ellipse",
-            "Pin your places",
-            "Two taps to driving",
-            "Save the locations you commute between. Tap a pin and go."
-        ),
-        (
-            "car.fill",
-            "Drive to learn",
-            "Just drive normally",
-            "Steddi records your routes so it knows YOUR preferred way, not what an algorithm guesses."
-        ),
-        (
-            "lock.shield.fill",
-            "Your data stays yours",
-            "Private by design",
-            "All your routes, locations, and driving data are stored on your device. Nothing is sold, shared, or sent to any server. Ever."
-        ),
-        (
-            "slider.horizontal.3",
-            "Set your threshold",
-            "No nagging, ever",
-            "Tell Steddi when a reroute is worth your attention. Small delays get ignored."
-        ),
-        (
-            "circle.lefthalf.filled",
-            "Choose your look",
-            "Light, dark, or match your device",
-            ""
-        )
-    ]
-
     var body: some View {
-        let _ = accentColor // force SwiftUI re-render on accent change
+        // Force a re-render when the in-flight accent changes so the footer and
+        // chrome recolor live during beat 3.
+        let _ = coordinator.selectedAccent
         VStack(spacing: 0) {
-            TabView(selection: $currentPage) {
-                ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                    if index == themePageIndex {
-                        themeSelectionPage
-                            .tag(index)
-                    } else {
-                        VStack(spacing: 24) {
-                            Spacer()
+            beatContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                            Image(systemName: page.icon)
-                                .font(.system(size: 64))
-                                .foregroundStyle(SteddiTheme.accent)
-                                .padding(.bottom, 8)
-
-                            VStack(spacing: 8) {
-                                Text(page.title)
-                                    .font(.title.weight(.bold))
-
-                                Text(page.subtitle)
-                                    .font(.title3)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Text(page.body)
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 40)
-
-                            Spacer()
-                            Spacer()
-                        }
-                        .tag(index)
-                    }
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .always))
-
-            // Bottom button area
-            VStack(spacing: 16) {
-                if currentPage == pages.count - 1 {
-                    Button {
-                        completeOnboarding()
-                    } label: {
-                        Text("Get Started")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                } else {
-                    Button {
-                        withAnimation {
-                            currentPage += 1
-                        }
-                    } label: {
-                        Text("Next")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                }
-
-                if currentPage < pages.count - 1 {
-                    Button("Skip") {
-                        completeOnboarding()
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            footer
         }
-        .sheet(isPresented: $showDonation, onDismiss: {
-            hasCompletedOnboarding = true
-        }) {
+        .background(SteddiTheme.surfacePrimary.ignoresSafeArea())
+        .sheet(isPresented: $showDonation, onDismiss: completeOnboarding) {
             DonationView()
         }
     }
 
-    private var themePageIndex: Int { pages.count - 1 }
+    // MARK: - Beats
 
-    private var themeSelectionPage: some View {
-        VStack(spacing: 24) {
-            Spacer()
+    @ViewBuilder
+    private var beatContent: some View {
+        ZStack {
+            switch coordinator.currentBeat {
+            case .hero:
+                OnboardingHeroView {
+                    coordinator.heroAnimationComplete = true
+                }
+                .transition(beatTransition)
 
-            Image(systemName: "circle.lefthalf.filled")
-                .font(.system(size: 64))
-                .foregroundStyle(SteddiTheme.accent)
-                .padding(.bottom, 8)
+            case .permissions:
+                OnboardingPermissionsView(
+                    onContinue: requestLocation,
+                    onNotNow: { advance() }
+                )
+                .transition(beatTransition)
 
-            VStack(spacing: 8) {
-                Text("Choose your look")
-                    .font(.title.weight(.bold))
+            case .theme:
+                OnboardingThemeView(coordinator: coordinator)
+                    .transition(beatTransition)
 
-                Text("Light, dark, or match your device")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
+            case .emergency:
+                OnboardingEmergencyView(coordinator: coordinator)
+                    .transition(beatTransition)
             }
-
-            VStack(spacing: 12) {
-                themeCard(mode: "dynamic", icon: "sun.horizon.fill", label: "Dynamic", description: "Light by day, dark by night", recommended: true)
-                themeCard(mode: "dark", icon: "moon.fill", label: "Dark", description: "Always dark")
-                themeCard(mode: "light", icon: "sun.max.fill", label: "Light", description: "Always light")
-            }
-            .padding(.horizontal, 32)
-
-            Spacer()
-            Spacer()
         }
     }
 
-    private func themeCard(mode: String, icon: String, label: String, description: String, recommended: Bool = false) -> some View {
-        let isSelected = themeMode == mode
-        return Button {
-            themeMode = mode
-            NotificationCenter.default.post(name: .steddiThemeModeChanged, object: nil)
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .frame(width: 32)
-                    .foregroundStyle(isSelected ? SteddiTheme.accent : .secondary)
+    /// Asymmetric beat transition: gentle fade-in, scale-and-fade out. Collapses
+    /// to instant under Reduce Motion (handled by `SteddiMotion` at the call site
+    /// that drives `currentBeat`).
+    private var beatTransition: AnyTransition {
+        .asymmetric(
+            insertion: .opacity,
+            removal: .scale(scale: 0.96).combined(with: .opacity)
+        )
+    }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(label)
-                            .font(.headline)
-                        if recommended {
-                            Text("Recommended")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(SteddiTheme.accent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(SteddiTheme.accentSubtle, in: Capsule())
-                        }
-                    }
-                    Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+    // MARK: - Footer
+
+    @ViewBuilder
+    private var footer: some View {
+        VStack(spacing: 16) {
+            // The hero's primary button waits for the draw-on to finish; other
+            // beats show it immediately.
+            if showsPrimaryButton {
+                Button {
+                    HapticService.shared.fire(.uiToggle)
+                    advance()
+                } label: {
+                    Text(coordinator.currentBeat.primaryLabel)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(coordinator.selectedAccent.color, in: RoundedRectangle(cornerRadius: 14))
                 }
-
-                Spacer()
-
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(SteddiTheme.accent)
-                        .font(.title3)
-                }
+                .buttonStyle(.steddiPress)
+                .disabled(coordinator.isTransitioning)
+                .transition(.opacity)
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected ? SteddiTheme.accent.opacity(0.12) : SteddiTheme.surfaceSecondary)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? SteddiTheme.accent : .clear, lineWidth: 2)
-            )
+
+            if coordinator.currentBeat.allowsSkip {
+                Button("Skip") { skip() }
+                    .font(.subheadline)
+                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .disabled(coordinator.isTransitioning)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 32)
+        .padding(.top, 8)
+    }
+
+    /// Permissions has its own in-card Continue/Not-now buttons, so the footer's
+    /// primary is hidden there. The hero shows it only once its animation lands.
+    private var showsPrimaryButton: Bool {
+        switch coordinator.currentBeat {
+        case .permissions: return false
+        case .hero: return coordinator.heroAnimationComplete
+        default: return true
+        }
+    }
+
+    // MARK: - Flow control
+
+    /// Advance one beat, or finish the flow when there's no next beat.
+    private func advance() {
+        guard !coordinator.isTransitioning else { return }
+        guard coordinator.hasNextBeat else {
+            finishFlow()
+            return
+        }
+        coordinator.isTransitioning = true
+        withAnimation(SteddiMotion.resolve(.easeInOut(duration: 0.35))) {
+            _ = coordinator.advance()
+        }
+        // Re-enable the footer after the transition window (instant under Reduce
+        // Motion so it never sticks disabled).
+        let delay = reduceMotion ? 0 : 0.4
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            coordinator.isTransitioning = false
+        }
+    }
+
+    /// Skip the rest of onboarding from any skippable beat.
+    private func skip() {
+        guard !coordinator.isTransitioning else { return }
+        finishFlow()
+    }
+
+    /// Request location in-context. Advancing happens immediately — the system
+    /// prompt floats over beat 3, and any grant flows into the map later.
+    private func requestLocation() {
+        locationService.requestPermission()
+        coordinator.locationGranted = true
+        advance()
+    }
+
+    /// Persist selections, post deferred theme/accent notifications, then run the
+    /// completion path (donation sheet, which flips the gate on dismiss).
+    private func finishFlow() {
+        persistSelections()
+        showDonation = true
+    }
+
+    /// Write the in-flight accent/theme picks to their shared stores and notify
+    /// observers — only now, so the home screen renders the final palette once.
+    private func persistSelections() {
+        accentColor = coordinator.selectedAccent.rawValue
+        NotificationCenter.default.post(name: .steddiAccentColorChanged, object: nil)
+
+        // Route the theme mode through the engine: it persists, syncs the legacy
+        // "themeMode" shadow for map surfaces, and posts .steddiThemeModeChanged.
+        ThemeEngine.shared.baseMode = coordinator.selectedTheme
+
+        if let phone = coordinator.emergencyContact {
+            UserDefaults.standard.set(phone, forKey: "steddi.emergencyContact")
+        }
     }
 
     private func completeOnboarding() {
@@ -223,4 +191,5 @@ struct OnboardingView: View {
 
 #Preview {
     OnboardingView()
+        .environment(LocationService())
 }
