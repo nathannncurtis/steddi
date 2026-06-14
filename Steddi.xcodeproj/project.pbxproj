@@ -125,6 +125,7 @@
 		CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE4512ED735A6D3CD409755 /* VoicePicker.swift */; };
 		CDF629BD035374BC3BE0A99C /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B385FB734BECC176514917FB /* RoutePlannerView.swift */; };
 		CE0E87101839B1C3153234A1 /* VoiceGuidanceServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */; };
+		D16092362319596FA139A0F1 /* RoadConditionReconfirmSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3130157560032FDA76FED435 /* RoadConditionReconfirmSheet.swift */; };
 		D458D1FFCB26A8CB84EE42C6 /* NowPlayingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B614E4431FE25A25512707 /* NowPlayingService.swift */; };
 		D5D2CC709306B626B120D222 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4892145CE55DFF9FF13FC7 /* DonationView.swift */; };
 		D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671B3D459ED5359957DCDED5 /* CarPlaySceneDelegate.swift */; };
@@ -226,6 +227,7 @@
 		2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngineTests.swift; sourceTree = "<group>"; };
 		2DA34462C207C379281EC748 /* IconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPickerView.swift; sourceTree = "<group>"; };
 		30A628B67F551F51F4AEBEE8 /* LocalNormsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNormsProvider.swift; sourceTree = "<group>"; };
+		3130157560032FDA76FED435 /* RoadConditionReconfirmSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadConditionReconfirmSheet.swift; sourceTree = "<group>"; };
 		315032BDB9A34CDCE94D686D /* CommuteWeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteWeatherService.swift; sourceTree = "<group>"; };
 		33471F234A8AF73EC6B62F93 /* CommuteNotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationsSettingsView.swift; sourceTree = "<group>"; };
 		335291BA198DC1134B9072E8 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
@@ -614,6 +616,7 @@
 				53EB5BD45FD5C3961CFC647C /* PhoneCompanionView.swift */,
 				BCAFE3528F4C52D5167ED691 /* PostArrivalSheet.swift */,
 				F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */,
+				3130157560032FDA76FED435 /* RoadConditionReconfirmSheet.swift */,
 				7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */,
 				03F7AE23FE0B489FC3CA9D1E /* SteddiNavOverlay.swift */,
 			);
@@ -963,6 +966,7 @@
 				9DE142BF8E357A8F31464F2C /* RerouteEngine.swift in Sources */,
 				B15142D572255FF13A24D7D1 /* ReviewURLs.swift in Sources */,
 				A477A072BF5B7865AC486AF0 /* RoadCondition.swift in Sources */,
+				D16092362319596FA139A0F1 /* RoadConditionReconfirmSheet.swift in Sources */,
 				780E1D35A4D611FD450D82CE /* RoadConditionService.swift in Sources */,
 				E7E5DFCC07A00D2F568F38BF /* Route.swift in Sources */,
 				F2B518F621383E132FCCEDE3 /* RouteGeometry.swift in Sources */,
