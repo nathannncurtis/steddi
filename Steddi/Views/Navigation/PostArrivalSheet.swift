@@ -20,6 +20,8 @@ struct PostArrivalSheet: View {
     @State private var matchError = false
     @State private var routeName = ""
     @State private var isSaving = false
+    /// Drives the staggered fade-in of the review state's rows.
+    @State private var reviewAppeared = false
 
     // Road-condition report step (optional, skippable, never nags).
     @State private var reportSectionExpanded = false
@@ -72,8 +74,8 @@ struct PostArrivalSheet: View {
 
     private func reviewState(_ matched: MatchedRoute) -> some View {
         VStack(spacing: 0) {
-            // Map preview. Becomes tap-to-pin while reporting a condition so the
-            // user can drop the exact spot; otherwise it stays read-only.
+            // Map preview — fades in first. Becomes tap-to-pin while reporting a
+            // condition so the user can drop the exact spot; otherwise read-only.
             RoutePreviewMap(
                 coordinates: matched.coordinates,
                 pinnedCoordinate: selectedConditionKind == nil ? nil : pinnedConditionCoordinate,
@@ -86,8 +88,10 @@ struct PostArrivalSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
+                .opacity(reviewAppeared ? 1 : 0)
+                .animation(TransitionKit.cardStagger(index: 0), value: reviewAppeared)
 
-            // Stats
+            // Stats — fades in after the map.
             HStack(spacing: 24) {
                 HStack(spacing: 6) {
                     Image(systemName: "road.lanes")
@@ -97,6 +101,8 @@ struct PostArrivalSheet: View {
                         .font(SteddiTheme.mono(16))
                         .foregroundStyle(SteddiTheme.textPrimary)
                 }
+                .opacity(reviewAppeared ? 1 : 0)
+                .animation(TransitionKit.cardStagger(index: 1), value: reviewAppeared)
 
                 if let commuteName = commute?.name {
                     HStack(spacing: 6) {
@@ -107,6 +113,8 @@ struct PostArrivalSheet: View {
                             .font(SteddiTheme.body(14))
                             .foregroundStyle(SteddiTheme.textSecondary)
                     }
+                    .opacity(reviewAppeared ? 1 : 0)
+                    .animation(TransitionKit.cardStagger(index: 2), value: reviewAppeared)
                 }
 
                 Spacer()
@@ -114,13 +122,15 @@ struct PostArrivalSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
 
-            // Route name field
+            // Route name field — fades in after the stats.
             TextField("Route name (optional)", text: $routeName)
                 .font(SteddiTheme.body(15))
                 .padding(12)
                 .background(SteddiTheme.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
+                .opacity(reviewAppeared ? 1 : 0)
+                .animation(TransitionKit.cardStagger(index: 3), value: reviewAppeared)
 
             conditionReportSection
                 .padding(.horizontal, 16)
@@ -165,6 +175,17 @@ struct PostArrivalSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
+            .opacity(reviewAppeared ? 1 : 0)
+            .animation(TransitionKit.cardStagger(index: 4), value: reviewAppeared)
+        }
+        .onAppear {
+            if SteddiMotion.shouldAnimate {
+                reviewAppeared = true
+            } else {
+                var txn = Transaction()
+                txn.disablesAnimations = true
+                withTransaction(txn) { reviewAppeared = true }
+            }
         }
     }
 
