@@ -74,6 +74,21 @@ final class NavigationEngine {
     /// Condition ids already announced this session, so passing a single pothole
     /// fires exactly one heads-up instead of one per fix while in range.
     private var alertedConditionIDs: Set<UUID> = []
+
+    /// Injected speed-camera proximity lookup. Given the snapped position and
+    /// travel bearing it returns the closest enforcement camera ahead within the
+    /// alert range, or nil. A closure so the engine never imports
+    /// SpeedCameraService — same decoupling as `speedLimitProvider`.
+    @ObservationIgnored
+    var speedCameraProvider: ((CLLocationCoordinate2D, Double?) -> SpeedCameraAlert?)? = nil
+    /// Fired once per camera when the engine first comes within range this
+    /// session. The wiring side does the tone/haptic + voice; the engine owns
+    /// only the detection and debounce.
+    @ObservationIgnored
+    var onSpeedCameraApproaching: ((SpeedCameraAlert) -> Void)? = nil
+    /// Camera alert ids already announced this session, so passing one camera
+    /// fires exactly one heads-up instead of one per fix while in range.
+    private var alertedCameraIDs: Set<String> = []
     /// Smoothed travel bearing. nil until the first valid bearing — never a
     /// due-north sentinel, and held (not reset) when no new bearing is available.
     var headingDegrees: Double? = nil
@@ -140,6 +155,7 @@ final class NavigationEngine {
         locationUpdateCount = 0
         navigationToken = UUID()
         alertedConditionIDs.removeAll()
+        alertedCameraIDs.removeAll()
         routePolylineCoordinates = polyline
 
         projector = polyline.count >= 2
@@ -263,6 +279,7 @@ final class NavigationEngine {
         updateHeading(location: location, projection: projection, speedMPS: speedMPS)
         updateSpeedLimit(location: location)
         checkRoadConditionProximity()
+        checkSpeedCameraProximity()
 
         if speedMPS > 1.0 {
             speedSampleCount += 1
@@ -313,6 +330,21 @@ final class NavigationEngine {
         guard !alertedConditionIDs.contains(condition.id) else { return }
         alertedConditionIDs.insert(condition.id)
         onRoadConditionApproaching?(condition)
+    }
+
+    /// Heads-up when approaching a known enforcement camera. Uses the snapped
+    /// position (puck on the polyline) and the smoothed travel bearing so the
+    /// lookup tracks the route, not GPS scatter, and only warns about cameras
+    /// ahead. Debounced per camera for the session so a single camera announces
+    /// once. The actual tone/haptic/voice is delegated to the wiring via
+    /// `onSpeedCameraApproaching`.
+    private func checkSpeedCameraProximity() {
+        guard let provider = speedCameraProvider else { return }
+        let probe = snappedCoordinate ?? currentCoordinate
+        guard let probe, let alert = provider(probe, headingDegrees) else { return }
+        guard !alertedCameraIDs.contains(alert.alertID) else { return }
+        alertedCameraIDs.insert(alert.alertID)
+        onSpeedCameraApproaching?(alert)
     }
 
     /// Position-based speed limit from the injected provider (OSM data),
