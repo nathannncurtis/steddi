@@ -26,6 +26,7 @@
 		2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
 		3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335291BA198DC1134B9072E8 /* LocationPickerView.swift */; };
+		43C4CC9A502866B2BE5E5A35 /* ThemeRevisionTrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = 215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */; };
 		441AC263D0497D1AA6E95964 /* SteddiLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */; };
 		4A0898B3E04DFD141E0808AD /* EmergencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F1F21786B81D853B9E61B6 /* EmergencyView.swift */; };
@@ -169,6 +170,7 @@
 		13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiShortcuts.swift; sourceTree = "<group>"; };
 		16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManagerTests.swift; sourceTree = "<group>"; };
 		1D932805B66B86200A9B9645 /* CommuteAnalyticsAggregate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteAnalyticsAggregate.swift; sourceTree = "<group>"; };
+		215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeRevisionTrait.swift; sourceTree = "<group>"; };
 		247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolatorTests.swift; sourceTree = "<group>"; };
 		24F1F21786B81D853B9E61B6 /* EmergencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmergencyView.swift; sourceTree = "<group>"; };
 		262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceService.swift; sourceTree = "<group>"; };
@@ -604,6 +606,7 @@
 				37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */,
 				F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */,
 				777F9439E5905A75A1BBDB95 /* ThemePalette.swift */,
+				215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -825,6 +828,7 @@
 				75C718A237AFFBD58B0D2195 /* ThemeEngine.swift in Sources */,
 				4A8A3A9A1BA94ADE882306D9 /* ThemeModeEx.swift in Sources */,
 				B697491FBDB6DEAA201BF5FC /* ThemePalette.swift in Sources */,
+				43C4CC9A502866B2BE5E5A35 /* ThemeRevisionTrait.swift in Sources */,
 				8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */,
 				5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */,
 				21592CE104F443B0892973CF /* TunnelDetectionService.swift in Sources */,

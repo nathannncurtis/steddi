@@ -6,6 +6,11 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
 
+    /// Hosting controller for the SwiftUI tree. Kept so dynamic theme updates
+    /// can bump its theme-revision trait override (see `applyThemeRevision`).
+    private weak var hostingController: UIViewController?
+    private var dynamicThemeObserver: NSObjectProtocol?
+
     func scene(
         _ scene: UIScene,
         willConnectTo session: UISceneSession,
@@ -30,14 +35,43 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
         // never flashes the wrong polarity mid-transition.
         case .dynamic: window.backgroundColor = ThemeEngine.shared.currentState.surfacePrimary.uiColor
         }
-        window.rootViewController = UIHostingController(rootView: rootView)
+        let hosting = UIHostingController(rootView: rootView)
+        window.rootViewController = hosting
+        self.hostingController = hosting
+        applyThemeRevision()
         window.makeKeyAndVisible()
         self.window = window
+
+        // Single injection point for dynamic theme propagation: every engine
+        // step posts `.steddiDynamicThemeUpdated`; bumping the hosting
+        // controller's theme-revision trait re-resolves every dynamic
+        // `SteddiTheme` color in the SwiftUI tree (HomeView, the nav overlay,
+        // every card) against the latest snapshot, without rebuilding state.
+        dynamicThemeObserver = NotificationCenter.default.addObserver(
+            forName: .steddiDynamicThemeUpdated,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyThemeRevision()
+        }
 
         // Handle any URLs passed at launch
         if let url = connectionOptions.urlContexts.first?.url {
             handleURL(url)
         }
+    }
+
+    deinit {
+        if let dynamicThemeObserver {
+            NotificationCenter.default.removeObserver(dynamicThemeObserver)
+        }
+    }
+
+    /// Mirror the engine's published revision into the hosting controller's
+    /// trait overrides. `ThemeRevisionTrait.affectsColorAppearance` makes UIKit
+    /// re-invoke every dynamic color provider in the subtree when this changes.
+    private func applyThemeRevision() {
+        hostingController?.traitOverrides[ThemeRevisionTrait.self] = ThemeEngine.revision
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {

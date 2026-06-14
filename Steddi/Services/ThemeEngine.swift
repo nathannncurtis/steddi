@@ -102,6 +102,13 @@ final class ThemeEngine {
     /// actor; a torn read can at worst mix two adjacent 1Hz frames of color.
     nonisolated(unsafe) private(set) static var snapshot: ThemeState = ThemeEngine.bootstrapState()
 
+    /// Monotonic counter bumped on every published state change. The app root
+    /// mirrors this into the window's `ThemeRevisionTrait`, which forces every
+    /// `Color(UIColor { ... })`-backed facade color in the hosted tree to
+    /// re-resolve against the latest `snapshot` — the mechanism that carries a
+    /// dynamic theme step into HomeView / the nav overlay without editing them.
+    nonisolated(unsafe) private(set) static var revision: Int = 0
+
     private(set) var currentState: ThemeState
 
     var baseMode: ThemeModeEx {
@@ -211,6 +218,7 @@ final class ThemeEngine {
             let chromeFlipped = newState.prefersDarkChrome != currentState.prefersDarkChrome
             currentState = newState
             Self.snapshot = newState
+            Self.revision &+= 1
             NotificationCenter.default.post(name: .steddiDynamicThemeUpdated, object: nil)
             if chromeFlipped {
                 // Map surfaces re-resolve SteddiTheme.currentThemeMode on this

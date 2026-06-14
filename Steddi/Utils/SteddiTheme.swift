@@ -69,18 +69,40 @@ enum SteddiTheme {
     /// Surface colors — resolved by ThemeEngine. The dark/light endpoints are
     /// pixel-identical to the old trait-adaptive values (see ThemePalette);
     /// dynamic mode interpolates between them, through grey when enabled.
-    /// Views keep reading these statics unchanged — the facade hides the
-    /// engine entirely. Repaints ride the existing theme notifications plus
-    /// `.steddiDynamicThemeUpdated`; colors resolve from the latest snapshot
-    /// every time a body re-evaluates.
-    static var surfacePrimary: Color { ThemeEngine.snapshot.surfacePrimary.color }
-    static var surfaceSecondary: Color { ThemeEngine.snapshot.surfaceSecondary.color }
-    static var surfaceElevated: Color { ThemeEngine.snapshot.surfaceElevated.color }
+    ///
+    /// Views keep reading these statics unchanged — the facade hides the engine
+    /// entirely. Each color is a *dynamic* `Color(UIColor { ... })`: the UIKit
+    /// provider re-resolves whenever a trait it reads changes, and it reads the
+    /// custom `ThemeRevisionTrait`. The app root bumps that trait on every
+    /// `.steddiDynamicThemeUpdated`, so a golden-hour / temperature / tunnel
+    /// step propagates as a trait change through the whole hosted tree and every
+    /// dynamic color re-resolves against the freshest `ThemeEngine.snapshot` —
+    /// no body needs to read the engine and no `@State` is rebuilt. Non-reactive
+    /// call sites (UIKit map surfaces, snapshots) still get a correct value
+    /// because the provider also resolves eagerly from the current snapshot.
+    static var surfacePrimary: Color { dynamicColor { $0.surfacePrimary } }
+    static var surfaceSecondary: Color { dynamicColor { $0.surfaceSecondary } }
+    static var surfaceElevated: Color { dynamicColor { $0.surfaceElevated } }
 
     /// Text — resolved by ThemeEngine alongside the surfaces.
-    static var textPrimary: Color { ThemeEngine.snapshot.textPrimary.color }
-    static var textSecondary: Color { ThemeEngine.snapshot.textSecondary.color }
-    static var textMuted: Color { ThemeEngine.snapshot.textMuted.color }
+    static var textPrimary: Color { dynamicColor { $0.textPrimary } }
+    static var textSecondary: Color { dynamicColor { $0.textSecondary } }
+    static var textMuted: Color { dynamicColor { $0.textMuted } }
+
+    /// Build a dynamic SwiftUI color whose UIKit provider (a) reads the live
+    /// `ThemeEngine.snapshot` so the value is always current, and (b) touches
+    /// `traitCollection.themeRevision` so the provider registers a dependency on
+    /// the theme-revision trait and is re-invoked when the root bumps it.
+    private static func dynamicColor(
+        _ select: @escaping (ThemeState) -> RGBColor
+    ) -> Color {
+        Color(UIColor { traitCollection in
+            // Reading the revision establishes the trait dependency that drives
+            // re-resolution; the value itself is otherwise unused here.
+            _ = traitCollection.themeRevision
+            return select(ThemeEngine.snapshot).uiColor
+        })
+    }
 
     // MARK: - Typography
 
