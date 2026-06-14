@@ -128,6 +128,7 @@
 		BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29048E65BF78AEB095A5D599 /* CommuteListView.swift */; };
 		BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C7DC812CB94F8043C1B8E3 /* SteddiMapView.swift */; };
 		C4A0314513C0EDA3FFC980BB /* CustomRouteBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */; };
+		C6239C9F7BFB618596CD3D33 /* CameraReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BCA75D43D11EA6F5D4123D8 /* CameraReport.swift */; };
 		C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */; };
 		C71246A6559A6AC5CE9A73C3 /* RoutePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */; };
 		C7C6B2714873506D611A112D /* FuzzyRouteParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F657EB3BAF59F5A88D66FA5 /* FuzzyRouteParser.swift */; };
@@ -239,6 +240,7 @@
 		2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiWidgetBundle.swift; sourceTree = "<group>"; };
 		2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsServiceTests.swift; sourceTree = "<group>"; };
 		2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngineTests.swift; sourceTree = "<group>"; };
+		2BCA75D43D11EA6F5D4123D8 /* CameraReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraReport.swift; sourceTree = "<group>"; };
 		2DA34462C207C379281EC748 /* IconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPickerView.swift; sourceTree = "<group>"; };
 		30A628B67F551F51F4AEBEE8 /* LocalNormsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNormsProvider.swift; sourceTree = "<group>"; };
 		30D7349058BD69D002F9FBF1 /* OnboardingThemeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingThemeView.swift; sourceTree = "<group>"; };
@@ -427,6 +429,7 @@
 		1B08229D7455DAC8B35B5E17 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				2BCA75D43D11EA6F5D4123D8 /* CameraReport.swift */,
 				C5C5FF4BBAEE143DBA3AF70A /* Commute.swift */,
 				1D932805B66B86200A9B9645 /* CommuteAnalyticsAggregate.swift */,
 				AEFAA5B585FD30B82ABB61FF /* CommuteTrip.swift */,
@@ -941,6 +944,7 @@
 				87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */,
 				99F03247346288E9F7BA4DB7 /* ArrivalNotificationService.swift in Sources */,
 				8FFA00BD6370747C969692D5 /* AudioDuckingService.swift in Sources */,
+				C6239C9F7BFB618596CD3D33 /* CameraReport.swift in Sources */,
 				64A4B0737C28DA81734CD449 /* CarPlayDashboardDelegate.swift in Sources */,
 				60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */,
 				D5E40AD927A3D0893E5F3ABC /* CarPlaySceneDelegate.swift in Sources */,

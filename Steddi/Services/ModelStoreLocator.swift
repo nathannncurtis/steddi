@@ -31,7 +31,8 @@ enum ModelStoreLocator {
             CommuteAnalyticsAggregate.self,
             Trip.self,
             TripStop.self,
-            RoadCondition.self
+            RoadCondition.self,
+            CameraReport.self
         ])
     }
 
