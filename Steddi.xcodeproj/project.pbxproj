@@ -59,6 +59,7 @@
 		72DD5D3842C50C4BEA5B5D44 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7216B43DFA31852E44CBCDC1 /* WidgetKit.framework */; };
 		7552887A81B82204D94A6BFA /* RouteGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */; };
 		755CA9609153C6BBD3833D97 /* CheckCommuteETAIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF93E8E7AA08F1E11F2C60A /* CheckCommuteETAIntent.swift */; };
+		7563ED49C5D46457AD882CA4 /* ZoneDrawingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27FB85CBF3D500E916BCF5B8 /* ZoneDrawingService.swift */; };
 		75C718A237AFFBD58B0D2195 /* ThemeEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C62D85ED65451F0DD7CCB4E5 /* ThemeEngine.swift */; };
 		7A02746BE36AE68D66022B5A /* TemperatureNorms.json in Resources */ = {isa = PBXBuildFile; fileRef = 50D3C8B274D86BDFE1B49206 /* TemperatureNorms.json */; };
 		7AC6366691401A8DB28223A8 /* NavigationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61C1C1CB86EAD2B697A4A14 /* NavigationEngine.swift */; };
@@ -191,6 +192,7 @@
 		247EA8FF00C60E83ADD4763F /* NavPoseInterpolatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolatorTests.swift; sourceTree = "<group>"; };
 		24F1F21786B81D853B9E61B6 /* EmergencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmergencyView.swift; sourceTree = "<group>"; };
 		262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGuidanceService.swift; sourceTree = "<group>"; };
+		27FB85CBF3D500E916BCF5B8 /* ZoneDrawingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneDrawingService.swift; sourceTree = "<group>"; };
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
 		2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiWidgetBundle.swift; sourceTree = "<group>"; };
 		2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsServiceTests.swift; sourceTree = "<group>"; };
@@ -621,6 +623,7 @@
 				84E610B8A29F73B013FB139D /* TunnelDetectionService.swift */,
 				262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */,
 				544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */,
+				27FB85CBF3D500E916BCF5B8 /* ZoneDrawingService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -899,6 +902,7 @@
 				62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */,
 				CDEDE64AAE4D8364D9ADB16A /* VoicePicker.swift in Sources */,
 				9275C4BC68051B778B8E32C5 /* WeatherKitService.swift in Sources */,
+				7563ED49C5D46457AD882CA4 /* ZoneDrawingService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
