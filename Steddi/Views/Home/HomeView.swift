@@ -1117,34 +1117,74 @@ struct HomeView: View {
     private var placesTab: some View {
         Group {
             if pinnedLocations.isEmpty {
-                emptyState
-                    .padding(.vertical, 24)
-                    .padding(.horizontal, 20)
-            } else {
-                List {
-                    ForEach(pinnedLocations) { location in
-                        LocationCardView(
-                            name: location.name,
-                            icon: location.icon,
-                            etaMinutes: nil,
-                            delayMinutes: nil,
-                            onTap: {
-                                navigateTo(
-                                    name: location.name,
-                                    coordinate: location.coordinate,
-                                    address: location.address
-                                )
-                            }
-                        )
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                    }
-                    .onMove(perform: movePlaces)
+                VStack(spacing: 14) {
+                    emptyState
+                    addPlaceMenu(compact: false)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .frame(maxHeight: isLandscape ? .infinity : 160)
+                .padding(.vertical, 24)
+                .padding(.horizontal, 20)
+            } else {
+                VStack(spacing: 8) {
+                    List {
+                        ForEach(pinnedLocations) { location in
+                            LocationCardView(
+                                name: location.name,
+                                icon: location.icon,
+                                etaMinutes: nil,
+                                delayMinutes: nil,
+                                onTap: {
+                                    navigateTo(
+                                        name: location.name,
+                                        coordinate: location.coordinate,
+                                        address: location.address
+                                    )
+                                }
+                            )
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                        }
+                        .onMove(perform: movePlaces)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .frame(maxHeight: isLandscape ? .infinity : 160)
+
+                    addPlaceMenu(compact: true)
+                        .padding(.bottom, 8)
+                }
+            }
+        }
+    }
+
+    /// "Add Place" entry point on the Places tab. Mirrors the Commutes tab's
+    /// New Commute affordance but offers a menu: Search opens the search flow,
+    /// Use Current Location reverse-geocodes and opens the category picker.
+    @ViewBuilder
+    private func addPlaceMenu(compact: Bool) -> some View {
+        Menu {
+            Button {
+                showSearch = true
+            } label: {
+                Label("Search", systemImage: "magnifyingglass")
+            }
+            Button {
+                startCurrentLocationAddFlow()
+            } label: {
+                Label("Use Current Location", systemImage: "location.fill")
+            }
+        } label: {
+            if compact {
+                Label("Add Place", systemImage: "plus")
+                    .font(SteddiTheme.heading(13))
+                    .foregroundStyle(SteddiTheme.accent)
+            } else {
+                Label("Add Place", systemImage: "plus")
+                    .font(SteddiTheme.heading(14))
+                    .foregroundStyle(SteddiTheme.accent)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(SteddiTheme.accentSubtle, in: Capsule())
             }
         }
     }
