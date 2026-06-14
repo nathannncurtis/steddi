@@ -15,6 +15,34 @@ struct SettingsView: View {
     @AppStorage("steddi.defaultAvoidsHighways") private var avoidsHighways: Bool = false
     @AppStorage("steddi.hapticLevel") private var hapticLevel: String = HapticLevel.dynamic.rawValue
     @AppStorage("accentColor") private var accentColor: String = SteddiTheme.AccentOption.lavender.rawValue
+
+    // Theme state is split across two storage mechanisms on purpose; the
+    // asymmetry below is intentional, not an oversight:
+    //
+    // • `themeModeEx` is @AppStorage on a single String defaults key. The picker
+    //   binds to it directly, so selecting a mode persists immediately. The
+    //   `.onChange` then routes the new value through `ThemeEngine.baseMode`,
+    //   whose `didSet` re-persists it, syncs the legacy "themeMode" shadow, and
+    //   posts `.steddiThemeModeChanged`. (The @AppStorage write and the engine
+    //   write target the same key with the same value, so they never diverge.)
+    //
+    // • `dynamicComponents` is a *struct of five booleans* (solar/weather/temp/
+    //   tunnel/grey). @AppStorage only wraps single values, so it can't bind one
+    //   key per toggle here without five more properties. Instead it is @State
+    //   seeded from `DynamicThemeComponents.load()` (which reads its own keys),
+    //   the toggles bind to its fields, and the section `.onChange` hands the
+    //   whole struct to `ThemeEngine.dynamicComponents` — whose `didSet` calls
+    //   `.save()`. So persistence for the components lives in the engine, not in
+    //   this view, which is why they are @State rather than @AppStorage.
+    //
+    // Consequence to keep in mind: because `dynamicComponents` is plain @State
+    // seeded once at init, it does NOT live-update if the components change from
+    // outside this view while it is open (e.g. another surface mutating the
+    // engine). The engine remains the source of truth; this view is a one-shot
+    // editor that reads at open and writes on change. That is acceptable today —
+    // Settings is the only editor of these toggles — but if a second writer
+    // appears, switch this to observe `ThemeEngine.shared.dynamicComponents`
+    // (the engine is already @Observable) instead of a snapshotted @State copy.
     @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
     @State private var dynamicComponents = DynamicThemeComponents.load()
     @AppStorage("steddi.passengerMode") private var passengerMode: Bool = false
@@ -88,9 +116,12 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                     }
                     .onChange(of: themeModeEx) {
-                        // The engine persists the mode, keeps the legacy
-                        // "themeMode" shadow in sync for map surfaces, and
-                        // posts .steddiThemeModeChanged itself.
+                        // @AppStorage already persisted the picker's new value.
+                        // Pushing it through the engine is what makes it *take
+                        // effect*: baseMode.didSet re-persists (idempotent),
+                        // keeps the legacy "themeMode" shadow in sync for map
+                        // surfaces, recomputes the ThemeState, and posts
+                        // .steddiThemeModeChanged.
                         ThemeEngine.shared.baseMode = ThemeModeEx(rawValue: themeModeEx) ?? .dynamic
                     }
 
@@ -109,6 +140,10 @@ struct SettingsView: View {
                     }
                 }
                 .onChange(of: dynamicComponents) {
+                    // Hand the whole struct to the engine; its didSet calls
+                    // .save() (this view never persists the components itself)
+                    // and recomputes the ThemeState. See the storage note on the
+                    // `dynamicComponents` property for why this is @State.
                     ThemeEngine.shared.dynamicComponents = dynamicComponents
                 }
 
