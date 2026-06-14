@@ -854,7 +854,9 @@ struct SteddiNavOverlay: View {
                 }
 
                 if let suggestion = bestSuggestion {
-                    rerouteSuggestion = suggestion
+                    withAnimation(TransitionKit.rerouteSpringIn) {
+                        rerouteSuggestion = suggestion
+                    }
                 }
             }
         }
