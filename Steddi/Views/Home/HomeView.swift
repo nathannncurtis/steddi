@@ -2060,10 +2060,24 @@ struct HomeView: View {
         guard let engine = navigationEngine else { return }
 
         // Single-flight + cooldown: while a recovery request is pending (or
-        // just resolved), further off-route fires are ignored — no stacked
-        // MKDirections requests, no repeated voice nagging.
-        guard !isRecoveryInFlight else { return }
-        if let last = lastRecoveryAt, Date().timeIntervalSince(last) < 30 { return }
+        // just resolved), further off-route fires are DEBOUNCED — no stacked
+        // MKDirections requests, no repeated voice nagging. But the debounce is
+        // ONLY a request suppressor; it must not leave the engine's in-recovery
+        // latch set, or guidance freezes for the rest of the leg. The latch was
+        // raised by the event that triggered this call (onOffRoute fires only
+        // while latched), so on every early bail we re-arm the detector: clear
+        // the latch + offRouteCount so step/ETA advancement resumes and, once
+        // the in-flight flag clears / cooldown lapses, a fresh deviation episode
+        // can re-accrue over offRouteThreshold fixes and fire a new event —
+        // recovery retries instead of being permanently disarmed.
+        guard !isRecoveryInFlight else {
+            engine.clearOffRouteRecovery()
+            return
+        }
+        if let last = lastRecoveryAt, Date().timeIntervalSince(last) < 30 {
+            engine.clearOffRouteRecovery()
+            return
+        }
         isRecoveryInFlight = true
         lastRecoveryAt = Date()
         defer { isRecoveryInFlight = false }
@@ -2273,10 +2287,16 @@ struct HomeView: View {
         // superseded engine regardless of how splice is reached.
         guard isNavigationLive(engine) else { return false }
 
+        // preservingAlerts: this is an in-place restart onto continued geometry
+        // (the recovery detour stitched onto the saved tail), not a fresh drive.
+        // Cameras/conditions the driver already passed and was warned about can
+        // still fall inside the combined corridor near the rejoin origin; carry
+        // the per-session debounce sets across so they don't re-chime.
         engine.startNavigation(
             polyline: combined,
             steps: combinedSteps,
-            expectedTravelTime: recovery.duration + remaining
+            expectedTravelTime: recovery.duration + remaining,
+            preservingAlerts: true
         )
         activeSavedPolyline = combined
         navStateManager.activeRouteCoords = combined
@@ -2301,7 +2321,13 @@ struct HomeView: View {
         // the saved polyline or the step will advance when they get close.
         // Don't fight them — the saved polyline is the guide, not a prison.
         if activeSavedPolyline != nil {
-            // Simply announce and let them continue — they know their route
+            // Simply announce and let them continue — they know their route.
+            // "Let the engine keep tracking" requires the in-recovery latch to
+            // be clear, otherwise step/ETA advancement stays frozen. The
+            // saved-route callers already cleared it before falling through here,
+            // but clear again so this branch is self-contained and never freezes
+            // regardless of how it's reached.
+            navigationEngine?.clearOffRouteRecovery()
             HapticService.shared.fire(.rerouteSuggestion)
             VoiceGuidanceService.shared.speak("Off route. Continue to rejoin your route.")
             return
@@ -2318,7 +2344,15 @@ struct HomeView: View {
 
         do {
             let response = try await MKDirections(request: request).calculate()
-            guard !response.routes.isEmpty else { return }
+            guard !response.routes.isEmpty else {
+                // No alternates came back, but the off-route event already
+                // latched the engine. Re-arm so guidance keeps advancing and a
+                // later deviation can fire a fresh reroute instead of freezing.
+                if let engine = navigationEngine, isNavigationLive(engine) {
+                    engine.clearOffRouteRecovery()
+                }
+                return
+            }
 
             // The MKDirections fetch freed the main actor; the user may have
             // ended the drive or switched routes while it was in flight. Bail
@@ -2335,8 +2369,18 @@ struct HomeView: View {
                 }
                 .first ?? response.routes[0]
 
+            // This is an in-place mid-drive reroute, not a fresh drive. Carry
+            // the per-session alert debounce across the stop()/start() so a
+            // camera/condition the driver already passed near the reroute origin
+            // doesn't re-chime. stopNavigation() wipes the sets, so snapshot
+            // first and re-seed after the restart.
+            let alertSnapshot = engine.alertedSetsSnapshot
             engine.stopNavigation()
-            engine.startNavigation(route: bestRoute)
+            engine.startNavigation(route: bestRoute, preservingAlerts: true)
+            engine.restoreAlertedSets(
+                cameraIDs: alertSnapshot.cameraIDs,
+                conditionIDs: alertSnapshot.conditionIDs
+            )
             navigationRoute = bestRoute
 
             engine.onOffRoute = { event in
@@ -2352,7 +2396,14 @@ struct HomeView: View {
             HapticService.shared.fire(.rerouteSuggestion)
             VoiceGuidanceService.shared.speak("Rerouting")
         } catch {
-            // Silently fail — user is still driving, next off-route check will retry
+            // The directions fetch failed (e.g. a transient mid-drive network
+            // loss). The triggering off-route event already latched the engine,
+            // so "next off-route check will retry" only holds if we re-arm the
+            // detector now — otherwise the latch stays set and guidance freezes
+            // for the rest of the leg. Clear it so a fresh deviation can re-fire.
+            if let engine = navigationEngine, isNavigationLive(engine) {
+                engine.clearOffRouteRecovery()
+            }
         }
     }
 

@@ -188,7 +188,22 @@ final class NavigationEngine {
 
     /// Start navigation from a polyline with custom steps.
     /// This is the core path — everything flows through here.
-    func startNavigation(polyline: [CLLocationCoordinate2D], steps: [NavStep], expectedTravelTime: TimeInterval? = nil) {
+    ///
+    /// - Parameter preservingAlerts: when `true`, the per-session alert debounce
+    ///   sets (`alertedCameraIDs` / `alertedConditionIDs`) are CARRIED OVER
+    ///   instead of cleared. Use this for an in-place mid-drive restart onto
+    ///   continued geometry — a recovery splice or Apple-route reroute — where
+    ///   the driver is the same session and has already physically passed (and
+    ///   been warned about) cameras/conditions that may still fall inside the
+    ///   new combined corridor near the restart origin. Wiping the sets there
+    ///   would re-chime an already-passed alert. A brand-new drive passes the
+    ///   default `false`, which resets the one-shot-per-session guarantee.
+    func startNavigation(
+        polyline: [CLLocationCoordinate2D],
+        steps: [NavStep],
+        expectedTravelTime: TimeInterval? = nil,
+        preservingAlerts: Bool = false
+    ) {
         self.steps = steps
         currentStepIndex = 0
         isNavigating = true
@@ -200,8 +215,13 @@ final class NavigationEngine {
         isRecoveringOffRoute = false
         locationUpdateCount = 0
         navigationToken = UUID()
-        alertedConditionIDs.removeAll()
-        alertedCameraIDs.removeAll()
+        // Preserve the alerted sets across an in-place restart so an
+        // already-passed camera/condition near the restart origin doesn't
+        // re-fire; only a brand-new drive resets the one-shot debounce.
+        if !preservingAlerts {
+            alertedConditionIDs.removeAll()
+            alertedCameraIDs.removeAll()
+        }
         approachingCamera = nil
         routePolylineCoordinates = polyline
 
@@ -247,15 +267,36 @@ final class NavigationEngine {
 
     /// Convenience: convert an MKRoute to our format and start navigation.
     /// Apple's data is adapted into NavSteps — the engine doesn't use MKRoute internally.
-    func startNavigation(route: MKRoute) {
+    ///
+    /// - Parameter preservingAlerts: forwarded to the core polyline path; pass
+    ///   `true` for an Apple-route reroute mid-drive so already-passed cameras /
+    ///   conditions near the reroute origin don't re-chime. See the polyline
+    ///   overload. A brand-new drive uses the default `false`.
+    func startNavigation(route: MKRoute, preservingAlerts: Bool = false) {
         let polyline = Self.extractCoordinates(from: route.polyline)
         let navSteps = Self.convertMKRouteToSteps(route)
 
-        startNavigation(polyline: polyline, steps: navSteps)
+        startNavigation(polyline: polyline, steps: navSteps, preservingAlerts: preservingAlerts)
 
         // Override with Apple's more accurate values
         totalRouteDistance = route.distance
         originalExpectedTravelTime = route.expectedTravelTime
+    }
+
+    /// Snapshot of the per-session alert debounce sets, for carrying the
+    /// one-shot-per-session guarantee across an in-place stop()/start() reroute
+    /// (which would otherwise wipe them). Paired with `restoreAlertedSets`.
+    var alertedSetsSnapshot: (cameraIDs: Set<String>, conditionIDs: Set<UUID>) {
+        (alertedCameraIDs, alertedConditionIDs)
+    }
+
+    /// Re-seed the per-session alert debounce sets after an in-place reroute
+    /// restart so cameras/conditions the driver already passed (and was warned
+    /// about) don't re-fire on the new geometry. Unions rather than replaces so
+    /// any alert detected on the very first post-restart fix is also retained.
+    func restoreAlertedSets(cameraIDs: Set<String>, conditionIDs: Set<UUID>) {
+        alertedCameraIDs.formUnion(cameraIDs)
+        alertedConditionIDs.formUnion(conditionIDs)
     }
 
     func stopNavigation() {
