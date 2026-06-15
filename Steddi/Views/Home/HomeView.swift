@@ -825,7 +825,12 @@ struct HomeView: View {
                                         in: .circle,
                                         fallbackFill: SteddiTheme.surfaceSecondary
                                     )
+                                    // Keep the 36pt glass visual but expand the
+                                    // hit area to the 44pt minimum tap target.
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Circle())
                             }
+                            .accessibilityLabel("Settings")
                         }
                     }
                     .padding(.horizontal, 12)
@@ -1777,7 +1782,11 @@ struct HomeView: View {
                     .foregroundStyle(SteddiTheme.textMuted)
                     .frame(width: 28, height: 28)
                     .background(SteddiTheme.surfaceSecondary, in: Circle())
+                    // 28pt glyph, 44pt tap target.
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
+            .accessibilityLabel("Dismiss resume banner")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

@@ -74,8 +74,9 @@ struct LocationCardView<Menu: View>: View {
                         Image(systemName: "ellipsis")
                             .font(.body.weight(.semibold))
                             .foregroundStyle(SteddiTheme.textMuted)
-                            .frame(width: 32, height: 32)
+                            .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
+                            .accessibilityLabel("More options")
                     }
                     .buttonStyle(.plain)
                 } else {
