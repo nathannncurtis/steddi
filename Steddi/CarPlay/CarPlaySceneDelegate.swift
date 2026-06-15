@@ -189,13 +189,19 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                         .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
                         item.setImage(img)
                     }
-                    item.handler = { [weak self] _, completion in
-                        if let dest = commute.destination {
+                    // Capture plain value copies, not the @Model. The list can
+                    // sit on screen for minutes; touching the SwiftData object
+                    // (or its lazily-faulted coordinate) on tap could fault on a
+                    // row deleted from the main context in the meantime.
+                    if let dest = commute.destination {
+                        let destName = dest.name
+                        let destCoord = dest.coordinate
+                        item.handler = { [weak self] _, completion in
                             Task { @MainActor in
-                                await self?.showRoutePreview(name: dest.name, coordinate: dest.coordinate)
+                                await self?.showRoutePreview(name: destName, coordinate: destCoord)
                             }
+                            completion()
                         }
-                        completion()
                     }
                     items.append(item)
                 }
@@ -230,9 +236,15 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                         .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
                         item.setImage(img)
                     }
+                    // Capture plain value copies, not the @Model — see
+                    // showCommutesList. The coordinate is a lazily-faulted
+                    // property, so reading it now (not on tap) avoids faulting a
+                    // row the user may delete on the phone while this list shows.
+                    let placeName = location.name
+                    let placeCoord = location.coordinate
                     item.handler = { [weak self] _, completion in
                         Task { @MainActor in
-                            await self?.showRoutePreview(name: location.name, coordinate: location.coordinate)
+                            await self?.showRoutePreview(name: placeName, coordinate: placeCoord)
                         }
                         completion()
                     }
