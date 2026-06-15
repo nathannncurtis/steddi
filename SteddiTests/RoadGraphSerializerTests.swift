@@ -204,6 +204,52 @@ struct RoadGraphSerializerTests {
         #expect(RoadGraphSerializer.deserialize(Data(chopped)) == nil)
     }
 
+    /// A blob with a valid magic+version header but a wildly oversized geometry
+    /// count (the partial-write / bit-rot corruption mode) must fail cleanly to
+    /// nil rather than try to reserveCapacity tens of GB and abort the process.
+    @Test("Corrupt oversized geometry count returns nil, never OOM-crashes")
+    func corruptOversizedGeomCount() {
+        // magic "SRG1" + version 3 + geomCount = 0xFFFFFFFF (≈4.29e9), then
+        // nothing — far more than the remaining 0 bytes could ever hold.
+        var bytes: [UInt8] = [0x53, 0x52, 0x47, 0x31]      // magic
+        bytes.append(RoadGraphSerializer.formatVersion)     // version
+        bytes.append(contentsOf: [0xFF, 0xFF, 0xFF, 0xFF]) // geomCount (little-endian)
+        #expect(RoadGraphSerializer.deserialize(Data(bytes)) == nil)
+    }
+
+    /// A corrupt oversized node count (header + valid empty geometry, then a
+    /// huge nodeCount) must likewise fail cleanly rather than over-reserve.
+    @Test("Corrupt oversized node count returns nil, never OOM-crashes")
+    func corruptOversizedNodeCount() {
+        var bytes: [UInt8] = [0x53, 0x52, 0x47, 0x31]      // magic
+        bytes.append(RoadGraphSerializer.formatVersion)     // version
+        bytes.append(contentsOf: [0x00, 0x00, 0x00, 0x00]) // geomCount = 0 (none to read)
+        bytes.append(contentsOf: [0xFF, 0xFF, 0xFF, 0xFF]) // nodeCount = 0xFFFFFFFF
+        #expect(RoadGraphSerializer.deserialize(Data(bytes)) == nil)
+    }
+
+    /// A corrupt oversized edge count (header + empty geometry + empty nodes,
+    /// then a huge edgeCount) must fail cleanly rather than over-reserve.
+    @Test("Corrupt oversized edge count returns nil, never OOM-crashes")
+    func corruptOversizedEdgeCount() {
+        var bytes: [UInt8] = [0x53, 0x52, 0x47, 0x31]      // magic
+        bytes.append(RoadGraphSerializer.formatVersion)     // version
+        bytes.append(contentsOf: [0x00, 0x00, 0x00, 0x00]) // geomCount = 0
+        bytes.append(contentsOf: [0x00, 0x00, 0x00, 0x00]) // nodeCount = 0
+        bytes.append(contentsOf: [0xFF, 0xFF, 0xFF, 0xFF]) // edgeCount = 0xFFFFFFFF
+        #expect(RoadGraphSerializer.deserialize(Data(bytes)) == nil)
+    }
+
+    /// The guard must not over-reject: a count that fits the remaining bytes
+    /// still deserializes. The round-trip suite already proves the happy path,
+    /// but assert the boundary explicitly so a too-tight bound is caught.
+    @Test("A legitimate full-size blob still deserializes after the count guard")
+    func legitimateBlobStillDeserializes() {
+        let graph = buildSampleGraph()
+        let data = RoadGraphSerializer.serialize(graph)
+        #expect(RoadGraphSerializer.deserialize(data) != nil)
+    }
+
     @Test("Binary blob is materially smaller than JSON would be")
     func compact() {
         let graph = buildSampleGraph()

@@ -104,6 +104,14 @@ enum RoadGraphSerializer {
         guard let version = reader.readU8(), version == formatVersion else { return nil }
 
         guard let geomCount = reader.readU32() else { return nil }
+        // The count comes from an untrusted/possibly-corrupt blob; a wild value
+        // (e.g. 0xFFFFFFFF) would make reserveCapacity request tens of GB and
+        // abort the process BEFORE the per-element bounds-checked reads or the
+        // structural validation could fail it cleanly into a MapKit re-fetch.
+        // Bound each count against the bytes that remain, using each record's
+        // MINIMUM encoded size, so the reservation can never exceed the file.
+        // Geometry: 2 signed varints/coord, each >= 1 byte -> >= 2 bytes each.
+        guard reader.canHold(count: geomCount, minBytesEach: 2) else { return nil }
         var geometry: [CLLocationCoordinate2D] = []
         geometry.reserveCapacity(Int(geomCount))
         var prevLat: Int32 = 0
@@ -122,6 +130,9 @@ enum RoadGraphSerializer {
         }
 
         guard let nodeCount = reader.readU32() else { return nil }
+        // Each node record is a fixed 25 bytes (osmID 8 + lat 4 + lon 4 +
+        // firstEdge 4 + edgeCount 4 + flags 1).
+        guard reader.canHold(count: nodeCount, minBytesEach: 25) else { return nil }
         var nodes: [GraphNode] = []
         nodes.reserveCapacity(Int(nodeCount))
         var osmToIndex: [OSMNodeID: NodeIndex] = [:]
@@ -152,6 +163,9 @@ enum RoadGraphSerializer {
         }
 
         guard let edgeCount = reader.readU32() else { return nil }
+        // Each edge record is a fixed 40 bytes (from 4 + to 4 + lower 4 +
+        // upper 4 + length 8 + speed 4 + wayID 8 + class 1 + attrs 2 + oncoming 1).
+        guard reader.canHold(count: edgeCount, minBytesEach: 40) else { return nil }
         var edges: [GraphEdge] = []
         edges.reserveCapacity(Int(edgeCount))
         for _ in 0..<edgeCount {
@@ -273,6 +287,18 @@ private struct ByteReader {
         guard offset < data.endIndex else { return nil }
         defer { offset += 1 }
         return data[offset]
+    }
+
+    /// Bytes not yet consumed.
+    private var remaining: Int { data.endIndex - offset }
+
+    /// Whether `count` records of at least `minBytesEach` bytes could possibly
+    /// fit in the bytes that remain. Guards `reserveCapacity` so a corrupt count
+    /// can't trigger a multi-GB allocation; the per-element reads still enforce
+    /// the exact layout afterward. `minBytesEach` is assumed >= 1.
+    func canHold(count: UInt32, minBytesEach: Int) -> Bool {
+        // UInt64 math so count * minBytesEach can never overflow Int.
+        UInt64(count) * UInt64(minBytesEach) <= UInt64(remaining)
     }
 
     mutating func readBytes(_ count: Int) -> [UInt8]? {
