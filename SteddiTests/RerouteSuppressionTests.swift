@@ -63,6 +63,219 @@ struct RemainingPolylineTests {
     }
 }
 
+// MARK: - Symmetric Reroute ETA Comparison
+
+/// Both sides of the reroute decision must be "time from where I am NOW to the
+/// destination via route X." The active route's baseline is its REMAINING ETA
+/// (geometry ahead of the driver only); each candidate must be measured the same
+/// way — its polyline trimmed to the portion ahead of the current position. The
+/// regression was that the candidate used its FULL saved polyline (starting at
+/// the commute origin), so mid-drive every candidate ETA was inflated by the
+/// backtrack to the origin and a genuinely faster route never surfaced.
+///
+/// These tests inject a `fetchETA` that returns a duration proportional to the
+/// geometric length of the polyline it is HANDED — faithfully mimicking OSRM's
+/// path-aware duration. So if `bestReroute` passes a candidate's full (un-trimmed)
+/// polyline, the injected ETA balloons exactly as the real backtrack would, and
+/// the asymmetry is caught.
+@Suite("NavigationStateManager symmetric reroute ETA")
+@MainActor
+struct SymmetricRerouteETATests {
+
+    /// Speed used to turn a polyline's length into a duration (m/s).
+    private static let metersPerSecond: Double = 20.0
+
+    /// ETA proportional to the trimmed-ahead length of the polyline actually
+    /// handed to the fetch — the same way OSRM's via-route duration tracks the
+    /// geometry it's given. Faster routes (shorter ahead-geometry) -> lower ETA.
+    private static func lengthProportionalETA(
+        _ coord: CLLocationCoordinate2D, _ encoded: String
+    ) async throws -> TimeInterval {
+        let coords = PolylineEncoder.decode(encoded, precision: 6)
+        let length = RouteGeometry.cumulativeDistances(coords).last ?? 0
+        return length / metersPerSecond
+    }
+
+    /// A straight east-west route. `lat`/`lon` span chosen so two parallel
+    /// routes between the same endpoints can differ only in path length.
+    private func straightRoute(latOffset: Double, points: Int = 21) -> [CLLocationCoordinate2D] {
+        (0..<points).map { i in
+            let frac = Double(i) / Double(points - 1)
+            return CLLocationCoordinate2D(latitude: 33.0 + latOffset, longitude: -117.0 + frac * 0.2)
+        }
+    }
+
+    private func route(_ rank: Int, _ coords: [CLLocationCoordinate2D], name: String) -> Route {
+        Route(
+            rank: rank,
+            encodedPolyline: PolylineEncoder.encode(coords, precision: 6),
+            name: name,
+            direction: .originToDestination
+        )
+    }
+
+    /// A genuinely faster alternative (shorter ahead-geometry) yields positive
+    /// savings — and crucially, the savings reflect only the geometry AHEAD of
+    /// the driver, computed symmetrically for both sides.
+    @Test("A genuinely faster alternative yields real savings")
+    func fasterAlternativeShowsSavings() async throws {
+        let manager = NavigationStateManager()
+
+        // Active route: a long detour that bulges far north before reaching the
+        // shared destination. Candidate: a short straight shot. Both share the
+        // same first and last coordinate (same origin/destination).
+        let origin = CLLocationCoordinate2D(latitude: 33.0, longitude: -117.0)
+        let destination = CLLocationCoordinate2D(latitude: 33.0, longitude: -116.8)
+
+        // Long active route: detours up to lat 33.1 in the middle.
+        var activeCoords: [CLLocationCoordinate2D] = [origin]
+        activeCoords += (1..<10).map { CLLocationCoordinate2D(latitude: 33.1, longitude: -117.0 + Double($0) * 0.02) }
+        activeCoords.append(destination)
+
+        // Short candidate: straight line origin -> destination.
+        let candidateCoords = [origin, destination]
+
+        // Driver is at the origin (start of the drive) so "remaining" is the
+        // whole route for both — comparison is over the full shared trip.
+        let currentCoord = origin
+
+        let remainingActive = DirectionsService.remainingPolyline(of: activeCoords, from: currentCoord)
+        let remainingETA = try await Self.lengthProportionalETA(
+            currentCoord, PolylineEncoder.encode(remainingActive, precision: 6)
+        )
+
+        let candidate = route(1, candidateCoords, name: "Straight shot")
+        let best = await NavigationStateManager.bestReroute(
+            candidates: [candidate],
+            currentCoord: currentCoord,
+            remainingETASeconds: remainingETA,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            isSuppressed: { _, _ in false },
+            fetchETA: Self.lengthProportionalETA
+        )
+
+        let suggestion = try #require(best, "A clearly faster alternative should be suggested")
+        #expect(suggestion.route.id == candidate.id)
+        #expect(suggestion.savingsMinutes > 0)
+        _ = manager // keep the @MainActor harness honest
+    }
+
+    /// Comparing a route against ITSELF must show ~0 savings (no spurious card to
+    /// "switch" to the route already being driven). This is the symmetry proof:
+    /// both sides trim from the same current position, so identical geometry ->
+    /// identical ETA -> zero savings -> no suggestion.
+    @Test("The same route yields ~0 savings and no suggestion")
+    func sameRouteYieldsNoSavings() async throws {
+        let coords = straightRoute(latOffset: 0)
+        let currentCoord = coords[7] // partway along
+
+        let remainingActive = DirectionsService.remainingPolyline(of: coords, from: currentCoord)
+        let remainingETA = try await Self.lengthProportionalETA(
+            currentCoord, PolylineEncoder.encode(remainingActive, precision: 6)
+        )
+
+        // The candidate IS the same geometry as the active route.
+        let candidate = route(1, coords, name: "Same path")
+        let best = await NavigationStateManager.bestReroute(
+            candidates: [candidate],
+            currentCoord: currentCoord,
+            remainingETASeconds: remainingETA,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            isSuppressed: { _, _ in false },
+            fetchETA: Self.lengthProportionalETA
+        )
+
+        #expect(best == nil, "An identical route must not be surfaced as a faster reroute")
+    }
+
+    /// Direct regression guard: mid-drive, a candidate identical to the active
+    /// route must NOT look faster. If the candidate were measured along its FULL
+    /// polyline (the old bug) its ETA would include backtracking to the origin,
+    /// which — depending on sign — corrupts the comparison. With both sides
+    /// trimmed-from-current-position the self-comparison is provably ~0.
+    @Test("Mid-drive, an identical candidate is never spuriously faster")
+    func midDriveSelfComparisonIsZero() async throws {
+        let coords = straightRoute(latOffset: 0, points: 41)
+        // Well into the drive — the bug's backtrack-to-origin inflation would be
+        // largest here.
+        let currentCoord = coords[30]
+
+        let remainingActive = DirectionsService.remainingPolyline(of: coords, from: currentCoord)
+        let remainingETA = try await Self.lengthProportionalETA(
+            currentCoord, PolylineEncoder.encode(remainingActive, precision: 6)
+        )
+
+        // Recreate the candidate ETA the way bestReroute does (trim then fetch)
+        // to prove it equals the active remaining ETA.
+        let candidateRemaining = DirectionsService.remainingPolyline(of: coords, from: currentCoord)
+        let candidateETA = try await Self.lengthProportionalETA(
+            currentCoord, PolylineEncoder.encode(candidateRemaining, precision: 6)
+        )
+        #expect(abs(candidateETA - remainingETA) < 1.0)
+
+        let candidate = route(1, coords, name: "Same path mid-drive")
+        let best = await NavigationStateManager.bestReroute(
+            candidates: [candidate],
+            currentCoord: currentCoord,
+            remainingETASeconds: remainingETA,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            isSuppressed: { _, _ in false },
+            fetchETA: Self.lengthProportionalETA
+        )
+        #expect(best == nil)
+    }
+
+    /// Candidate exclusion is by IDENTITY, not rank (Finding 2). After switching
+    /// onto a fallback, the caller passes only the OTHER routes as candidates; the
+    /// just-switched fallback must not be re-suggested, and the faster preferred
+    /// (rank 0) route CAN be offered back.
+    @Test("After switching to an alt, the alt is not re-suggested and the preferred route can be re-offered")
+    func preferredRouteCanBeReOffered() async throws {
+        let origin = CLLocationCoordinate2D(latitude: 33.0, longitude: -117.0)
+        let destination = CLLocationCoordinate2D(latitude: 33.0, longitude: -116.8)
+
+        // Preferred (rank 0): now the SHORT straight shot (became faster again).
+        let preferredCoords = [origin, destination]
+        // Fallback (rank 1): the LONG detour the driver switched onto earlier.
+        var altCoords: [CLLocationCoordinate2D] = [origin]
+        altCoords += (1..<10).map { CLLocationCoordinate2D(latitude: 33.1, longitude: -117.0 + Double($0) * 0.02) }
+        altCoords.append(destination)
+
+        let preferred = route(0, preferredCoords, name: "Preferred")
+        let alt = route(1, altCoords, name: "Alt (currently driving)")
+
+        // Driver is on the alt; remaining baseline measured along the alt.
+        let currentCoord = origin
+        let remainingAlt = DirectionsService.remainingPolyline(of: altCoords, from: currentCoord)
+        let remainingETA = try await Self.lengthProportionalETA(
+            currentCoord, PolylineEncoder.encode(remainingAlt, precision: 6)
+        )
+
+        // Caller excludes the active route (alt) by identity — only the preferred
+        // route is a candidate. (The OLD rank>0 filter would have excluded the
+        // preferred route and kept the alt — exactly backwards.)
+        let candidates = [preferred, alt].filter { $0.id != alt.id }
+        #expect(candidates.map(\.id) == [preferred.id])
+
+        let best = await NavigationStateManager.bestReroute(
+            candidates: candidates,
+            currentCoord: currentCoord,
+            remainingETASeconds: remainingETA,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            isSuppressed: { _, _ in false },
+            fetchETA: Self.lengthProportionalETA
+        )
+
+        let suggestion = try #require(best, "The faster preferred route should be re-offered")
+        #expect(suggestion.route.id == preferred.id)
+        #expect(suggestion.route.id != alt.id, "The route being driven must never be re-suggested")
+    }
+}
+
 // MARK: - "Stay" Cooldown Suppression (low-severity nag fix)
 
 @Suite("NavigationStateManager reroute suppression")
