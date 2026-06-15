@@ -50,6 +50,13 @@ struct CostWeights: Sendable, Equatable {
     /// Flat penalty added once per tolled edge when the driver opted to avoid
     /// tolls (finite — a toll is taken only if it's the sole way through).
     var tollPenalty: Double = 600
+    /// Flat penalty added once per `access=destination` edge. Large but FINITE so
+    /// a destination-only road (a private alley/driveway usable only to reach a
+    /// property on it) is never chosen as a through-route, yet stays reachable when
+    /// it is the sole way to the snapped origin/destination — the cost model can't
+    /// see endpoints, so a finite penalty leaves that decision to A*. (`access=no`/
+    /// `private` is hard-excluded outright, not penalized; see `edgeCost`.)
+    var destinationOnlyPenalty: Double = 1200
     /// Rush-hour edge-time multiplier, applied during the configured rush windows.
     var rushHourMultiplier: Double = 1.35
     /// Soft no-go zone penalty per second of edge time spent inside the zone — a
@@ -246,6 +253,14 @@ struct DefaultCostModel: SearchCost {
     func edgeCost(_ edge: GraphEdge, in graph: RoadGraph) -> Double {
         let speed = Double(edge.freeFlowSpeedMPS)
         guard speed > 0 else { return .infinity }
+
+        // Access: `access=no`/`private` is hard-excluded from the driving profile
+        // (same impassable treatment as a hard no-go zone) — a gated/no-access road
+        // must never be a through-route. Checked before any geometry resolution
+        // since it short-circuits the whole edge. `access=destination` is handled
+        // below with a large finite penalty (usable only to reach an endpoint).
+        if edge.attrs.contains(.privateAccess) { return .infinity }
+
         var time = Double(edge.lengthMeters) / speed   // free-flow seconds (the floor)
 
         // Hard/soft no-go zones need the edge's geometry, which costs an O(fan-out)
@@ -292,6 +307,13 @@ struct DefaultCostModel: SearchCost {
         // Avoid-tolls: flat additive penalty.
         if context.avoidsTolls && edge.attrs.contains(.toll) {
             time += weights.tollPenalty
+        }
+
+        // Destination-only access: large finite penalty so the edge is used only
+        // when it is the sole way to reach the snapped origin/destination on it,
+        // never as a through-route. Additive and >= 0, so admissibility holds.
+        if edge.attrs.contains(.destinationOnly) {
+            time += weights.destinationOnlyPenalty
         }
 
         return time

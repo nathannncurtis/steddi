@@ -307,6 +307,88 @@ struct ZoneCostTests {
     }
 }
 
+// MARK: - Access restrictions
+
+@Suite("DefaultCostModel access restrictions")
+struct AccessRestrictionCostTests {
+    /// A straight S->N road, tagged via `access`.
+    private func accessGraph(_ access: String) -> RoadGraph {
+        buildGraph(
+            node(1, 34.0000, -117.0000),
+            node(2, 34.0050, -117.0000),
+            way(10, [1, 2], tags: ["highway": "service", "maxspeed": "15 mph", "access": access])
+        )
+    }
+
+    @Test("access=private edge is impassable (infinite cost)")
+    func privateExcluded() {
+        let g = accessGraph("private")
+        let e = edge(in: g, from: 1, to: 2)!
+        #expect(e.attrs.contains(.privateAccess))
+        #expect(DefaultCostModel().edgeCost(e, in: g) == .infinity)
+    }
+
+    @Test("access=no edge is impassable (infinite cost)")
+    func noAccessExcluded() {
+        let g = accessGraph("no")
+        let e = edge(in: g, from: 1, to: 2)!
+        #expect(e.attrs.contains(.privateAccess))
+        #expect(DefaultCostModel().edgeCost(e, in: g) == .infinity)
+    }
+
+    @Test("access=destination edge is heavily penalized but stays passable")
+    func destinationPenalized() {
+        let g = accessGraph("destination")
+        let e = edge(in: g, from: 1, to: 2)!
+        #expect(e.attrs.contains(.destinationOnly))
+        let cost = DefaultCostModel().edgeCost(e, in: g)
+        let freeFlow = Double(e.lengthMeters) / Double(e.freeFlowSpeedMPS)
+        #expect(cost < .infinity)
+        #expect(cost - freeFlow >= CostWeights.default.destinationOnlyPenalty - 0.001)
+    }
+
+    @Test("A* routes around a private road, even when it is the shorter way")
+    func aStarAvoidsPrivateRoad() throws {
+        // Two ways from S (node 1) to D (node 9):
+        //  - a SHORT direct PRIVATE diagonal 1->9, and
+        //  - a longer all-public ring around the block.
+        // Layout:
+        //   7 --- 8 --- 9(D)
+        //   |           |
+        //   4           6
+        //   |           |
+        //   1(S)- 2 --- 3
+        // Public ring: 1-2-3-6-9 and 1-4-7-8-9. The direct private diagonal would
+        // win on time alone, so it is the temptation A* must refuse.
+        let g = buildGraph(
+            node(1, 34.0000, -117.0020),
+            node(2, 34.0000, -117.0010),
+            node(3, 34.0000, -117.0000),
+            node(4, 34.0010, -117.0020),
+            node(6, 34.0010, -117.0000),
+            node(7, 34.0020, -117.0020),
+            node(8, 34.0020, -117.0010),
+            node(9, 34.0020, -117.0000),
+            // Public block ring.
+            way(10, [1, 2, 3], tags: ["highway": "residential"]),
+            way(11, [3, 6, 9], tags: ["highway": "residential"]),
+            way(12, [1, 4, 7], tags: ["highway": "residential"]),
+            way(13, [7, 8, 9], tags: ["highway": "residential"]),
+            // A short PRIVATE diagonal shortcut straight from S to D.
+            way(20, [1, 9], tags: ["highway": "service", "access": "private"])
+        )
+        let start = SearchEndpoint.node(g.osmToIndex[1]!)
+        let dest = SearchEndpoint.node(g.osmToIndex[9]!)
+        let search = AStarSearch()
+        let result = try #require(search.search(from: start, to: dest, in: g, cost: DefaultCostModel()))
+        // The chosen path must not traverse the private way (osmWayID 20).
+        let usedPrivate = result.edgePath.contains { g.edges[Int($0)].osmWayID == 20 }
+        #expect(!usedPrivate)
+        // And the destination is still reached via the public ring.
+        #expect(result.nodePath.last == g.osmToIndex[9]!)
+    }
+}
+
 // MARK: - UPS scenario (end-to-end through A*)
 
 @Suite("DefaultCostModel UPS scenario")
