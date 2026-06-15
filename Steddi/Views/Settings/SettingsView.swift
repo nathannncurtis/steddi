@@ -96,7 +96,7 @@ struct SettingsView: View {
                                         if isSelected {
                                             Image(systemName: "checkmark")
                                                 .font(.system(size: 14, weight: .bold))
-                                                .foregroundStyle(.white)
+                                                .foregroundStyle(option.contrastingGlyph)
                                         }
                                     }
                                     .overlay {
