@@ -1528,3 +1528,203 @@ struct NavigationEngineCameraHeadingTests {
         #expect(engine.approachingCamera == nil)
     }
 }
+
+// MARK: - ETA decaying speed
+
+@Suite("NavigationEngine ETA decaying speed estimate")
+@MainActor
+struct NavigationEngineETATests {
+
+    /// Long straight route so there's always plenty of distance remaining and
+    /// ETA stays well clear of the arrival latch.
+    private func longRoute() -> [CLLocationCoordinate2D] {
+        (0...400).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.0009, longitude: -117.0) }
+    }
+
+    private func silentSteps(along polyline: [CLLocationCoordinate2D]) -> [NavStep] {
+        [
+            NavStep(instruction: "", distance: 100000, coordinate: polyline.first ?? CLLocationCoordinate2D(), maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline.last ?? CLLocationCoordinate2D(), maneuverSymbol: "flag.fill"),
+        ]
+    }
+
+    private func fix(at coord: CLLocationCoordinate2D, speed: Double, t: TimeInterval) -> CLLocation {
+        CLLocation(
+            coordinate: coord,
+            altitude: 0,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            course: 0,
+            courseAccuracy: 5,
+            speed: speed,
+            speedAccuracy: 1,
+            timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
+        )
+    }
+
+    @Test("A sustained recent slowdown lowers the ETA speed estimate (EWMA decays)")
+    func recentSlowdownLowersEstimate() {
+        let engine = NavigationEngine()
+        let polyline = longRoute()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        // Phase 1: a long fast highway stretch at 30 m/s (~67 mph). Stay early on
+        // the route so distance-remaining barely moves and ETA reflects speed.
+        var t = 0.0
+        for _ in 0..<120 {
+            engine.updateLocation(fix(at: polyline[1], speed: 30, t: t))
+            t += 1
+        }
+        let etaAfterFast = engine.etaSeconds
+        #expect(etaAfterFast > 0)
+
+        // Phase 2: hit sustained stop-and-go at 4 m/s (~9 mph) at roughly the
+        // same position. With a never-decaying cumulative mean the ETA would
+        // barely move (the thousands of fast samples dominate). An EWMA pulls the
+        // speed estimate down quickly, so the ETA climbs sharply.
+        for _ in 0..<60 {
+            engine.updateLocation(fix(at: polyline[1], speed: 4, t: t))
+            t += 1
+        }
+        let etaAfterSlow = engine.etaSeconds
+
+        // Recent slowdown must materially raise ETA (lower speed estimate). With
+        // a 6x speed drop the EWMA should at least roughly double the ETA; a
+        // frozen cumulative mean would move it only a few percent.
+        #expect(etaAfterSlow > etaAfterFast * 2)
+        engine.stopNavigation()
+    }
+
+    @Test("EWMA stays stable against single-fix speed jitter")
+    func ewmaIgnoresSingleSpike() {
+        let engine = NavigationEngine()
+        let polyline = longRoute()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        var t = 0.0
+        for _ in 0..<60 {
+            engine.updateLocation(fix(at: polyline[1], speed: 20, t: t))
+            t += 1
+        }
+        let etaSteady = engine.etaSeconds
+
+        // One wild GPS speed spike (60 m/s) should barely move the estimate.
+        engine.updateLocation(fix(at: polyline[1], speed: 60, t: t)); t += 1
+        let etaAfterSpike = engine.etaSeconds
+
+        // Within ~10% — a single fix at alpha 0.05 nudges the average only a little.
+        let delta = abs(etaAfterSpike - etaSteady) / etaSteady
+        #expect(delta < 0.10)
+        engine.stopNavigation()
+    }
+}
+
+// MARK: - Arrival progress gate
+
+@Suite("NavigationEngine arrival along-route gate")
+@MainActor
+struct NavigationEngineArrivalTests {
+
+    private func silentSteps(along polyline: [CLLocationCoordinate2D]) -> [NavStep] {
+        [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline.first ?? CLLocationCoordinate2D(), maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline.last ?? CLLocationCoordinate2D(), maneuverSymbol: "flag.fill"),
+        ]
+    }
+
+    private func fix(lat: Double, lon: Double, t: TimeInterval) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+            altitude: 0,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            course: -1,
+            courseAccuracy: -1,
+            speed: 13,
+            speedAccuracy: 1,
+            timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
+        )
+    }
+
+    /// A loop that departs a point, runs a wide rectangle, and returns so its
+    /// final destination vertex sits a few meters from the START. Mid-route the
+    /// driver passes within 50m of that final vertex (right at the start) yet has
+    /// the whole loop still to drive.
+    private func loopRoute() -> [CLLocationCoordinate2D] {
+        // ~0.0009 deg ≈ 100m per leg. Square loop returning near origin.
+        let n = 33.0
+        let w = -117.0
+        var coords: [CLLocationCoordinate2D] = []
+        // East leg
+        for i in 0...5 { coords.append(.init(latitude: n, longitude: w + Double(i) * 0.0006)) }
+        // North leg
+        for i in 1...5 { coords.append(.init(latitude: n + Double(i) * 0.0006, longitude: w + 5 * 0.0006)) }
+        // West leg
+        for i in 1...5 { coords.append(.init(latitude: n + 5 * 0.0006, longitude: w + (5 - Double(i)) * 0.0006)) }
+        // South leg back toward the origin, ending ~10m short of the start.
+        for i in 1...5 { coords.append(.init(latitude: n + (5 - Double(i)) * 0.0006, longitude: w)) }
+        // Final vertex pulled to within ~10m of the very first coordinate.
+        coords.append(.init(latitude: n + 0.0001, longitude: w))
+        return coords
+    }
+
+    @Test("Loop route does not latch arrival mid-route despite passing near the end vertex")
+    func loopDoesNotFalselyArrive() {
+        let engine = NavigationEngine()
+        let polyline = loopRoute()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        // Drive the first several fixes near the START — which is also within 50m
+        // of the route's LAST vertex (the loop closes near origin). Old proximity-
+        // only arrival would latch immediately here.
+        var t = 0.0
+        for i in 0...6 {
+            engine.updateLocation(fix(lat: 33.0, lon: -117.0 + Double(i) * 0.0006, t: t))
+            t += 1
+            #expect(engine.hasArrived == false)
+        }
+
+        // Continue the loop back toward the end. Still not arrived until we
+        // actually consume the route by arc-length.
+        engine.updateLocation(fix(lat: 33.0015, lon: -117.0 + 5 * 0.0006, t: t)); t += 1
+        #expect(engine.hasArrived == false)
+
+        engine.stopNavigation()
+    }
+
+    @Test("Reaching the route end by arc-length and proximity latches arrival")
+    func reachingEndArrives() {
+        let engine = NavigationEngine()
+        let polyline = loopRoute()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        // Walk the whole polyline so the projection's distance-along-route
+        // reaches the end, then deliver a final fix on the destination vertex.
+        var t = 0.0
+        for c in polyline {
+            engine.updateLocation(fix(lat: c.latitude, lon: c.longitude, t: t))
+            t += 1
+        }
+        let last = polyline.last!
+        engine.updateLocation(fix(lat: last.latitude, lon: last.longitude, t: t))
+
+        #expect(engine.hasArrived == true)
+        #expect(engine.instruction == "You have arrived")
+        engine.stopNavigation()
+    }
+
+    @Test("Straight-shot destination still arrives (no regression)")
+    func straightShotArrives() {
+        let engine = NavigationEngine()
+        let polyline = (0...20).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        var t = 0.0
+        for c in polyline {
+            engine.updateLocation(fix(lat: c.latitude, lon: c.longitude, t: t))
+            t += 1
+        }
+        #expect(engine.hasArrived == true)
+        engine.stopNavigation()
+    }
+}

@@ -17,10 +17,22 @@ struct MapMatchingServiceTests {
         }
     }
 
-    @Test("nil tail returns the chunk unchanged")
-    func nilTailReturnsChunk() {
+    /// Build a tail region of `count` coords ending at `tail`, spaced `meters`
+    /// apart heading north — mirrors the stitched tail span the dedupe sees.
+    private func tailRegion(endingAt tail: CLLocationCoordinate2D, count: Int, meters: Double) -> [CLLocationCoordinate2D] {
+        let degPerMeter = 1.0 / 111_320.0
+        return (0..<count).reversed().map {
+            CLLocationCoordinate2D(
+                latitude: tail.latitude - Double($0) * meters * degPerMeter,
+                longitude: tail.longitude
+            )
+        }
+    }
+
+    @Test("empty tail region returns the chunk unchanged")
+    func emptyTailRegionReturnsChunk() {
         let chunk = line(from: .init(latitude: 33.0, longitude: -117.0), count: 3, meters: 30)
-        let stitched = MapMatchingService.stitchSeam(tail: nil, chunk: chunk)
+        let stitched = MapMatchingService.stitchSeam(tailRegion: [], chunk: chunk)
         #expect(stitched.count == 3)
     }
 
@@ -42,28 +54,30 @@ struct MapMatchingServiceTests {
             .init(latitude: tail.latitude + 60 * degPerMeter, longitude: -117.0),
         ]
 
-        let stitched = MapMatchingService.stitchSeam(tail: tail, chunk: chunk)
+        let stitched = MapMatchingService.stitchSeam(tailRegion: [tail], chunk: chunk)
 
         // The three near-tail points are dropped; the two clear ones remain.
         #expect(stitched.count == 2)
         #expect(NavigationEngine.haversineDistance(from: tail, to: stitched[0]) > MapMatchingService.seamEpsilon)
     }
 
-    @Test("Stops dropping at the first point beyond epsilon (no seam gap)")
+    @Test("Stops dropping at the first point clear of the whole tail region (no seam gap)")
     func stopsAtFirstClearPoint() {
         let tail = CLLocationCoordinate2D(latitude: 33.001, longitude: -117.0)
         let degPerMeter = 1.0 / 111_320.0
 
-        // First point already clear of the tail (~15m); a later point happens to
-        // pass back near the tail's latitude. Only the leading run is considered,
-        // so nothing is dropped and the later near point is preserved.
+        // First point already clear of the tail region (~15m ahead, and the
+        // region only extends behind the tail); a later point happens to pass
+        // back near the tail's latitude. Only the leading run is considered, so
+        // nothing is dropped and the later near point is preserved.
+        let region = tailRegion(endingAt: tail, count: 5, meters: 10)
         let chunk: [CLLocationCoordinate2D] = [
             .init(latitude: tail.latitude + 15 * degPerMeter, longitude: -117.0),
             .init(latitude: tail.latitude + 40 * degPerMeter, longitude: -117.0),
             .init(latitude: tail.latitude + 2 * degPerMeter, longitude: -117.0),
         ]
 
-        let stitched = MapMatchingService.stitchSeam(tail: tail, chunk: chunk)
+        let stitched = MapMatchingService.stitchSeam(tailRegion: region, chunk: chunk)
         #expect(stitched.count == 3)
     }
 
@@ -75,7 +89,7 @@ struct MapMatchingServiceTests {
             .init(latitude: tail.latitude + 1 * degPerMeter, longitude: -117.0),
             .init(latitude: tail.latitude + 3 * degPerMeter, longitude: -117.0),
         ]
-        let stitched = MapMatchingService.stitchSeam(tail: tail, chunk: chunk)
+        let stitched = MapMatchingService.stitchSeam(tailRegion: [tail], chunk: chunk)
         #expect(stitched.isEmpty)
     }
 
@@ -95,8 +109,55 @@ struct MapMatchingServiceTests {
             .init(latitude: tail.latitude + 75 * degPerMeter, longitude: -117.0),  // keep
         ]
 
-        let stitched = MapMatchingService.stitchSeam(tail: tail, chunk: chunk)
+        let stitched = MapMatchingService.stitchSeam(tailRegion: [tail], chunk: chunk)
         #expect(stitched.count == 3)
         // A raw drop-5 would have produced 0 points here, losing real geometry.
+    }
+
+    @Test("Coarse OSRM resample: overlap re-traced as widely-spaced vertices is fully dropped")
+    func coarseResampleOverlapDroppedViaTailRegion() {
+        // The real failure mode: chunk N's overlap geometry begins ~100m BEHIND
+        // the stitched tail (it re-feeds ~5 input points ending one fix before
+        // the tail). On a straight freeway OSRM resamples that overlap coarsely —
+        // here as vertices ~25m apart — so NOT ONE of them lands within the 10m
+        // seamEpsilon of the SINGLE tail vertex. The previous single-vertex
+        // dedupe therefore dropped 0 points and re-appended the entire overlap,
+        // backtracking the polyline and inflating distance. Comparing against the
+        // tail REGION (the last several stitched coords spanning the overlap)
+        // catches each overlap vertex near its matching region vertex.
+        let degPerMeter = 1.0 / 111_320.0
+        let base = 33.0
+
+        // Stitched tail region: vertices every 25m up to the tail at +200m.
+        let tailRegion: [CLLocationCoordinate2D] = stride(from: 100.0, through: 200.0, by: 25.0).map {
+            .init(latitude: base + $0 * degPerMeter, longitude: -117.0)
+        }
+        let tail = tailRegion.last!
+
+        // New chunk: re-traces the overlap (125m..200m, every 25m — coarse, and
+        // none within 10m of the lone +200m tail) then continues forward.
+        let overlapCoords: [CLLocationCoordinate2D] = stride(from: 125.0, through: 200.0, by: 25.0).map {
+            .init(latitude: base + $0 * degPerMeter, longitude: -117.0)
+        }
+        let forwardCoords: [CLLocationCoordinate2D] = stride(from: 225.0, through: 300.0, by: 25.0).map {
+            .init(latitude: base + $0 * degPerMeter, longitude: -117.0)
+        }
+        let chunk = overlapCoords + forwardCoords
+
+        // Single-vertex baseline (old behavior): nothing is within 10m of the
+        // lone tail, so the whole overlap survives — the defect.
+        let singleVertex = MapMatchingService.stitchSeam(tailRegion: [tail], chunk: chunk)
+        #expect(singleVertex.count == chunk.count) // overlap re-appended (bad)
+
+        // Tail-region dedupe: every overlap vertex sits within 10m of a region
+        // vertex, so all four overlap points drop and only the forward points
+        // remain — no backtrack, no inflated distance.
+        let stitched = MapMatchingService.stitchSeam(tailRegion: tailRegion, chunk: chunk)
+        #expect(stitched.count == forwardCoords.count)
+        #expect(NavigationEngine.haversineDistance(from: tail, to: stitched[0]) > MapMatchingService.seamEpsilon)
+
+        // The kept geometry strictly advances past the tail — no backward jump.
+        let firstKeptAlong = (stitched.first!.latitude - base) / degPerMeter
+        #expect(firstKeptAlong > 200.0)
     }
 }

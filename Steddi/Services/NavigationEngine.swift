@@ -147,8 +147,19 @@ final class NavigationEngine {
     private var projector: RouteProjector?
     private(set) var totalRouteDistance: Double = 0
     private(set) var originalExpectedTravelTime: TimeInterval = 0
+    /// Exponentially-weighted moving average of recent moving speed (m/s),
+    /// driving the live ETA. An EWMA (vs. a cumulative all-samples mean) lets
+    /// recent conditions dominate: after a long fast highway stretch, hitting
+    /// stop-and-go pulls the estimate down within a minute or two so the ETA
+    /// stops under-estimating time through the jam (and vice-versa). 0 until the
+    /// first moving sample seeds it.
     private var averageSpeedMPS: Double = 0
     private var speedSampleCount: Int = 0
+    /// EWMA smoothing factor per moving fix (~1Hz feed). ~0.05 gives an
+    /// effective window of ~20 fixes (~20s) — responsive to a sustained change
+    /// while still ignoring single-fix GPS speed jitter, so the ETA tracks
+    /// recent conditions without wild swings.
+    private let speedEWMAAlpha: Double = 0.05
     private var locationUpdateCount: Int = 0
 
     // Thresholds
@@ -414,12 +425,21 @@ final class NavigationEngine {
         checkRoadConditionProximity()
         checkSpeedCameraProximity()
 
+        // Decaying (EWMA) speed estimate: weight recent moving fixes so the ETA
+        // tracks current conditions instead of a frozen whole-drive mean. The
+        // >1 m/s gate still drops full stops so a red light doesn't drag the
+        // estimate to zero. The first moving sample seeds the average directly
+        // (no warm-up bias toward 0).
         if speedMPS > 1.0 {
+            if speedSampleCount == 0 {
+                averageSpeedMPS = speedMPS
+            } else {
+                averageSpeedMPS += speedEWMAAlpha * (speedMPS - averageSpeedMPS)
+            }
             speedSampleCount += 1
-            averageSpeedMPS += (speedMPS - averageSpeedMPS) / Double(speedSampleCount)
         }
 
-        if checkArrival(location: location) { return }
+        if checkArrival(location: location, projection: projection) { return }
 
         if checkOffRoute(location: location, projection: projection) { return }
 
@@ -637,10 +657,47 @@ final class NavigationEngine {
         }
     }
 
-    private func checkArrival(location: CLLocation) -> Bool {
+    /// Distance (meters) from the route's end, by arc-length, within which the
+    /// driver is considered to have consumed enough of the route for the
+    /// proximity check to be allowed to latch arrival. Sized to the off-route
+    /// corridor so a final-approach fix that snaps a little short still qualifies
+    /// while a mid-route brush past the destination vertex (with most of the
+    /// route still ahead by arc-length) does not.
+    private let arrivalAlongRouteSlack: CLLocationDistance = 80
+
+    /// Arrival requires BOTH:
+    /// (a) the driver is physically within `arrivalDistance` of the final
+    ///     polyline vertex, AND
+    /// (b) the driver has consumed essentially the whole route by arc-length
+    ///     (projected distance-along-route is within `arrivalAlongRouteSlack` of
+    ///     the route end).
+    ///
+    /// Proximity alone latched too early on two real geometries: a route whose
+    /// final vertex sits within 50m of the start (loops / cul-de-sacs — the very
+    /// first fix is "at" the destination), and a self-crossing / out-and-back
+    /// route that brushes within 50m of its own endpoint mid-drive. The projector
+    /// already gives the along-route position each fix, so gating on progress
+    /// distinguishes "near the END of the route" from "near a coordinate that
+    /// happens to recur." When the projection is unavailable (degenerate
+    /// polyline) we fall back to the proximity-only check — there is no
+    /// along-route signal to gate on.
+    private func checkArrival(location: CLLocation, projection: RouteProjection?) -> Bool {
         guard let lastCoord = routePolylineCoordinates.last else { return false }
         let destination = CLLocation(latitude: lastCoord.latitude, longitude: lastCoord.longitude)
-        if location.distance(from: destination) < arrivalDistance {
+        let withinProximity = location.distance(from: destination) < arrivalDistance
+
+        // Along-route progress gate: require the driver to be near the route end
+        // by arc-length, not merely within 50m of the last vertex. Skipped only
+        // when there is no projection to read.
+        let nearRouteEndByArcLength: Bool
+        if let projection, totalRouteDistance > 0 {
+            nearRouteEndByArcLength =
+                projection.distanceAlongRoute >= totalRouteDistance - arrivalAlongRouteSlack
+        } else {
+            nearRouteEndByArcLength = true
+        }
+
+        if withinProximity && nearRouteEndByArcLength {
             hasArrived = true
             HapticService.shared.fire(.arrival)
             VoiceGuidanceService.shared.speakArrival()

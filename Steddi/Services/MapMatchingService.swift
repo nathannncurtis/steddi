@@ -10,6 +10,16 @@ final class MapMatchingService {
     /// covers OSRM's re-snap jitter at the overlap without eating a genuine
     /// short segment.
     static let seamEpsilon: CLLocationDistance = 10
+    /// Input-point overlap fed to consecutive chunks. The new chunk re-traces
+    /// roughly this many input intervals of geometry already present at the
+    /// stitched tail, so the seam dedupe must compare against a TAIL REGION at
+    /// least this deep, not just the single last vertex.
+    static let chunkOverlap = 5
+    /// How many trailing stitched coordinates the seam dedupe compares each
+    /// leading new-chunk point against. Sized a bit beyond `chunkOverlap` so a
+    /// coarse OSRM resample (overlap emitted as a few widely-spaced vertices)
+    /// still has a tail vertex within `seamEpsilon` of each overlap point.
+    static let seamTailWindow = 8
     private let session: URLSession
 
     init(session: URLSession = .shared) {
@@ -29,7 +39,7 @@ final class MapMatchingService {
         }
 
         // Chunk with overlap so segments connect cleanly
-        let overlap = 5
+        let overlap = Self.chunkOverlap
         var chunks: [[GPSPoint]] = []
         var start = 0
         while start < points.count {
@@ -57,10 +67,15 @@ final class MapMatchingService {
                 // snaps to the road, so the leading matched coords of this
                 // chunk re-trace some length already present at the tail of the
                 // stitched output. Dropping a fixed input-point count leaves
-                // seam gaps or overlaps. Instead dedupe by matched geometry:
-                // drop leading points of this chunk that fall within `seamEpsilon`
-                // of the previous chunk's tail, then append the remainder.
-                allCoordinates.append(contentsOf: Self.stitchSeam(tail: allCoordinates.last, chunk: coords))
+                // seam gaps or overlaps. Instead dedupe by matched geometry
+                // against the previous chunk's TAIL REGION (the last
+                // `seamTailWindow` stitched coords spanning the overlap), not
+                // just the single last vertex — a coarse OSRM resample emits the
+                // overlap as a few widely-spaced points that never land within
+                // `seamEpsilon` of the lone tail, so a single-vertex compare
+                // re-appends the whole overlap and inflates the trace distance.
+                let tailRegion = allCoordinates.suffix(Self.seamTailWindow)
+                allCoordinates.append(contentsOf: Self.stitchSeam(tailRegion: Array(tailRegion), chunk: coords))
             }
         }
 
@@ -71,17 +86,30 @@ final class MapMatchingService {
         return MatchedRoute(encodedPolyline: polyline, coordinates: allCoordinates, distanceMeters: totalDistance)
     }
 
-    /// Dedupe a subsequent chunk against the stitched tail by matched-geometry
-    /// proximity. Leading points of `chunk` within `seamEpsilon` of `tail` are
-    /// the overlap re-trace and are dropped; the first point that has moved
-    /// clear of the tail (and everything after it) is what we keep. Stops at the
-    /// first point beyond the epsilon so a later pass back near the tail (e.g. a
-    /// loop) is preserved.
-    static func stitchSeam(tail: CLLocationCoordinate2D?, chunk: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
-        guard let tail else { return chunk }
+    /// Dedupe a subsequent chunk against the stitched tail REGION by
+    /// matched-geometry proximity. Each leading point of `chunk` that falls
+    /// within `seamEpsilon` of ANY point in `tailRegion` (the last few stitched
+    /// coords spanning the input overlap) is the overlap re-trace and is
+    /// dropped; the first point that has moved clear of the whole tail region
+    /// (and everything after it) is what we keep.
+    ///
+    /// Comparing against the region, not just the single last vertex, is what
+    /// makes this robust to a coarse OSRM resample: when the matcher emits the
+    /// overlap as a handful of widely-spaced vertices, an overlap point can sit
+    /// >`seamEpsilon` from the lone tail yet still be within `seamEpsilon` of an
+    /// earlier tail-region vertex, so it is correctly dropped instead of
+    /// re-appended (which would backtrack the polyline and inflate distance).
+    ///
+    /// We stop at the first leading point clear of the entire region so a later
+    /// genuine pass back near the tail (e.g. a loop) is preserved.
+    static func stitchSeam(tailRegion: [CLLocationCoordinate2D], chunk: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
+        guard !tailRegion.isEmpty else { return chunk }
         var dropCount = 0
         for coord in chunk {
-            if NavigationEngine.haversineDistance(from: tail, to: coord) <= seamEpsilon {
+            let nearTail = tailRegion.contains {
+                NavigationEngine.haversineDistance(from: $0, to: coord) <= seamEpsilon
+            }
+            if nearTail {
                 dropCount += 1
             } else {
                 break
