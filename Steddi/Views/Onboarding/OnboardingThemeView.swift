@@ -107,6 +107,10 @@ struct OnboardingThemeView: View {
             Circle()
                 .fill(option.color)
                 .frame(width: swatchSize, height: swatchSize)
+                // Fixed light hairline so every swatch is bounded against the
+                // accent-tinted theme card — the SELECTED swatch's fill equals
+                // the card tint, so without this it dissolves into the card.
+                .overlay { Circle().stroke(.white.opacity(0.5), lineWidth: 1.5) }
                 .overlay {
                     if isSelected {
                         Image(systemName: "checkmark")
@@ -116,8 +120,10 @@ struct OnboardingThemeView: View {
                     }
                 }
                 .overlay {
+                    // Selected ring in fixed white — the accent ring matched the
+                    // recolored card and vanished. White reads on any accent.
                     Circle()
-                        .stroke(option.color, lineWidth: 3)
+                        .stroke(.white.opacity(0.9), lineWidth: 3)
                         .frame(width: swatchSize + 10, height: swatchSize + 10)
                         .opacity(isSelected ? 1 : 0)
                 }
@@ -165,10 +171,12 @@ struct OnboardingThemeView: View {
                         if card.recommended {
                             Text("Recommended")
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(coordinator.selectedAccent.color)
+                                // Fixed light on a neutral wash — accent-on-accent
+                                // (over the accent-tinted card) was near-invisible.
+                                .foregroundStyle(SteddiTheme.onboardingTextPrimary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(coordinator.selectedAccent.color.opacity(0.15), in: Capsule())
+                                .background(Color.white.opacity(0.2), in: Capsule())
                         }
                     }
                     Text(card.description)
@@ -180,7 +188,7 @@ struct OnboardingThemeView: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(coordinator.selectedAccent.color)
+                        .foregroundStyle(SteddiTheme.onboardingTextPrimary)
                         .font(.title3)
                         .transition(.opacity)
                 }
@@ -193,12 +201,15 @@ struct OnboardingThemeView: View {
                 // fighting the fixed-white labels). A faint white wash keeps the
                 // card dark and legible in every theme; the selected card's accent
                 // tint already contrasts the backdrop.
+                // Selection shown with a fixed-light wash + white border, not the
+                // accent (which matched the accent-tinted card and made the
+                // selected card indistinguishable from the deselected ones).
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected ? coordinator.selectedAccent.color.opacity(0.12) : Color.white.opacity(0.08))
+                    .fill(isSelected ? Color.white.opacity(0.18) : Color.white.opacity(0.08))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? coordinator.selectedAccent.color : .clear, lineWidth: 2)
+                    .stroke(isSelected ? Color.white.opacity(0.7) : .clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
