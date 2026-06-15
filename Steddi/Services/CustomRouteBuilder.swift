@@ -130,11 +130,11 @@ final class CustomRouteBuilder {
     // MARK: - Simplification (Ramer-Douglas-Peucker)
 
     private static func simplify(_ coords: [CLLocationCoordinate2D], tolerance: Double) -> [CLLocationCoordinate2D] {
-        guard coords.count > 2 else { return coords }
+        // Combine the >2 invariant with the endpoint bindings so the unwraps are
+        // explicitly tied to the guard that makes them safe.
+        guard coords.count > 2, let start = coords.first, let end = coords.last else { return coords }
         var maxDist: Double = 0
         var maxIndex = 0
-        let start = coords.first!
-        let end = coords.last!
 
         for i in 1..<(coords.count - 1) {
             let d = perpDistMeters(point: coords[i], lineStart: start, lineEnd: end)
