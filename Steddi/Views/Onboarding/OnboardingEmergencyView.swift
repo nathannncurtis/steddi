@@ -46,13 +46,16 @@ struct OnboardingEmergencyView: View {
                 Text(hasContact ? "Contact saved" : "In case of emergency")
                     .font(.title2.weight(.bold))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(SteddiTheme.textPrimary)
+                    // Fixed light-on-dark: this card floats on the dark
+                    // cinematic backdrop in every theme (theme tokens go
+                    // near-black in Light and vanish here).
+                    .foregroundStyle(SteddiTheme.onboardingTextPrimary)
 
                 Text(hasContact
                      ? "We'll be able to help you reach them if something goes wrong."
                      : "Add a contact we can help you reach if something goes wrong. It's optional — you can add this later in Settings.")
                     .font(.body)
-                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                     .multilineTextAlignment(.center)
             }
 
