@@ -1,6 +1,19 @@
 import WidgetKit
 import SwiftUI
 
+/// App Group keys written by NavigationStateManager (kept in sync there).
+private enum WidgetKeys {
+    static let commuteName = "widget.commuteName"
+    static let destinationName = "widget.destinationName"
+    static let isNavigating = "widget.isNavigating"
+    static let etaMinutes = "widget.etaMinutes"
+    static let etaUpdatedAt = "widget.etaUpdatedAt"
+}
+
+/// How long an idle ETA is considered "fresh" enough to present as a current
+/// glance rather than a clearly-stale last-known value (seconds).
+private let etaFreshnessWindow: TimeInterval = 30 * 60
+
 /// Data for the commute ETA widget
 struct CommuteETAEntry: TimelineEntry {
     let date: Date
@@ -8,6 +21,16 @@ struct CommuteETAEntry: TimelineEntry {
     let etaMinutes: Int?
     let destinationName: String
     let isNavigating: Bool
+    /// When the ETA was computed, if known. Drives the freshness label so a
+    /// value written by an earlier drive/check isn't shown as if it were live.
+    let etaUpdatedAt: Date?
+
+    /// The ETA is considered stale (worth labeling as last-known) when it isn't
+    /// live and was computed outside the freshness window.
+    var isStale: Bool {
+        guard !isNavigating, let updated = etaUpdatedAt else { return false }
+        return date.timeIntervalSince(updated) > etaFreshnessWindow
+    }
 }
 
 /// Timeline provider — reads shared data from App Group
@@ -15,7 +38,7 @@ struct CommuteETAProvider: TimelineProvider {
     private let defaults = UserDefaults(suiteName: "group.to.nathancurtis.steddi")
 
     func placeholder(in context: Context) -> CommuteETAEntry {
-        CommuteETAEntry(date: .now, commuteName: "Work", etaMinutes: 35, destinationName: "Office", isNavigating: false)
+        CommuteETAEntry(date: .now, commuteName: "Work", etaMinutes: 35, destinationName: "Office", isNavigating: false, etaUpdatedAt: .now)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (CommuteETAEntry) -> Void) {
@@ -25,24 +48,27 @@ struct CommuteETAProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<CommuteETAEntry>) -> Void) {
         let entry = currentEntry()
-        // Refresh every 15 minutes
+        // Refresh every 15 minutes so the freshness label/relative age advances
+        // even when the app doesn't write new defaults in between.
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: .now) ?? .now.addingTimeInterval(900)
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)
     }
 
     private func currentEntry() -> CommuteETAEntry {
-        let name = defaults?.string(forKey: "widget.commuteName") ?? "Commute"
-        let eta = defaults?.integer(forKey: "widget.etaMinutes")
-        let dest = defaults?.string(forKey: "widget.destinationName") ?? ""
-        let isNav = defaults?.bool(forKey: "widget.isNavigating") ?? false
+        let name = defaults?.string(forKey: WidgetKeys.commuteName) ?? "Commute"
+        let eta = defaults?.integer(forKey: WidgetKeys.etaMinutes) ?? 0
+        let dest = defaults?.string(forKey: WidgetKeys.destinationName) ?? ""
+        let isNav = defaults?.bool(forKey: WidgetKeys.isNavigating) ?? false
+        let updatedRaw = defaults?.double(forKey: WidgetKeys.etaUpdatedAt) ?? 0
 
         return CommuteETAEntry(
             date: .now,
             commuteName: name,
             etaMinutes: eta == 0 ? nil : eta,
             destinationName: dest,
-            isNavigating: isNav
+            isNavigating: isNav,
+            etaUpdatedAt: updatedRaw > 0 ? Date(timeIntervalSince1970: updatedRaw) : nil
         )
     }
 }
@@ -101,8 +127,13 @@ struct CommuteETAView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(.white.opacity(0.5))
                 }
+                if entry.isStale, let updated = entry.etaUpdatedAt {
+                    Text("as of \(updated, style: .time)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
             } else {
-                Text("Tap to update")
+                Text("No ETA yet")
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.5))
             }
@@ -141,8 +172,13 @@ struct CommuteETAView: View {
                             .font(.system(size: 16))
                             .foregroundStyle(.white.opacity(0.5))
                     }
+                    if entry.isStale, let updated = entry.etaUpdatedAt {
+                        Text("as of \(updated, style: .time)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.35))
+                    }
                 } else {
-                    Text("Tap to update")
+                    Text("No ETA yet")
                         .font(.system(size: 16))
                         .foregroundStyle(.white.opacity(0.5))
                 }
