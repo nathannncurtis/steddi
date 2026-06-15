@@ -439,7 +439,7 @@ final class NavigationEngine {
             speedSampleCount += 1
         }
 
-        if checkArrival(location: location) { return }
+        if checkArrival(location: location, projection: projection) { return }
 
         if checkOffRoute(location: location, projection: projection) { return }
 
@@ -657,10 +657,47 @@ final class NavigationEngine {
         }
     }
 
-    private func checkArrival(location: CLLocation) -> Bool {
+    /// Distance (meters) from the route's end, by arc-length, within which the
+    /// driver is considered to have consumed enough of the route for the
+    /// proximity check to be allowed to latch arrival. Sized to the off-route
+    /// corridor so a final-approach fix that snaps a little short still qualifies
+    /// while a mid-route brush past the destination vertex (with most of the
+    /// route still ahead by arc-length) does not.
+    private let arrivalAlongRouteSlack: CLLocationDistance = 80
+
+    /// Arrival requires BOTH:
+    /// (a) the driver is physically within `arrivalDistance` of the final
+    ///     polyline vertex, AND
+    /// (b) the driver has consumed essentially the whole route by arc-length
+    ///     (projected distance-along-route is within `arrivalAlongRouteSlack` of
+    ///     the route end).
+    ///
+    /// Proximity alone latched too early on two real geometries: a route whose
+    /// final vertex sits within 50m of the start (loops / cul-de-sacs — the very
+    /// first fix is "at" the destination), and a self-crossing / out-and-back
+    /// route that brushes within 50m of its own endpoint mid-drive. The projector
+    /// already gives the along-route position each fix, so gating on progress
+    /// distinguishes "near the END of the route" from "near a coordinate that
+    /// happens to recur." When the projection is unavailable (degenerate
+    /// polyline) we fall back to the proximity-only check — there is no
+    /// along-route signal to gate on.
+    private func checkArrival(location: CLLocation, projection: RouteProjection?) -> Bool {
         guard let lastCoord = routePolylineCoordinates.last else { return false }
         let destination = CLLocation(latitude: lastCoord.latitude, longitude: lastCoord.longitude)
-        if location.distance(from: destination) < arrivalDistance {
+        let withinProximity = location.distance(from: destination) < arrivalDistance
+
+        // Along-route progress gate: require the driver to be near the route end
+        // by arc-length, not merely within 50m of the last vertex. Skipped only
+        // when there is no projection to read.
+        let nearRouteEndByArcLength: Bool
+        if let projection, totalRouteDistance > 0 {
+            nearRouteEndByArcLength =
+                projection.distanceAlongRoute >= totalRouteDistance - arrivalAlongRouteSlack
+        } else {
+            nearRouteEndByArcLength = true
+        }
+
+        if withinProximity && nearRouteEndByArcLength {
             hasArrived = true
             HapticService.shared.fire(.arrival)
             VoiceGuidanceService.shared.speakArrival()
