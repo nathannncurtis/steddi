@@ -98,6 +98,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        // Pre-drive ETA widget: every time the app becomes active (launch and
+        // each foreground), refresh the idle home-screen ETA for the next
+        // upcoming commute so opening/closing Steddi keeps the widget fresh
+        // before the first drive. Lightweight — reuses the existing commute-ETA
+        // computation and is gated to no-op while navigating, so it never
+        // clobbers a live ETA.
+        Task {
+            await commuteNotificationService.refreshIdleCommuteETA()
+        }
+    }
+
     func applicationWillTerminate(_ application: UIApplication) {
         // Nav is active and the process is dying — end the Live Activity now
         // or it lingers on the Lock Screen as a zombie until iOS reaps it.

@@ -209,12 +209,78 @@ final class CommuteNotificationService {
 
         let allTrips = (try? context.fetch(FetchDescriptor<CommuteTrip>())) ?? []
 
+        // The widget shows ONE upcoming commute, so only the commute owning the
+        // next departure window should push its ETA to the idle widget — every
+        // other commute in this pass evaluates notifications but leaves the
+        // widget alone, so the last commute in the loop can't arbitrarily win.
+        let widgetCommuteID = nextDepartureCommuteID(commutes: commutes, trips: allTrips, now: now)
+
         for commute in commutes {
-            await evaluateAndDispatch(commute: commute, allTrips: allTrips, now: now)
+            await evaluateAndDispatch(
+                commute: commute,
+                allTrips: allTrips,
+                now: now,
+                pushIdleETA: commute.id == widgetCommuteID
+            )
         }
     }
 
-    private func evaluateAndDispatch(commute: Commute, allTrips: [CommuteTrip], now: Date) async {
+    // MARK: - Idle Widget Refresh (pre-drive)
+
+    /// Lightweight refresh of the home-screen ETA widget for the next upcoming
+    /// commute, without running the full notification pass (no alerts dispatched).
+    /// Reuses the same ETA computation the background pass and the commute-ETA
+    /// intent use — the live MKDirections ETA when a location fix is available,
+    /// else the preferred route's stored typical duration — so opening/closing
+    /// the app keeps the widget fresh before the first drive. No-op while a live
+    /// nav session is active (NavigationStateManager also guards this) so it can't
+    /// clobber a live ETA.
+    func refreshIdleCommuteETA(now: Date = Date()) async {
+        guard globallyEnabled else { return }
+        if await MainActor.run(body: { NavigationStateManager.shared.isNavigating }) { return }
+
+        let context = ModelContext(modelContainer)
+        let commutes: [Commute]
+        do {
+            commutes = try context.fetch(
+                FetchDescriptor<Commute>(predicate: #Predicate { $0.isActive })
+            )
+        } catch {
+            serviceLog.error("idle ETA: failed to fetch commutes: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        let trips = (try? context.fetch(FetchDescriptor<CommuteTrip>())) ?? []
+
+        guard let widgetCommuteID = nextDepartureCommuteID(commutes: commutes, trips: trips, now: now),
+              let commute = commutes.first(where: { $0.id == widgetCommuteID }),
+              commute.notificationsEnabled
+        else { return }
+
+        let direction = CommuteDirectionResolver.scheduledDirection(commute: commute, now: now)
+            ?? CommuteDirectionResolver.nextScheduledDirection(commute: commute, now: now)
+            ?? .originToDestination
+        let (destCoord, destName) = destination(for: commute, direction: direction)
+
+        // Live ETA only when a fix exists; otherwise fall back to typical so the
+        // widget still shows something useful before the first drive.
+        var etaSeconds: TimeInterval?
+        if let here = locationProvider()?.coordinate, let dest = destCoord {
+            do {
+                etaSeconds = try await directionsService.fetchDirectETA(from: here, to: dest)
+            } catch {
+                serviceLog.notice("idle ETA fetch failed for \(commute.name, privacy: .public); using typical duration: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        let typical = commute.preferredRoute(for: direction)?.typicalDurationSeconds
+
+        await pushIdleCommuteETA(
+            commuteName: commute.name,
+            destinationName: destName,
+            etaSeconds: etaSeconds ?? typical
+        )
+    }
+
+    private func evaluateAndDispatch(commute: Commute, allTrips: [CommuteTrip], now: Date, pushIdleETA: Bool) async {
         guard commute.notificationsEnabled else { return }
 
         // Direction for this window: schedule rules first, then next-scheduled.
@@ -244,6 +310,21 @@ final class CommuteNotificationService {
 
         // Typical baseline: preferred route's stored typical duration.
         let typical = commute.preferredRoute(for: direction)?.typicalDurationSeconds
+
+        // Pre-drive widget: this commute owns the next departure window, so push
+        // its freshly-computed ETA to the idle home-screen widget. Reuse exactly
+        // the ETA this pass already derived — the live MKDirections value when
+        // available, else the route's stored typical duration — so no extra
+        // route/network call happens just for the widget. NavigationStateManager
+        // no-ops the write while a live nav session is active and reloads the
+        // widget timeline itself.
+        if pushIdleETA {
+            await pushIdleCommuteETA(
+                commuteName: commute.name,
+                destinationName: destName,
+                etaSeconds: currentETA ?? typical
+            )
+        }
 
         // Weather for the destination (degrades to .unavailable gracefully).
         let weather: WeatherCondition
@@ -333,6 +414,26 @@ final class CommuteNotificationService {
 
     // MARK: - Helpers
 
+    /// Earliest upcoming departure Date for a single commute (learned or
+    /// scheduled rules over the next 7 days). nil when nothing is known.
+    private func nextDeparture(for commute: Commute, trips: [CommuteTrip], now: Date, calendar cal: Calendar) -> Date? {
+        guard commute.notificationsEnabled else { return nil }
+        var best: Date?
+        for dayOffset in 0...7 {
+            guard let day = cal.date(byAdding: .day, value: dayOffset, to: now) else { continue }
+            let learned = Self.learnedDepartureHours(commute: commute, trips: trips, now: day, calendar: cal)
+            let toDest = commute.scheduleToDestStartHour.map { [$0] } ?? []
+            let toOrigin = commute.scheduleToOriginStartHour.map { [$0] } ?? []
+            let hours = Set(learned + toDest + toOrigin)
+            for hour in hours {
+                guard let candidate = cal.date(bySettingHour: hour, minute: 0, second: 0, of: day),
+                      candidate > now else { continue }
+                best = best.map { min($0, candidate) } ?? candidate
+            }
+        }
+        return best
+    }
+
     /// Next departure Date across all active commutes (learned or scheduled),
     /// used to time the background refresh. nil when nothing is known.
     private func nextDepartureDate() -> Date? {
@@ -345,23 +446,46 @@ final class CommuteNotificationService {
         let cal = Calendar.current
         let now = Date()
         var best: Date?
-
-        for commute in commutes where commute.notificationsEnabled {
-            // Candidate hours over the next 7 days from learned + scheduled rules.
-            for dayOffset in 0...7 {
-                guard let day = cal.date(byAdding: .day, value: dayOffset, to: now) else { continue }
-                let learned = Self.learnedDepartureHours(commute: commute, trips: trips, now: day, calendar: cal)
-                let toDest = commute.scheduleToDestStartHour.map { [$0] } ?? []
-                let toOrigin = commute.scheduleToOriginStartHour.map { [$0] } ?? []
-                let hours = Set(learned + toDest + toOrigin)
-                for hour in hours {
-                    guard let candidate = cal.date(bySettingHour: hour, minute: 0, second: 0, of: day),
-                          candidate > now else { continue }
-                    best = best.map { min($0, candidate) } ?? candidate
-                }
-            }
+        for commute in commutes {
+            guard let candidate = nextDeparture(for: commute, trips: trips, now: now, calendar: cal) else { continue }
+            best = best.map { min($0, candidate) } ?? candidate
         }
         return best
+    }
+
+    /// The id of the active commute whose next departure window comes soonest —
+    /// the one whose ETA the idle pre-drive widget should reflect. nil when no
+    /// upcoming departure is known across the given commutes. Internal (not
+    /// private) so the next-commute selection can be unit-tested without racing
+    /// on the shared App Group widget defaults.
+    func nextDepartureCommuteID(commutes: [Commute], trips: [CommuteTrip], now: Date) -> UUID? {
+        let cal = Calendar.current
+        var bestDate: Date?
+        var bestID: UUID?
+        for commute in commutes {
+            guard let candidate = nextDeparture(for: commute, trips: trips, now: now, calendar: cal) else { continue }
+            if bestDate == nil || candidate < bestDate! {
+                bestDate = candidate
+                bestID = commute.id
+            }
+        }
+        return bestID
+    }
+
+    /// Hand a freshly-derived commute ETA to the idle home-screen widget,
+    /// converting the route duration (seconds) to whole minutes the same way the
+    /// commute-ETA intent does. NavigationStateManager is main-actor isolated and
+    /// owns the no-op-while-navigating guard plus the widget timeline reload.
+    private func pushIdleCommuteETA(commuteName: String, destinationName: String, etaSeconds: TimeInterval?) async {
+        guard let etaSeconds, etaSeconds > 0 else { return }
+        let minutes = max(1, Int((etaSeconds / 60).rounded()))
+        await MainActor.run {
+            NavigationStateManager.shared.updateIdleCommuteETA(
+                commuteName: commuteName,
+                destinationName: destinationName,
+                etaMinutes: minutes
+            )
+        }
     }
 
     /// Destination coordinate + display name for a direction.
