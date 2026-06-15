@@ -119,6 +119,12 @@ final class LiveActivityService {
             }
             semaphore.signal()
         }
+        // Best-effort at process death: the system gives terminating apps only a
+        // short grace window, so we cap the wait at 2s. A longer block risks the
+        // watchdog killing us before the end request lands anyway; if it times
+        // out the activity may briefly linger, which the next launch's
+        // `cleanupOrphanedActivities` sweeps up. This is an inherent
+        // termination-path tradeoff, not a fixable race.
         _ = semaphore.wait(timeout: .now() + 2)
         currentActivity = nil
     }
