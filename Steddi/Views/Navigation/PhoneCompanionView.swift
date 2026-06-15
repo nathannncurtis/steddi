@@ -54,7 +54,7 @@ struct PhoneCompanionView: View {
                             navState.rerouteSuggestion = nil
                         },
                         onStay: {
-                            navState.rerouteSuggestion = nil
+                            navState.dismissRerouteSuggestion()
                         }
                     )
                     .padding(.bottom, 100)
