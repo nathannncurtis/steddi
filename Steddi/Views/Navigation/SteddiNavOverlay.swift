@@ -22,9 +22,11 @@ struct SteddiNavOverlay: View {
     /// trip-aware remaining summary alongside the maneuver display.
     var tripContext: TripNavContext? = nil
 
-    // Reroute suggestion
-    @State private var rerouteSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)? = nil
-    @State private var currentRemainingETA: TimeInterval = 0
+    // Reroute suggestion — read from the shared manager, which owns the single
+    // periodic reroute-evaluation loop (NavigationStateManager.rerouteTask). The
+    // overlay and the CarPlay companion both read/clear this one source so a
+    // dismissed suggestion actually unblocks the manager's re-evaluation guard.
+    @State private var navState = NavigationStateManager.shared
 
     // Toggles
     @AppStorage("steddi.voiceGuidanceEnabled") var isVoiceOn: Bool = true
@@ -131,9 +133,6 @@ struct SteddiNavOverlay: View {
         .onChange(of: engine.hasArrived) { _, arrived in
             if arrived { triggerArrivalCelebration() }
         }
-        .task {
-            startRerouteLoop()
-        }
     }
 
     // MARK: - Portrait Nav Layout
@@ -194,16 +193,16 @@ struct SteddiNavOverlay: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                if let suggestion = rerouteSuggestion {
+                if let suggestion = navState.rerouteSuggestion {
                     RerouteCardView(
                         routeName: suggestion.route.name ?? "Faster route",
                         timeSavingsMinutes: Int(suggestion.savingsMinutes),
                         percentageSavings: Int(suggestion.savingsPercentage * 100),
                         onSwitch: {
                             onSwitchRoute?(suggestion.route)
-                            rerouteSuggestion = nil
+                            navState.rerouteSuggestion = nil
                         },
-                        onStay: { rerouteSuggestion = nil }
+                        onStay: { navState.rerouteSuggestion = nil }
                     )
                     .padding(.bottom, 8)
                 }
@@ -883,68 +882,6 @@ struct SteddiNavOverlay: View {
         .padding(.vertical, 12)
         // Neutral glass capsule; the sage checkmark icon carries the meaning.
         .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.3)
-    }
-
-    // MARK: - Reroute Loop
-
-    private func startRerouteLoop() {
-        guard let commute, let direction else { return }
-
-        Task { @MainActor in
-            let directionsService = DirectionsService()
-
-            while !Task.isCancelled && !engine.hasArrived {
-                try? await Task.sleep(for: .seconds(300)) // 5 min safety net poll
-                guard !Task.isCancelled, !engine.hasArrived else { break }
-                guard rerouteSuggestion == nil else { continue }
-
-                guard let currentCoord = engine.currentCoordinate,
-                      engine.isNavigating else { continue }
-
-                let remainingETA = Double(engine.etaMinutes) * 60.0
-                currentRemainingETA = remainingETA
-
-                // Check each fallback route
-                let fallbacks = commute.orderedRoutes(for: direction).filter { $0.rank > 0 }
-                guard !fallbacks.isEmpty else { continue }
-
-                var bestSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)?
-                var bestSavings: TimeInterval = 0
-
-                for fallback in fallbacks {
-                    do {
-                        let fallbackETA = try await directionsService.fetchETA(
-                            from: currentCoord,
-                            along: fallback.encodedPolyline
-                        )
-
-                        let decision = RerouteEngine.evaluate(
-                            remainingETASeconds: remainingETA,
-                            fallbackETASeconds: fallbackETA,
-                            basePercentage: commute.thresholdPercentage,
-                            hardMinuteFloor: commute.hardMinuteFloor
-                        )
-
-                        if decision.shouldReroute, decision.savingsSeconds > bestSavings {
-                            bestSavings = decision.savingsSeconds
-                            bestSuggestion = (
-                                route: fallback,
-                                savingsMinutes: decision.savingsMinutes,
-                                savingsPercentage: remainingETA > 0 ? decision.savingsSeconds / remainingETA : 0
-                            )
-                        }
-                    } catch {
-                        continue
-                    }
-                }
-
-                if let suggestion = bestSuggestion {
-                    withAnimation(TransitionKit.rerouteSpringIn) {
-                        rerouteSuggestion = suggestion
-                    }
-                }
-            }
-        }
     }
 
     // MARK: - Formatting
