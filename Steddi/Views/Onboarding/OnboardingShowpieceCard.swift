@@ -100,7 +100,11 @@ struct OnboardingShowpieceCard<Content: View>: View {
                 .steddiGlass(
                     tint: cardTint,
                     in: RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge),
-                    fallbackFill: SteddiTheme.surfaceSecondary
+                    // The card floats on a fixed dark backdrop and its copy is
+                    // fixed-white, so the Reduce-Transparency fallback must be a
+                    // fixed DARK fill — the default `surfaceSecondary` is near-
+                    // white in Light and would hide the white text.
+                    fallbackFill: SteddiTheme.onboardingCardFallbackFill
                 )
                 .glassEffectID("onboarding.beatCard", in: beatCardNamespace)
                 .glassEffectTransition(.matchedGeometry)

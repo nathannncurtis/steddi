@@ -27,11 +27,15 @@ struct OnboardingRouteRulesView: View {
                 Text("Your route, your rules")
                     .font(.title2.weight(.bold))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(SteddiTheme.textPrimary)
+                    // The card floats on a fixed dark cinematic backdrop, not a
+                    // theme surface, so copy must stay light in every resolved
+                    // theme — a theme `textPrimary` resolves near-black in Light
+                    // and vanishes here (mirrors the footer's fixed-white skip).
+                    .foregroundStyle(SteddiTheme.onboardingTextPrimary)
 
                 Text("Steddi sends you the way *you* want to go — your fallbacks, your no-go zones, your call.")
                     .font(.body)
-                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                     .multilineTextAlignment(.center)
             }
         }
@@ -57,7 +61,9 @@ struct OnboardingRouteRulesView: View {
             ZStack {
                 // Faint "straight through" path the user rejected.
                 straightPath(w: w, h: h)
-                    .stroke(SteddiTheme.textMuted.opacity(0.35),
+                    // Fixed light-on-dark: the muted theme token resolves
+                    // near-black in Light and would disappear on this dark card.
+                    .stroke(SteddiTheme.onboardingTextMuted.opacity(0.6),
                             style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [2, 7]))
 
                 // The no-go zone: a soft accent-ringed blob.
