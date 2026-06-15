@@ -46,19 +46,16 @@ struct TripArrivalCard: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
-            .background {
-                RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                            .fill(SteddiTheme.surfacePrimary.opacity(0.88))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                            .stroke(SteddiTheme.sage.opacity(0.3), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.35), radius: 14, y: 5)
-            }
+            // Route through the centralized glass modifier so Reduce Transparency /
+            // high-contrast goes opaque (matching the rest of the floating nav
+            // chrome) instead of letting "Arrived at … / Next: …" fight the map.
+            // Sage tint keeps the existing "all-clear" green hairline border.
+            .steddiGlass(
+                tint: SteddiTheme.sage,
+                in: RoundedRectangle(cornerRadius: SteddiTheme.radiusCard),
+                fallbackStrokeOpacity: 0.3
+            )
+            .shadow(color: .black.opacity(0.35), radius: 14, y: 5)
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 16)
