@@ -384,11 +384,18 @@ final class NavigationStateManager {
         // The live ETA is also the freshest real commute ETA the app computes,
         // so persist it (with a timestamp) as the "last known" value the widget
         // shows when idle — that's the whole point of a commute-ETA widget.
-        widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
-        widgetDefaults?.set(Date().timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
+        //
+        // kIsNavigating is cheap and must stay current every tick. But the
+        // displayed ETA only changes on a whole-minute boundary, so writing
+        // kETAMinutes + restamping kETAUpdatedAt every 500ms is pure churn the
+        // widget can't observe (the freshness stamp would also tick needlessly).
+        // Only write the ETA + restamp + reload when the minute actually changes,
+        // matching the timeline-reload gate.
         widgetDefaults?.set(engine.isNavigating, forKey: Self.kIsNavigating)
         if engine.etaMinutes != lastWidgetETAMinutes {
             lastWidgetETAMinutes = engine.etaMinutes
+            widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
+            widgetDefaults?.set(Date().timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
             WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
         }
     }
