@@ -142,6 +142,10 @@ struct HomeView: View {
     @State private var placeLinkErrorMessage: String?
     private let mockPolyline = "gipx_Appax~Exr@GzBu@p@iBGqKAgI?uBjCAz{@?dNFzPPfAClKA`VGnS?vA?dGBtLKrAQ|DmArCwA|FnOjCvHhAvGTnE?jEe@xEkBfJsDbMuHdT{GvPeC`IeAnGoA~Vy@xXU~^LvM`@hFzAvI`F|NnChHnBvG~ArHlAvL`@dHInLqBxYoBl[cAhL{AnJoCpLoClJkGfPqEhIoFxH}GpHkCfC}FpEuFfDeIfDqKrCkIlA{]nC{Db@sFhAoEjBkEzCuD~CyCdDkDzF}ClHcBnH_AdIWjJJjJr@tI|ArHnCnJ|BdGjDxGbGnIlDtD"
 
+    /// High-contrast promotion source — the app's Accessibility mode or the
+    /// system "Increase Contrast" setting. Mirrors `SteddiNavOverlay`.
+    private var highContrast: Bool { DisplayModeService.shared.useHighContrast }
+
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
         ZStack(alignment: .bottom) {
@@ -271,9 +275,12 @@ struct HomeView: View {
                 }
             }
 
-            // Loading overlay
+            // Loading overlay — centered in the ZStack rather than pinned to the
+            // bottom alignment guide. Wrapping just the overlay keeps the rest of
+            // the bottom-aligned content (sheet, controls) in place.
             if isCalculatingRoute {
                 routeLoadingOverlay
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
         }
         .ignoresSafeArea()
@@ -1347,7 +1354,7 @@ struct HomeView: View {
             if let coord, let dist = formattedDistance(to: coord) {
                 Text(dist)
                     .font(SteddiTheme.mono(13))
-                    .foregroundStyle(SteddiTheme.sage)
+                    .foregroundStyle(SteddiTheme.sageText)
             }
         }
         .padding(.horizontal, 14)
@@ -1809,8 +1816,8 @@ struct HomeView: View {
                         Text(last.formatted(date: .abbreviated, time: .shortened))
                     }
                 }
-                .font(SteddiTheme.body(12))
-                .foregroundStyle(SteddiTheme.textSecondary)
+                .font(SteddiTheme.body(12, highContrast: highContrast))
+                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
             }
 
             Spacer()
@@ -1820,7 +1827,7 @@ struct HomeView: View {
             } label: {
                 Text("Resume")
                     .font(SteddiTheme.heading(13))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SteddiTheme.onAccent)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
                     .background(SteddiTheme.accent, in: Capsule())

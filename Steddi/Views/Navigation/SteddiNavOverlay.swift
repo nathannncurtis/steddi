@@ -711,6 +711,13 @@ struct SteddiNavOverlay: View {
             return SteddiTheme.textPrimary
         }()
 
+        // The digit needs to stay legible *on the neutral glass housing*, where a
+        // raw warningAmber goes near-invisible in light/dynamic-day — exactly when
+        // the over-limit readout matters. Use the surface-adaptive amberText for
+        // the amber state; the >8mph warmRed state has its own solid housing, so
+        // it keeps warmRed. Arc/ring hue (speedColor) is unchanged.
+        let speedTextColor: Color = overLimit > 0 && overLimit <= 8 ? SteddiTheme.amberText : speedColor
+
         // Over-limit warning stays a SOLID warmRedSubtle fill — a safety readout
         // must never lose contrast to translucency. Otherwise the housing is
         // neutral glass.
@@ -744,7 +751,7 @@ struct SteddiNavOverlay: View {
                 VStack(spacing: 0) {
                     Text("\(Int(engine.currentSpeedMph))")
                         .font(SteddiTheme.mono(22 * scale))
-                        .foregroundStyle(speedColor)
+                        .foregroundStyle(speedTextColor)
 
                     Text("mph")
                         // Floor the unit caption so it stays legible: at the
