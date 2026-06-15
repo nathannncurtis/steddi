@@ -53,6 +53,16 @@ struct OnboardingView: View {
                 }
                 .transition(beatTransition)
 
+            case .routeRules:
+                // Phase A placeholder; real showcase content lands in Phase D.
+                Color.clear
+                    .transition(beatTransition)
+
+            case .turnByTurn:
+                // Phase A placeholder; real showcase content lands in Phase D.
+                Color.clear
+                    .transition(beatTransition)
+
             case .permissions:
                 OnboardingPermissionsView(
                     onContinue: requestLocation,

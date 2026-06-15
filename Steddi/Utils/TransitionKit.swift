@@ -31,6 +31,25 @@ enum TransitionKit {
     /// Route draw-on duration (matches the renderer's CADisplayLink schedule).
     static let routeDrawDuration: Double = 1.2
 
+    // MARK: - Onboarding showpiece
+
+    /// Autoplay dwell per showcase beat, before it auto-advances. A hands-off
+    /// viewer sees the full reel; a tap on Next cancels the dwell and advances
+    /// immediately. Disabled entirely under Reduce Motion / VoiceOver.
+    static let onboardingBeatDwell: Double = 5.5
+
+    /// Drives the morph of the single Liquid Glass card between beats — the
+    /// glass shell springs between geometries as the inner content swaps.
+    /// Reduce-Motion-aware: resolves to `nil` (instant) when motion is reduced.
+    static var onboardingMorph: Animation? {
+        SteddiMotion.resolve(.spring(response: 0.5, dampingFraction: 0.82))
+    }
+
+    /// The hero's glass wordmark plate materialize spring.
+    static var onboardingWordmark: Animation? {
+        SteddiMotion.resolve(.spring(response: 0.6, dampingFraction: 0.8))
+    }
+
     // MARK: - Spring Parameters (response, dampingFraction)
 
     /// Button press feedback — snappy, minimal overshoot.

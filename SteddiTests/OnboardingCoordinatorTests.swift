@@ -19,9 +19,13 @@ struct OnboardingCoordinatorTests {
         let c = OnboardingCoordinator()
         #expect(c.currentBeat == .hero)
         #expect(c.advance() == true)
-        #expect(c.currentBeat == .permissions)
+        #expect(c.currentBeat == .routeRules)
+        #expect(c.advance() == true)
+        #expect(c.currentBeat == .turnByTurn)
         #expect(c.advance() == true)
         #expect(c.currentBeat == .theme)
+        #expect(c.advance() == true)
+        #expect(c.currentBeat == .permissions)
         #expect(c.advance() == true)
         #expect(c.currentBeat == .emergency)
     }
@@ -39,8 +43,10 @@ struct OnboardingCoordinatorTests {
     func hasNextBeatGate() {
         let c = OnboardingCoordinator()
         #expect(c.hasNextBeat == true)            // hero
-        _ = c.advance(); #expect(c.hasNextBeat)   // permissions
+        _ = c.advance(); #expect(c.hasNextBeat)   // routeRules
+        _ = c.advance(); #expect(c.hasNextBeat)   // turnByTurn
         _ = c.advance(); #expect(c.hasNextBeat)   // theme
+        _ = c.advance(); #expect(c.hasNextBeat)   // permissions
         _ = c.advance()                           // emergency
         #expect(c.hasNextBeat == false)
     }
@@ -58,9 +64,25 @@ struct OnboardingCoordinatorTests {
     @Test("Every beat allows Skip except permissions")
     func skipGating() {
         #expect(OnboardingCoordinator.OnboardingBeat.hero.allowsSkip)
-        #expect(OnboardingCoordinator.OnboardingBeat.permissions.allowsSkip == false)
+        #expect(OnboardingCoordinator.OnboardingBeat.routeRules.allowsSkip)
+        #expect(OnboardingCoordinator.OnboardingBeat.turnByTurn.allowsSkip)
         #expect(OnboardingCoordinator.OnboardingBeat.theme.allowsSkip)
+        #expect(OnboardingCoordinator.OnboardingBeat.permissions.allowsSkip == false)
         #expect(OnboardingCoordinator.OnboardingBeat.emergency.allowsSkip)
+    }
+
+    // MARK: - Autoplay gating
+
+    @Test("Only the showcase beats auto-advance")
+    func autoAdvanceGating() {
+        // The showcase reel (routeRules, turnByTurn) plays itself; the hero waits
+        // on its draw-on and the ask/delight beats want a deliberate user choice.
+        #expect(OnboardingCoordinator.OnboardingBeat.hero.autoAdvances == false)
+        #expect(OnboardingCoordinator.OnboardingBeat.routeRules.autoAdvances)
+        #expect(OnboardingCoordinator.OnboardingBeat.turnByTurn.autoAdvances)
+        #expect(OnboardingCoordinator.OnboardingBeat.theme.autoAdvances == false)
+        #expect(OnboardingCoordinator.OnboardingBeat.permissions.autoAdvances == false)
+        #expect(OnboardingCoordinator.OnboardingBeat.emergency.autoAdvances == false)
     }
 
     // MARK: - Primary button label
@@ -68,8 +90,10 @@ struct OnboardingCoordinatorTests {
     @Test("Only the final beat's primary reads Get Started")
     func primaryLabel() {
         #expect(OnboardingCoordinator.OnboardingBeat.hero.primaryLabel == "Next")
-        #expect(OnboardingCoordinator.OnboardingBeat.permissions.primaryLabel == "Next")
+        #expect(OnboardingCoordinator.OnboardingBeat.routeRules.primaryLabel == "Next")
+        #expect(OnboardingCoordinator.OnboardingBeat.turnByTurn.primaryLabel == "Next")
         #expect(OnboardingCoordinator.OnboardingBeat.theme.primaryLabel == "Next")
+        #expect(OnboardingCoordinator.OnboardingBeat.permissions.primaryLabel == "Next")
         #expect(OnboardingCoordinator.OnboardingBeat.emergency.primaryLabel == "Get Started")
     }
 
@@ -107,11 +131,13 @@ struct OnboardingCoordinatorTests {
 
     // MARK: - Adversarial edge cases
 
-    @Test("Beat order is exactly hero → permissions → theme → emergency")
+    @Test("Beat order is exactly hero → routeRules → turnByTurn → theme → permissions → emergency")
     func beatOrderIsStable() {
         // primaryLabel and skipToCompletion both lean on this order; pin it so a
         // future reorder can't silently move "Get Started" off the last beat.
-        #expect(OnboardingCoordinator.OnboardingBeat.allCases == [.hero, .permissions, .theme, .emergency])
+        // The showpiece leads with the showcase beats (soul before asks) and
+        // promotes theme (delight) ahead of permissions.
+        #expect(OnboardingCoordinator.OnboardingBeat.allCases == [.hero, .routeRules, .turnByTurn, .theme, .permissions, .emergency])
         #expect(OnboardingCoordinator.OnboardingBeat.allCases.first == .hero)
         #expect(OnboardingCoordinator.OnboardingBeat.allCases.last == .emergency)
     }

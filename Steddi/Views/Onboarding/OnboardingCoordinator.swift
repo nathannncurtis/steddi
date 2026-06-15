@@ -19,11 +19,20 @@ import Observation
 final class OnboardingCoordinator {
 
     /// The ordered first-run beats. `CaseIterable` order *is* the flow order.
+    ///
+    /// The showpiece flow leads with *soul* — two showcase beats that say what
+    /// Steddi is for before asking for anything — then promotes `theme` (the
+    /// delight beat) ahead of `permissions` so the recolor lands while attention
+    /// is highest and the system location prompt floats over the freshly tinted
+    /// UI. `permissions` keeps its no-top-level-Skip rule; `emergency` stays last
+    /// so its footer reads "Get Started".
     enum OnboardingBeat: String, CaseIterable {
-        case hero        // animated route draw across a dark map
-        case permissions // location, framed in-context
-        case theme       // accent + theme pick — the delight moment
-        case emergency   // optional emergency contact
+        case hero        // 1 — animated route draw across a dark map + wordmark
+        case routeRules  // 2 — "your route, your rules" (showcase)
+        case turnByTurn  // 3 — Steddi's own turn-by-turn (showcase)
+        case theme       // 4 — accent + theme pick — the delight moment
+        case permissions // 5 — location, framed in-context (no skip)
+        case emergency   // 6 — optional emergency contact
 
         /// Permissions is the one beat without a top-level Skip: the user makes
         /// an explicit allow/defer choice there rather than skipping past it.
@@ -34,6 +43,13 @@ final class OnboardingCoordinator {
         var primaryLabel: String {
             self == OnboardingBeat.allCases.last ? "Get Started" : "Next"
         }
+
+        /// The showcase beats autoplay: after a dwell they auto-advance so a
+        /// hands-off viewer sees the full reel. The hero (which waits on its
+        /// draw-on) and the ask/delight beats (which want a deliberate choice)
+        /// do not. Autoplay itself is driven in the view and gated on Reduce
+        /// Motion / VoiceOver — the coordinator stays a pure, timer-free model.
+        var autoAdvances: Bool { self == .routeRules || self == .turnByTurn }
     }
 
     /// The beat currently on screen.
