@@ -10,6 +10,7 @@ struct TripEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
 
     @State private var showDeleteInProgressConfirm = false
 
@@ -78,6 +79,11 @@ struct TripEditorView: View {
         } message: {
             Text("This trip is being navigated. Deleting it will end the active trip session.")
         }
+        .preferredColorScheme(resolvedColorScheme)
+    }
+
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
     }
 
     /// Remove the trip, first tearing down the active trip session if this is
@@ -92,13 +98,19 @@ struct TripEditorView: View {
     }
 
     private func stopRow(_ stop: TripStop) -> some View {
-        HStack(spacing: 10) {
+        let isCurrent = stop.id == trip.currentStopId
+        return HStack(spacing: 10) {
             Text("\(stop.order + 1)")
                 .font(.caption.weight(.bold).monospaced())
-                .foregroundStyle(.white)
+                // Contrast with whichever fill: accent for the current stop,
+                // textMuted otherwise. White-on-textMuted is invisible in the
+                // light grey theme and weak elsewhere, so pick per-fill.
+                .foregroundStyle(isCurrent
+                    ? SteddiTheme.onAccent
+                    : SteddiTheme.contrastingForeground(on: ThemeEngine.snapshot.textMuted))
                 .frame(width: 22, height: 22)
                 .background(
-                    stop.id == trip.currentStopId ? SteddiTheme.accent : SteddiTheme.textMuted,
+                    isCurrent ? SteddiTheme.accent : SteddiTheme.textMuted,
                     in: Circle()
                 )
 
