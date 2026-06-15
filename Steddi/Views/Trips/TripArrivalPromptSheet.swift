@@ -90,7 +90,11 @@ struct TripArrivalPromptSheet: View {
                 Button(action: onEndTrip) {
                     Text("End Trip Here")
                         .font(SteddiTheme.body(14))
-                        .foregroundStyle(SteddiTheme.warmRed)
+                        // Surface-adaptive legible red — raw warmRed as text on
+                        // surfacePrimary fails AA in light (3.56:1) and is near-
+                        // invisible in grey (1.77:1). Kept as a quiet text action
+                        // (not a prominent CTA) to match the sibling above.
+                        .foregroundStyle(SteddiTheme.warmRedText)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                 }
