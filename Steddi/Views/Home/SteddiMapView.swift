@@ -840,9 +840,10 @@ extension SteddiMapContainer: MKMapViewDelegate {
             renderer.lineJoin = .round
             return renderer
         }
-        // Remaining (ahead of the puck): full-accent bright line.
+        // Remaining (ahead of the puck): full-accent bright line, with a
+        // contrasting casing so it stays legible over any map tile.
         if let polyline = overlay as? MKPolyline, polyline === remainingOverlay {
-            let renderer = MKPolylineRenderer(polyline: polyline)
+            let renderer = CasedPolylineRenderer(polyline: polyline)
             renderer.strokeColor = SteddiTheme.accentUIColor
             renderer.lineWidth = 6
             renderer.lineCap = .round
@@ -858,7 +859,7 @@ extension SteddiMapContainer: MKMapViewDelegate {
             return renderer
         }
         if let polyline = overlay as? MKPolyline {
-            let renderer = MKPolylineRenderer(polyline: polyline)
+            let renderer = CasedPolylineRenderer(polyline: polyline)
             renderer.strokeColor = SteddiTheme.accentUIColor
             renderer.lineWidth = 6
             renderer.lineCap = .round
