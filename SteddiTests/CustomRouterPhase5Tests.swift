@@ -417,6 +417,54 @@ struct CustomRouterEndToEndTests {
         #expect(viaStepSum > 0)
     }
 
+    @Test("a turn-less intermediate leg preserves its distance through stitching")
+    func waypointStitchingPreservesTurnlessLegDistance() {
+        // A perfectly STRAIGHT road (all nodes collinear, no maneuvers) so the
+        // middle waypoint→waypoint leg is a turn-less straight shot. Such a leg
+        // synthesizes exactly [departure(distance = whole leg length), arrival]:
+        // the entire leg distance lives on the departure step. Stripping that
+        // departure as a waypoint pass-through (and the leg's arrival) must NOT drop
+        // the distance — pre-fix it folded onto the arrival which was then stripped,
+        // so the straight leg's length silently vanished from the step list while
+        // the geometry stayed full-length.
+        // Separate collinear ways so EVERY node is a way endpoint and thus a real
+        // graph node (a single multi-node way would collapse the interior nodes to
+        // geometry, leaving no routable mid-chain waypoint). All on the equator so
+        // every junction is straight-through — no maneuvers.
+        let graph = p5graph(
+            p5node(1, 0.0, 0.0),
+            p5node(2, 0.0, 0.001),
+            p5node(3, 0.0, 0.002),
+            p5node(4, 0.0, 0.003),
+            p5node(5, 0.0, 0.004),
+            p5way(100, [1, 2], tags: ["highway": "primary", "maxspeed": "35 mph"]),
+            p5way(101, [2, 3], tags: ["highway": "primary", "maxspeed": "35 mph"]),
+            p5way(102, [3, 4], tags: ["highway": "primary", "maxspeed": "35 mph"]),
+            p5way(103, [4, 5], tags: ["highway": "primary", "maxspeed": "35 mph"])
+        )
+        let origin = graph.nodes[Int(graph.osmToIndex[1]!)].coordinate
+        let waypoint1 = graph.nodes[Int(graph.osmToIndex[2]!)].coordinate
+        let waypoint2 = graph.nodes[Int(graph.osmToIndex[4]!)].coordinate
+        let destination = graph.nodes[Int(graph.osmToIndex[5]!)].coordinate
+
+        let synthesis = CustomRouter.searchAndSynthesize(
+            stops: [origin, waypoint1, waypoint2, destination],
+            graph: graph,
+            search: AStarSearch(),
+            cost: DefaultCostModel()
+        )
+        guard let synthesis else { Issue.record("no synthesis"); return }
+
+        // The middle leg (waypoint1 → waypoint2) has no turns; its distance must
+        // still be accounted for. The summed per-step distance must equal the full
+        // driven geometry — not be short by the straight middle leg.
+        let stepSum = synthesis.steps.reduce(0) { $0 + $1.distance }
+        let geometryLength = RouteGeometry.cumulativeDistances(synthesis.coordinates).last ?? 0
+        #expect(geometryLength > 0)
+        #expect(abs(stepSum - geometryLength) < 1.0,
+                "step distances \(stepSum) m should sum to the driven length \(geometryLength) m, not drop the turn-less leg")
+    }
+
     @Test("no path through a disconnected graph yields nil (fallback signal)")
     func noPathYieldsNil() {
         // Two disconnected ways: origin near one, destination near the other.
