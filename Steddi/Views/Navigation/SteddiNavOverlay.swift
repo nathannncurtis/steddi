@@ -971,7 +971,10 @@ struct SteddiNavOverlay: View {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(SteddiTheme.sage)
             Text("\(reportedType) Reported")
-                .font(SteddiTheme.body(15))
+                // Thread highContrast + textScale like every other nav banner so
+                // the label thickens and grows for accessibility users instead of
+                // staying thin, fixed-size while the rest of the chrome promotes.
+                .font(SteddiTheme.body(15 * textScale, highContrast: highContrast))
                 .foregroundStyle(SteddiTheme.textPrimary)
         }
         .padding(.horizontal, 20)
