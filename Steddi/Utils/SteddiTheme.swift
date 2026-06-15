@@ -10,16 +10,20 @@ enum SteddiTheme {
     enum AccentOption: String, CaseIterable {
         case lavender, ocean, sage, coral, gold, slate
 
-        var color: Color {
+        /// Raw brand hue. Single source of truth for `color`/`uiColor` and the
+        /// contrast math, so the text-safe shift can't drift from the swatch.
+        var rgb: RGBColor {
             switch self {
-            case .lavender: return Color(red: 0.61, green: 0.56, blue: 0.77)  // #9B8EC4
-            case .ocean:    return Color(red: 0.29, green: 0.56, blue: 0.85)  // #4A90D9
-            case .sage:     return Color(red: 0.42, green: 0.61, blue: 0.49)  // #6B9B7D
-            case .coral:    return Color(red: 0.83, green: 0.45, blue: 0.42)  // #D4726A
-            case .gold:     return Color(red: 0.77, green: 0.64, blue: 0.31)  // #C4A44E
-            case .slate:    return Color(red: 0.48, green: 0.55, blue: 0.60)  // #7A8B9A
+            case .lavender: return RGBColor(0.61, 0.56, 0.77)  // #9B8EC4
+            case .ocean:    return RGBColor(0.29, 0.56, 0.85)  // #4A90D9
+            case .sage:     return RGBColor(0.42, 0.61, 0.49)  // #6B9B7D
+            case .coral:    return RGBColor(0.83, 0.45, 0.42)  // #D4726A
+            case .gold:     return RGBColor(0.77, 0.64, 0.31)  // #C4A44E
+            case .slate:    return RGBColor(0.48, 0.55, 0.60)  // #7A8B9A
             }
         }
+
+        var color: Color { rgb.color }
 
         var uiColor: UIColor {
             switch self {
@@ -51,11 +55,80 @@ enum SteddiTheme {
 
     // MARK: - Signature Colors
 
-    /// User-selected accent color.
-    static var accent: Color { currentAccentOption.color }
+    /// User-selected accent color, made text-safe against the live theme surface.
+    ///
+    /// The brand accents (lavender, gold, sage, …) are mid-tone hues that, used
+    /// raw as foreground text/glyphs on the near-white light surface, fail WCAG
+    /// AA badly (gold 2.26:1, lavender 2.77:1 on light `surfacePrimary`). Since
+    /// the same token is read as a *foreground* across the consumer views and we
+    /// can't touch those call sites, `accent` is luminance-shifted per surface —
+    /// darkened on light surfaces, lightened on dark/mid surfaces — by exactly
+    /// the amount needed to clear AA (see `textSafeAccent`). Measured against the
+    /// actual surface constants this lifts accent-as-text from sub-AA to:
+    ///   • light  P 5.70  S 5.21  E 4.74  (all AA; was 2.26–3.26)
+    ///   • dark   P 5.70+ S 4.75+ E 3.97+ (P/S AA; was 5.03–7.24 P, elevated now ≥3:1)
+    ///   • grey   P 5.70  S 4.52  E 3.63  (P/S AA; the grey palette's ceiling —
+    ///            even pure white only reaches 4.26:1 on grey elevated)
+    /// Hue is preserved (a luminance shift toward black/white), so the accent
+    /// still reads as itself. `accentBrand` keeps the unshifted hue for fills.
+    static var accent: Color {
+        // Dynamic so it re-resolves on every theme-revision bump (golden hour,
+        // day/night flip, grey toggle) just like the surface tokens — reading
+        // the revision trait registers the dependency; the value comes from the
+        // freshest snapshot.
+        Color(UIColor { traitCollection in
+            _ = traitCollection.themeRevision
+            return Self.textSafeAccent.uiColor
+        })
+    }
+
+    /// Unshifted brand hue — for accent *fills*, capsule backgrounds, gauge arcs,
+    /// and large iconography where contrast is carried by the fill, not the hue.
+    /// `accent` (text-safe) and `accentBrand` (fill) intentionally diverge.
+    static var accentBrand: Color { currentAccentOption.color }
+
     static var accentLight: Color { accent.opacity(0.7) }
-    static var accentSubtle: Color { accent.opacity(0.15) }
+    static var accentSubtle: Color { accentBrand.opacity(0.15) }
     static var accentUIColor: UIColor { currentAccentOption.uiColor }
+
+    /// Per-surface luminance-shifted accent that meets WCAG AA as foreground
+    /// text. Dynamic so it re-resolves on every theme-revision bump exactly like
+    /// the surface tokens; reads the live `ThemeEngine.snapshot.surfacePrimary`.
+    private static var textSafeAccent: RGBColor {
+        textSafeAccent(currentAccentOption.rgb, onSurface: ThemeEngine.snapshot.surfacePrimary)
+    }
+
+    /// AA target measured against `surfacePrimary`. Set above the 4.5 floor so
+    /// the slightly-lower-contrast `surfaceSecondary` (and most of `surface
+    /// Elevated`) also clear AA from the same shift — most accent-as-text sits on
+    /// primary/secondary. Mid-tone (grey) surfaces lack the headroom to reach
+    /// this even at the cap, so they land at the best the palette allows.
+    private static let accentTextTarget: Double = 5.7
+    /// Cap on the luminance shift so the accent stays recognisably itself rather
+    /// than collapsing to pure black/white when a surface is low on headroom.
+    private static let accentShiftCap: Double = 0.85
+
+    /// Pure, testable mapping from a brand accent + the surface it sits on to a
+    /// text-safe accent. Light surfaces darken the accent; dark and mid-tone
+    /// surfaces lighten it (the only direction with headroom against a ~0.4 grey
+    /// surface). The minimal shift that reaches `accentTextTarget` is found by
+    /// bisection and clamped to `accentShiftCap`; hue is preserved throughout.
+    static func textSafeAccent(_ base: RGBColor, onSurface surface: RGBColor) -> RGBColor {
+        let towardWhite = ContrastRatio.relativeLuminance(surface) < 0.5
+        let shift: (Double) -> RGBColor = { f in
+            towardWhite ? ContrastRatio.lighten(base, by: f) : ContrastRatio.darken(base, by: f)
+        }
+        // If even the cap can't reach the target (mid-tone surface), take the cap.
+        guard ContrastRatio.ratio(shift(accentShiftCap), surface) >= accentTextTarget else {
+            return shift(accentShiftCap)
+        }
+        var lo = 0.0, hi = accentShiftCap
+        for _ in 0..<24 {
+            let mid = (lo + hi) / 2
+            if ContrastRatio.ratio(shift(mid), surface) >= accentTextTarget { hi = mid } else { lo = mid }
+        }
+        return shift(hi)
+    }
 
     /// Sage green — "all clear" / "good to go" states.
     static let sage = Color(red: 0.13, green: 0.74, blue: 0.45)         // #22BD73
@@ -106,26 +179,58 @@ enum SteddiTheme {
 
     // MARK: - Typography
 
+    /// Upper bound on the OS Dynamic Type category we honour for scaling. The
+    /// nav HUD lives in fixed-height chrome over a moving map, so the maneuver
+    /// banner / speedometer must grow with the system Larger Text setting but not
+    /// explode. We track the live setting up through the first accessibility step
+    /// (`.accessibilityExtraLarge`, well past XXL); past that the *metric* is
+    /// clamped here so the largest accessibility sizes stay bounded. Standard
+    /// (non-accessibility) sizes through XXL are honoured exactly.
+    private static let dynamicTypeCeiling: UIContentSizeCategory = .accessibilityExtraLarge
+
+    /// Scale a fixed base point size by the OS Dynamic Type setting so every
+    /// `SteddiTheme.*`-driven label responds to Settings ▸ Display ▸ Text Size /
+    /// Larger Text — the foundational fix that propagates to every consumer
+    /// without touching call sites.
+    ///
+    /// `UIFontMetrics` maps the base size through the user's content-size
+    /// category (the same curve UIKit/SwiftUI text styles use). We resolve
+    /// against the *live* category but never above `dynamicTypeCeiling`, capping
+    /// growth so the in-nav HUD stays bounded while still supporting at least XXL.
+    /// Reading `UIScreen.main.traitCollection` here also makes the font re-derive
+    /// when the OS setting changes (SwiftUI rebuilds text on a content-size-
+    /// category change). The app's own passenger/accessibility `textScale`
+    /// multiplier is already folded into `size` by call sites (e.g.
+    /// `mono(26 * textScale)`), so it composes multiplicatively on top of OS
+    /// Dynamic Type — the intended layering, which only meaningfully stacks in the
+    /// app's accessibility display mode.
+    private static func scaled(_ size: CGFloat) -> CGFloat {
+        let live = UITraitCollection.current.preferredContentSizeCategory
+        let effective = min(live, dynamicTypeCeiling)
+        let metrics = UITraitCollection(preferredContentSizeCategory: effective)
+        return UIFontMetrics.default.scaledValue(for: size, compatibleWith: metrics)
+    }
+
     /// Confident, weighted heading style
     static func heading(_ size: CGFloat = 20) -> Font {
-        .system(size: size, weight: .bold, design: .rounded)
+        .system(size: scaled(size), weight: .bold, design: .rounded)
     }
 
     /// Body text — clean and readable
     static func body(_ size: CGFloat = 16) -> Font {
-        .system(size: size, weight: .regular, design: .default)
+        .system(size: scaled(size), weight: .regular, design: .default)
     }
 
     /// Mono for numbers (ETAs, times, distances)
     static func mono(_ size: CGFloat = 15) -> Font {
-        .system(size: size, weight: .medium, design: .monospaced)
+        .system(size: scaled(size), weight: .medium, design: .monospaced)
     }
 
     // MARK: - High Contrast (accessibility mode)
 
     /// Body text that thickens for high-contrast reading.
     static func body(_ size: CGFloat, highContrast: Bool) -> Font {
-        .system(size: size, weight: highContrast ? .semibold : .regular, design: .default)
+        .system(size: scaled(size), weight: highContrast ? .semibold : .regular, design: .default)
     }
 
     /// Secondary text promoted to full contrast when high contrast is on.
