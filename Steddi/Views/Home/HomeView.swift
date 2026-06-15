@@ -1956,9 +1956,16 @@ struct HomeView: View {
     ) {
         let recoveryCoords = PolylineEncoder.decode(recovery.encodedPolyline, precision: 6)
         guard recoveryCoords.count >= 2 else { return }
+        // Without saved geometry there's nothing to stitch onto — bail safely
+        // rather than indexing an empty polyline.
+        guard !savedPolyline.isEmpty else { return }
 
-        // Saved geometry from the rejoin point forward
-        let rejoinIndex = cumulative.firstIndex(where: { $0 >= candidate.alongDistance }) ?? (savedPolyline.count - 1)
+        // Saved geometry from the rejoin point forward. The fallback (no
+        // cumulative match) is the last vertex; clamp into bounds so a
+        // short/mismatched `cumulative` (or an empty one) can never produce an
+        // out-of-range index into `savedPolyline`.
+        let rawRejoinIndex = cumulative.firstIndex(where: { $0 >= candidate.alongDistance }) ?? (savedPolyline.count - 1)
+        let rejoinIndex = min(max(0, rawRejoinIndex), savedPolyline.count - 1)
         let savedTail = Array(savedPolyline[rejoinIndex...])
 
         // Recovery steps (drop its arrival step) + saved steps from the rejoin
