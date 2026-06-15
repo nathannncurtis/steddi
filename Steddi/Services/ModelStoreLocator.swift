@@ -18,6 +18,13 @@ enum ModelStoreLocator {
     static let storeFilename = "Steddi.store"
     static let legacyStoreFilename = "default.store"
 
+    /// Set once the group store has opened successfully (post-migration). After
+    /// this, the group store is the single source of truth: a later group-open
+    /// failure must NOT silently divert to the never-deleted, pre-migration
+    /// legacy store (which would strand the user on stale data and split writes
+    /// across two stores). See `makeAppContainer`.
+    static let groupStoreEstablishedKey = "steddi.groupStoreEstablished"
+
     /// Full schema for the app's model graph. Built from the current
     /// `VersionedSchema` so the schema and the migration plan can never drift —
     /// every container opens the exact set of models the plan migrates.
@@ -178,26 +185,62 @@ enum ModelStoreLocator {
         let warning: String?
     }
 
-    /// Build the app's main container with a fallback chain:
-    /// group store → legacy store → in-memory (with a user-visible warning).
-    static func makeAppContainer() -> ContainerResult {
+    /// Build the app's main container.
+    ///
+    /// Recovery strategy (chosen to avoid split-brain / silent data loss):
+    /// - Normal path: open the group store. On first success record the
+    ///   `groupStoreEstablished` marker — from then on the group store is the
+    ///   single source of truth.
+    /// - If the group open fails, retry it once: the most plausible failures
+    ///   (transient App Group container unavailability at boot, a file still
+    ///   protected while the device is locked) are momentary and self-heal.
+    /// - If the group open STILL fails once the group store is the source of
+    ///   truth (marker set, or the group file already exists with data), do NOT
+    ///   silently reopen the never-deleted, pre-migration legacy store
+    ///   read-write. That would strand the user on stale data and split new
+    ///   writes across two stores. Surface the in-memory warning instead so the
+    ///   user sees "changes won't be saved" rather than quietly losing their
+    ///   recent drives/commutes.
+    /// - Legacy is opened read-write ONLY when the group store was never
+    ///   established (e.g. the migration copy itself failed and `selectStoreURL`
+    ///   returned `.legacy`) — there is no divergent group data to lose then.
+    /// - Last resort is the in-memory store with a user-visible warning.
+    static func makeAppContainer(defaults: UserDefaults = .standard) -> ContainerResult {
         let candidates = legacyStoreCandidates()
-        let selection = selectStoreURL(groupURL: groupStoreURL(), legacyCandidates: candidates)
+        let groupURL = groupStoreURL()
+        let selection = selectStoreURL(groupURL: groupURL, legacyCandidates: candidates)
 
         if case .group(let url) = selection {
-            do {
-                let container = try ModelContainer(
-                    for: schema,
-                    migrationPlan: migrationPlan,
-                    configurations: [ModelConfiguration(url: url)]
-                )
-                storeLog.info("Opened SwiftData store in app group container: \(url.path)")
-                return ContainerResult(container: container, warning: nil)
-            } catch {
-                storeLog.error("Failed to open group store at \(url.path) (\(error.localizedDescription)) — falling back to legacy store")
+            // One retry to ride out a transient container-unavailability at boot.
+            for attempt in 1...2 {
+                do {
+                    let container = try ModelContainer(
+                        for: schema,
+                        migrationPlan: migrationPlan,
+                        configurations: [ModelConfiguration(url: url)]
+                    )
+                    defaults.set(true, forKey: groupStoreEstablishedKey)
+                    storeLog.info("Opened SwiftData store in app group container: \(url.path)")
+                    return ContainerResult(container: container, warning: nil)
+                } catch {
+                    storeLog.error("Failed to open group store at \(url.path) (attempt \(attempt)/2): \(error.localizedDescription)")
+                }
             }
+
+            // Group open failed after retry. If the group store is the source of
+            // truth, refuse to diverge onto the stale legacy store — warn instead.
+            let groupEstablished = defaults.bool(forKey: groupStoreEstablishedKey)
+            let groupExists = FileManager.default.fileExists(atPath: url.path)
+            if groupEstablished || groupExists {
+                storeLog.fault("Group store unavailable but it is the source of truth (established=\(groupEstablished), exists=\(groupExists)) — refusing to revert to the pre-migration legacy store; using in-memory store with warning")
+                return inMemoryFallback()
+            }
+            storeLog.error("Group store never established — falling back to legacy store location")
         }
 
+        // Legacy read-write fallback: reached only when the migration copy failed
+        // (selection == .legacy) or the group store was never established, so no
+        // divergent group data exists to strand.
         let legacyURL: URL
         if case .legacy(let url) = selection {
             legacyURL = url
@@ -218,6 +261,15 @@ enum ModelStoreLocator {
             storeLog.fault("Failed to open legacy store (\(error.localizedDescription)) — using in-memory store")
         }
 
+        return inMemoryFallback()
+    }
+
+    /// In-memory container of last resort, carrying the user-visible
+    /// "changes won't be saved" warning. Used when no on-disk store can be
+    /// opened safely — including the case where the group store (the source of
+    /// truth) is temporarily unopenable, so we warn rather than silently revert
+    /// to a divergent legacy store.
+    private static func inMemoryFallback() -> ContainerResult {
         do {
             let container = try ModelContainer(
                 for: schema,
