@@ -82,11 +82,20 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
-        // Scene torn down (user swiped the app away) — applicationWillTerminate is
-        // not guaranteed to fire, so end any Live Activity here too or it lingers
-        // on the Lock Screen. We do NOT gate on isNavigating: a paused/arrived
-        // activity awaiting its 30s dismissal must still be reaped.
-        // endActivityImmediately() self-guards (no-op when nothing is live).
+        // sceneDidDisconnect is NOT termination: UIKit also calls it when the
+        // system reclaims a scene to free resources while the app keeps running
+        // (Apple: "UIKit may disconnect a scene… this does not indicate the app
+        // is quitting"). With multiple-scene support + background location, iOS
+        // can reap this window scene mid-drive while navigation continues in
+        // NavigationStateManager.shared. So we must NOT kill an active nav Live
+        // Activity here — it is meant to outlive the app/scene during a drive.
+        //
+        // Only reap when there is NO active navigation (e.g. a paused/arrived
+        // activity still under its dismissal policy, or a swipe-kill while idle):
+        // applicationWillTerminate handles true process death regardless of
+        // isNavigating, and the next launch's cleanupOrphanedActivities() sweeps
+        // up anything missed. endActivityImmediately() self-guards on empty.
+        guard !NavigationStateManager.shared.isNavigating else { return }
         LiveActivityService.shared.endActivityImmediately()
     }
 
