@@ -19,7 +19,6 @@ struct CommuteDirectionResolver {
     static func resolve(
         commute: Commute,
         currentLocation: CLLocation,
-        trips: [CommuteTrip] = [],
         now: Date = Date()
     ) -> Result {
         guard let origin = commute.origin, let destination = commute.destination else {
@@ -70,7 +69,7 @@ struct CommuteDirectionResolver {
            let startHour = commute.scheduleToDestStartHour,
            let endHour = commute.scheduleToDestEndHour {
             let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
-            if days.contains(currentDay) && currentHour >= startHour && currentHour < endHour {
+            if days.contains(currentDay) && hourInWindow(currentHour, start: startHour, end: endHour) {
                 return .originToDestination
             }
         }
@@ -80,12 +79,25 @@ struct CommuteDirectionResolver {
            let startHour = commute.scheduleToOriginStartHour,
            let endHour = commute.scheduleToOriginEndHour {
             let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
-            if days.contains(currentDay) && currentHour >= startHour && currentHour < endHour {
+            if days.contains(currentDay) && hourInWindow(currentHour, start: startHour, end: endHour) {
                 return .destinationToOrigin
             }
         }
 
         return nil
+    }
+
+    /// Whether `hour` falls inside the [start, end) hour window, handling a
+    /// window that wraps past midnight (start > end, e.g. 22→6 covers 10pm
+    /// through 6am). Mirrors NoGoZone.TimeWindow.isActive so midnight-spanning
+    /// commute schedules behave like the no-go-zone time picker users already
+    /// know. The end hour stays exclusive.
+    private static func hourInWindow(_ hour: Int, start: Int, end: Int) -> Bool {
+        if start <= end {
+            return hour >= start && hour < end
+        } else {
+            return hour >= start || hour < end
+        }
     }
 
     /// The direction of the next upcoming schedule window after `now`.
@@ -127,61 +139,5 @@ struct CommuteDirectionResolver {
         }
 
         return best?.direction
-    }
-
-    // MARK: - Learned Patterns
-
-    /// Check if we have enough trip history to predict the direction.
-    /// Requires at least 5 trips on the same day-of-week within ±2 hours.
-    private static func learnedDirection(
-        commute: Commute,
-        trips: [CommuteTrip],
-        now: Date
-    ) -> CommuteDirection? {
-        let cal = Calendar.current
-        let currentDay = cal.component(.weekday, from: now)
-        let currentHour = cal.component(.hour, from: now)
-
-        // Filter to trips for this commute, same day of week, within ±2 hours
-        let relevant = trips.filter { trip in
-            trip.commute?.id == commute.id &&
-            trip.dayOfWeek == currentDay &&
-            abs(trip.hourOfDay - currentHour) <= 2
-        }
-
-        guard relevant.count >= 5 else { return nil }
-
-        // Majority vote
-        let toDestCount = relevant.filter { $0.direction == .originToDestination }.count
-        let toOriginCount = relevant.filter { $0.direction == .destinationToOrigin }.count
-
-        // Need at least 70% agreement to be confident
-        let total = Double(relevant.count)
-        if Double(toDestCount) / total >= 0.7 { return .originToDestination }
-        if Double(toOriginCount) / total >= 0.7 { return .destinationToOrigin }
-
-        return nil
-    }
-
-    // MARK: - Smart Defaults
-
-    /// Weekday heuristic: before noon → going to destination (work), after noon → going to origin (home).
-    /// Weekends → nil (ambiguous).
-    private static func smartDefault(now: Date) -> CommuteDirection? {
-        let cal = Calendar.current
-        let weekday = cal.component(.weekday, from: now)
-        let hour = cal.component(.hour, from: now)
-
-        // Weekend (Sunday=1, Saturday=7)
-        if weekday == 1 || weekday == 7 { return nil }
-
-        // Weekday
-        if hour >= 5 && hour < 12 {
-            return .originToDestination  // morning → going to work
-        } else if hour >= 12 && hour < 22 {
-            return .destinationToOrigin  // afternoon/evening → going home
-        }
-
-        return nil // late night → ambiguous
     }
 }

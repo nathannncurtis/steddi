@@ -1112,8 +1112,7 @@ struct HomeView: View {
         }
         return CommuteDirectionResolver.resolve(
             commute: commute,
-            currentLocation: currentLoc,
-            trips: commuteTrips
+            currentLocation: currentLoc
         )
     }
 

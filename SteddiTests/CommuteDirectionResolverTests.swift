@@ -157,3 +157,64 @@ struct ResolveProximityTests {
         #expect(destinationName == "Work")
     }
 }
+
+// MARK: - Midnight-Crossing Window Tests
+
+@Suite("CommuteDirectionResolver.scheduledDirection midnight wrap")
+struct MidnightWindowTests {
+
+    /// Night-shift commute: drive to work 22:00→02:00, drive home 04:00→08:00,
+    /// every day. Both to-dest windows wrap past midnight (start > end).
+    private func makeNightShiftCommute() throws -> (ModelContainer, Commute) {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ModelStoreLocator.schema, configurations: [config])
+        let context = ModelContext(container)
+
+        let home = PinnedLocation(name: "Home", latitude: 34.05, longitude: -118.25)
+        let work = PinnedLocation(name: "Work", latitude: 34.10, longitude: -118.40)
+        let commute = Commute(name: "Night Shift", origin: home, destination: work)
+        commute.scheduleToDestDays = "1,2,3,4,5,6,7"
+        commute.scheduleToDestStartHour = 22
+        commute.scheduleToDestEndHour = 2
+        commute.scheduleToOriginDays = "1,2,3,4,5,6,7"
+        commute.scheduleToOriginStartHour = 4
+        commute.scheduleToOriginEndHour = 8
+
+        context.insert(commute)
+        return (container, commute)
+    }
+
+    @Test("Late-evening hour inside the wrapping to-dest window matches")
+    func lateEveningMatchesToDest() throws {
+        let (container, commute) = try makeNightShiftCommute()
+        _ = container
+        let monday11pm = try date(day: 8, hour: 23)
+        #expect(CommuteDirectionResolver.scheduledDirection(commute: commute, now: monday11pm) == .originToDestination)
+    }
+
+    @Test("After-midnight hour still inside the wrapping to-dest window matches")
+    func afterMidnightMatchesToDest() throws {
+        let (container, commute) = try makeNightShiftCommute()
+        _ = container
+        let tuesday1am = try date(day: 9, hour: 1)
+        #expect(CommuteDirectionResolver.scheduledDirection(commute: commute, now: tuesday1am) == .originToDestination)
+    }
+
+    @Test("End hour of a wrapping window is exclusive")
+    func wrappingEndHourExclusive() throws {
+        let (container, commute) = try makeNightShiftCommute()
+        _ = container
+        let tuesday2am = try date(day: 9, hour: 2)
+        // 02:00 is the exclusive end of the to-dest window and below the 04:00
+        // start of the to-origin window — neither matches.
+        #expect(CommuteDirectionResolver.scheduledDirection(commute: commute, now: tuesday2am) == nil)
+    }
+
+    @Test("Hour inside the non-wrapping to-origin window matches")
+    func morningMatchesToOrigin() throws {
+        let (container, commute) = try makeNightShiftCommute()
+        _ = container
+        let tuesday6am = try date(day: 9, hour: 6)
+        #expect(CommuteDirectionResolver.scheduledDirection(commute: commute, now: tuesday6am) == .destinationToOrigin)
+    }
+}
