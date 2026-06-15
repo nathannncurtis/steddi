@@ -145,6 +145,16 @@ final class NavigationStateManager {
                                 along: fallback.encodedPolyline
                             )
 
+                            // The fetch awaited; the session may have ended (or a
+                            // different engine taken over) while it was in flight.
+                            // Bail before applying a stale reroute result so it
+                            // can't land after navigation was torn down.
+                            guard !Task.isCancelled,
+                                  let liveEngine = self.activeEngine,
+                                  liveEngine === engine,
+                                  liveEngine.isNavigating,
+                                  !self.hasArrived else { break }
+
                             let decision = RerouteEngine.evaluate(
                                 remainingETASeconds: remainingETA,
                                 fallbackETASeconds: fallbackETA,
@@ -165,7 +175,14 @@ final class NavigationStateManager {
                         }
                     }
 
-                    if let suggestion = bestSuggestion {
+                    // Final guard: only surface the suggestion if the same
+                    // session is still live after all the awaits above.
+                    if let suggestion = bestSuggestion,
+                       !Task.isCancelled,
+                       let liveEngine = self.activeEngine,
+                       liveEngine === engine,
+                       liveEngine.isNavigating,
+                       !self.hasArrived {
                         self.rerouteSuggestion = suggestion
                     }
                 }
