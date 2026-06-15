@@ -17,7 +17,12 @@ struct TripArrivalPromptSheet: View {
 
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
-        VStack(spacing: 0) {
+        // The header + next-stop block scrolls (a long stop name + 2-line address
+        // + notes at large Dynamic Type can't all fit the .medium detent) while the
+        // 3 action buttons stay pinned in a bottom safe-area inset so they never
+        // collide with the content or get clipped below the detent edge.
+        ScrollView {
+            VStack(spacing: 0) {
             // Header
             VStack(spacing: 6) {
                 if let arrivedStopName {
@@ -66,10 +71,12 @@ struct TripArrivalPromptSheet: View {
             }
             .padding(.top, 20)
             .padding(.horizontal, 16)
-
-            Spacer()
-
-            // Actions
+            .padding(.bottom, 20)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            // Actions — pinned below the scroll so the 3 buttons stay reachable
+            // and never collide with the content at large Dynamic Type sizes.
             VStack(spacing: 10) {
                 Button(action: onNextLeg) {
                     Label("Start Next Leg", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
@@ -100,7 +107,9 @@ struct TripArrivalPromptSheet: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 8)
             .padding(.bottom, 20)
+            .background(SteddiTheme.surfacePrimary)
         }
         .background(SteddiTheme.surfacePrimary)
     }
