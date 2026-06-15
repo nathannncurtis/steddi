@@ -57,7 +57,6 @@
 		43C4CC9A502866B2BE5E5A35 /* ThemeRevisionTrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = 215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */; };
 		441AC263D0497D1AA6E95964 /* SteddiLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */; };
-		AAAA1111TUNNELTEST00BUILD0 /* TunnelDetectionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBBB2222TUNNELTEST00FILE00 /* TunnelDetectionServiceTests.swift */; };
 		4641591AC55A72F04A852898 /* PreferenceLearnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA904694CE91F625D8EBE294 /* PreferenceLearnerTests.swift */; };
 		4786241496BB09CF9AD53A97 /* OnboardingEmergencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71155E230D450D007980A661 /* OnboardingEmergencyView.swift */; };
 		4A0898B3E04DFD141E0808AD /* EmergencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F1F21786B81D853B9E61B6 /* EmergencyView.swift */; };
@@ -200,6 +199,7 @@
 		EC2A22C59A5539845B5C4173 /* MapMatchingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE2000CD9239BB50E6449738 /* MapMatchingServiceTests.swift */; };
 		ED8A8DD03F0E29EB1068EE3D /* RouteProviderFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50EC0F5A62F0B1D29D13208 /* RouteProviderFactory.swift */; };
 		EE9A99666A053E756399DA66 /* CommuteAnalyticsAggregate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D932805B66B86200A9B9645 /* CommuteAnalyticsAggregate.swift */; };
+		EF8575283D3A37688BF291CC /* TunnelDetectionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D40CAB85DF6276E530672F77 /* TunnelDetectionServiceTests.swift */; };
 		F087ADA9291AE26E7125BD3B /* OSMTagParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9D08E3026C7F5520ACED2C /* OSMTagParsing.swift */; };
 		F169525C2DB0B5475A9302CF /* SearchResultActionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD2CEE6BF282A7424D54D6E /* SearchResultActionCard.swift */; };
 		F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5377B9191F5C3DB661E259F2 /* RerouteEngineTests.swift */; };
@@ -309,7 +309,6 @@
 		3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SteddiLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3EFF4B06D4FB4955CEA5934A /* ContrastRatio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContrastRatio.swift; sourceTree = "<group>"; };
 		3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoderTests.swift; sourceTree = "<group>"; };
-		BBBB2222TUNNELTEST00FILE00 /* TunnelDetectionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDetectionServiceTests.swift; sourceTree = "<group>"; };
 		40841EB3367948433AC5D433 /* SpeedCameraAlertTone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedCameraAlertTone.swift; sourceTree = "<group>"; };
 		41A765371F7D3E908A2FB941 /* RoadGraphSerializerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadGraphSerializerTests.swift; sourceTree = "<group>"; };
 		42C53B70A81A76FE0196BE90 /* TripProgressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripProgressionTests.swift; sourceTree = "<group>"; };
@@ -434,6 +433,7 @@
 		D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationCenterTests.swift; sourceTree = "<group>"; };
 		D3052F1FB67E6754BA5AE313 /* CorridorValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorridorValidator.swift; sourceTree = "<group>"; };
 		D30598BF220C0E6199379B02 /* AudioDuckingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDuckingService.swift; sourceTree = "<group>"; };
+		D40CAB85DF6276E530672F77 /* TunnelDetectionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelDetectionServiceTests.swift; sourceTree = "<group>"; };
 		D4A66865EAA2157BCE1B58E3 /* ArrivalNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalNotificationService.swift; sourceTree = "<group>"; };
 		D50B3D1495689CE92E4ED80B /* GeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingService.swift; sourceTree = "<group>"; };
 		D819D80D3E57EAFFF227D0E8 /* CustomRouteBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomRouteBuilder.swift; sourceTree = "<group>"; };
@@ -652,8 +652,8 @@
 				C45863BA13BEC729818B3EC3 /* SpeedCameraServiceTests.swift */,
 				1B34FE1AC285419AA48A10C0 /* ThemeContrastTests.swift */,
 				622A4EBF2DCE91568A12E937 /* ThemeEngineTests.swift */,
-				BBBB2222TUNNELTEST00FILE00 /* TunnelDetectionServiceTests.swift */,
 				42C53B70A81A76FE0196BE90 /* TripProgressionTests.swift */,
+				D40CAB85DF6276E530672F77 /* TunnelDetectionServiceTests.swift */,
 				CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */,
 				11174913BB8D28369D82EC58 /* ZoneValidationEngineTests.swift */,
 			);
@@ -1269,7 +1269,6 @@
 				0B4B8A0683044E51CD7D29AE /* POIDiscoveryTests.swift in Sources */,
 				3C6ECCF87073C9F5713AC231 /* PendingCommuteStartStoreTests.swift in Sources */,
 				44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */,
-				AAAA1111TUNNELTEST00BUILD0 /* TunnelDetectionServiceTests.swift in Sources */,
 				1FE6CCB15A3CE08B8026FB33 /* PreferenceLearnerInvariantHardeningTests.swift in Sources */,
 				4641591AC55A72F04A852898 /* PreferenceLearnerTests.swift in Sources */,
 				F273E1EB6FB393104399D94D /* RerouteEngineTests.swift in Sources */,
@@ -1285,6 +1284,7 @@
 				BAF5E4B4C4A763C1B3B0B9B7 /* ThemeContrastTests.swift in Sources */,
 				F77FC27F57FDECE474D81093 /* ThemeEngineTests.swift in Sources */,
 				DF73C0BF9350C7CA1709AC80 /* TripProgressionTests.swift in Sources */,
+				EF8575283D3A37688BF291CC /* TunnelDetectionServiceTests.swift in Sources */,
 				CE0E87101839B1C3153234A1 /* VoiceGuidanceServiceTests.swift in Sources */,
 				B72EA015CC0BDA5C9464DFAD /* ZoneValidationEngineTests.swift in Sources */,
 			);
