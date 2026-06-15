@@ -326,6 +326,8 @@ struct SettingsView: View {
                     Text("Permanently removes all commutes, routes, pinned locations, drive records, no-go zones, and commute trips.")
                 }
             }
+            // Soft Liquid Glass fade where content scrolls under the nav title.
+            .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
