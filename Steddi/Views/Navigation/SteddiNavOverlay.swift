@@ -264,8 +264,7 @@ struct SteddiNavOverlay: View {
                 }
                 .padding(14)
                 .frame(width: landscapeCardWidth, alignment: .leading)
-                .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.95, highContrast: highContrast)), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
+                .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.mediumShape)
 
                 // Trip leg context (compact, below instruction)
                 if let tripContext {
@@ -287,7 +286,7 @@ struct SteddiNavOverlay: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .frame(width: landscapeCardWidth, alignment: .leading)
-                    .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.85, highContrast: highContrast)), in: RoundedRectangle(cornerRadius: 12))
+                    .steddiGlass(tint: nil, interactive: false, in: RoundedRectangle(cornerRadius: 12))
                 }
 
                 if !activePreferenceLabels.isEmpty {
@@ -366,7 +365,7 @@ struct SteddiNavOverlay: View {
                     .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
-                    .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.85, highContrast: highContrast)), in: Capsule())
+                    .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.25)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 8)
             }
