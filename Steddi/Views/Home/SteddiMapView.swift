@@ -252,7 +252,14 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         let btn = UIButton(type: .system)
         btn.setImage(UIImage(systemName: "location.fill"), for: .normal)
         btn.tintColor = SteddiTheme.accentUIColor
-        btn.backgroundColor = UIColor(white: 0.1, alpha: 0.9)
+        // Theme- and contrast-aware: light surface in light mode, dark in dark
+        // mode, and fully opaque under Increase Contrast so it never washes out
+        // over the map (was a hardcoded dark translucent fill for both themes).
+        btn.backgroundColor = UIColor { traits in
+            let white: CGFloat = traits.userInterfaceStyle == .dark ? 0.1 : 0.96
+            let alpha: CGFloat = traits.accessibilityContrast == .high ? 1.0 : 0.9
+            return UIColor(white: white, alpha: alpha)
+        }
         btn.layer.cornerRadius = 22
         btn.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
         btn.addTarget(self, action: #selector(recenterTapped), for: .touchUpInside)
