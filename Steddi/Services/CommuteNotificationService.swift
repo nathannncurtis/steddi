@@ -153,7 +153,11 @@ final class CommuteNotificationService {
 
         let earliest = nextDepartureDate()
         guard let earliest else {
-            serviceLog.info("no learned/scheduled departures; skipping background scheduling")
+            // No upcoming departures (commutes removed/deactivated, rules cleared).
+            // Clear any previously submitted request so a stale task can't fire
+            // around a now-defunct window and burn background budget on a no-op.
+            BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.backgroundTaskIdentifier)
+            serviceLog.info("no learned/scheduled departures; cleared pending background refresh")
             return
         }
 

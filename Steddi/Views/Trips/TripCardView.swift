@@ -36,7 +36,9 @@ struct TripCardView: View {
 
                     Text(progressBadge)
                         .font(SteddiTheme.mono(11))
-                        .foregroundStyle(trip.isInProgress ? SteddiTheme.accent : SteddiTheme.textMuted)
+                        // Resting badge text is body-size metadata — use
+                        // textSecondary so "5 stops" clears 4.5:1 on near-black.
+                        .foregroundStyle(trip.isInProgress ? SteddiTheme.accent : SteddiTheme.textSecondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(
@@ -46,7 +48,8 @@ struct TripCardView: View {
 
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(SteddiTheme.textMuted)
+                        // Tappable affordance — promote under high contrast.
+                        .foregroundStyle(SteddiTheme.textMuted(highContrast: DisplayModeService.shared.useHighContrast))
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 12)

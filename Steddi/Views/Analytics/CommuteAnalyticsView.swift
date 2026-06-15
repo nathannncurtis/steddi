@@ -13,6 +13,11 @@ struct CommuteAnalyticsView: View {
     @State private var service = AnalyticsService()
     @State private var window: AnalyticsTimeWindow = .fourWeeks
 
+    /// Fixed on-accent label color. Every accent option is a mid-tone, so a
+    /// near-black label clears AA on the accent pill in all themes (unlike
+    /// surfacePrimary, which flips to near-white in light/grey modes).
+    private static let onAccent = Color(red: 0.07, green: 0.07, blue: 0.08)
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -57,7 +62,10 @@ struct CommuteAnalyticsView: View {
                 } label: {
                     Text(option.displayName)
                         .font(SteddiTheme.mono(13))
-                        .foregroundStyle(window == option ? SteddiTheme.surfacePrimary : SteddiTheme.textSecondary)
+                        // On-accent label: a fixed near-black reads clearly on
+                        // every accent pill (4.97–7.15:1). surfacePrimary would
+                        // invert to near-white in light/grey themes and fail.
+                        .foregroundStyle(window == option ? Self.onAccent : SteddiTheme.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background {

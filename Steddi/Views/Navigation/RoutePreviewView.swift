@@ -174,7 +174,10 @@ struct RoutePreviewView: View {
                 Text("\(Int(ceil(route.expectedTravelTime / 60))) min")
                     .font(SteddiTheme.mono(14))
             }
-            .foregroundStyle(isSelected ? SteddiTheme.accent : SteddiTheme.textMuted)
+            // Selected label sits on accentSubtle (accent@15%); accent-on-accent
+            // fails AA in every theme (1.4–4.6:1), so use textPrimary which
+            // clears it everywhere. The accent identity stays in the fill + stroke.
+            .foregroundStyle(isSelected ? SteddiTheme.textPrimary : SteddiTheme.textMuted)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(

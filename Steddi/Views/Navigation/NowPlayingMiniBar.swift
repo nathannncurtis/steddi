@@ -28,19 +28,14 @@ struct NowPlayingMiniBar: View {
         }
         .padding(.horizontal, compact ? 10 : 12)
         .frame(height: height)
-        .background {
-            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                        .fill(SteddiTheme.surfacePrimary.opacity(0.6))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                        .stroke(SteddiTheme.accent.opacity(0.12), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
-        }
+        // Route through the centralized glass modifier so Reduce Transparency /
+        // high-contrast goes opaque like the rest of the nav chrome instead of
+        // leaving the title/artist fighting the moving map underneath.
+        .steddiGlass(
+            in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium),
+            fallbackStrokeOpacity: 0.12
+        )
+        .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
         .contentShape(RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
         .onTapGesture { service.openNowPlayingApp() }
         .accessibilityElement(children: .combine)
