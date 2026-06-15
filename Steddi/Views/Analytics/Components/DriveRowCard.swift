@@ -54,7 +54,7 @@ struct DriveRowCard: View {
             Text("\(AnalyticsFormat.minutesValue(seconds: seconds))m")
                 .font(SteddiTheme.mono(11))
         }
-        .foregroundStyle(SteddiTheme.warmRed)
+        .foregroundStyle(SteddiTheme.warmRedText)
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
         .background(Capsule().fill(SteddiTheme.warmRedSubtle))
