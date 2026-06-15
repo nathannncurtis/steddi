@@ -14,6 +14,7 @@ struct PostArrivalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx = ThemeModeEx.dynamic.rawValue
 
     @State private var isMatching = true
     @State private var matchedRoute: MatchedRoute?
@@ -49,7 +50,15 @@ struct PostArrivalSheet: View {
                 }
             }
         }
+        // Pin presented chrome (inline nav bar, Discard button, the route-name
+        // keyboard) to the Steddi theme so it never renders in the device
+        // appearance when the two disagree — matching every sibling editor sheet.
+        .preferredColorScheme(resolvedColorScheme)
         .task { await matchTrace() }
+    }
+
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
     }
 
     // MARK: - Loading State
@@ -73,7 +82,12 @@ struct PostArrivalSheet: View {
     // MARK: - Review State (matched route)
 
     private func reviewState(_ matched: MatchedRoute) -> some View {
-        VStack(spacing: 0) {
+        // The content scrolls (the 300pt map + form can't all fit at large
+        // Dynamic Type with the route-name keyboard up) while the action buttons
+        // stay pinned in a bottom safe-area inset so the primary save CTA is
+        // always reachable above the keyboard at every text size.
+        ScrollView {
+            VStack(spacing: 0) {
             // Map preview — fades in first. Becomes tap-to-pin while reporting a
             // condition so the user can drop the exact spot; otherwise read-only.
             RoutePreviewMap(
@@ -135,10 +149,12 @@ struct PostArrivalSheet: View {
             conditionReportSection
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
-
-            Spacer()
-
-            // Action buttons
+                .padding(.bottom, 12)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            // Action buttons — pinned below the scroll so they stay reachable
+            // above the keyboard at every Dynamic Type size.
             VStack(spacing: 10) {
                 Button {
                     Task { await saveRoute(matched) }
@@ -175,7 +191,9 @@ struct PostArrivalSheet: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 8)
             .padding(.bottom, 20)
+            .background(SteddiTheme.surfacePrimary)
             .opacity(reviewAppeared ? 1 : 0)
             .animation(TransitionKit.cardStagger(index: 4), value: reviewAppeared)
         }
