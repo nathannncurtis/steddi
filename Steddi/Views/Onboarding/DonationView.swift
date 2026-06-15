@@ -134,7 +134,12 @@ struct DonationView: View {
             let result = try await product.purchase()
             switch result {
             case .success(let verification):
-                if case .verified = verification {
+                // Only deliver + finish a *verified* transaction. Tips are
+                // consumables, so StoreKit keeps the transaction in the queue
+                // (and re-delivers it via Transaction.updates on every launch)
+                // until we call finish() — do it after recording the thank-you.
+                if case .verified(let transaction) = verification {
+                    await transaction.finish()
                     withAnimation {
                         showThankYou = true
                     }
@@ -150,6 +155,27 @@ struct DonationView: View {
             }
         } catch {
             // Purchase failed — no aggressive error, just let them try again
+        }
+    }
+}
+
+/// Finishes any tip transactions that StoreKit delivers out-of-band — e.g. a
+/// purchase that completed while the sheet was closed, an Ask-to-Buy approval,
+/// or a transaction left unfinished by a prior version. Without a live
+/// `Transaction.updates` listener these consumables would otherwise sit in the
+/// queue forever and re-deliver on every launch. Started once at app launch.
+enum TipTransactionObserver {
+    private static var task: Task<Void, Never>?
+
+    static func start() {
+        guard task == nil else { return }
+        task = Task.detached {
+            for await update in Transaction.updates {
+                guard case .verified(let transaction) = update else { continue }
+                // Tips are consumables with nothing to unlock; just finalize so
+                // the transaction leaves the queue and stops re-delivering.
+                await transaction.finish()
+            }
         }
     }
 }

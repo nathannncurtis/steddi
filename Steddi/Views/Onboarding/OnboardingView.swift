@@ -215,11 +215,15 @@ struct OnboardingView: View {
                 .transition(.opacity)
             }
 
-            if coordinator.currentBeat.allowsSkip {
-                Button("Skip") { skip() }
+            // One skip control per beat. The autoplay showcase beats use the
+            // top-right "Skip setup" affordance instead (alongside "Next"), so we
+            // suppress the footer skip there to avoid two identical controls.
+            if coordinator.currentBeat.allowsSkip && !coordinator.currentBeat.autoAdvances {
+                Button("Skip setup") { skip() }
                     .font(.subheadline)
                     .foregroundStyle(coordinator.currentBeat == .hero ? .white.opacity(0.85) : SteddiTheme.textSecondary)
                     .disabled(coordinator.isTransitioning)
+                    .accessibilityHint("Skips the rest of setup and goes to the app")
             }
         }
         .padding(.horizontal, 24)
@@ -237,13 +241,15 @@ struct OnboardingView: View {
         }
     }
 
-    /// A small "Skip intro" affordance for the autoplaying showcase beats so an
-    /// impatient first-timer can bail straight to done. Hidden on the hero
-    /// (which has its own footer Skip) and on `permissions` (no skip there).
+    /// The single skip control for the autoplaying showcase beats. Labeled
+    /// "Skip setup" (not "Skip intro") because it ends the *entire* onboarding —
+    /// not just the showcase reel — so the scope is unambiguous. The footer skip
+    /// is suppressed on these beats so this is the only skip affordance shown.
+    /// Hidden on the hero (footer skip) and on `permissions` (no skip there).
     @ViewBuilder
     private var skipIntroButton: some View {
         if coordinator.currentBeat.autoAdvances {
-            Button("Skip intro") { skip() }
+            Button("Skip setup") { skip() }
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 16)
@@ -252,7 +258,8 @@ struct OnboardingView: View {
                 .padding(.trailing, 12)
                 .disabled(coordinator.isTransitioning)
                 .transition(.opacity)
-                .accessibilityLabel("Skip intro")
+                .accessibilityLabel("Skip setup")
+                .accessibilityHint("Skips the rest of setup and goes to the app")
         }
     }
 

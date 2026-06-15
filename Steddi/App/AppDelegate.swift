@@ -41,11 +41,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             appLog.fault("UNCAUGHT EXCEPTION: \(exception.name.rawValue): \(exception.reason ?? "no reason")\n\(exception.callStackSymbols.joined(separator: "\n"))")
         }
 
-        // ArrivalNotificationService keeps its own permission/category flow; the
-        // SAVE_ROUTE prompt fires post-arrival, not at launch.
-        ArrivalNotificationService.shared.requestPermissionIfNeeded()
+        // Register the SAVE_ROUTE category and become the notification delegate at
+        // launch (neither prompts the user). We deliberately do NOT request
+        // notification permission here — per the onboarding spec it is never asked
+        // at first launch; the arrival/SAVE_ROUTE prompt is deferred to the first
+        // arrival (HomeView), mirroring the in-context location/commute flows.
         ArrivalNotificationService.shared.registerCategory()
         ArrivalNotificationService.shared.setupDelegate()
+
+        // Finish any out-of-band tip (consumable) transactions so they don't sit
+        // in the StoreKit queue and re-deliver on every launch.
+        TipTransactionObserver.start()
 
         // Migrate the legacy "themeMode" key before the engine reads settings,
         // then spin the engine up so the first frame paints the right palette.
