@@ -481,12 +481,17 @@ enum ThemeMode: String, CaseIterable {
     }
 
     /// Calculate whether the sun is up using the user's actual location and solar math.
-    /// Falls back to 7am-7pm if no location is available.
+    /// Falls back to 7am-7pm only when no real location is available.
     static var isDaytime: Bool {
-        // Get the user's location from LocationService or CLLocationManager
-        let locManager = CLLocationManager()
-        guard let coord = locManager.location?.coordinate else {
-            // No location — fall back to simple time check
+        // Prefer the process-wide last-known fix the live location feed
+        // publishes (LastKnownLocation) — a freshly-created CLLocationManager's
+        // `.location` read cold is almost always nil, which is what silently
+        // killed the accurate solar check and forced the clock fallback. A cold
+        // manager can still occasionally return CoreLocation's process cache, so
+        // try it as a secondary source before falling back to the clock.
+        let coord = LastKnownLocation.current ?? CLLocationManager().location?.coordinate
+        guard let coord else {
+            // No real location anywhere — fall back to simple time check.
             let hour = Calendar.current.component(.hour, from: Date())
             return hour >= 7 && hour < 19
         }

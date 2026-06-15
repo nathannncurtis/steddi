@@ -315,6 +315,12 @@ final class NavigationEngine {
         // navigation (deduped against the LocationService forward).
         TunnelDetectionService.shared.updateLocation(location)
 
+        // Publish the fix to the process-wide last-known store so synchronous,
+        // nonisolated theming code (SteddiTheme.ThemeMode.isDaytime, read from
+        // map surfaces / CarPlay) can run the real solar check instead of a cold
+        // CLLocationManager whose `.location` is almost always nil.
+        LastKnownLocation.update(location.coordinate)
+
         currentCoordinate = location.coordinate
         locationUpdateCount += 1
 
@@ -797,5 +803,38 @@ final class NavigationEngine {
             if !name.isEmpty { return name }
         }
         return ""
+    }
+}
+
+// MARK: - Last-Known Location (process-wide)
+
+/// Process-wide cache of the most recent location fix, readable synchronously
+/// from any (nonisolated) context.
+///
+/// Some synchronous, non-actor-isolated code needs the user's coordinate without
+/// being able to `await` a fix or touch a `@MainActor` location service — most
+/// notably `SteddiTheme.ThemeMode.isDaytime`, which decides dynamic light/dark
+/// for map surfaces and CarPlay. A freshly-created `CLLocationManager().location`
+/// read cold is almost always nil (the property is only populated after updates
+/// start), so that path silently fell back to a fixed 7am–7pm clock. The live
+/// navigation feed (`NavigationEngine.updateLocation`) publishes every fix here
+/// so the real solar check has a coordinate to work with. Thread-safe via an
+/// unfair lock; last-writer-wins.
+enum LastKnownLocation {
+    nonisolated(unsafe) private static var coordinate: CLLocationCoordinate2D?
+    private static let lock = NSLock()
+
+    /// Record the latest fix. Called from the live location feed.
+    static func update(_ coordinate: CLLocationCoordinate2D) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.coordinate = coordinate
+    }
+
+    /// The most recent fix, or nil if none has been recorded this process.
+    static var current: CLLocationCoordinate2D? {
+        lock.lock()
+        defer { lock.unlock() }
+        return coordinate
     }
 }
