@@ -147,15 +147,18 @@ final class VoiceGuidanceService: NSObject, AVSpeechSynthesizerDelegate {
     // MARK: - AVSpeechSynthesizerDelegate
 
     /// Speech finished naturally — un-duck media (unless an alert still holds
-    /// the duck). AVSpeechSynthesizer fires delegate callbacks on the main queue.
+    /// the duck). AVSpeechSynthesizer USUALLY fires delegate callbacks on the main
+    /// queue, but that is not contractually guaranteed (interruption/route-change
+    /// paths can deliver off-main), so hop explicitly — `assumeIsolated` would
+    /// FATAL-TRAP an off-main delivery mid-drive.
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        MainActor.assumeIsolated { AudioDuckingService.shared.deactivateVoiceGuidance() }
+        Task { @MainActor in AudioDuckingService.shared.deactivateVoiceGuidance() }
     }
 
     /// Speech was cancelled (e.g. a newer prompt interrupted it). If another
     /// utterance is starting it will re-activate; otherwise this restores media.
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         guard !synthesizer.isSpeaking else { return }
-        MainActor.assumeIsolated { AudioDuckingService.shared.deactivateVoiceGuidance() }
+        Task { @MainActor in AudioDuckingService.shared.deactivateVoiceGuidance() }
     }
 }

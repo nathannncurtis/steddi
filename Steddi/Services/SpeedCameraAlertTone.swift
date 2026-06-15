@@ -127,10 +127,14 @@ final class SpeedCameraAlertTone: NSObject {
 extension SpeedCameraAlertTone: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         // Restore media volume (unless voice guidance still holds the duck).
-        MainActor.assumeIsolated { AudioDuckingService.shared.deactivateAlert() }
+        // AVAudioPlayerDelegate is NOT guaranteed to arrive on the main thread
+        // (interruption/route-change-driven completions can land on an internal
+        // audio thread), so hop explicitly — `assumeIsolated` would FATAL-TRAP an
+        // off-main delivery mid-drive.
+        Task { @MainActor in AudioDuckingService.shared.deactivateAlert() }
     }
 
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
-        MainActor.assumeIsolated { AudioDuckingService.shared.deactivateAlert() }
+        Task { @MainActor in AudioDuckingService.shared.deactivateAlert() }
     }
 }
