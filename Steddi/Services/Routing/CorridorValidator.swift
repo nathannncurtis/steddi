@@ -205,11 +205,19 @@ enum CorridorValidator {
         }
 
         let coords = geometry(of: searchResult, in: graph)
+        // Time-sanity must compare like-for-like against a pure free-flow lower
+        // bound. `searchResult.totalCost` is in the cost model's currency — under
+        // DefaultCostModel it folds in turn/zone PENALTIES (destination-only, tolls,
+        // unprotected lefts, …) that the crow-flight bound has no notion of, so a
+        // legitimately penalized route would be falsely flagged as time-implausible.
+        // Pass nil to derive the honest free-flow estimate (geometry distance ÷
+        // graphMaxSpeed) — the same basis the lower bound uses, and the basis
+        // CustomRouter reports as the route's duration.
         let result = validate(
             coordinates: coords,
             origin: origin,
             destination: destination,
-            timeSeconds: searchResult.totalCost,
+            timeSeconds: nil,
             graphMaxSpeedMPS: Double(graph.graphMaxSpeedMPS),
             config: config
         )
