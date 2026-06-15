@@ -107,7 +107,7 @@ struct EmergencyView: View {
         } label: {
             Label("Share My Location", systemImage: "square.and.arrow.up")
                 .font(.body.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(SteddiTheme.onAccent)
                 .frame(maxWidth: .infinity, minHeight: 28)
                 .padding(.vertical, 16)
                 .background(
