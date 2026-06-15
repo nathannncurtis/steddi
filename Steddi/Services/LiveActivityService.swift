@@ -117,11 +117,30 @@ final class LiveActivityService {
         }
     }
 
+    /// End any Live Activity without blocking the caller — for paths where the
+    /// process keeps running (a routine `sceneDidDisconnect` scene reclaim), so
+    /// the main thread is never stalled. Fire-and-forget: the end request is
+    /// dispatched and the next launch's `cleanupOrphanedActivities()` backstops
+    /// anything that didn't land. Use `endActivityImmediately()` only when the
+    /// process is actually dying (applicationWillTerminate), where the blocking
+    /// wait is justified to make the end request land before we're killed.
+    func endActivityAsync() {
+        let activities = Activity<NavigationAttributes>.activities
+        guard !activities.isEmpty else { return }
+        currentActivity = nil
+        Task {
+            for activity in activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
+    }
+
     /// End the Live Activity right now — termination path for
-    /// applicationWillTerminate / sceneDidDisconnect, where the normal async
-    /// lifecycle never gets a chance to run before the process dies.
-    /// Blocks the caller briefly (bounded at 2s) so the end request lands;
-    /// without it the activity lingers on the Lock Screen as a zombie.
+    /// applicationWillTerminate, where the normal async lifecycle never gets a
+    /// chance to run before the process dies. Blocks the caller briefly (bounded
+    /// at 2s) so the end request lands; without it the activity lingers on the
+    /// Lock Screen as a zombie. Do NOT use this on a routine scene reclaim where
+    /// the process survives — use `endActivityAsync()` to avoid stalling the UI.
     func endActivityImmediately() {
         let activities = Activity<NavigationAttributes>.activities
         guard !activities.isEmpty else { return }

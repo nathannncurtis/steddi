@@ -94,9 +94,14 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
         // activity still under its dismissal policy, or a swipe-kill while idle):
         // applicationWillTerminate handles true process death regardless of
         // isNavigating, and the next launch's cleanupOrphanedActivities() sweeps
-        // up anything missed. endActivityImmediately() self-guards on empty.
+        // up anything missed.
+        //
+        // Use the NON-blocking end here: this is a routine scene reclaim, not
+        // termination — the process keeps running, so the 2s blocking wait of
+        // endActivityImmediately() would needlessly stall the main thread (and
+        // any live CarPlay scene). endActivityAsync() self-guards on empty.
         guard !NavigationStateManager.shared.isNavigating else { return }
-        LiveActivityService.shared.endActivityImmediately()
+        LiveActivityService.shared.endActivityAsync()
     }
 
     private func handleURL(_ url: URL) {
