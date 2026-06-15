@@ -384,11 +384,18 @@ final class NavigationStateManager {
         // The live ETA is also the freshest real commute ETA the app computes,
         // so persist it (with a timestamp) as the "last known" value the widget
         // shows when idle — that's the whole point of a commute-ETA widget.
-        widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
-        widgetDefaults?.set(Date().timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
+        //
+        // kIsNavigating is cheap and must stay current every tick. But the
+        // displayed ETA only changes on a whole-minute boundary, so writing
+        // kETAMinutes + restamping kETAUpdatedAt every 500ms is pure churn the
+        // widget can't observe (the freshness stamp would also tick needlessly).
+        // Only write the ETA + restamp + reload when the minute actually changes,
+        // matching the timeline-reload gate.
         widgetDefaults?.set(engine.isNavigating, forKey: Self.kIsNavigating)
         if engine.etaMinutes != lastWidgetETAMinutes {
             lastWidgetETAMinutes = engine.etaMinutes
+            widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
+            widgetDefaults?.set(Date().timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
             WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
         }
     }
@@ -529,6 +536,23 @@ final class NavigationStateManager {
         widgetDefaults?.set(0, forKey: Self.kETAMinutes)
         widgetDefaults?.removeObject(forKey: Self.kETAUpdatedAt)
         WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
+    }
+
+    /// Stale-session guard for launch. If the app was killed mid-drive (OOM /
+    /// watchdog), the teardown paths that clear `kIsNavigating` never ran, so the
+    /// App Group keeps `kIsNavigating == true` plus a near-arrival ETA with a
+    /// recent stamp — and the widget then renders a phantom "Navigating" card
+    /// with a finished drive's ~1-2 min remaining presented as a live ETA
+    /// indefinitely (the idle refresh only runs when a commute departure is
+    /// pending). At launch we are by definition not yet in a live session, so if
+    /// `isNavigating` is false reconcile the widget to a known-idle baseline.
+    /// Mirrors the Live Activity orphan sweep already run at launch. Safe no-op
+    /// when actually navigating (a CarPlay-first relaunch into an active drive),
+    /// since the next sync immediately repopulates the live values.
+    func reconcileWidgetSessionAtLaunch() {
+        guard !isNavigating else { return }
+        guard widgetDefaults?.bool(forKey: Self.kIsNavigating) == true else { return }
+        clearWidgetSession()
     }
 
     // MARK: - Idle Commute ETA (widget pre-drive)

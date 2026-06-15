@@ -97,6 +97,12 @@ struct HomeView: View {
     @State private var lastRecoveryAt: Date?
     @State private var recoveriesThisTrip = 0
 
+    // When navigation ends with the 30s "You have arrived" linger (the
+    // non-immediate endActivity()), the activity stays presented for that window.
+    // Record the window end so an incidental onAppear rebuild (e.g. Reduce
+    // Transparency toggling) doesn't reap that still-presenting activity early.
+    @State private var arrivalLingerUntil: Date?
+
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
@@ -188,7 +194,7 @@ struct HomeView: View {
                         locationFeedTask = nil
                         navigationEngine?.stopNavigation()
                         navStateManager.stopObserving()
-                        LiveActivityService.shared.endActivity()
+                        endActivityWithArrivalLinger()
                         is3DNav = true
                         withAnimation(TransitionKit.standardEntrance) {
                             isNavigating = false
@@ -302,7 +308,15 @@ struct HomeView: View {
             // struct's @State), so gating on it skips the reap during a live
             // session. True cold-launch orphans from a prior process are still
             // backstopped by the sweep in AppDelegate.didFinishLaunching.
-            if !navStateManager.isNavigating {
+            //
+            // Also skip the reap during the post-arrival 30s "You have arrived"
+            // linger: isNavigating is already false by then (stopObserving runs
+            // before endActivity), so without this guard an incidental rebuild in
+            // that window would cleanupOrphanedActivities() the still-presenting
+            // arrival glance and cut it short. That activity is owned by this
+            // process and not yet orphaned.
+            let inArrivalLinger = arrivalLingerUntil.map { Date() < $0 } ?? false
+            if !navStateManager.isNavigating && !inArrivalLinger {
                 LiveActivityService.shared.cleanupOrphanedActivities()
             }
             // Drain any start request that landed before this view attached
@@ -719,6 +733,13 @@ struct HomeView: View {
         if RecoveryBudget.shouldReset(isContinuingTripLeg: activeTrip != nil) {
             recoveriesThisTrip = 0
         }
+        // The recovery request debounce is PER-ENGINE, not per-trip: a fresh
+        // engine has no prior reroute to suppress. Reset it unconditionally so a
+        // recovery that fired within 30s before this start (a route switch or a
+        // continuous-mode leg handoff) can't silently suppress the first genuine
+        // off-route on the new leg's geometry.
+        lastRecoveryAt = nil
+        isRecoveryInFlight = false
         let engine = NavigationEngine()
         engine.startNavigation(route: route)
         self.navigationEngine = engine
@@ -1326,6 +1347,11 @@ struct HomeView: View {
         if RecoveryBudget.shouldReset(isContinuingTripLeg: activeTrip != nil) {
             recoveriesThisTrip = 0
         }
+        // Per-engine recovery debounce — clear it for the fresh engine so the
+        // prior leg/route's cooldown can't suppress the new geometry's first
+        // off-route (see beginNavigation for the full rationale).
+        lastRecoveryAt = nil
+        isRecoveryInFlight = false
 
         let engine = NavigationEngine()
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
@@ -1824,6 +1850,15 @@ struct HomeView: View {
         showTripArrivalPrompt = true
     }
 
+    /// End the Live Activity with its 30s "You have arrived" linger and record
+    /// the window so the onAppear orphan sweep won't reap the still-presenting
+    /// activity during it (an incidental subtree rebuild — Reduce Transparency
+    /// toggling — re-fires onAppear and would otherwise cut the glance short).
+    private func endActivityWithArrivalLinger() {
+        arrivalLingerUntil = Date().addingTimeInterval(30)
+        LiveActivityService.shared.endActivity()
+    }
+
     /// Manual mode pause between legs: engine and overlay stand down, the
     /// trip stays active so the next-leg prompt can continue it.
     private func pauseNavigationBetweenLegs() {
@@ -1833,7 +1868,7 @@ struct HomeView: View {
         locationFeedTask = nil
         navigationEngine?.stopNavigation()
         navStateManager.stopObserving()
-        LiveActivityService.shared.endActivity()
+        endActivityWithArrivalLinger()
         is3DNav = true
         withAnimation(TransitionKit.standardEntrance) {
             isNavigating = false
@@ -1854,7 +1889,7 @@ struct HomeView: View {
         locationFeedTask = nil
         navigationEngine?.stopNavigation()
         navStateManager.stopObserving()
-        LiveActivityService.shared.endActivity()
+        endActivityWithArrivalLinger()
         is3DNav = true
         isNavigating = false
         navigationRoute = nil
@@ -1899,7 +1934,7 @@ struct HomeView: View {
         navigationEngine?.onOffRoute = nil
         navigationEngine?.stopNavigation()
         navigationEngine = nil
-        LiveActivityService.shared.endActivity()
+        endActivityWithArrivalLinger()
         is3DNav = true
         withAnimation(TransitionKit.standardEntrance) {
             isNavigating = false

@@ -101,6 +101,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             // that path. Self-guards on an empty activity set; a true cold launch has
             // no in-memory active nav, so it can't end a legitimately-live activity.
             LiveActivityService.shared.cleanupOrphanedActivities()
+
+            // Same backstop for the home-screen widget: an OOM/watchdog kill
+            // mid-drive leaves the App Group's kIsNavigating stuck true, so the
+            // widget shows a phantom live nav. At launch we're not in a live
+            // session, so clear a crash-orphaned "navigating" flag + its stale
+            // ETA. No-op when actually navigating.
+            NavigationStateManager.shared.reconcileWidgetSessionAtLaunch()
         }
 
         return true

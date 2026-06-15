@@ -500,6 +500,66 @@ struct NavigationStateManagerWidgetSyncTests {
 
         engine.stopNavigation()
     }
+
+    /// Crash-orphan guard: an OOM/watchdog kill mid-drive leaves the App Group's
+    /// kIsNavigating stuck true with a near-arrival ETA, so the widget shows a
+    /// phantom live nav forever. At launch (not navigating) the reconcile must
+    /// clear the flag and zero the stale live ETA.
+    @Test("reconcileWidgetSessionAtLaunch clears a crash-orphaned navigating flag when idle")
+    func reconcileClearsStaleNavigatingFlag() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        // Simulate the App Group left behind by a crash mid-drive.
+        defaults.set(true, forKey: "widget.isNavigating")
+        defaults.set(2, forKey: "widget.etaMinutes")
+        defaults.set(Date().timeIntervalSince1970, forKey: "widget.etaUpdatedAt")
+
+        let manager = NavigationStateManager()
+        #expect(manager.isNavigating == false)
+
+        manager.reconcileWidgetSessionAtLaunch()
+
+        #expect(defaults.bool(forKey: "widget.isNavigating") == false)
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 0)
+        #expect(defaults.double(forKey: "widget.etaUpdatedAt") == 0)
+    }
+
+    /// The reconcile must not wipe a legitimate idle ETA snapshot — it only acts
+    /// when the orphaned navigating flag is set.
+    @Test("reconcileWidgetSessionAtLaunch leaves a clean idle snapshot untouched")
+    func reconcileNoOpWhenAlreadyIdle() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        defaults.set(false, forKey: "widget.isNavigating")
+        defaults.set(31, forKey: "widget.etaMinutes")
+        let stamp = Date().timeIntervalSince1970
+        defaults.set(stamp, forKey: "widget.etaUpdatedAt")
+
+        let manager = NavigationStateManager()
+        manager.reconcileWidgetSessionAtLaunch()
+
+        // Idle pre-drive ETA preserved.
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 31)
+        #expect(defaults.double(forKey: "widget.etaUpdatedAt") == stamp)
+        #expect(defaults.bool(forKey: "widget.isNavigating") == false)
+    }
+
+    /// Must not clobber a genuinely live session (e.g. a CarPlay-first relaunch
+    /// into an active drive where isNavigating is already true).
+    @Test("reconcileWidgetSessionAtLaunch is a no-op while actually navigating")
+    func reconcileNoOpWhileNavigating() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        defaults.set(true, forKey: "widget.isNavigating")
+        defaults.set(7, forKey: "widget.etaMinutes")
+
+        let manager = NavigationStateManager()
+        manager.isNavigating = true
+
+        manager.reconcileWidgetSessionAtLaunch()
+
+        #expect(defaults.bool(forKey: "widget.isNavigating") == true)
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 7)
+
+        manager.isNavigating = false
+    }
 }
 
 // MARK: - Active Trip Teardown Tests
