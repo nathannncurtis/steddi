@@ -20,7 +20,7 @@ struct AggregateStatsCards: View {
                 StatCard(
                     value: AnalyticsFormat.hoursValue(seconds: stats.totalTrafficSeconds),
                     label: "In traffic", unit: "hrs", icon: "car.rear.waves.up",
-                    tint: stats.totalTrafficSeconds > 0 ? SteddiTheme.warmRed : SteddiTheme.sage
+                    tint: stats.totalTrafficSeconds > 0 ? SteddiTheme.warmRedText : SteddiTheme.sageText
                 )
             }
 
@@ -38,7 +38,7 @@ struct AggregateStatsCards: View {
             splitCell(
                 value: AnalyticsFormat.duration(seconds: stats.medianDurationSeconds),
                 label: "Typical drive",
-                tint: SteddiTheme.sage
+                tint: SteddiTheme.sageText
             )
             Rectangle()
                 .fill(SteddiTheme.textMuted.opacity(0.2))
@@ -46,7 +46,7 @@ struct AggregateStatsCards: View {
             splitCell(
                 value: AnalyticsFormat.duration(seconds: stats.p90DurationSeconds),
                 label: "Slow day (90th)",
-                tint: SteddiTheme.warmRed
+                tint: SteddiTheme.warmRedText
             )
         }
         .padding(.vertical, 12)

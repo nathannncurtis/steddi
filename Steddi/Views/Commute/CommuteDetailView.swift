@@ -376,10 +376,13 @@ struct CommuteDetailView: View {
                     .frame(width: 32, height: 32)
                     .background(
                         selectedDays.wrappedValue.contains(weekday)
-                            ? SteddiTheme.accent
+                            ? SteddiTheme.accentBrand
                             : Color(.systemGray5)
                     )
-                    .foregroundStyle(selectedDays.wrappedValue.contains(weekday) ? .white : .primary)
+                    // On-fill label: brand-hue fill + onAccent clears AA on
+                    // every accent in every theme; the text-safe accent fill +
+                    // white failed in grey (~1.1:1) and dark.
+                    .foregroundStyle(selectedDays.wrappedValue.contains(weekday) ? SteddiTheme.onAccent : .primary)
                     .clipShape(Circle())
                     .onTapGesture {
                         if selectedDays.wrappedValue.contains(weekday) {
@@ -428,18 +431,28 @@ struct CommuteDetailView: View {
                 HStack(spacing: 8) {
                     Text(route.source.rawValue.capitalized)
                         .font(.caption2)
-                        .foregroundStyle(.white)
+                        // On-fill caption: pick black/white per the fill hue
+                        // (contrastingForeground on the sage fill, onAccent on
+                        // the accent-brand fill). Hard-coded white failed AA on
+                        // the sage fill (2.45:1) and on the text-safe accent in
+                        // dark/grey.
+                        .foregroundStyle(route.source == .recorded
+                            ? SteddiTheme.contrastingForeground(on: SteddiTheme.sageRGB)
+                            : SteddiTheme.onAccent)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(route.source == .recorded ? SteddiTheme.sage : SteddiTheme.accent, in: Capsule())
+                        .background(route.source == .recorded ? SteddiTheme.sage : SteddiTheme.accentBrand, in: Capsule())
 
                     if offlineCacheService.downloadedRouteIDs.contains(route.id) {
                         Text("Offline")
                             .font(.caption2)
-                            .foregroundStyle(.white)
+                            // Solid brand-hue fill + onAccent so the on-fill
+                            // contrast math holds; the previous 0.6-opacity fill
+                            // let the surface bleed through and white failed AA.
+                            .foregroundStyle(SteddiTheme.onAccent)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(SteddiTheme.accent.opacity(0.6), in: Capsule())
+                            .background(SteddiTheme.accentBrand, in: Capsule())
                     }
 
                     if let duration = route.typicalDurationSeconds {

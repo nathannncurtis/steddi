@@ -91,7 +91,7 @@ enum AnalyticsFormat {
         SteddiTheme.surfacePrimary.ignoresSafeArea()
         HStack(spacing: 12) {
             StatCard(value: "42", label: "Duration", unit: "min", icon: "clock")
-            StatCard(value: "8", label: "In traffic", unit: "min", icon: "car.rear.waves.up", tint: SteddiTheme.warmRed)
+            StatCard(value: "8", label: "In traffic", unit: "min", icon: "car.rear.waves.up", tint: SteddiTheme.warmRedText)
         }
         .padding()
     }

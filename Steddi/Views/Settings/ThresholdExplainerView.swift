@@ -7,6 +7,15 @@ struct ThresholdExplainerView: View {
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
+
+    /// A presented sheet gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin the app theme here
+    /// too — otherwise this sheet renders in the device appearance and mismatches
+    /// the rest of Steddi when the chosen theme differs from the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     /// Display percentage as whole number
     private var displayPercentage: Int { Int(thresholdPercentage * 100) }
@@ -94,6 +103,7 @@ struct ThresholdExplainerView: View {
                 }
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     private func exampleCard(remaining: Int, savings: Int, wouldNotify: Bool) -> some View {
