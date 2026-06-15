@@ -176,9 +176,21 @@ struct DefaultCostModel: SearchCost {
         guard speed > 0 else { return .infinity }
         var time = Double(edge.lengthMeters) / speed   // free-flow seconds (the floor)
 
+        // Hard/soft no-go zones need the edge's geometry, which costs an O(fan-out)
+        // edge-index resolution + slice. In the common path (no zones configured)
+        // skip it entirely — edgeCost is the single hottest function in A*, and
+        // resolving geometry only to discard it would scale search latency with
+        // node degree, undoing the dense-CSR design. Resolved once and shared by
+        // the hard- and soft-zone checks below.
+        let geom: ArraySlice<CLLocationCoordinate2D>?
+        if !context.hardZones.isEmpty || !context.softZones.isEmpty {
+            geom = graph.geometry(of: edgeIndexForCost(edge, in: graph))
+        } else {
+            geom = nil
+        }
+
         // Hard no-go: an excluded edge is impassable.
-        let geom = graph.geometry(of: edgeIndexForCost(edge, in: graph))
-        if !context.hardZones.isEmpty {
+        if let geom {
             for zone in context.hardZones where zone.intersects(geom) { return .infinity }
         }
 
@@ -198,7 +210,7 @@ struct DefaultCostModel: SearchCost {
         if context.isRushHour { time *= weights.rushHourMultiplier }
 
         // Soft no-go: graduated penalty proportional to time spent in the zone.
-        if !context.softZones.isEmpty {
+        if !context.softZones.isEmpty, let geom {
             let baseTime = Double(edge.lengthMeters) / speed
             for zone in context.softZones where zone.intersects(geom) {
                 time += baseTime * weights.softZoneTimeMultiplier
