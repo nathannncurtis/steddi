@@ -82,10 +82,11 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
-        // Scene torn down mid-navigation (user swiped the app away) —
-        // applicationWillTerminate is not guaranteed to fire, so end the
-        // Live Activity here too or it lingers on the Lock Screen.
-        guard NavigationStateManager.shared.isNavigating else { return }
+        // Scene torn down (user swiped the app away) — applicationWillTerminate is
+        // not guaranteed to fire, so end any Live Activity here too or it lingers
+        // on the Lock Screen. We do NOT gate on isNavigating: a paused/arrived
+        // activity awaiting its 30s dismissal must still be reaped.
+        // endActivityImmediately() self-guards (no-op when nothing is live).
         LiveActivityService.shared.endActivityImmediately()
     }
 
