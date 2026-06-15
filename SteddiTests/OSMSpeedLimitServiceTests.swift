@@ -623,6 +623,42 @@ struct OSMSpeedLimitCacheTests {
         #expect(service.speedLimit(at: onRoad, heading: nil)?.mph == 25)
         #expect(service.speedLimit(at: coord(1.0005, 1), heading: nil) == nil)
     }
+
+    @Test("Failed prefetch for a new route clears the previous route's index")
+    func failedPrefetchClearsStaleIndex() async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // Two geographically distinct routes. The first loads successfully; the
+        // second's prefetch fails on every mirror. Route A's first mirror
+        // succeeds in one request; route B then fails on all three mirrors —
+        // so the first request is route A and every later one is route B.
+        let firstPolyline = [coord(0, 0), coord(0.001, 0)]
+        let secondPolyline = [coord(5, 5), coord(5.001, 5)]
+        let firstOnRoad = coord(0.0005, 0)
+        let counter = CallCounter()
+
+        let transport: OSMSpeedLimitService.Transport = { request in
+            if counter.next() == 1 {
+                return httpOK(overpassData(wayJSON(id: 1, highway: "residential", maxspeed: "25 mph", coords: [(0, 0), (0.001, 0)])), url: request.url)
+            }
+            throw URLError(.timedOut)
+        }
+        let service = OSMSpeedLimitService(transport: transport, cacheDirectory: directory)
+
+        await service.prefetch(for: firstPolyline, routeKey: "route-A")
+        #expect(service.loadedRouteKey == "route-A")
+        #expect(service.speedLimit(at: firstOnRoad, heading: nil)?.mph == 25)
+
+        // Switch-nav to route B; its prefetch fails on all mirrors.
+        await service.prefetch(for: secondPolyline, routeKey: "route-B")
+
+        // The stale route-A index must be gone: lookups on route-A geometry
+        // return nil rather than the abandoned route's limit, and loadedRouteKey
+        // goes nil — it never keeps reporting the old route as still loaded.
+        #expect(service.loadedRouteKey == nil)
+        #expect(service.speedLimit(at: firstOnRoad, heading: nil) == nil)
+    }
 }
 
 // MARK: - Spatial Lookup
