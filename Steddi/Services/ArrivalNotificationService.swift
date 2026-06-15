@@ -14,11 +14,22 @@ final class ArrivalNotificationService {
 
     private init() {}
 
-    /// Request notification permission if not already granted.
-    func requestPermissionIfNeeded() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            if settings.authorizationStatus == .notDetermined {
-                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    /// Request notification permission if not already determined, then run
+    /// `completion` with the resulting authorization (true = may post). This is
+    /// called in-context (post-arrival, when we're about to schedule the
+    /// SAVE_ROUTE prompt) — never at first launch, per the onboarding spec.
+    func requestPermissionIfNeeded(completion: @escaping (Bool) -> Void = { _ in }) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                    completion(granted)
+                }
+            case .authorized, .provisional, .ephemeral:
+                completion(true)
+            default:
+                completion(false)
             }
         }
     }
@@ -43,23 +54,30 @@ final class ArrivalNotificationService {
         }
     }
 
-    /// Schedule a "save this route?" notification 2 minutes from now.
+    /// Schedule a "save this route?" notification 2 minutes from now. This is the
+    /// in-context moment the notification permission is first requested (the user
+    /// just finished a drive worth saving) — the prompt is only added once we have
+    /// authorization, so a denied/undetermined user never gets a silent no-op.
     func scheduleRoutePrompt(commuteName: String, destinationName: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "Route recorded"
-        content.body = "Want to save this route for your \(commuteName) commute to \(destinationName)?"
-        content.sound = .default
-        content.categoryIdentifier = Self.categoryIdentifier
+        requestPermissionIfNeeded { [weak self] granted in
+            guard granted, let self else { return }
 
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 120, repeats: false) // 2 minutes
+            let content = UNMutableNotificationContent()
+            content.title = "Route recorded"
+            content.body = "Want to save this route for your \(commuteName) commute to \(destinationName)?"
+            content.sound = .default
+            content.categoryIdentifier = Self.categoryIdentifier
 
-        let request = UNNotificationRequest(
-            identifier: Self.notificationIdentifier,
-            content: content,
-            trigger: trigger
-        )
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 120, repeats: false) // 2 minutes
 
-        UNUserNotificationCenter.current().add(request)
+            let request = UNNotificationRequest(
+                identifier: Self.notificationIdentifier,
+                content: content,
+                trigger: trigger
+            )
+
+            UNUserNotificationCenter.current().add(request)
+        }
     }
 
     /// Cancel any pending route prompt.
