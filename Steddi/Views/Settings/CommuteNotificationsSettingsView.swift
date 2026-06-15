@@ -150,11 +150,10 @@ struct CommuteNotificationsSettingsView: View {
             } label: {
                 Text("Enable Notifications")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
             }
+            .buttonStyle(.steddiPrimary)
             .padding(.horizontal, 24)
 
             Button("Not now") {

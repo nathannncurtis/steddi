@@ -52,12 +52,10 @@ struct SearchResultActionCard: View {
                 Button(action: onNavigate) {
                     Label("Navigate", systemImage: "location.fill")
                         .font(SteddiTheme.heading(14))
-                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
-                        .background(SteddiTheme.accent, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.steddiPrimary)
 
                 Button(action: onSave) {
                     Label("Save Place", systemImage: "bookmark.fill")

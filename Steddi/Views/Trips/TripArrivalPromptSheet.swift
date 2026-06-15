@@ -74,11 +74,10 @@ struct TripArrivalPromptSheet: View {
                 Button(action: onNextLeg) {
                     Label("Start Next Leg", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .font(SteddiTheme.heading(16))
-                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                 }
-                .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                .buttonStyle(.steddiPrimary)
 
                 Button(action: onSwitchToContinuous) {
                     Text("Continue automatically for remaining stops")

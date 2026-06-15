@@ -144,19 +144,20 @@ struct PostArrivalSheet: View {
                     Task { await saveRoute(matched) }
                 } label: {
                     if isSaving {
+                        // Spinner tinted to the on-fill foreground so it stays
+                        // legible on the accent fill the style paints.
                         ProgressView()
-                            .tint(.white)
+                            .tint(SteddiTheme.onAccent)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                     } else {
                         Text("Looks good — save it")
                             .font(SteddiTheme.heading(16))
-                            .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                     }
                 }
-                .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                .buttonStyle(.steddiPrimary)
                 .disabled(isSaving)
 
                 Button {
@@ -296,11 +297,10 @@ struct PostArrivalSheet: View {
                 } label: {
                     Text("Plan it manually")
                         .font(SteddiTheme.heading(16))
-                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                 }
-                .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                .buttonStyle(.steddiPrimary)
 
                 Button("Discard") { dismiss() }
                     .font(SteddiTheme.body(15))
