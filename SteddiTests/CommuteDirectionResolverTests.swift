@@ -218,3 +218,100 @@ struct MidnightWindowTests {
         #expect(CommuteDirectionResolver.scheduledDirection(commute: commute, now: tuesday6am) == .destinationToOrigin)
     }
 }
+
+// MARK: - Midnight-Wrap Day Attribution (mirrors NoGoZone.TimeWindow.isActive)
+
+/// A wrapping window's post-midnight portion belongs to the PREVIOUS weekday, so
+/// a sparse-day schedule (not all 7 days) must attribute it exactly the way
+/// `NoGoZone.TimeWindow.isActive` does. These cases distinguish the correct
+/// previous-day attribution from the old "today only" semantics, which the
+/// all-days fixtures above cannot detect.
+@Suite("CommuteDirectionResolver midnight-wrap day attribution")
+struct MidnightWrapDayAttributionTests {
+
+    /// Monday-ONLY night shift: drive to work 22:00→06:00. The morning portion
+    /// (00:00–06:00) belongs to Monday's window and so falls on TUESDAY morning.
+    private func makeMondayOnlyNightShift() throws -> (ModelContainer, Commute) {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ModelStoreLocator.schema, configurations: [config])
+        let context = ModelContext(container)
+
+        let home = PinnedLocation(name: "Home", latitude: 34.05, longitude: -118.25)
+        let work = PinnedLocation(name: "Work", latitude: 34.10, longitude: -118.40)
+        let commute = Commute(name: "Monday Night Shift", origin: home, destination: work)
+        commute.scheduleToDestDays = "2"   // Monday only (Sun=1 .. Sat=7)
+        commute.scheduleToDestStartHour = 22
+        commute.scheduleToDestEndHour = 6
+        context.insert(commute)
+        return (container, commute)
+    }
+
+    @Test("Tuesday 02:00 IS active — the morning portion belongs to Monday's window")
+    func tuesdayMorningBelongsToMonday() throws {
+        let (container, commute) = try makeMondayOnlyNightShift()
+        _ = container
+        let tuesday2am = try date(day: 9, hour: 2)   // June 9 2026 is Tuesday
+        #expect(CommuteDirectionResolver.scheduledDirection(commute: commute, now: tuesday2am) == .originToDestination)
+    }
+
+    @Test("Monday 02:00 is NOT active — that morning belongs to Sunday's window")
+    func mondayMorningBelongsToSunday() throws {
+        let (container, commute) = try makeMondayOnlyNightShift()
+        _ = container
+        let monday2am = try date(day: 8, hour: 2)   // June 8 2026 is Monday
+        #expect(CommuteDirectionResolver.scheduledDirection(commute: commute, now: monday2am) == nil)
+    }
+
+    @Test("Monday 23:00 IS active — the evening portion belongs to the scheduled day")
+    func mondayEveningActive() throws {
+        let (container, commute) = try makeMondayOnlyNightShift()
+        _ = container
+        let monday11pm = try date(day: 8, hour: 23)
+        #expect(CommuteDirectionResolver.scheduledDirection(commute: commute, now: monday11pm) == .originToDestination)
+    }
+
+    @Test("Tuesday 23:00 is NOT active — Tuesday evening is not scheduled")
+    func tuesdayEveningInactive() throws {
+        let (container, commute) = try makeMondayOnlyNightShift()
+        _ = container
+        let tuesday11pm = try date(day: 9, hour: 23)
+        #expect(CommuteDirectionResolver.scheduledDirection(commute: commute, now: tuesday11pm) == nil)
+    }
+
+    /// `windowActive` must agree with `NoGoZone.TimeWindow.isActive` for every
+    /// (day, hour) over a full week, across same-day, wrapping, and zero-length
+    /// windows on a sparse day set — the two implementations the resolver claims
+    /// to share must be identical.
+    @Test("windowActive matches TimeWindow.isActive for all weekday/hour combinations")
+    func parityWithTimeWindowIsActive() throws {
+        let cal = Calendar.current
+        let windows: [(start: Int, end: Int)] = [
+            (6, 10),    // same-day
+            (22, 6),    // wrapping
+            (0, 0),     // zero-length (never active)
+            (23, 1),    // narrow wrap
+            (0, 23),    // nearly full day
+        ]
+        let daySets: [Set<Int>] = [[2], [1, 3], [6, 7], [1, 2, 3, 4, 5, 6, 7]]
+
+        for win in windows {
+            for days in daySets {
+                let window = TimeWindow(daysOfWeek: days, startHour: win.start, endHour: win.end)
+                // June 7 2026 is a Sunday → 7 consecutive days cover all weekdays.
+                for dayOffset in 0..<7 {
+                    for hour in 0..<24 {
+                        let when = try #require(cal.date(from: DateComponents(
+                            year: 2026, month: 6, day: 7 + dayOffset, hour: hour
+                        )))
+                        let weekday = cal.component(.weekday, from: when)
+                        let expected = window.isActive(now: when, calendar: cal)
+                        let actual = CommuteDirectionResolver.windowActive(
+                            day: weekday, hour: hour, days: days, start: win.start, end: win.end
+                        )
+                        #expect(actual == expected, "mismatch win=\(win) days=\(days) day=\(weekday) hour=\(hour)")
+                    }
+                }
+            }
+        }
+    }
+}

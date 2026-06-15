@@ -69,7 +69,7 @@ struct CommuteDirectionResolver {
            let startHour = commute.scheduleToDestStartHour,
            let endHour = commute.scheduleToDestEndHour {
             let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
-            if days.contains(currentDay) && hourInWindow(currentHour, start: startHour, end: endHour) {
+            if windowActive(day: currentDay, hour: currentHour, days: days, start: startHour, end: endHour) {
                 return .originToDestination
             }
         }
@@ -79,7 +79,7 @@ struct CommuteDirectionResolver {
            let startHour = commute.scheduleToOriginStartHour,
            let endHour = commute.scheduleToOriginEndHour {
             let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
-            if days.contains(currentDay) && hourInWindow(currentHour, start: startHour, end: endHour) {
+            if windowActive(day: currentDay, hour: currentHour, days: days, start: startHour, end: endHour) {
                 return .destinationToOrigin
             }
         }
@@ -87,16 +87,33 @@ struct CommuteDirectionResolver {
         return nil
     }
 
-    /// Whether `hour` falls inside the [start, end) hour window, handling a
-    /// window that wraps past midnight (start > end, e.g. 22→6 covers 10pm
-    /// through 6am). Mirrors NoGoZone.TimeWindow.isActive so midnight-spanning
-    /// commute schedules behave like the no-go-zone time picker users already
-    /// know. The end hour stays exclusive.
-    private static func hourInWindow(_ hour: Int, start: Int, end: Int) -> Bool {
-        if start <= end {
-            return hour >= start && hour < end
+    /// Whether the schedule (its set of weekdays + [start, end) hour window) is
+    /// active at `(day, hour)`. Mirrors `NoGoZone.TimeWindow.isActive` EXACTLY,
+    /// including its midnight-wrap day attribution: for a wrapping window
+    /// (start > end, e.g. 22→6) the evening portion (hour >= start) belongs to the
+    /// scheduled day, but the morning portion (hour < end) belongs to the PREVIOUS
+    /// weekday's window — so a Monday-only 22→6 schedule is active Tue 02:00, not
+    /// Mon 02:00. `day` is `Calendar.weekday` (Sun=1 .. Sat=7); the end hour is
+    /// exclusive. Previously this only checked `days.contains(today)` for both
+    /// portions, diverging from the zone semantics it claims to share.
+    static func windowActive(day: Int, hour: Int, days: Set<Int>, start: Int, end: Int) -> Bool {
+        if start < end {
+            // Same-day window: day must match and hour within [start, end).
+            return days.contains(day) && hour >= start && hour < end
+        } else if start > end {
+            // Wrapping window: evening portion is the scheduled day; morning
+            // portion belongs to the previous weekday.
+            if hour >= start {
+                return days.contains(day)
+            }
+            if hour < end {
+                let prevDay = day == 1 ? 7 : day - 1
+                return days.contains(prevDay)
+            }
+            return false
         } else {
-            return hour >= start || hour < end
+            // start == end: zero-length window, never active.
+            return false
         }
     }
 
