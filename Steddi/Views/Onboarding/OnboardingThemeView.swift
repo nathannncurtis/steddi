@@ -56,7 +56,12 @@ struct OnboardingThemeView: View {
         VStack(spacing: 8) {
             Image(systemName: "paintpalette.fill")
                 .font(.system(size: 56))
-                .foregroundStyle(coordinator.selectedAccent.color)
+                // Fixed light, NOT the accent: on the theme beat the card is
+                // tinted to the chosen accent, so an accent glyph was the same
+                // hue as the card behind it and dissolved into an invisible
+                // ghost. White reads on every accent tint (same rule the swatch
+                // ring/check and the title beneath already follow).
+                .foregroundStyle(SteddiTheme.onboardingTextPrimary)
             Text("Make it yours")
                 .font(.title.weight(.bold))
                 // Fixed light-on-dark: the theme beat (like every showpiece beat)
@@ -159,9 +164,15 @@ struct OnboardingThemeView: View {
                 Image(systemName: card.icon)
                     .font(.title2)
                     .frame(width: 32)
-                    // Fixed light-on-dark for the deselected glyph (the selected
-                    // one keeps the accent, which already contrasts the dark card).
-                    .foregroundStyle(isSelected ? coordinator.selectedAccent.color : SteddiTheme.onboardingTextSecondary)
+                    // Fixed light glyph regardless of selection. On the theme
+                    // beat the whole card is accent-tinted, so an accent icon on
+                    // the SELECTED card was accent-on-accent and near-invisible —
+                    // inverting the affordance (the chosen row's glyph hardest to
+                    // see). Selection is already signaled by the white wash +
+                    // border + checkmark, so the icon just needs to read clearly:
+                    // primary white for the selected row, the dimmer secondary
+                    // tier for deselected rows.
+                    .foregroundStyle(isSelected ? SteddiTheme.onboardingTextPrimary : SteddiTheme.onboardingTextSecondary)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {

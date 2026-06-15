@@ -60,8 +60,17 @@ struct OnboardingView: View {
         .background(beatBackground.ignoresSafeArea())
         .overlay(alignment: .topTrailing) { if !settling { skipIntroButton } }
         .overlay(alignment: .top) { settlePill }
+        // The entire onboarding flow floats on a FIXED dark cinematic backdrop
+        // (beatBackground == .black / the hero's dark map) regardless of the
+        // resolved app theme. Pin the flow to a dark color scheme so the system
+        // status-bar glyphs (clock / wifi / battery) stay LIGHT over that dark
+        // backdrop — in the Light app theme the root's `.preferredColorScheme(.light)`
+        // would otherwise render dark glyphs that vanish on the dark surface.
+        // This only governs the onboarding tree; the root swaps to Home (with its
+        // own scheme) when the gate flips, so the fall-into-Home morph is intact.
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $showDonation, onDismiss: beginSettle) {
-            DonationView()
+            DonationView(fromOnboarding: true)
         }
         .onChange(of: coordinator.currentBeat) { _, _ in
             armAutoplayIfNeeded()
@@ -164,7 +173,8 @@ struct OnboardingView: View {
             OnboardingPermissionsView(
                 onContinue: requestLocation,
                 onNotNow: { advance() },
-                accent: coordinator.selectedAccent.color
+                accent: coordinator.selectedAccent.color,
+                onAccentLabel: coordinator.selectedAccent.contrastingGlyph
             )
 
         case .emergency:
@@ -203,14 +213,24 @@ struct OnboardingView: View {
                 } label: {
                     Text(coordinator.currentBeat.primaryLabel)
                         .font(.headline)
+                        // On-fill label: the brand accents are light/mid-tone
+                        // hues, so a system-white label (what `.glassProminent`
+                        // paints) failed WCAG AA on the fill (gold ~2.4:1).
+                        // `contrastingGlyph` is the luminance-correct on-fill
+                        // color for the IN-FLIGHT accent (the picks aren't
+                        // persisted until completion, so `SteddiTheme.onAccent`
+                        // would lag a beat behind the live recolor).
+                        .foregroundStyle(coordinator.selectedAccent.contrastingGlyph)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                 }
-                // The footer CTA is a genuine system primary — Apple's
-                // `.glassProminent`, tinted live to the chosen accent so it glows
-                // the user's color from the delight beat onward.
-                .buttonStyle(.glassProminent)
-                .tint(coordinator.selectedAccent.color)
+                // The genuine primary CTA: a glass fill in the IN-FLIGHT brand
+                // hue (so it glows the user's chosen color live from the delight
+                // beat onward) with a luminance-correct on-fill label, instead of
+                // `.glassProminent` (which forces a white label that fails AA on
+                // the light accents).
+                .buttonStyle(.plain)
+                .steddiGlass(tint: coordinator.selectedAccent.color, interactive: true, in: Capsule())
                 .disabled(coordinator.isTransitioning)
                 .transition(.opacity)
             }
