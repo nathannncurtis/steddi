@@ -489,6 +489,11 @@ final class AnalyticsService {
         if valid.count <= maxPoints {
             return valid.map { DriveDetail.RouteSample(coordinate: $0.coordinate, speedMps: max(0, $0.speed)) }
         }
+        // `maxPoints < 2` would make the stride below divide by zero. Clamp to a
+        // single endpoint sample rather than crash on a degenerate cap.
+        guard maxPoints >= 2 else {
+            return valid.prefix(1).map { DriveDetail.RouteSample(coordinate: $0.coordinate, speedMps: max(0, $0.speed)) }
+        }
         let step = Double(valid.count - 1) / Double(maxPoints - 1)
         return (0..<maxPoints).map { i in
             let point = valid[min(valid.count - 1, Int((Double(i) * step).rounded()))]
