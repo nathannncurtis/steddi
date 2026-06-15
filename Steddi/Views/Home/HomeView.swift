@@ -1486,6 +1486,11 @@ struct HomeView: View {
                 Label("Add Place", systemImage: "plus")
                     .font(SteddiTheme.heading(13))
                     .foregroundStyle(SteddiTheme.accent)
+                    // Bare text link is only ~22pt tall; expand the hit area to
+                    // the 44pt minimum without changing the type (matches the
+                    // Commutes tab's inline "New Commute" link).
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             } else {
                 Label("Add Place", systemImage: "plus")
                     .font(SteddiTheme.heading(14))
@@ -1493,6 +1498,10 @@ struct HomeView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(SteddiTheme.accentSubtle, in: Capsule())
+                    // Keep the pill's visual size but expand the tappable area
+                    // to the 44pt minimum (the capsule is ~34pt tall).
+                    .frame(minHeight: 44)
+                    .contentShape(Capsule())
             }
         }
     }
@@ -1579,6 +1588,10 @@ struct HomeView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background(SteddiTheme.accentSubtle, in: Capsule())
+                            // Keep the pill's visual size but expand the tappable
+                            // area to the 44pt minimum (the capsule is ~34pt tall).
+                            .frame(minHeight: 44)
+                            .contentShape(Capsule())
                     }
                     .padding(.top, 4)
                 }
@@ -1596,6 +1609,11 @@ struct HomeView: View {
                             Label("New Trip", systemImage: "plus")
                                 .font(SteddiTheme.heading(13))
                                 .foregroundStyle(SteddiTheme.accent)
+                                // Bare text link is only ~22pt tall; expand the
+                                // hit area to the 44pt minimum without changing
+                                // the type (matches the Commutes "New Commute").
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .padding(.top, 4)
                     }
@@ -2533,6 +2551,10 @@ private struct ExpandedSearchView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(SteddiTheme.textMuted)
+                            // Icon-only glyph is ~22pt; expand the hit area to
+                            // the 44pt minimum while keeping the glyph's size.
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                 }
             }
