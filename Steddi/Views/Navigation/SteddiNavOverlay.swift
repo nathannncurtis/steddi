@@ -362,13 +362,16 @@ struct SteddiNavOverlay: View {
                                 .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
                                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                         }
+                        // Meaningful readouts over translucent nav glass on a
+                        // moving map — textSecondary, not textMuted (whose AA
+                        // guarantee is only against the solid surface tokens).
                         HStack(spacing: 6) {
                             Text(engine.distanceRemaining)
                                 .font(SteddiTheme.mono(12 * textScale))
-                                .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
+                                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                             Text(engine.arrivalTime)
                                 .font(SteddiTheme.mono(12 * textScale))
-                                .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
+                                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                         }
                     }
 
@@ -463,9 +466,11 @@ struct SteddiNavOverlay: View {
             Spacer()
 
             if let summary = trip.remainingSummary {
+                // Meaningful readout over translucent nav glass — textSecondary,
+                // not textMuted (which is only AA-guaranteed on solid surfaces).
                 Text(summary)
                     .font(SteddiTheme.mono(12 * textScale))
-                    .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
+                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
             }
         }
         .padding(.horizontal, 14)
@@ -482,9 +487,11 @@ struct SteddiNavOverlay: View {
                 .foregroundStyle(SteddiTheme.accent.opacity(0.7))
                 .frame(width: 28 * iconScale, height: 28 * iconScale)
 
+            // The follow-on maneuver is real driving info over translucent nav
+            // glass — textSecondary, not textMuted (AA-guaranteed only on solids).
             Text("Then: \(displayFollowOnInstruction)")
                 .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
-                .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
+                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                 .lineLimit(1)
 
             Spacer()
@@ -704,9 +711,12 @@ struct SteddiNavOverlay: View {
                         .fill(SteddiTheme.textMuted)
                         .frame(width: 3, height: 3)
 
+                    // Arrival time is a meaningful readout over translucent glass —
+                    // textSecondary to match its distance sibling above (textMuted's
+                    // AA guarantee is only against solid surfaces, not nav glass).
                     Text(engine.arrivalTime)
                         .font(SteddiTheme.mono(13 * textScale))
-                        .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
+                        .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                 }
             }
             .frame(maxWidth: .infinity)
