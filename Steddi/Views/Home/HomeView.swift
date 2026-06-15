@@ -919,13 +919,11 @@ struct HomeView: View {
     // MARK: - Bottom Sheet (portrait only)
 
     private var bottomSheet: some View {
+        // No grabber handle: this sheet is a fixed inline view (not a presented
+        // .sheet, and it has no DragGesture/detents), so a drag-indicator capsule
+        // would be a false affordance — it signals drag-to-resize that does not
+        // exist. The inner tab lists scroll internally for overflow.
         VStack(spacing: 0) {
-            // Drag indicator
-            Capsule()
-                .fill(SteddiTheme.textMuted.opacity(0.4))
-                .frame(width: 36, height: 4)
-                .padding(.top, 10)
-
             // Tab selector — the bar itself is a floating Liquid Glass capsule,
             // with a moving accent-glass pill sliding under the active tab
             // (matchedGeometry morph). Bar + pill share one GlassEffectContainer
@@ -974,7 +972,8 @@ struct HomeView: View {
                 )
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
+            // Top inset that the removed grabber used to provide.
+            .padding(.top, 14)
             .padding(.bottom, 4)
 
             SteadyLine(color: SteddiTheme.accent, height: 1)
