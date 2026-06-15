@@ -346,7 +346,7 @@ final class CommuteNotificationService {
                 for hour in hours {
                     guard let candidate = cal.date(bySettingHour: hour, minute: 0, second: 0, of: day),
                           candidate > now else { continue }
-                    if best == nil || candidate < best! { best = candidate }
+                    best = best.map { min($0, candidate) } ?? candidate
                 }
             }
         }
