@@ -5,6 +5,11 @@ import CoreLocation
 /// Chunks traces that exceed the 100-coordinate API limit.
 final class MapMatchingService {
     private let maxCoordinatesPerRequest = 100
+    /// Matched points within this distance (meters) of the previous chunk's
+    /// tail are treated as the same seam geometry and dropped. ~10m comfortably
+    /// covers OSRM's re-snap jitter at the overlap without eating a genuine
+    /// short segment.
+    static let seamEpsilon: CLLocationDistance = 10
     private let session: URLSession
 
     init(session: URLSession = .shared) {
@@ -47,9 +52,15 @@ final class MapMatchingService {
             if index == 0 {
                 allCoordinates.append(contentsOf: coords)
             } else {
-                // Skip overlapping points from the start of subsequent chunks
-                let skipCount = min(overlap, coords.count)
-                allCoordinates.append(contentsOf: coords.dropFirst(skipCount))
+                // Matched coordinates do NOT map 1:1 to the `overlap` input
+                // points OSRM is fed at the seam — the matcher resamples and
+                // snaps to the road, so the leading matched coords of this
+                // chunk re-trace some length already present at the tail of the
+                // stitched output. Dropping a fixed input-point count leaves
+                // seam gaps or overlaps. Instead dedupe by matched geometry:
+                // drop leading points of this chunk that fall within `seamEpsilon`
+                // of the previous chunk's tail, then append the remainder.
+                allCoordinates.append(contentsOf: Self.stitchSeam(tail: allCoordinates.last, chunk: coords))
             }
         }
 
@@ -58,6 +69,25 @@ final class MapMatchingService {
         let totalDistance = RouteGeometry.cumulativeDistances(allCoordinates).last ?? 0
         let polyline = PolylineEncoder.encode(allCoordinates)
         return MatchedRoute(encodedPolyline: polyline, coordinates: allCoordinates, distanceMeters: totalDistance)
+    }
+
+    /// Dedupe a subsequent chunk against the stitched tail by matched-geometry
+    /// proximity. Leading points of `chunk` within `seamEpsilon` of `tail` are
+    /// the overlap re-trace and are dropped; the first point that has moved
+    /// clear of the tail (and everything after it) is what we keep. Stops at the
+    /// first point beyond the epsilon so a later pass back near the tail (e.g. a
+    /// loop) is preserved.
+    static func stitchSeam(tail: CLLocationCoordinate2D?, chunk: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
+        guard let tail else { return chunk }
+        var dropCount = 0
+        for coord in chunk {
+            if NavigationEngine.haversineDistance(from: tail, to: coord) <= seamEpsilon {
+                dropCount += 1
+            } else {
+                break
+            }
+        }
+        return Array(chunk.dropFirst(dropCount))
     }
 
     private func matchChunk(_ points: [GPSPoint]) async throws -> MatchedRoute {
