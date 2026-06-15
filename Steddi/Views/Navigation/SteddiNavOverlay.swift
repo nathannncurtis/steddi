@@ -708,7 +708,10 @@ struct SteddiNavOverlay: View {
                         .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
 
                     Circle()
-                        .fill(SteddiTheme.textMuted)
+                        // Match the textSecondary readouts it sits between and
+                        // pick up the high-contrast promotion: raw textMuted's AA
+                        // guarantee is only against solid surfaces, not nav glass.
+                        .fill(SteddiTheme.textSecondary(highContrast: highContrast))
                         .frame(width: 3, height: 3)
 
                     // Arrival time is a meaningful readout over translucent glass —
