@@ -46,6 +46,11 @@ struct SteddiNavOverlay: View {
     // Floating-button spring entrance — flips true a beat after the overlay
     // appears so the buttons spring in behind the sheet/banner.
     @State private var floatingButtonsAppeared = false
+    /// Namespace tying the floating glass controls together so they morph/merge
+    /// as one glass system during the spring entrance.
+    @Namespace private var navGlassNamespace
+    /// Namespace for the banner glass column (topBanner / followOn / tripLeg).
+    @Namespace private var bannerGlassNamespace
     // Arrival celebration — drives the one-shot maneuver-icon bounce.
     @State private var arrivalCelebrating = false
 
@@ -201,11 +206,19 @@ struct SteddiNavOverlay: View {
             .animation(SteddiMotion.shouldAnimate ? .easeInOut(duration: 0.3) : nil, value: engine.approachingCamera)
 
             // Floating buttons — right side. Spring in behind the sheet/banner.
-            VStack(spacing: 12) {
-                compassIndicator
-                voiceButton
-                viewToggleButton
-                reportButton
+            // Grouped in one GlassEffectContainer so the four controls render in
+            // a single pass and merge/separate smoothly during the entrance.
+            GlassEffectContainer(spacing: 14) {
+                VStack(spacing: 12) {
+                    compassIndicator
+                        .glassEffectID("nav.compass", in: navGlassNamespace)
+                    voiceButton
+                        .glassEffectID("nav.voice", in: navGlassNamespace)
+                    viewToggleButton
+                        .glassEffectID("nav.view", in: navGlassNamespace)
+                    reportButton
+                        .glassEffectID("nav.report", in: navGlassNamespace)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .padding(.trailing, 16)
@@ -288,15 +301,18 @@ struct SteddiNavOverlay: View {
 
             // Bottom-left: buttons row + ETA + speedometer + End
             VStack(spacing: 6) {
-                // Buttons — horizontal row above the ETA bar, left aligned
-                HStack(spacing: 10) {
-                    landscapeCompassIndicator
-                    landscapeButton(isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") {
-                        isVoiceOn.toggle()
-                        VoiceGuidanceService.shared.enabled = isVoiceOn
+                // Buttons — horizontal row above the ETA bar, left aligned.
+                // Grouped glass so the row reads as one floating control cluster.
+                GlassEffectContainer(spacing: 12) {
+                    HStack(spacing: 10) {
+                        landscapeCompassIndicator
+                        landscapeButton(isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill", isActive: isVoiceOn) {
+                            isVoiceOn.toggle()
+                            VoiceGuidanceService.shared.enabled = isVoiceOn
+                        }
+                        landscapeButton(is3DView ? "cube" : "square", isActive: is3DView) { is3DView.toggle(); onToggleView(is3DView) }
+                        landscapeButton("exclamationmark.bubble.fill") { showReportSheet = true }
                     }
-                    landscapeButton(is3DView ? "cube" : "square") { is3DView.toggle(); onToggleView(is3DView) }
-                    landscapeButton("exclamationmark.bubble.fill") { showReportSheet = true }
                 }
 
                 // ETA bar
@@ -529,17 +545,12 @@ struct SteddiNavOverlay: View {
     // MARK: - Floating Buttons
 
     private var compassIndicator: some View {
-        ZStack {
-            Circle()
-                .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.88, highContrast: highContrast)))
-                .overlay(Circle().stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.12, highContrast: highContrast)), lineWidth: 1))
-                .frame(width: 44 * iconScale, height: 44 * iconScale)
-
-            Text(compassLabel)
-                .font(.system(size: 15 * textScale, weight: .heavy, design: .rounded))
-                .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
-        }
-        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+        Text(compassLabel)
+            .font(.system(size: 15 * textScale, weight: .heavy, design: .rounded))
+            .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
+            .frame(width: 44 * iconScale, height: 44 * iconScale)
+            // Neutral glass readout — not a toggle, so no accent tint.
+            .steddiGlass(tint: nil, interactive: false, in: .circle)
     }
 
     private static let compassLabels = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
@@ -621,33 +632,29 @@ struct SteddiNavOverlay: View {
     }
 
     private var landscapeCompassIndicator: some View {
-        ZStack {
-            Circle()
-                .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.88, highContrast: highContrast)))
-                .overlay(Circle().stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.15, highContrast: highContrast)), lineWidth: 1))
-                .frame(width: 50 * iconScale, height: 50 * iconScale)
-
-            Text(compassLabel)
-                .font(.system(size: 16 * textScale, weight: .heavy, design: .rounded))
-                .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
-        }
-        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+        Text(compassLabel)
+            .font(.system(size: 16 * textScale, weight: .heavy, design: .rounded))
+            .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
+            .frame(width: 50 * iconScale, height: 50 * iconScale)
+            .steddiGlass(tint: nil, interactive: false, in: .circle)
     }
 
-    private func landscapeButton(_ symbol: String, rotationDegrees: Double = 0, action: @escaping () -> Void) -> some View {
+    private func landscapeButton(_ symbol: String, isActive: Bool = false, rotationDegrees: Double = 0, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 20 * controlScale, weight: .medium))
                 .foregroundStyle(SteddiTheme.accent)
                 .rotationEffect(.degrees(rotationDegrees))
                 .frame(width: 50 * controlScale, height: 50 * controlScale)
-                .background {
-                    Circle()
-                        .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.88, highContrast: highContrast)))
-                        .overlay(Circle().stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.15, highContrast: highContrast)), lineWidth: 1))
-                }
-                .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+                // Glass replaces the solid circle + manual shadow; active
+                // toggles (voice on, 3D on) carry the accent tint.
+                .steddiGlass(
+                    tint: isActive ? SteddiTheme.accent : nil,
+                    interactive: true,
+                    in: .circle
+                )
         }
+        .buttonStyle(.steddiPress)
     }
 
     private func floatingButtonCircle(symbol: String, isActive: Bool) -> some View {
@@ -655,15 +662,13 @@ struct SteddiNavOverlay: View {
             .font(.system(size: 17 * controlScale, weight: .medium))
             .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textMuted(highContrast: highContrast))
             .frame(width: 44 * controlScale, height: 44 * controlScale)
-            .background {
-                Circle()
-                    .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.88, highContrast: highContrast)))
-                    .overlay(
-                        Circle()
-                            .stroke(isActive ? SteddiTheme.accent.opacity(0.2) : SteddiTheme.textMuted.opacity(0.1), lineWidth: 1)
-                    )
-            }
-            .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+            // Glass replaces the solid circle + manual shadow; active controls
+            // (voice on, 3D on) carry the accent tint, inactive read neutral.
+            .steddiGlass(
+                tint: isActive ? SteddiTheme.accent : nil,
+                interactive: true,
+                in: .circle
+            )
     }
 
     // MARK: - Bottom Bar
