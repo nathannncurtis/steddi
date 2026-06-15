@@ -59,7 +59,11 @@ struct OnboardingThemeView: View {
                 .foregroundStyle(coordinator.selectedAccent.color)
             Text("Make it yours")
                 .font(.title.weight(.bold))
-                .foregroundStyle(SteddiTheme.textPrimary)
+                // Fixed light-on-dark: the theme beat (like every showpiece beat)
+                // floats on the dark cinematic backdrop in every theme, so its
+                // copy must stay light. A theme `textPrimary` resolves near-black
+                // in Light and would vanish here.
+                .foregroundStyle(SteddiTheme.onboardingTextPrimary)
         }
     }
 
@@ -67,10 +71,10 @@ struct OnboardingThemeView: View {
         VStack(spacing: 2) {
             Text(title)
                 .font(.headline)
-                .foregroundStyle(SteddiTheme.textPrimary)
+                .foregroundStyle(SteddiTheme.onboardingTextPrimary)
             Text(subtitle)
                 .font(.subheadline)
-                .foregroundStyle(SteddiTheme.textSecondary)
+                .foregroundStyle(SteddiTheme.onboardingTextSecondary)
         }
     }
 
@@ -149,13 +153,15 @@ struct OnboardingThemeView: View {
                 Image(systemName: card.icon)
                     .font(.title2)
                     .frame(width: 32)
-                    .foregroundStyle(isSelected ? coordinator.selectedAccent.color : SteddiTheme.textSecondary)
+                    // Fixed light-on-dark for the deselected glyph (the selected
+                    // one keeps the accent, which already contrasts the dark card).
+                    .foregroundStyle(isSelected ? coordinator.selectedAccent.color : SteddiTheme.onboardingTextSecondary)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(card.label)
                             .font(.headline)
-                            .foregroundStyle(SteddiTheme.textPrimary)
+                            .foregroundStyle(SteddiTheme.onboardingTextPrimary)
                         if card.recommended {
                             Text("Recommended")
                                 .font(.caption2.weight(.semibold))
@@ -167,7 +173,7 @@ struct OnboardingThemeView: View {
                     }
                     Text(card.description)
                         .font(.caption)
-                        .foregroundStyle(SteddiTheme.textSecondary)
+                        .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                 }
 
                 Spacer()
@@ -181,8 +187,14 @@ struct OnboardingThemeView: View {
             }
             .padding(14)
             .background(
+                // The deselected card fill must be a fixed light-on-dark wash,
+                // not the adaptive `surfaceSecondary` (which is near-WHITE in the
+                // Light theme and would render a light box on the dark backdrop,
+                // fighting the fixed-white labels). A faint white wash keeps the
+                // card dark and legible in every theme; the selected card's accent
+                // tint already contrasts the backdrop.
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected ? coordinator.selectedAccent.color.opacity(0.12) : SteddiTheme.surfaceSecondary)
+                    .fill(isSelected ? coordinator.selectedAccent.color.opacity(0.12) : Color.white.opacity(0.08))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
