@@ -666,10 +666,13 @@ struct HomeView: View {
         self.activeSavedPolyline = nil
         self.activeRoadConditions = []
         self.navigationRoute = route
-        // New trip: the off-route recovery cap is PER-TRIP, so reset it here.
-        // Without this it accumulates across every drive and permanently
-        // disables recovery after a few lifetime deviations.
-        recoveriesThisTrip = 0
+        // The off-route recovery cap is PER-TRIP, so reset it only when a fresh
+        // session begins — never on a continuing trip leg, which would re-arm
+        // the budget every leg and defeat the cap (a trip resets once, in
+        // startTrip). A standalone drive has no active trip and resets here.
+        if RecoveryBudget.shouldReset(isContinuingTripLeg: activeTrip != nil) {
+            recoveriesThisTrip = 0
+        }
         let engine = NavigationEngine()
         engine.startNavigation(route: route)
         self.navigationEngine = engine
@@ -1238,8 +1241,11 @@ struct HomeView: View {
 
         self.activeSavedPolyline = polyline
         self.navigationRoute = nil
-        // New trip: reset the per-trip off-route recovery cap (see beginNavigation).
-        recoveriesThisTrip = 0
+        // Reset the per-trip recovery cap only for a fresh session, never on a
+        // continuing trip leg (see beginNavigation / startTrip).
+        if RecoveryBudget.shouldReset(isContinuingTripLeg: activeTrip != nil) {
+            recoveriesThisTrip = 0
+        }
 
         let engine = NavigationEngine()
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
@@ -1586,6 +1592,12 @@ struct HomeView: View {
         guard let stop = trip.currentStop else { return }
         activeTrip = trip
         tripArrivalStop = nil
+        // A trip is one unit for the off-route recovery budget: reset once here,
+        // at the trip's start. The per-leg begin* paths skip the reset while a
+        // trip is active (activeTrip != nil), so the 3-recovery cap holds across
+        // every leg instead of re-arming each leg. advanceTripLeg never passes
+        // through here, so continuing legs keep the running count.
+        recoveriesThisTrip = 0
         try? modelContext.save()
         beginTripLeg(to: stop, trip: trip)
     }
