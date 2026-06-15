@@ -289,7 +289,7 @@ final class CommuteNotificationService {
             ?? .originToDestination
 
         let learned = Self.learnedDepartureHours(commute: commute, trips: allTrips, now: now)
-        let scheduled = Self.scheduledDepartureHours(commute: commute, direction: direction)
+        let scheduled = Self.scheduledDepartureHours(commute: commute, direction: direction, now: now)
         let expectedHours = learned.isEmpty ? scheduled : learned
 
         // Resolve destination coordinate + name for the chosen direction.
@@ -399,17 +399,36 @@ final class CommuteNotificationService {
     }
 
     /// Schedule-rule departure hours for the given direction (zero-history
-    /// fallback). The window start hour is the expected departure.
+    /// fallback). The window start hour is the expected departure, but only on
+    /// days the user actually configured for that direction — a weekday-only
+    /// commute returns nothing on Saturday/Sunday so the engine can't fire a
+    /// "leave early" alert (or waste a background wakeup) on an excluded day.
     static func scheduledDepartureHours(
         commute: Commute,
-        direction: CommuteDirection
+        direction: CommuteDirection,
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> [Int] {
+        let weekday = calendar.component(.weekday, from: now)
         switch direction {
         case .originToDestination:
+            guard scheduleActive(days: commute.scheduleToDestDays, on: weekday) else { return [] }
             return commute.scheduleToDestStartHour.map { [$0] } ?? []
         case .destinationToOrigin:
+            guard scheduleActive(days: commute.scheduleToOriginDays, on: weekday) else { return [] }
             return commute.scheduleToOriginStartHour.map { [$0] } ?? []
         }
+    }
+
+    /// Whether a direction's day-of-week rule is active on `weekday` (Sun=1..Sat=7).
+    /// Mirrors `CommuteDirectionResolver`'s `days.contains(currentDay)` test. A nil
+    /// or empty days string means "no day restriction configured" — treat every
+    /// day as active so a schedule with only start hours set still works.
+    static func scheduleActive(days: String?, on weekday: Int) -> Bool {
+        guard let days, !days.isEmpty else { return true }
+        let set = Set(days.split(separator: ",").compactMap { Int($0) })
+        guard !set.isEmpty else { return true }
+        return set.contains(weekday)
     }
 
     // MARK: - Helpers
@@ -421,9 +440,16 @@ final class CommuteNotificationService {
         var best: Date?
         for dayOffset in 0...7 {
             guard let day = cal.date(byAdding: .day, value: dayOffset, to: now) else { continue }
+            // Learned hours are already filtered to this day's day-of-week.
+            // Schedule-rule hours must honor each direction's configured days so a
+            // weekday-only commute never schedules a wakeup on the weekend.
             let learned = Self.learnedDepartureHours(commute: commute, trips: trips, now: day, calendar: cal)
-            let toDest = commute.scheduleToDestStartHour.map { [$0] } ?? []
-            let toOrigin = commute.scheduleToOriginStartHour.map { [$0] } ?? []
+            let toDest = Self.scheduledDepartureHours(
+                commute: commute, direction: .originToDestination, now: day, calendar: cal
+            )
+            let toOrigin = Self.scheduledDepartureHours(
+                commute: commute, direction: .destinationToOrigin, now: day, calendar: cal
+            )
             let hours = Set(learned + toDest + toOrigin)
             for hour in hours {
                 guard let candidate = cal.date(bySettingHour: hour, minute: 0, second: 0, of: day),

@@ -128,10 +128,13 @@ struct ScheduledDepartureTests {
         commute.scheduleToOriginStartHour = 17
         context.insert(commute)
 
+        // No days configured ⇒ no day restriction; returns the start hour on a
+        // weekday (Monday, June 8) just as before.
+        let monday = try at(hour: 6)
         #expect(CommuteNotificationService.scheduledDepartureHours(
-            commute: commute, direction: .originToDestination) == [6])
+            commute: commute, direction: .originToDestination, now: monday) == [6])
         #expect(CommuteNotificationService.scheduledDepartureHours(
-            commute: commute, direction: .destinationToOrigin) == [17])
+            commute: commute, direction: .destinationToOrigin, now: monday) == [17])
     }
 
     @Test("No schedule returns empty")
@@ -142,7 +145,55 @@ struct ScheduledDepartureTests {
         context.insert(commute)
 
         #expect(CommuteNotificationService.scheduledDepartureHours(
-            commute: commute, direction: .originToDestination).isEmpty)
+            commute: commute, direction: .originToDestination, now: try at(hour: 6)).isEmpty)
+    }
+
+    @Test("Weekday-only schedule returns the hour on a weekday")
+    func weekdayScheduleActiveOnWeekday() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+        let commute = Commute(name: "Work")
+        commute.scheduleToDestStartHour = 8
+        commute.scheduleToDestDays = "2,3,4,5,6"   // Mon–Fri
+        context.insert(commute)
+
+        // June 8, 2026 is a Monday (weekday 2) — inside the rule.
+        let monday = try at(hour: 7)
+        #expect(CommuteNotificationService.scheduledDepartureHours(
+            commute: commute, direction: .originToDestination, now: monday) == [8])
+    }
+
+    @Test("Weekday-only schedule returns empty on Saturday")
+    func weekdayScheduleSilentOnSaturday() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+        let commute = Commute(name: "Work")
+        commute.scheduleToDestStartHour = 8
+        commute.scheduleToDestDays = "2,3,4,5,6"   // Mon–Fri only
+        context.insert(commute)
+
+        // June 13, 2026 is a Saturday (weekday 7) — outside the rule, so no
+        // departure hour and therefore no weekend "leave early" false alert.
+        let saturday = try at(day: 13, hour: 7)
+        #expect(CommuteNotificationService.scheduledDepartureHours(
+            commute: commute, direction: .originToDestination, now: saturday).isEmpty)
+    }
+
+    @Test("Weekend-only schedule is silent on weekdays, active on its day")
+    func weekendScheduleHonorsItsDays() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+        let commute = Commute(name: "Gym")
+        commute.scheduleToDestStartHour = 9
+        commute.scheduleToDestDays = "1,7"   // Sun + Sat only
+        context.insert(commute)
+
+        // Monday (weekday 2) — outside the rule.
+        #expect(CommuteNotificationService.scheduledDepartureHours(
+            commute: commute, direction: .originToDestination, now: try at(hour: 8)).isEmpty)
+        // Saturday (weekday 7) — inside the rule.
+        #expect(CommuteNotificationService.scheduledDepartureHours(
+            commute: commute, direction: .originToDestination, now: try at(day: 13, hour: 8)) == [9])
     }
 }
 
@@ -319,6 +370,44 @@ struct ServiceNextDepartureTests {
         let trips = try context.fetch(FetchDescriptor<CommuteTrip>())
         let id = service(container).nextDepartureCommuteID(commutes: commutes, trips: trips, now: try at(hour: 6))
         #expect(id == nil)
+    }
+
+    /// A weekday-only commute, queried on a weekend, must NOT schedule a
+    /// same-weekend departure (the bug that wasted background wakeups + fired
+    /// weekend false alerts). Its next departure is the following Monday, which
+    /// is more than 24h out from Saturday morning — so a same-day Saturday
+    /// candidate would surface as "soonest" and be detectable here.
+    @Test("Weekday-only commute has no weekend departure")
+    func noWeekendDepartureForWeekdayCommute() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+
+        // Weekday-only (Mon–Fri) commute departing 08:00.
+        let weekdayCommute = Commute(name: "Work")
+        weekdayCommute.isActive = true
+        weekdayCommute.scheduleToDestStartHour = 8
+        weekdayCommute.scheduleToDestDays = "2,3,4,5,6"
+        context.insert(weekdayCommute)
+
+        // A weekend-active commute departing 09:00 on Sat/Sun — its Saturday
+        // window IS valid and must win over the weekday commute's Monday window.
+        let weekendCommute = Commute(name: "Gym")
+        weekendCommute.isActive = true
+        weekendCommute.scheduleToDestStartHour = 9
+        weekendCommute.scheduleToDestDays = "1,7"
+        context.insert(weekendCommute)
+        try context.save()
+
+        let commutes = try context.fetch(FetchDescriptor<Commute>())
+        let trips = try context.fetch(FetchDescriptor<CommuteTrip>())
+
+        // Query Saturday June 13 at 07:00. If the weekday commute (incorrectly)
+        // scheduled an 08:00 Saturday departure, it would beat the weekend
+        // commute's 09:00 Saturday departure and win. It must not — the weekend
+        // commute owns the next departure.
+        let saturday = try at(day: 13, hour: 7)
+        let id = service(container).nextDepartureCommuteID(commutes: commutes, trips: trips, now: saturday)
+        #expect(id == weekendCommute.id)
     }
 }
 
