@@ -33,6 +33,16 @@ final class CommuteWeatherService {
     /// Cache TTL — 8 minutes, inside the spec's 5–10 min guidance.
     static let cacheTTL: TimeInterval = 8 * 60
 
+    /// How long to suppress further WeatherKit calls after a hard/entitlement
+    /// failure (no entitlement, unsupported region). Mirrors WeatherKitService's
+    /// 6h availability retry so a build without the entitlement doesn't re-hit
+    /// WeatherKit for every commute on every background pass.
+    static let entitlementBackoff: TimeInterval = 6 * 60 * 60
+    /// Shorter cooldown after a transient failure (network) so genuine weather
+    /// comes back quickly once connectivity returns, without re-calling for
+    /// every nearby commute in the same constrained background window.
+    static let transientBackoff: TimeInterval = 5 * 60
+
     // MARK: Harsh-Condition Thresholds (insurance-grade, from spec)
 
     static let heavyPrecipMmPerHour: Double = 25.0
@@ -51,6 +61,13 @@ final class CommuteWeatherService {
         let fetchedAt: Date
     }
     private var cache: [String: CacheEntry] = [:]
+
+    /// When set, WeatherKit recently failed and we short-circuit to
+    /// `.unavailable` (skipping the framework call entirely) until this instant.
+    /// Cleared on the first successful fetch. Prevents re-hitting WeatherKit for
+    /// every commute on every background pass when the entitlement is missing or
+    /// the network is down.
+    private var unavailableUntil: Date?
 
     private let defaults: UserDefaults
     private let now: () -> Date
@@ -74,6 +91,16 @@ final class CommuteWeatherService {
             return entry.condition
         }
 
+        // Unavailability cooldown — a recent missing-entitlement / network
+        // failure suppresses further WeatherKit calls (across every commute in
+        // this pass and subsequent background passes) until the backoff lapses,
+        // so a no-entitlement build doesn't pay the failed-call latency on every
+        // commute on every wake.
+        if let until = unavailableUntil {
+            if now() < until { return .unavailable }
+            unavailableUntil = nil
+        }
+
         // Budget guard — refresh the month rollover first.
         refreshBudgetMonth()
         guard budgetRemaining > 0 else {
@@ -81,13 +108,22 @@ final class CommuteWeatherService {
             return .unavailable
         }
 
-        let condition = await fetchCondition(for: coordinate)
-        // Only spend budget and cache when we actually reached WeatherKit.
-        if condition.available {
+        let result = await fetchCondition(for: coordinate)
+        switch result {
+        case .success(let condition):
+            unavailableUntil = nil
             decrementBudget()
             cache[key] = CacheEntry(condition: condition, fetchedAt: now())
+            return condition
+        case .entitlementFailure:
+            // Hard failure (no entitlement, unsupported region) — long backoff.
+            unavailableUntil = now().addingTimeInterval(Self.entitlementBackoff)
+            return .unavailable
+        case .transientFailure:
+            // Network/etc. — short backoff so genuine weather returns soon.
+            unavailableUntil = now().addingTimeInterval(Self.transientBackoff)
+            return .unavailable
         }
-        return condition
     }
 
     /// Whether weather features are usable at all right now (budget remaining).
@@ -100,19 +136,32 @@ final class CommuteWeatherService {
 
     // MARK: - Fetch + Mapping
 
-    private func fetchCondition(for coordinate: CLLocationCoordinate2D) async -> WeatherCondition {
+    /// Outcome of a single WeatherKit fetch, distinguishing a hard/entitlement
+    /// failure (long backoff) from a transient one (short backoff) so the caller
+    /// can pick the right cooldown.
+    private enum FetchResult {
+        case success(WeatherCondition)
+        case entitlementFailure
+        case transientFailure
+    }
+
+    private func fetchCondition(for coordinate: CLLocationCoordinate2D) async -> FetchResult {
         #if canImport(WeatherKit)
         do {
             let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
             let weather = try await WeatherService.shared.weather(for: location)
-            return Self.map(current: weather.currentWeather, hourly: weather.hourlyForecast)
+            return .success(Self.map(current: weather.currentWeather, hourly: weather.hourlyForecast))
         } catch {
             // No entitlement, unsupported region, or network — degrade silently.
             weatherLog.error("WeatherKit fetch failed: \(error.localizedDescription, privacy: .public)")
-            return .unavailable
+            return WeatherKitService.isEntitlementFailure(error)
+                ? .entitlementFailure
+                : .transientFailure
         }
         #else
-        return .unavailable
+        // WeatherKit can't even link in this build — treat as a hard failure so
+        // we back off rather than retrying a framework that will never resolve.
+        return .entitlementFailure
         #endif
     }
 

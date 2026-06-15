@@ -1,6 +1,7 @@
 import UIKit
 import SwiftUI
 import SwiftData
+import CoreLocation
 
 class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -27,6 +28,7 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             .environment(appDelegate.commuteNotificationService)
             .environment(NavigationStateManager.shared)
             .environment(PendingCommuteStartStore.shared)
+            .environment(PendingUIRouteStore.shared)
 
         let window = UIWindow(windowScene: windowScene)
         switch SteddiTheme.currentThemeModeEx {
@@ -94,9 +96,14 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
         // activity still under its dismissal policy, or a swipe-kill while idle):
         // applicationWillTerminate handles true process death regardless of
         // isNavigating, and the next launch's cleanupOrphanedActivities() sweeps
-        // up anything missed. endActivityImmediately() self-guards on empty.
+        // up anything missed.
+        //
+        // Use the NON-blocking end here: this is a routine scene reclaim, not
+        // termination — the process keeps running, so the 2s blocking wait of
+        // endActivityImmediately() would needlessly stall the main thread (and
+        // any live CarPlay scene). endActivityAsync() self-guards on empty.
         guard !NavigationStateManager.shared.isNavigating else { return }
-        LiveActivityService.shared.endActivityImmediately()
+        LiveActivityService.shared.endActivityAsync()
     }
 
     private func handleURL(_ url: URL) {
@@ -116,11 +123,19 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             if let latStr = params["lat"], let lngStr = params["lng"],
                let lat = Double(latStr), let lng = Double(lngStr) {
                 let name = params["name"] ?? "Destination"
-                NotificationCenter.default.post(
-                    name: .steddiNavigateToLocation,
-                    object: nil,
-                    userInfo: ["lat": lat, "lng": lng, "name": name]
-                )
+                // Durable hand-off: this URL can arrive during cold-launch scene
+                // connection, before HomeView attaches its observers, so a bare
+                // post would evaporate. HomeView drains the store on appear and
+                // reactively. (CarPlay route-preview "Start Navigation" deep-links
+                // here too — see CarPlaySceneDelegate.)
+                MainActor.assumeIsolated {
+                    PendingUIRouteStore.shared.request(
+                        .navigate(
+                            name: name,
+                            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                        )
+                    )
+                }
             } else if let commuteIdStr = params["commuteId"], let commuteId = UUID(uuidString: commuteIdStr) {
                 // Smart-commute notification "Start Commute" deep link:
                 // steddi://navigate?commuteId=<id>&direction=<dir>
@@ -146,8 +161,13 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
         case "places":
             // CarPlay dashboard "Recent Places" button — foreground the app on
-            // its Places tab so the driver can pick a destination.
-            NotificationCenter.default.post(name: .steddiShowPlaces, object: nil)
+            // its Places tab so the driver can pick a destination. Durable
+            // hand-off: on a cold launch this URL lands before HomeView attaches
+            // its observer, so a bare post would be lost and the app would open
+            // on the default Commutes tab. HomeView drains the store on appear.
+            MainActor.assumeIsolated {
+                PendingUIRouteStore.shared.request(.showPlaces)
+            }
         case "search":
             if let query = params["q"] {
                 NotificationCenter.default.post(
@@ -171,9 +191,7 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
 // MARK: - URL Scheme Notifications
 
 extension Notification.Name {
-    static let steddiNavigateToLocation = Notification.Name("steddiNavigateToLocation")
     static let steddiSearchQuery = Notification.Name("steddiSearchQuery")
-    static let steddiShowPlaces = Notification.Name("steddiShowPlaces")
     static let steddiTestArrival = Notification.Name("steddiTestArrival")
     static let steddiResetOnboarding = Notification.Name("steddiResetOnboarding")
 }
@@ -210,10 +228,14 @@ private struct SteddiRootView: View {
             if let storageWarning {
                 Label(storageWarning, systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white)
+                    // White-on-red fails WCAG AA body (~3.3–4:1). Use the
+                    // AA-correct on-fill token (near-black, ~5.5:1) over the
+                    // brand warmRed fill — matching the destructive-CTA and
+                    // traffic-badge treatment.
+                    .foregroundStyle(SteddiTheme.contrastingForeground(on: SteddiTheme.warmRedRGB))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(.red.opacity(0.92), in: Capsule())
+                    .background(SteddiTheme.warmRed, in: Capsule())
                     .padding(.top, 4)
             }
         }

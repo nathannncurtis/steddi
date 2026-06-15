@@ -90,9 +90,16 @@ final class CommuteNotificationService {
     // MARK: - Permission Flow (thoughtful, not at first launch)
 
     /// Refresh `authorizationStatus` from the system.
+    ///
+    /// `authorizationStatus` is an `@Observable` property SwiftUI reads on the
+    /// main actor, but this method is nonisolated `async` and its callers
+    /// (AppDelegate's launch Task, the Settings view's refresh) run on the
+    /// cooperative pool. Hop the assignment onto the main actor so the
+    /// Observation-tracked write never races a main-actor read.
     func refreshAuthorizationStatus() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
-        authorizationStatus = settings.authorizationStatus
+        let status = settings.authorizationStatus
+        await MainActor.run { self.authorizationStatus = status }
     }
 
     /// Whether we should still surface the pre-permission explainer. True only

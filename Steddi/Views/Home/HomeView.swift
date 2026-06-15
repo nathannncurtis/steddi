@@ -8,6 +8,7 @@ struct HomeView: View {
     @Environment(LocationService.self) private var locationService
     @Environment(NavigationStateManager.self) private var navStateManager
     @Environment(PendingCommuteStartStore.self) private var pendingCommuteStart
+    @Environment(PendingUIRouteStore.self) private var pendingUIRoute
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
     @Query(sort: \Commute.createdAt) private var commutes: [Commute]
     @Query private var commuteTrips: [CommuteTrip]
@@ -293,6 +294,11 @@ struct HomeView: View {
             // Drain any start request that landed before this view attached
             // (cold launch from Siri / CarPlay / a notification deep link).
             consumePendingCommuteStart()
+            // Same for UI/navigation routes (CarPlay "Recent Places" / route
+            // preview "Start Navigation"), which can also land pre-attach on a
+            // cold launch and would otherwise leave the user on the wrong tab or
+            // do nothing.
+            consumePendingUIRoute()
         }
         .onDisappear {
             // The whole HomeView subtree is being torn down. The happy paths
@@ -331,6 +337,13 @@ struct HomeView: View {
         // where the request landed before this view existed).
         .onChange(of: pendingCommuteStart.version) { _, _ in
             consumePendingCommuteStart()
+        }
+        // Drain UI/navigation routes raised from outside the SwiftUI tree
+        // (CarPlay "Recent Places", route-preview "Start Navigation",
+        // steddi://navigate). Same durable mailbox pattern as the commute store:
+        // reactive while foregrounded, plus the onAppear drain for cold launch.
+        .onChange(of: pendingUIRoute.version) { _, _ in
+            consumePendingUIRoute()
         }
         // External teardown sync. The shared manager can end the session out
         // from under this view — the only such path today is deleting the
@@ -484,22 +497,6 @@ struct HomeView: View {
                 GPSPoint(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
             }
             showPostArrival = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .steddiShowPlaces)) { _ in
-            // CarPlay dashboard "Recent Places" deep link foregrounded the app —
-            // surface the Places tab so the driver lands where they expect.
-            withAnimation(TransitionKit.quickFade) { sheetTab = .places }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .steddiNavigateToLocation)) { notification in
-            // steddi://navigate and CarPlay Start Navigation both post this
-            guard let lat = notification.userInfo?["lat"] as? Double,
-                  let lng = notification.userInfo?["lng"] as? Double else { return }
-            let name = notification.userInfo?["name"] as? String ?? "Destination"
-            navigateTo(
-                name: name,
-                coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
-                skipPreview: true
-            )
         }
         .alert(
             "Couldn’t Open Link",
@@ -1142,6 +1139,23 @@ struct HomeView: View {
         case .firstActive:
             guard let commute = commutes.first(where: { $0.isActive }) else { return }
             startCommute(commute, direction: resolvedStartDirection(commute))
+        }
+    }
+
+    /// Drain a UI/navigation route raised outside the SwiftUI tree (CarPlay
+    /// "Recent Places", CarPlay route-preview "Start Navigation",
+    /// `steddi://navigate`). Replaces the old transient NotificationCenter posts,
+    /// which were lost on a cold launch (the observer wasn't attached yet),
+    /// leaving the user on the wrong tab or a dead "Start Navigation".
+    private func consumePendingUIRoute() {
+        guard let route = pendingUIRoute.consume() else { return }
+
+        switch route {
+        case .showPlaces:
+            withAnimation(TransitionKit.quickFade) { sheetTab = .places }
+        case .navigate(let name, let coordinate):
+            guard !isNavigating else { return }
+            navigateTo(name: name, coordinate: coordinate, skipPreview: true)
         }
     }
 
