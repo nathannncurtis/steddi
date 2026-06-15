@@ -198,6 +198,9 @@ struct HomeView: View {
                             record.rawGPSPoints = points
                             record.associatedCommute = activeCommute
                             record.endedAt = Date()
+                            // Cache the computed summary on write so analytics
+                            // never has to decode the GPS blob to backfill it.
+                            record.finalizeSummary()
                             modelContext.insert(record)
                             recordedPoints = points
                         }
