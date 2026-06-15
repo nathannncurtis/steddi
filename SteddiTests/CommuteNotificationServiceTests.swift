@@ -246,3 +246,57 @@ struct ServicePassTests {
         await service.runNotificationPass(now: try at(hour: 6))
     }
 }
+
+// MARK: - CommuteTrip Cascade Delete
+
+@Suite("Commute cascade-deletes its trips")
+struct CommuteTripCascadeTests {
+
+    /// Deleting a Commute must cascade-delete its CommuteTrip history. Without the
+    /// model-level cascade the trips were merely nullified (commute -> nil) and
+    /// left behind as orphans, accumulating forever.
+    @Test("Deleting a commute removes all its CommuteTrip rows")
+    func deletingCommuteRemovesTrips() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+
+        let commute = Commute(name: "Work")
+        context.insert(commute)
+        for _ in 0..<5 {
+            context.insert(CommuteTrip(commute: commute, direction: .originToDestination))
+        }
+        try context.save()
+
+        #expect(try context.fetch(FetchDescriptor<CommuteTrip>()).count == 5)
+
+        context.delete(commute)
+        try context.save()
+
+        #expect(try context.fetch(FetchDescriptor<Commute>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<CommuteTrip>()).isEmpty)
+    }
+
+    /// A sibling commute's trips must survive when another commute is deleted —
+    /// the cascade is scoped to the deleted commute's own trips only.
+    @Test("Cascade is scoped to the deleted commute, sibling trips survive")
+    func cascadeScopedToDeletedCommute() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+
+        let work = Commute(name: "Work")
+        let gym = Commute(name: "Gym")
+        context.insert(work)
+        context.insert(gym)
+        context.insert(CommuteTrip(commute: work, direction: .originToDestination))
+        context.insert(CommuteTrip(commute: work, direction: .destinationToOrigin))
+        context.insert(CommuteTrip(commute: gym, direction: .originToDestination))
+        try context.save()
+
+        context.delete(work)
+        try context.save()
+
+        let remaining = try context.fetch(FetchDescriptor<CommuteTrip>())
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.commute?.id == gym.id)
+    }
+}
