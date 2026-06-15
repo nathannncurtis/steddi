@@ -22,7 +22,18 @@ struct CheckCommuteETAIntent: AppIntent {
             predicate: #Predicate { $0.isActive },
             sortBy: [SortDescriptor(\.createdAt)]
         )
-        let commutes = (try? context.fetch(descriptor)) ?? []
+        // Guard the fetch the same way the open is guarded: a read-only
+        // container can open fine but throw at fetch time when the on-disk
+        // schema is behind (SwiftData defers the migration check, and a
+        // read-only store can't migrate). Distinguish that failure from a
+        // genuinely empty store so we don't tell a user with commutes that they
+        // have none — steer them to open the app (which performs the migration).
+        let commutes: [Commute]
+        do {
+            commutes = try context.fetch(descriptor)
+        } catch {
+            return respond("I couldn't read your commutes right now. Open Steddi once to finish updating, then try again.")
+        }
 
         guard let commute = commutes.first else {
             return respond("You haven't set up any commutes yet.")
@@ -34,7 +45,13 @@ struct CheckCommuteETAIntent: AppIntent {
         // Resolve direction: proximity when we have a location fix, then the
         // active schedule window, then the next scheduled window, defaulting
         // to heading out (origin → destination).
-        let currentLocation = CLLocationManager().location
+        //
+        // A cold `CLLocationManager().location` is virtually always nil here:
+        // intents run without the app's running location service, so the
+        // property was never populated. Request a proper one-shot fix instead,
+        // failing gracefully (nil) on denial/timeout so direction falls back to
+        // the schedule.
+        let currentLocation = await OneShotLocation.current()
         let direction = resolveDirection(commute: commute, currentLocation: currentLocation)
 
         let destinationPin = direction == .originToDestination ? destination : origin

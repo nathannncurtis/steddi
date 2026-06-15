@@ -67,8 +67,12 @@ class CarPlayDashboardDelegate: UIResponder, CPTemplateApplicationDashboardScene
                     subtitleVariants: ["Tap to navigate", "Go"],
                     image: img
                 ) { _ in
-                    // Trigger commute start on the phone
-                    NotificationCenter.default.post(name: .steddiStartCommuteFromSiri, object: nil)
+                    // Queue a durable start request. The dashboard button can be
+                    // tapped while the phone app is suspended/cold; the store
+                    // survives the race and HomeView drains it on attach.
+                    Task { @MainActor in
+                        PendingCommuteStartStore.shared.request(.firstActive)
+                    }
                 }
                 buttons.append(commuteButton)
             }

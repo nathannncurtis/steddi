@@ -26,6 +26,7 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             .environment(appDelegate.offlineCacheService)
             .environment(appDelegate.commuteNotificationService)
             .environment(NavigationStateManager.shared)
+            .environment(PendingCommuteStartStore.shared)
 
         let window = UIWindow(windowScene: windowScene)
         switch SteddiTheme.currentThemeModeEx {
@@ -110,18 +111,20 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
                     object: nil,
                     userInfo: ["lat": lat, "lng": lng, "name": name]
                 )
-            } else if let commuteIdStr = params["commuteId"] {
+            } else if let commuteIdStr = params["commuteId"], let commuteId = UUID(uuidString: commuteIdStr) {
                 // Smart-commute notification "Start Commute" deep link:
                 // steddi://navigate?commuteId=<id>&direction=<dir>
-                var userInfo: [String: Any] = ["commuteId": commuteIdStr]
-                if let direction = params["direction"] {
-                    userInfo["direction"] = direction
+                //
+                // Queue a durable start request rather than posting into the
+                // void: this URL can arrive during cold-launch scene
+                // connection, before HomeView attaches its observers. The store
+                // survives that race and HomeView drains it on appear.
+                let direction = params["direction"].flatMap(CommuteDirection.init(rawValue:))
+                MainActor.assumeIsolated {
+                    PendingCommuteStartStore.shared.request(
+                        .specific(commuteId: commuteId, direction: direction)
+                    )
                 }
-                NotificationCenter.default.post(
-                    name: .steddiStartCommuteFromNotification,
-                    object: nil,
-                    userInfo: userInfo
-                )
             }
         case "search":
             if let query = params["q"] {
