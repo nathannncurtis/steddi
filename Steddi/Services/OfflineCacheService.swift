@@ -15,10 +15,12 @@ final class OfflineCacheService {
     private(set) var downloadedRouteIDs: Set<UUID> = []
 
     init() {
-        let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
         cacheDirectory = caches.appendingPathComponent("SteadyRouteCache", isDirectory: true)
 
-        let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
         downloadsDirectory = documents.appendingPathComponent("DownloadedRoutes", isDirectory: true)
 
         ensureDirectoryExists(cacheDirectory)
