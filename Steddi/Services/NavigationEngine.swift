@@ -557,12 +557,25 @@ final class NavigationEngine {
     /// inside `advanceStepIfNeeded`, AFTER `updateSpeedLimit` already ran this
     /// fix. Without this, the readout would show the estimate until the next
     /// fix re-queried the provider — the exact flicker we're fixing.
-    private func resolveSpeedLimitForStep(_ step: NavStep) {
+    private func resolveSpeedLimitForStep(at index: Int, step: NavStep) {
         let estimate = Self.estimateSpeedLimit(from: step.instruction)
         // Probe the provider at the new step's start so the limit matches the
-        // road being entered, not the position one fix ago.
+        // road being entered, not the position one fix ago. Pass the route's
+        // travel bearing AT THIS STEP so the OSM lookup keeps its carriageway
+        // gate: a heading-less probe skips that gate and can publish the
+        // opposite carriageway's limit on a divided road (the bug this fixes),
+        // and the current pose's bearing (directionalFilterBearing) is the wrong
+        // direction for a step that turns. The route bearing at the step's
+        // along-distance is GPS-independent and always the correct entry
+        // direction. Only when that bearing is unknown (degenerate route / no
+        // projector) do we fall back to the instruction estimate rather than
+        // querying omni-directionally; the next fix's updateSpeedLimit then
+        // upgrades to live data once a travel bearing exists.
+        let stepBearing = stepAlongDistanceIfPresent(index).flatMap { projector?.bearing(atDistance: $0) }
+            ?? directionalFilterBearing
         if let provider = speedLimitProvider,
-           let provided = provider(step.coordinate, headingDegrees) {
+           let bearing = stepBearing,
+           let provided = provider(step.coordinate, bearing) {
             speedLimitMph = provided.mph
             speedLimitIsEstimated = provided.isEstimated
         } else {
@@ -582,7 +595,7 @@ final class NavigationEngine {
         stepDistance = Self.formatDistance(step.distance)
         maneuverType = step.maneuverSymbol
         roadName = Self.extractRoadName(from: step.instruction)
-        resolveSpeedLimitForStep(step)
+        resolveSpeedLimitForStep(at: index, step: step)
 
         if !step.instruction.isEmpty {
             VoiceGuidanceService.shared.speakWithDistance(step.instruction, distance: step.distance)

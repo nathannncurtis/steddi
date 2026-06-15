@@ -1242,6 +1242,40 @@ struct NavigationEngineSpeedLimitStepTests {
         #expect(engine.speedLimitIsEstimated == true)
         engine.stopNavigation()
     }
+
+    @Test("Step-advance lookup passes a confident bearing (not heading-less) to the provider")
+    func stepAdvancePassesBearing() {
+        let engine = NavigationEngine()
+        let (polyline, steps) = twoStepRoute()
+
+        // Capture the heading the provider is probed with on the step-advance
+        // call (when the limit flips to the new step's road). Before the fix the
+        // step-advance lookup passed the RAW headingDegrees, which is nil early
+        // in a drive, so the OSM provider would skip its carriageway gate and
+        // could publish the opposite carriageway's limit. The fix routes it
+        // through directionalFilterBearing, which falls back to the route segment
+        // bearing while on-route — so the bearing handed in must be non-nil.
+        var headingsAtStep1: [Double?] = []
+        let boundaryLat = polyline[10].latitude
+        engine.speedLimitProvider = { coord, heading in
+            if coord.latitude >= boundaryLat {
+                headingsAtStep1.append(heading)
+            }
+            return (mph: 40, isEstimated: false)
+        }
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        for i in 0...10 {
+            engine.updateLocation(fix(lat: 33.0 + Double(i) * 0.001, lon: -117.0, t: Double(i)))
+        }
+
+        #expect(engine.currentStepIndex == 1)
+        // The step-advance probe at the new road must have received a bearing.
+        #expect(headingsAtStep1.contains { $0 != nil })
+        // And it must never have been queried heading-less for that road.
+        #expect(!headingsAtStep1.contains { $0 == nil })
+        engine.stopNavigation()
+    }
 }
 
 // MARK: - Legacy Saved Step Filtering
