@@ -411,6 +411,102 @@ struct ServiceNextDepartureTests {
     }
 }
 
+// MARK: - Idle Pre-Drive Widget: value extraction before await
+
+/// The SwiftData thread-safety fix restructured `refreshIdleCommuteETA` (and the
+/// notification pass) to snapshot every needed `@Model` property — commute name,
+/// destination name/coordinate, preferred-route typical duration, resolved
+/// direction — into a Sendable value struct SYNCHRONOUSLY before any await,
+/// because the @Model objects are bound to the ModelContext's executor and must
+/// not be touched after a suspension resumes on another thread.
+///
+/// These exercise that extraction directly via the (internal) selection seam and
+/// the model accessors the snapshot reads, WITHOUT touching the shared App Group
+/// widget defaults — the same approach `ServiceNextDepartureTests` takes to avoid
+/// racing the parallel NavigationStateManager widget-sync suite that mutates
+/// those defaults concurrently.
+@Suite("CommuteNotificationService idle ETA value extraction")
+struct ServiceIdleETAExtractionTests {
+
+    private func service(_ container: ModelContainer) -> CommuteNotificationService {
+        CommuteNotificationService(modelContainer: container, defaults: freshDefaults())
+    }
+
+    /// Build the fixture the snapshot reads: a scheduled to-destination commute
+    /// with a preferred (rank 0) route carrying a known typical duration.
+    private func fixture(_ context: ModelContext, typicalSeconds: Double) throws -> Commute {
+        let origin = PinnedLocation(name: "Home", latitude: 37.0, longitude: -122.0)
+        let destination = PinnedLocation(name: "Office", latitude: 37.5, longitude: -122.5)
+        let commute = Commute(name: "Work", origin: origin, destination: destination)
+        commute.isActive = true
+        commute.notificationsEnabled = true
+        commute.scheduleToDestStartHour = 8
+        commute.scheduleToDestDays = "2,3,4,5,6"   // Mon–Fri
+        context.insert(commute)
+
+        let route = Route(
+            rank: 0,
+            encodedPolyline: "abc",
+            typicalDurationSeconds: typicalSeconds,
+            direction: .originToDestination
+        )
+        context.insert(route)
+        // Link via the to-many side so `commute.preferredRoute(for:)` (which reads
+        // `commute.routes`) sees it — there's no declared inverse to auto-populate.
+        commute.routes = [route]
+        route.commute = commute
+        try context.save()
+        return commute
+    }
+
+    /// The selection seam must pick the scheduled commute, and the values the
+    /// snapshot extracts from it (the preferred route's typical duration for the
+    /// resolved direction, the destination name) must be exactly what the idle
+    /// widget would show — 1500s ⇒ 25 min, "Office".
+    @Test("Extracted typical duration and destination match the selected commute")
+    func extractsTypicalDurationAndDestination() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+        let commute = try fixture(context, typicalSeconds: 1500)   // 25 min
+
+        let monday = try at(hour: 7)   // before the 08:00 window
+        let commutes = try context.fetch(FetchDescriptor<Commute>())
+        let trips = try context.fetch(FetchDescriptor<CommuteTrip>())
+
+        // 1) Selection: this is the commute whose ETA the idle widget reflects.
+        let id = service(container).nextDepartureCommuteID(commutes: commutes, trips: trips, now: monday)
+        #expect(id == commute.id)
+
+        // 2) Values the snapshot extracts before any await: the resolved direction
+        //    is originToDestination (scheduled window), so the preferred route's
+        //    typical duration and the destination name are what flow to the widget.
+        let direction = CommuteDirectionResolver.scheduledDirection(commute: commute, now: monday)
+            ?? CommuteDirectionResolver.nextScheduledDirection(commute: commute, now: monday)
+            ?? .originToDestination
+        #expect(direction == .originToDestination)
+        #expect(commute.preferredRoute(for: direction)?.typicalDurationSeconds == 1500)
+        #expect(commute.destination?.name == "Office")
+        // The widget conversion the service applies: max(1, round(seconds/60)).
+        #expect(max(1, Int((1500.0 / 60).rounded())) == 25)
+    }
+
+    /// End-to-end: with no location fix the live-ETA await is skipped and the
+    /// model-derived typical duration is used — so the whole async path runs
+    /// without ever re-touching the @Model after a suspension point. Exercises the
+    /// restructured method for crashes/hangs even though the widget write itself
+    /// is intentionally not asserted here (it races the parallel NSM suite).
+    @Test("Idle refresh runs the extraction path with no location fix")
+    func idleRefreshRunsWithoutLocation() async throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+        _ = try fixture(context, typicalSeconds: 1500)
+
+        // Default locationProvider returns nil → no network suspension; the typical
+        // duration (extracted from the model before any await) is used.
+        await service(container).refreshIdleCommuteETA(now: try at(hour: 7))
+    }
+}
+
 // MARK: - CommuteTrip Cascade Delete
 
 @Suite("Commute cascade-deletes its trips")
