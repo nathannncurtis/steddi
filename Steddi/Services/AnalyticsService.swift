@@ -159,6 +159,13 @@ final class AnalyticsService {
     /// Shown in place of trends when the window has too little data.
     private(set) var trendGateMessage: String?
 
+    /// The window/clock the most recent load ran with, so a background backfill
+    /// can re-aggregate the same view once it finishes draining legacy records.
+    private var lastLoad: (window: AnalyticsTimeWindow, now: Date)?
+    /// Guards against spawning overlapping backfill passes when loadAnalytics is
+    /// called repeatedly (appear + window changes) before the first one drains.
+    private var backfillInFlight = false
+
     /// How many drives the list section shows.
     static let recentDriveLimit = 50
     /// Regression and traffic charts operate on at most this many recent
@@ -181,8 +188,19 @@ final class AnalyticsService {
         isLoading = true
         defer { isLoading = false }
 
-        backfillMissingSummaries(context: context)
+        lastLoad = (window, now)
+        aggregate(window: window, context: context, now: now)
 
+        // Legacy records (saved before the summary fields existed) decode their
+        // entire GPS blob to backfill summaries — far too heavy for the MainActor
+        // on the hottest analytics path. Drain that batch on a background context
+        // and re-aggregate when it lands, so the first paint is never blocked.
+        scheduleBackfill(container: context.container)
+    }
+
+    /// Builds and publishes every window aggregate from the cached summary
+    /// fields. Pure with respect to the GPS blob — never decodes it.
+    private func aggregate(window: AnalyticsTimeWindow, context: ModelContext, now: Date) {
         let calendar = Calendar.current
         let windowStart = window.startDate(now: now, calendar: calendar)
 
@@ -208,6 +226,34 @@ final class AnalyticsService {
         }
 
         recentDrives = fetchRecentDrives(from: windowStart, context: context)
+    }
+
+    /// Drains the legacy-summary backfill on a detached background context, then
+    /// re-aggregates the current window on the MainActor if any record was
+    /// finalized. At most one pass runs at a time; if more legacy records remain
+    /// after a full batch, another pass is queued so the backlog drains across a
+    /// few cycles without ever touching the main thread.
+    private func scheduleBackfill(container: ModelContainer) {
+        guard !backfillInFlight else { return }
+        backfillInFlight = true
+
+        Task.detached(priority: .utility) {
+            let backfilled = Self.backfillMissingSummaries(container: container)
+
+            await MainActor.run {
+                self.backfillInFlight = false
+                guard backfilled > 0, let last = self.lastLoad else { return }
+                // Newly-finalized records now qualify for aggregation. Re-read on
+                // the MainActor context the view owns so published state stays
+                // consistent with the store.
+                self.aggregate(window: last.window, context: ModelContext(container), now: last.now)
+                // A full batch likely means more legacy records remain — keep
+                // draining until the backlog is empty.
+                if backfilled >= Self.backfillBatchSize {
+                    self.scheduleBackfill(container: container)
+                }
+            }
+        }
     }
 
     private func applyTrends(_ result: (insights: [TrendInsight], gateMessage: String?)) {
@@ -775,20 +821,30 @@ final class AnalyticsService {
         return (try? context.fetch(descriptor)) ?? []
     }
 
+    /// Max legacy records finalized per backfill pass. A full batch signals more
+    /// remain, so the caller queues another pass until the backlog drains.
+    nonisolated static let backfillBatchSize = 200
+
     /// One-time migration for records saved before summary fields existed:
     /// decode their blobs once, persist the summaries, never decode again.
-    /// Batched so a large legacy library backfills across a few loads
-    /// instead of stalling the first one.
-    private func backfillMissingSummaries(context: ModelContext, batchSize: Int = 200) {
+    ///
+    /// Runs on a fresh background `ModelContext` (NOT the MainActor view context)
+    /// because finalizing a record materializes and iterates its entire raw GPS
+    /// blob — potentially thousands of points each — which would hitch the UI on
+    /// the hottest analytics path. Returns how many records were finalized so the
+    /// caller knows whether to re-aggregate and whether more remain.
+    nonisolated static func backfillMissingSummaries(container: ModelContainer) -> Int {
+        let context = ModelContext(container)
         var descriptor = FetchDescriptor<DriveRecord>(
             predicate: #Predicate { $0.endedAt != nil && $0.totalDurationSeconds == nil },
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
-        descriptor.fetchLimit = batchSize
-        guard let legacy = try? context.fetch(descriptor), !legacy.isEmpty else { return }
+        descriptor.fetchLimit = backfillBatchSize
+        guard let legacy = try? context.fetch(descriptor), !legacy.isEmpty else { return 0 }
         for record in legacy {
             record.finalizeSummary()
         }
         try? context.save()
+        return legacy.count
     }
 }

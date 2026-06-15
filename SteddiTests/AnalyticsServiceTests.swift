@@ -570,3 +570,72 @@ struct AnalyticsAggregationTests {
         #expect(AnalyticsService.weightedPercentile([(5, 0), (15, 3)], 0.5) == 15)
     }
 }
+
+// MARK: - Legacy summary backfill
+
+/// `backfillMissingSummaries` is the migration path for records saved before the
+/// computed-on-write summary fields existed. It must run OFF the MainActor (it
+/// decodes the full GPS blob), finalize only legacy records, and report how many
+/// it touched so the caller can re-aggregate and keep draining.
+@Suite("Analytics legacy backfill")
+struct AnalyticsBackfillTests {
+
+    static func makeContainer() throws -> ModelContainer {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        return try ModelContainer(for: ModelStoreLocator.schema, configurations: config)
+    }
+
+    /// A legacy record: ended, but with the summary fields still nil and a real
+    /// GPS trace that finalizeSummary must decode.
+    @discardableResult
+    static func insertLegacy(_ context: ModelContext, start: Date, minutes: Double) -> DriveRecord {
+        let record = DriveRecord(startedAt: start)
+        record.endedAt = start.addingTimeInterval(minutes * 60)
+        // Two valid fixes 1s apart at ~10 m/s so the summary computes non-trivially.
+        record.rawGPSPoints = [
+            GPSPoint(latitude: 34.0, longitude: -118.0, altitude: 0, horizontalAccuracy: 5, timestamp: start, speed: 10),
+            GPSPoint(latitude: 34.0001, longitude: -118.0, altitude: 0, horizontalAccuracy: 5, timestamp: start.addingTimeInterval(1), speed: 10)
+        ]
+        // totalDurationSeconds left nil — this is what marks it as un-backfilled.
+        context.insert(record)
+        return record
+    }
+
+    static func allRecords(_ context: ModelContext) -> [DriveRecord] {
+        (try? context.fetch(FetchDescriptor<DriveRecord>())) ?? []
+    }
+
+    @Test("Backfill finalizes legacy records and reports the count")
+    func backfillFinalizes() throws {
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        Self.insertLegacy(context, start: start, minutes: 20)
+        Self.insertLegacy(context, start: start.addingTimeInterval(3600), minutes: 30)
+        try context.save()
+
+        let count = AnalyticsService.backfillMissingSummaries(container: container)
+        #expect(count == 2)
+
+        // Read back through a fresh context (mirrors the re-aggregate path).
+        let verify = ModelContext(container)
+        let records = Self.allRecords(verify)
+        #expect(records.allSatisfy { $0.totalDurationSeconds != nil })
+        #expect(records.allSatisfy { $0.hasSummary })
+    }
+
+    @Test("Backfill leaves already-summarized records untouched and returns 0")
+    func backfillSkipsFinalized() throws {
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let record = DriveRecord(startedAt: start)
+        record.endedAt = start.addingTimeInterval(1200)
+        record.finalizeSummary() // already has a summary
+        context.insert(record)
+        try context.save()
+
+        let count = AnalyticsService.backfillMissingSummaries(container: container)
+        #expect(count == 0)
+    }
+}
