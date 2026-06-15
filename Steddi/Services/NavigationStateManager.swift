@@ -156,14 +156,41 @@ final class NavigationStateManager {
 
                     guard let engine = self.activeEngine,
                           engine.isNavigating,
-                          let currentCoord = engine.currentCoordinate else { continue }
+                          let currentCoord = engine.currentCoordinate,
+                          let activeDestination = engine.routePolylineCoordinates.last else { continue }
 
-                    // Use the engine's precise ETA in seconds. etaMinutes is
-                    // ceiled to the nearest minute with a 1-minute floor, which
-                    // both loses sub-minute precision and inflates short
-                    // segments — feeding that into RerouteEngine.evaluate would
-                    // suppress legitimate savings on short remaining legs.
-                    let remainingETA = engine.etaSeconds
+                    // Comparability: the candidate ETA below is an MKDirections
+                    // live-traffic point-to-point estimate from the current
+                    // position to the fallback's destination. The active route's
+                    // remaining ETA MUST be derived the same way, otherwise we'd
+                    // be subtracting two numbers on different bases — engine
+                    // `etaSeconds` is an avg-speed/typical-duration model skewed
+                    // by the driver's own running speed mean, so mixing it with
+                    // MKDirections biases EVERY suggestion (crawling inflates the
+                    // engine estimate and over-triggers; cruising deflates it and
+                    // suppresses legitimate reroutes). Compute the current
+                    // route's remaining ETA via the SAME MKDirections path used
+                    // for candidates so a saving is a genuine like-for-like one.
+                    let remainingETA: TimeInterval
+                    do {
+                        remainingETA = try await directionsService.fetchDirectETA(
+                            from: currentCoord,
+                            to: activeDestination
+                        )
+                    } catch {
+                        // Couldn't get a comparable baseline this cycle — skip
+                        // rather than fall back to the engine model and compare
+                        // incomparable numbers.
+                        continue
+                    }
+
+                    // The fetch awaited; bail if the session changed underneath.
+                    guard !Task.isCancelled,
+                          let liveEngine = self.activeEngine,
+                          liveEngine === engine,
+                          liveEngine.isNavigating,
+                          !self.hasArrived else { break }
+
                     self.currentRemainingETA = remainingETA
 
                     let fallbacks = commute.orderedRoutes(for: direction).filter { $0.rank > 0 }
