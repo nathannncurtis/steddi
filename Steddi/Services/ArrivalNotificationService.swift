@@ -23,7 +23,10 @@ final class ArrivalNotificationService {
         }
     }
 
-    /// Register the notification category with actions.
+    /// Register the SAVE_ROUTE category with actions. Reads the current set and
+    /// unions in SAVE_ROUTE so this never clobbers categories another service
+    /// already registered (e.g. COMMUTE_ALERT) — `setNotificationCategories`
+    /// replaces the whole set, so a blind set would silently drop the others.
     func registerCategory() {
         let saveAction = UNNotificationAction(identifier: "SAVE", title: "Save Route", options: .foreground)
         let dismissAction = UNNotificationAction(identifier: "DISMISS", title: "Not Now", options: .destructive)
@@ -32,7 +35,12 @@ final class ArrivalNotificationService {
             actions: [saveAction, dismissAction],
             intentIdentifiers: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationCategories { existing in
+            var merged = existing.filter { $0.identifier != Self.categoryIdentifier }
+            merged.insert(category)
+            center.setNotificationCategories(merged)
+        }
     }
 
     /// Schedule a "save this route?" notification 2 minutes from now.
