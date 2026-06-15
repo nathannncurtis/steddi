@@ -60,23 +60,52 @@ enum PlaceCategory: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Color hint for the category chip. Computed (not stored) so theme updates
-    /// apply without a data migration. Falls back to the live accent for cases
-    /// without a strong real-world color association.
+    /// Raw brand hue for the category — single source of truth for `themeColor`
+    /// (the FILL/tint) and `labelColor` (the legible TEXT), so the two can't
+    /// drift. `.work`/`.other` fall back to the live accent; those return the
+    /// accent's brand hue here and the surface-adaptive `accent` from
+    /// `labelColor`. Computed (not stored) so theme updates apply without a data
+    /// migration.
+    var rgb: RGBColor {
+        switch self {
+        case .home: return SteddiTheme.sageRGB
+        case .work: return SteddiTheme.currentAccentOption.rgb
+        case .gym: return RGBColor(0.95, 0.45, 0.30)   // coral
+        case .grocery: return RGBColor(0.30, 0.70, 0.40) // green
+        case .cafe: return RGBColor(0.62, 0.45, 0.32)  // mocha
+        case .restaurant: return RGBColor(0.90, 0.55, 0.20) // amber
+        case .hospital: return SteddiTheme.warmRedRGB
+        case .school: return RGBColor(0.35, 0.55, 0.90) // blue
+        case .airport: return RGBColor(0.40, 0.70, 0.85) // sky
+        case .gasStation: return RGBColor(0.85, 0.40, 0.50) // rose
+        case .parking: return RGBColor(0.45, 0.55, 0.75) // slate blue
+        case .other: return SteddiTheme.currentAccentOption.rgb
+        }
+    }
+
+    /// Color hint for the category chip FILL / 15%-tint background and the chip
+    /// glyph where contrast is carried by the fill, not small text. This is the
+    /// saturated brand hue — do NOT use it as a small text/label color on a light
+    /// tint of itself (it fails WCAG AA there); use `labelColor` for that.
     var themeColor: Color {
         switch self {
-        case .home: return SteddiTheme.sage
-        case .work: return SteddiTheme.accent
-        case .gym: return Color(red: 0.95, green: 0.45, blue: 0.30)   // coral
-        case .grocery: return Color(red: 0.30, green: 0.70, blue: 0.40) // green
-        case .cafe: return Color(red: 0.62, green: 0.45, blue: 0.32)  // mocha
-        case .restaurant: return Color(red: 0.90, green: 0.55, blue: 0.20) // amber
-        case .hospital: return SteddiTheme.warmRed
-        case .school: return Color(red: 0.35, green: 0.55, blue: 0.90) // blue
-        case .airport: return Color(red: 0.40, green: 0.70, blue: 0.85) // sky
-        case .gasStation: return Color(red: 0.85, green: 0.40, blue: 0.50) // rose
-        case .parking: return Color(red: 0.45, green: 0.55, blue: 0.75) // slate blue
-        case .other: return SteddiTheme.accent
+        case .work, .other: return SteddiTheme.accent
+        default: return rgb.color
+        }
+    }
+
+    /// AA-legible TEXT color for the category — the surface-adaptive,
+    /// hue-preserving variant of `themeColor`, sized to clear contrast when the
+    /// label sits on a 15%-tint-of-itself over the live surface. Rendered as a
+    /// saturated label on its own tint, the raw category hue fails contrast in
+    /// light/grey; this shifts it toward the side the surface has headroom in
+    /// while keeping the category's identity. LocationCardView (owned elsewhere)
+    /// should read this for the chip label instead of `themeColor`. `.work`/
+    /// `.other` defer to the live accent text token.
+    var labelColor: Color {
+        switch self {
+        case .work, .other: return SteddiTheme.accent
+        default: return SteddiTheme.legibleText(rgb)
         }
     }
 
