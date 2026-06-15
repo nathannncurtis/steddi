@@ -1347,7 +1347,11 @@ struct HomeView: View {
             commute: activeCommute,
             direction: activeDirection,
             trip: activeTrip,
-            destinationName: destName
+            destinationName: destName,
+            // Identity of the route being driven so the reroute loop excludes it
+            // (and only it) from candidates — works whether this is the preferred
+            // route or a fallback the driver switched to.
+            routeID: route?.id
         )
 
         startLocationFeed()

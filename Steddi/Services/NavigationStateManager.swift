@@ -60,6 +60,15 @@ final class NavigationStateManager {
     var rerouteSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)? = nil
     var currentRemainingETA: TimeInterval = 0
 
+    /// The id of the route the driver is actually navigating, set at session
+    /// start. The reroute loop excludes THIS route from candidates by identity
+    /// (not by rank), so after `switchToRoute` lands the driver on a fallback
+    /// (rank > 0) the loop never re-suggests the route already being driven and
+    /// CAN re-offer the preferred (rank 0) route if it becomes faster again.
+    /// nil for non-commute sessions (search nav), which run no reroute loop.
+    @ObservationIgnored
+    private var activeRouteID: UUID?
+
     /// The route the driver most recently declined (tapped "Stay") plus when,
     /// and the savings they rejected. The reroute loop suppresses re-suggesting
     /// that same route during a cooldown window unless it becomes materially
@@ -123,7 +132,8 @@ final class NavigationStateManager {
         commute: Commute? = nil,
         direction: CommuteDirection? = nil,
         trip: Trip? = nil,
-        destinationName: String? = nil
+        destinationName: String? = nil,
+        routeID: UUID? = nil
     ) {
         stopObserving()
 
@@ -135,6 +145,9 @@ final class NavigationStateManager {
         activeCommute = commute
         activeDirection = direction
         activeTrip = trip
+        // Identity of the route actually being driven, so the reroute loop can
+        // exclude it (and only it) from candidates regardless of its rank.
+        activeRouteID = routeID
 
         writeWidgetSession(commute: commute, direction: direction, destinationName: destinationName)
 
@@ -216,58 +229,30 @@ final class NavigationStateManager {
 
                     self.currentRemainingETA = remainingETA
 
-                    let fallbacks = commute.orderedRoutes(for: direction).filter { $0.rank > 0 }
-                    guard !fallbacks.isEmpty else { continue }
+                    // Candidates are every OTHER saved route in this direction —
+                    // excluded by IDENTITY, not by rank. The driver may already be
+                    // on a fallback (rank > 0) after a manual switch, so filtering
+                    // on rank-0 would (a) re-suggest the route being driven and
+                    // (b) permanently bar the preferred route from being re-offered
+                    // when it's faster again. Excluding only `activeRouteID` fixes
+                    // both.
+                    let candidates = commute.orderedRoutes(for: direction)
+                        .filter { $0.id != self.activeRouteID }
+                    guard !candidates.isEmpty else { continue }
 
-                    var bestSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)?
-                    var bestSavings: TimeInterval = 0
-
-                    for fallback in fallbacks {
-                        do {
-                            let fallbackETA = try await directionsService.fetchETA(
-                                from: currentCoord,
-                                along: fallback.encodedPolyline
-                            )
-
-                            // The fetch awaited; the session may have ended (or a
-                            // different engine taken over) while it was in flight.
-                            // Bail before applying a stale reroute result so it
-                            // can't land after navigation was torn down.
-                            guard !Task.isCancelled,
-                                  let liveEngine = self.activeEngine,
-                                  liveEngine === engine,
-                                  liveEngine.isNavigating,
-                                  !self.hasArrived else { break }
-
-                            let decision = RerouteEngine.evaluate(
-                                remainingETASeconds: remainingETA,
-                                fallbackETASeconds: fallbackETA,
-                                basePercentage: commute.thresholdPercentage,
-                                hardMinuteFloor: commute.hardMinuteFloor
-                            )
-
-                            // Don't re-surface a route the driver just declined
-                            // (tapped "Stay") until the cooldown lapses or it
-                            // becomes materially faster than what was rejected.
-                            if self.isRerouteSuppressed(
-                                routeID: fallback.id,
-                                savingsSeconds: decision.savingsSeconds
-                            ) {
-                                continue
-                            }
-
-                            if decision.shouldReroute, decision.savingsSeconds > bestSavings {
-                                bestSavings = decision.savingsSeconds
-                                bestSuggestion = (
-                                    route: fallback,
-                                    savingsMinutes: decision.savingsMinutes,
-                                    savingsPercentage: remainingETA > 0 ? decision.savingsSeconds / remainingETA : 0
-                                )
-                            }
-                        } catch {
-                            continue
+                    let bestSuggestion = await Self.bestReroute(
+                        candidates: candidates,
+                        currentCoord: currentCoord,
+                        remainingETASeconds: remainingETA,
+                        basePercentage: commute.thresholdPercentage,
+                        hardMinuteFloor: commute.hardMinuteFloor,
+                        isSuppressed: { [weak self] routeID, savingsSeconds in
+                            self?.isRerouteSuppressed(routeID: routeID, savingsSeconds: savingsSeconds) ?? false
+                        },
+                        fetchETA: { coord, polyline in
+                            try await directionsService.fetchETA(from: coord, along: polyline)
                         }
-                    }
+                    )
 
                     // Final guard: only surface the suggestion if the same
                     // session is still live after all the awaits above.
@@ -282,6 +267,88 @@ final class NavigationStateManager {
                 }
             }
         }
+    }
+
+    // MARK: - Reroute Candidate Evaluation
+
+    /// Pick the best reroute suggestion among `candidates`, comparing every ETA
+    /// SYMMETRICALLY: each side is "time from where I am NOW to the destination
+    /// via route X."
+    ///
+    /// The crux is that the active route's baseline (`remainingETASeconds`) is
+    /// measured along only the geometry still AHEAD of the driver, so each
+    /// candidate must be measured the same way — trim the candidate's polyline to
+    /// the portion ahead of `currentCoord` (`DirectionsService.remainingPolyline`)
+    /// before fetching its path-aware ETA. Passing the candidate's FULL saved
+    /// polyline (which begins at the commute origin) would instead measure
+    /// "drive BACK to the origin, then the whole candidate," systematically
+    /// inflating every candidate's ETA mid-drive and making real savings look
+    /// negative — the asymmetry that silently killed the feature after the first
+    /// few minutes of any drive. With both sides trimmed-from-current-position,
+    /// a genuinely faster alternative shows real savings and an equal route shows
+    /// ~0.
+    ///
+    /// Pure and dependency-injected (`fetchETA`, `isSuppressed`) so the
+    /// symmetric-comparison contract is unit-testable without a live engine or
+    /// network. Candidate exclusion (the active route) is the caller's job.
+    nonisolated static func bestReroute(
+        candidates: [Route],
+        currentCoord: CLLocationCoordinate2D,
+        remainingETASeconds: TimeInterval,
+        basePercentage: Double,
+        hardMinuteFloor: Int?,
+        isSuppressed: (UUID, TimeInterval) -> Bool,
+        fetchETA: (CLLocationCoordinate2D, String) async throws -> TimeInterval
+    ) async -> (route: Route, savingsMinutes: Double, savingsPercentage: Double)? {
+        var bestSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)?
+        var bestSavings: TimeInterval = 0
+
+        for candidate in candidates {
+            // Trim the candidate to the part AHEAD of the driver — symmetric with
+            // the active route's remaining ETA, so both numbers measure the same
+            // origin (current position) to the same destination, differing only
+            // by path.
+            let candidateCoords = PolylineEncoder.decode(candidate.encodedPolyline, precision: 6)
+            guard candidateCoords.count >= 2 else { continue }
+            let candidateRemaining = DirectionsService.remainingPolyline(
+                of: candidateCoords,
+                from: currentCoord
+            )
+
+            let candidateETA: TimeInterval
+            do {
+                candidateETA = try await fetchETA(
+                    currentCoord,
+                    PolylineEncoder.encode(candidateRemaining, precision: 6)
+                )
+            } catch {
+                continue
+            }
+
+            let decision = RerouteEngine.evaluate(
+                remainingETASeconds: remainingETASeconds,
+                fallbackETASeconds: candidateETA,
+                basePercentage: basePercentage,
+                hardMinuteFloor: hardMinuteFloor
+            )
+
+            // Don't re-surface a route the driver just declined ("Stay") until
+            // the cooldown lapses or it becomes materially faster than rejected.
+            if isSuppressed(candidate.id, decision.savingsSeconds) {
+                continue
+            }
+
+            if decision.shouldReroute, decision.savingsSeconds > bestSavings {
+                bestSavings = decision.savingsSeconds
+                bestSuggestion = (
+                    route: candidate,
+                    savingsMinutes: decision.savingsMinutes,
+                    savingsPercentage: remainingETASeconds > 0 ? decision.savingsSeconds / remainingETASeconds : 0
+                )
+            }
+        }
+
+        return bestSuggestion
     }
 
     /// Copy one tick of engine state into the manager's published properties.
@@ -410,6 +477,7 @@ final class NavigationStateManager {
         activeTrip = nil
         activeEngine = nil
         activeRouteCoords = []
+        activeRouteID = nil
         rerouteSuggestion = nil
         currentRemainingETA = 0
         upcomingSteps = []
