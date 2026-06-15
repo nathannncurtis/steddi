@@ -1350,7 +1350,7 @@ struct HomeView: View {
             if let coord, let dist = formattedDistance(to: coord) {
                 Text(dist)
                     .font(SteddiTheme.mono(13))
-                    .foregroundStyle(SteddiTheme.sage)
+                    .foregroundStyle(SteddiTheme.sageText)
             }
         }
         .padding(.horizontal, 14)
