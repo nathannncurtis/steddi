@@ -66,6 +66,8 @@ struct OnboardingShowpieceCard<Content: View>: View {
             backdrop
 
             VStack(spacing: 0) {
+                Spacer(minLength: 12)
+
                 GlassEffectContainer(spacing: 24) {
                     ZStack {
                         content()
@@ -91,6 +93,8 @@ struct OnboardingShowpieceCard<Content: View>: View {
                         .padding(.top, 16)
                         .transition(.opacity)
                 }
+
+                Spacer(minLength: 12)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
