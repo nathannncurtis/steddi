@@ -150,7 +150,7 @@ final class CommuteWeatherService {
         do {
             let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
             let weather = try await WeatherService.shared.weather(for: location)
-            return .success(Self.map(current: weather.currentWeather, hourly: weather.hourlyForecast))
+            return .success(Self.map(current: weather.currentWeather, hourly: weather.hourlyForecast, now: now()))
         } catch {
             // No entitlement, unsupported region, or network — degrade silently.
             weatherLog.error("WeatherKit fetch failed: \(error.localizedDescription, privacy: .public)")
@@ -167,39 +167,65 @@ final class CommuteWeatherService {
 
     #if canImport(WeatherKit)
     /// Map current conditions + the next 12h forecast to a `WeatherCondition`,
-    /// keeping the worst severity seen across the window.
+    /// keeping the worst severity seen across the window. `now` is the injected
+    /// clock so the scan is deterministic and testable.
     static func map(
         current: CurrentWeather,
-        hourly: Forecast<HourWeather>
+        hourly: Forecast<HourWeather>,
+        now: Date
     ) -> WeatherCondition {
-        var worst = severity(
+        let currentSeverity = severity(
             precipMmPerHour: Self.precipMmPerHour(current.precipitationIntensity),
             temperatureC: current.temperature.converted(to: .celsius).value,
             visibilityMeters: current.visibility.converted(to: .meters).value,
             windKmh: current.wind.speed.converted(to: .kilometersPerHour).value,
             condition: current.condition
         )
-        var worstSummary = worst.severity > WeatherSeverity.clear ? worst.summary : ""
-
-        let horizon = Date().addingTimeInterval(12 * 3600)
-        for hour in hourly.forecast where hour.date <= horizon {
-            // Hourly precipitationAmount is the mm of precip over the hour ==
-            // mm/hr for our threshold purposes.
-            let s = severity(
+        // Project each forecast hour to (date, severity) so the time-bounding +
+        // worst-severity reduction lives in a pure, WeatherKit-free helper that
+        // the suite can exercise with synthetic past/future hours.
+        let hourlySeverities = hourly.forecast.map { hour in
+            (date: hour.date, severity: severity(
+                // Hourly precipitationAmount is the mm of precip over the hour ==
+                // mm/hr for our threshold purposes.
                 precipMmPerHour: hour.precipitationAmount.converted(to: .millimeters).value,
                 temperatureC: hour.temperature.converted(to: .celsius).value,
                 visibilityMeters: hour.visibility.converted(to: .meters).value,
                 windKmh: hour.wind.speed.converted(to: .kilometersPerHour).value,
                 condition: hour.condition
-            )
-            if s.severity > worst.severity {
-                worst = s
-                worstSummary = s.summary
+            ))
+        }
+        return worstCondition(current: currentSeverity, hourly: hourlySeverities, now: now)
+    }
+    #endif
+
+    /// Reduce the current condition plus the time-stamped hourly severities to a
+    /// single worst-case `WeatherCondition`, scanning ONLY the [now, now + 12h]
+    /// window. The lower bound matters: WeatherKit's `hourlyForecast` routinely
+    /// begins before `now` (it starts ~10pm the prior local day), so without it an
+    /// already-elapsed burst of heavy rain that has since cleared would still
+    /// inflate the commute's severity and fire a false pre-drive alert. Pure and
+    /// WeatherKit-free so it is deterministically testable.
+    static func worstCondition(
+        current: (severity: WeatherSeverity, summary: String),
+        hourly: [(date: Date, severity: (severity: WeatherSeverity, summary: String))],
+        now: Date
+    ) -> WeatherCondition {
+        var worst = current
+        var worstSummary = worst.severity > WeatherSeverity.clear ? worst.summary : ""
+
+        let horizon = now.addingTimeInterval(12 * 3600)
+        for hour in hourly where hour.date >= now && hour.date <= horizon {
+            if hour.severity.severity > worst.severity {
+                worst = hour.severity
+                worstSummary = hour.severity.summary
             }
         }
 
         return WeatherCondition(severity: worst.severity, summary: worstSummary, available: true)
     }
+
+    #if canImport(WeatherKit)
 
     /// WeatherKit's `precipitationIntensity` is a `Measurement<UnitSpeed>`
     /// whose base unit is m/s. Convert to mm/hr: m/s × 1000 mm/m × 3600 s/hr.

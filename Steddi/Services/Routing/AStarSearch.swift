@@ -319,7 +319,11 @@ struct AStarSearch: PathSearch {
     private func resolveOrigin(_ endpoint: SearchEndpoint, in graph: RoadGraph, cost: SearchCost) -> ResolvedOrigin? {
         switch endpoint {
         case .node(let n):
-            guard Int(n) < graph.nodes.count else { return nil }
+            // Bounds-check both ends: NodeIndex is Int32, so a negative `.node(-1)`
+            // is representable and would otherwise pass an upper-bound-only guard
+            // and trap on the negative array subscript. Mirror the snap-edge guards
+            // below (`>= 0 && < count`) and fail clean instead.
+            guard n >= 0, Int(n) < graph.nodes.count else { return nil }
             return ResolvedOrigin(
                 entries: [.init(node: n, g: 0, viaEdge: -1)],
                 startFraction: 0,
@@ -371,7 +375,10 @@ struct AStarSearch: PathSearch {
     private func resolveDestination(_ endpoint: SearchEndpoint, in graph: RoadGraph, cost: SearchCost) -> ResolvedGoal? {
         switch endpoint {
         case .node(let n):
-            guard Int(n) < graph.nodes.count else { return nil }
+            // Symmetric lower-bound guard (see resolveOrigin): a negative
+            // `.node(-1)` is a representable Int32 and must fail clean, not trap on
+            // the negative `graph.nodes` subscript.
+            guard n >= 0, Int(n) < graph.nodes.count else { return nil }
             return ResolvedGoal(
                 node: n,
                 trailingEdge: -1,
