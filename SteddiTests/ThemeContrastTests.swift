@@ -147,4 +147,169 @@ struct ThemeContrastTests {
             else { #expect(safe.b >= safe.r && safe.b >= safe.g) }
         }
     }
+
+    // MARK: - onAccent (foreground ON an accent FILL): white-on-fill was the bug
+
+    @Test("onAccent clears AA on every accent FILL")
+    func onAccentFillAA() {
+        // The accent fill (`accentBrand`) is theme-independent — its luminance
+        // alone decides the on-fill glyph color — so one assertion per accent
+        // covers light/dark/grey/dynamic. Every current brand accent is light or
+        // mid-tone, so onAccent resolves to near-black and clears AA.
+        for option in SteddiTheme.AccentOption.allCases {
+            let fg = ContrastRatio.contrastingForeground(on: option.rgb)
+            let r = ContrastRatio.ratio(fg, option.rgb)
+            #expect(r >= ContrastRatio.aaBody,
+                    "onAccent(\(option.rawValue)) = \(r), want >= 4.5")
+        }
+    }
+
+    @Test("white-on-accent-fill failed AA (documents the bug onAccent fixes)")
+    func whiteOnAccentRegression() {
+        // Hardcoded `.white` glyphs on the accent fill — the pattern onAccent
+        // replaces. Every brand accent is too light for white to clear AA.
+        let white = RGBColor(1, 1, 1)
+        for option in SteddiTheme.AccentOption.allCases {
+            let raw = ContrastRatio.ratio(white, option.rgb)
+            #expect(raw < ContrastRatio.aaBody,
+                    "white/\(option.rawValue) was \(raw), expected sub-AA")
+            let fixed = ContrastRatio.ratio(
+                ContrastRatio.contrastingForeground(on: option.rgb), option.rgb)
+            #expect(fixed > raw)
+        }
+    }
+
+    @Test("contrastingForeground picks the higher-contrast endpoint")
+    func contrastingForegroundPicksBest() {
+        // On any fill, the chosen near-pure endpoint must out-contrast the other.
+        let fills = [RGBColor(0.95, 0.95, 0.95), RGBColor(0.1, 0.1, 0.1),
+                     RGBColor(0.5, 0.5, 0.5)] + SteddiTheme.AccentOption.allCases.map(\.rgb)
+        for fill in fills {
+            let chosen = ContrastRatio.contrastingForeground(on: fill)
+            let other = chosen == ContrastRatio.near.black ? ContrastRatio.near.white
+                                                           : ContrastRatio.near.black
+            #expect(ContrastRatio.ratio(chosen, fill) >= ContrastRatio.ratio(other, fill),
+                    "contrastingForeground picked the worse endpoint on \(fill)")
+            // And the chosen endpoint clears the 3:1 badge/large-text floor.
+            #expect(ContrastRatio.ratio(chosen, fill) >= ContrastRatio.aaLarge)
+        }
+    }
+
+    @Test("contrastingForeground clears AA on every semantic FILL (badges)")
+    func contrastingForegroundSemanticFillsAA() {
+        let fills: [(String, RGBColor)] = [
+            ("sage", SteddiTheme.sageRGB),
+            ("amber", SteddiTheme.warningAmberRGB),
+            ("warmRed", SteddiTheme.warmRedRGB),
+        ]
+        for (name, fill) in fills {
+            let r = ContrastRatio.ratio(ContrastRatio.contrastingForeground(on: fill), fill)
+            #expect(r >= ContrastRatio.aaBody, "onFill(\(name)) = \(r), want >= 4.5")
+        }
+    }
+
+    // MARK: - Semantic TEXT variants (finding 3): legible on the surfaces
+
+    private let semanticText: [(name: String, base: RGBColor)] = [
+        ("sage", SteddiTheme.sageRGB),
+        ("amber", SteddiTheme.warningAmberRGB),
+        ("warmRed", SteddiTheme.warmRedRGB),
+    ]
+
+    @Test("semantic text variants clear AA on surfacePrimary in every palette")
+    func semanticTextPrimaryAA() {
+        for (sName, base) in semanticText {
+            for (pName, p) in palettes {
+                let safe = SteddiTheme.legibleText(base, onSurface: p.surfacePrimary)
+                let r = ContrastRatio.ratio(safe, p.surfacePrimary)
+                #expect(r >= ContrastRatio.aaBody,
+                        "\(pName) \(sName)Text/primary = \(r), want >= 4.5")
+            }
+        }
+    }
+
+    @Test("semantic text variants clear AA on surfaceSecondary in dark and light")
+    func semanticTextSecondaryAA() {
+        // Grey is the palette ceiling (same envelope as textMuted/accent): a shift
+        // sized on grey primary clears AA there but only the 3:1 floor on
+        // secondary — asserted separately below.
+        for (sName, base) in semanticText {
+            for name in ["dark", "light"] {
+                let p = name == "dark" ? ThemePalette.dark : .light
+                let safe = SteddiTheme.legibleText(base, onSurface: p.surfacePrimary)
+                let r = ContrastRatio.ratio(safe, p.surfaceSecondary)
+                #expect(r >= ContrastRatio.aaBody,
+                        "\(name) \(sName)Text/secondary = \(r), want >= 4.5")
+            }
+        }
+    }
+
+    @Test("semantic text variants clear at least 3:1 on every surface, every palette")
+    func semanticTextFloorEverywhere() {
+        for (sName, base) in semanticText {
+            for (pName, p) in palettes {
+                let safe = SteddiTheme.legibleText(base, onSurface: p.surfacePrimary)
+                for (surfName, surf) in [("primary", p.surfacePrimary),
+                                         ("secondary", p.surfaceSecondary),
+                                         ("elevated", p.surfaceElevated)] {
+                    let r = ContrastRatio.ratio(safe, surf)
+                    #expect(r >= ContrastRatio.aaLarge,
+                            "\(pName) \(sName)Text/\(surfName) = \(r), want >= 3.0")
+                }
+            }
+        }
+    }
+
+    @Test("raw semantic hues failed AA as text on light/grey (documents the bug)")
+    func semanticTextRegression() {
+        // sage/amber/warmRed used raw as foreground text fail badly on the light
+        // and grey surfaces — the bug legibleText fixes. (They're fine on dark.)
+        for (sName, base) in semanticText {
+            for name in ["light", "grey"] {
+                let p = name == "light" ? ThemePalette.light : .grey
+                let raw = ContrastRatio.ratio(base, p.surfacePrimary)
+                #expect(raw < ContrastRatio.aaBody,
+                        "\(name) raw \(sName) was \(raw), expected sub-AA")
+                let fixed = ContrastRatio.ratio(
+                    SteddiTheme.legibleText(base, onSurface: p.surfacePrimary), p.surfacePrimary)
+                #expect(fixed > raw)
+            }
+        }
+    }
+
+    @Test("semantic text shift preserves hue ordering (luminance shift, not recolor)")
+    func semanticTextHuePreserved() {
+        for (_, base) in semanticText {
+            for (_, p) in palettes {
+                let safe = SteddiTheme.legibleText(base, onSurface: p.surfacePrimary)
+                let baseMax = max(base.r, base.g, base.b)
+                if baseMax == base.r { #expect(safe.r >= safe.g && safe.r >= safe.b) }
+                else if baseMax == base.g { #expect(safe.g >= safe.r && safe.g >= safe.b) }
+                else { #expect(safe.b >= safe.r && safe.b >= safe.g) }
+            }
+        }
+    }
+
+    // MARK: - Category label colors (finding 4)
+
+    @Test("category labelColor clears AA on a 15%-tint-of-itself over the surface")
+    func categoryLabelOnTintAA() {
+        // LocationCardView renders the label in the category color on a
+        // `themeColor.opacity(0.15)` capsule over the surface. Verify the legible
+        // label clears AA against that composited tint, in light and dark.
+        for category in PlaceCategory.allCases where category != .work && category != .other {
+            for (pName, p) in [("light", ThemePalette.light), ("dark", ThemePalette.dark)] {
+                // Composite 15% of the category hue over the surface (source-over).
+                let a = 0.15
+                let bg = RGBColor(
+                    category.rgb.r * a + p.surfacePrimary.r * (1 - a),
+                    category.rgb.g * a + p.surfacePrimary.g * (1 - a),
+                    category.rgb.b * a + p.surfacePrimary.b * (1 - a))
+                let label = SteddiTheme.legibleText(category.rgb, onSurface: p.surfacePrimary)
+                let r = ContrastRatio.ratio(label, bg)
+                #expect(r >= ContrastRatio.aaBody,
+                        "\(pName) \(category.rawValue) label/tint = \(r), want >= 4.5")
+            }
+        }
+    }
 }
