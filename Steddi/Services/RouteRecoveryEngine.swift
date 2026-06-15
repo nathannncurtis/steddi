@@ -108,6 +108,11 @@ enum RouteRecoveryEngine {
         polyline: [CLLocationCoordinate2D],
         totalDistance: Double
     ) -> [RejoinCandidate] {
+        // No polyline means no destination fallback and no look-ahead — the
+        // docstring's "destination is always present" guarantee can't be met, so
+        // return nothing rather than emit candidates with no geometry to anchor.
+        guard !polyline.isEmpty else { return [] }
+
         let floorAlong = event.distanceAlongRoute + minForwardOffset(speedMPS: event.speedMPS)
         var candidates: [RejoinCandidate] = []
 
