@@ -18,8 +18,12 @@ final class CommuteTrip {
         self.commute = commute
         self.direction = direction
         self.timestamp = Date()
+        // Clamp to expected ranges (dayOfWeek 1-7, hourOfDay 0-23) so downstream
+        // arithmetic (e.g. CommuteDirectionResolver hour-distance) and any
+        // weekday-indexed array access can never receive an out-of-range value,
+        // even if Calendar behaves unexpectedly or stored data is corrupted.
         let cal = Calendar.current
-        self.dayOfWeek = cal.component(.weekday, from: Date())
-        self.hourOfDay = cal.component(.hour, from: Date())
+        self.dayOfWeek = min(7, max(1, cal.component(.weekday, from: Date())))
+        self.hourOfDay = min(23, max(0, cal.component(.hour, from: Date())))
     }
 }
