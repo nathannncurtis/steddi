@@ -1955,21 +1955,29 @@ struct HomeView: View {
             event: event, legs: legs, steps: steps, alongDistances: alongs,
             polyline: savedPolyline, totalDistance: total
         )
-        guard !candidates.isEmpty else { return }
+        guard !candidates.isEmpty else {
+            // No rejoin candidates: recovery cannot splice. Clear the engine's
+            // in-recovery latch so guidance resumes instead of freezing forever.
+            engine.clearOffRouteRecovery()
+            return
+        }
 
         VoiceGuidanceService.shared.speak("Rerouting ahead to rejoin your route.")
 
-        // Fetch a recovery route to each candidate concurrently.
+        // Fetch a recovery route to each candidate concurrently. Anchor at the
+        // engine's live position (it has moved since the deviation was confirmed)
+        // and keep the fetched route per candidate so the chosen one is spliced
+        // without a second redundant round-trip from a now-stale origin.
         let service = DirectionsService()
-        let origin = event.coordinate
-        let options = await withTaskGroup(of: RecoveryOption?.self) { group in
+        let origin = engine.currentCoordinate ?? event.coordinate
+        let scored = await withTaskGroup(of: (Int, DirectionsRoute, RecoveryOption)?.self) { group in
             for (index, candidate) in candidates.enumerated() {
                 group.addTask { @MainActor in
                     guard let route = try? await service.fetchRoute(from: origin, to: candidate.coordinate) else { return nil }
                     let coords = PolylineEncoder.decode(route.encodedPolyline, precision: 6)
                     let firstInstructions = route.legs.flatMap(\.steps).prefix(2)
                         .map(\.instructions).joined(separator: " ").lowercased()
-                    return RecoveryOption(
+                    let option = RecoveryOption(
                         candidateIndex: index,
                         etaSeconds: route.duration,
                         initialBearingDegrees: RouteGeometry.bearing(
@@ -1980,12 +1988,16 @@ struct HomeView: View {
                         ),
                         beginsWithUTurn: firstInstructions.contains("u-turn")
                     )
+                    return (index, route, option)
                 }
             }
-            var collected: [RecoveryOption] = []
-            for await option in group { if let option { collected.append(option) } }
+            var collected: [(Int, DirectionsRoute, RecoveryOption)] = []
+            for await scored in group { if let scored { collected.append(scored) } }
             return collected
         }
+
+        let options = scored.map(\.2)
+        let routesByCandidate = Dictionary(uniqueKeysWithValues: scored.map { ($0.0, $0.1) })
 
         let decision = RouteRecoveryEngine.choose(
             candidates: candidates, options: options, event: event,
@@ -1996,19 +2008,25 @@ struct HomeView: View {
 
         switch decision {
         case .rejoin(let index):
-            guard index < candidates.count,
-                  let option = options.first(where: { $0.candidateIndex == index }),
-                  let route = try? await service.fetchRoute(from: origin, to: candidates[index].coordinate)
-            else {
+            guard index < candidates.count, let route = routesByCandidate[index] else {
+                // Chose a candidate but its route is unavailable: fall back, and
+                // clear the latch so guidance isn't frozen for the rest of the leg.
+                engine.clearOffRouteRecovery()
                 if let destination = savedPolyline.last {
                     await handleOffRoute(from: event.coordinate, to: destination)
                 }
                 return
             }
-            _ = option
-            splice(recovery: route, onto: savedPolyline, cumulative: cumulative,
-                   at: candidates[index], steps: steps, alongs: alongs, engine: engine)
+            let spliced = splice(recovery: route, onto: savedPolyline, cumulative: cumulative,
+                                 at: candidates[index], steps: steps, alongs: alongs, engine: engine)
+            // splice() restarts the engine on success (which clears the latch);
+            // on a geometry bail-out it does not, so re-arm here to avoid a freeze.
+            if !spliced { engine.clearOffRouteRecovery() }
         case .abandonToDestination:
+            // Deliberate abandon (no usable options, recovery budget spent, or
+            // direct beats rejoining): no splice happens, so clear the latch to
+            // keep guidance live toward the destination.
+            engine.clearOffRouteRecovery()
             if let destination = savedPolyline.last {
                 await handleOffRoute(from: event.coordinate, to: destination)
             }
@@ -2017,7 +2035,10 @@ struct HomeView: View {
 
     /// Stitch the recovery route onto the saved route at the rejoin point and
     /// restart the engine on the combined geometry — normal guidance then
-    /// falls back onto the predefined route automatically.
+    /// falls back onto the predefined route automatically. Returns `true` when
+    /// the engine was restarted; `false` on a bail-out (the caller must then
+    /// clear the off-route latch so guidance doesn't stay frozen).
+    @discardableResult
     private func splice(
         recovery: DirectionsRoute,
         onto savedPolyline: [CLLocationCoordinate2D],
@@ -2026,12 +2047,12 @@ struct HomeView: View {
         steps: [NavStep],
         alongs: [Double],
         engine: NavigationEngine
-    ) {
+    ) -> Bool {
         let recoveryCoords = PolylineEncoder.decode(recovery.encodedPolyline, precision: 6)
-        guard recoveryCoords.count >= 2 else { return }
+        guard recoveryCoords.count >= 2 else { return false }
         // Without saved geometry there's nothing to stitch onto — bail safely
         // rather than indexing an empty polyline.
-        guard !savedPolyline.isEmpty else { return }
+        guard !savedPolyline.isEmpty else { return false }
 
         // Saved geometry from the rejoin point forward. The fallback (no
         // cumulative match) is the last vertex; clamp into bounds so a
@@ -2051,7 +2072,7 @@ struct HomeView: View {
 
         let combined = recoveryCoords + savedTail
         let combinedSteps = recoverySteps + savedTailSteps
-        guard combined.count >= 2, !combinedSteps.isEmpty else { return }
+        guard combined.count >= 2, !combinedSteps.isEmpty else { return false }
 
         let remaining = RouteRecoveryEngine.proratedRemainingETA(
             fromAlong: candidate.alongDistance,
@@ -2066,6 +2087,7 @@ struct HomeView: View {
         )
         activeSavedPolyline = combined
         navStateManager.activeRouteCoords = combined
+        return true
     }
 
     private func handleOffRoute(from currentPos: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) async {
