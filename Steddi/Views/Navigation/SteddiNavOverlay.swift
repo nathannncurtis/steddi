@@ -196,7 +196,10 @@ struct SteddiNavOverlay: View {
                 if let suggestion = navState.rerouteSuggestion {
                     RerouteCardView(
                         routeName: suggestion.route.name ?? "Faster route",
-                        timeSavingsMinutes: Int(suggestion.savingsMinutes),
+                        // The engine only surfaces a suggestion it has already
+                        // vetted as worthwhile, so a sub-minute saving must never
+                        // render "Save ~0 min". Round (not floor) and clamp to ≥1.
+                        timeSavingsMinutes: max(1, Int(suggestion.savingsMinutes.rounded())),
                         percentageSavings: Int(suggestion.savingsPercentage * 100),
                         onSwitch: {
                             onSwitchRoute?(suggestion.route)
@@ -549,7 +552,14 @@ struct SteddiNavOverlay: View {
     private var compassIndicator: some View {
         Text(compassLabel)
             .font(.system(size: 15 * textScale, weight: .heavy, design: .rounded))
-            .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
+            // The compass letter is a READOUT riding neutral nav glass over a
+            // moving map, so it needs a treatment that holds against any tile —
+            // not the surface-sized text-safe accent (AA only proven on the solid
+            // surface). Use textPrimary (the strongest surface-adaptive token,
+            // promoted like the sibling nav readouts) plus a soft shadow so it
+            // separates from bright/varied cartography on every theme.
+            .foregroundStyle(SteddiTheme.textPrimary.opacity(compassSector == nil ? 0.35 : 1))
+            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
             .frame(width: 44 * iconScale, height: 44 * iconScale)
             // Neutral glass readout — not a toggle, so no accent tint.
             .steddiGlass(tint: nil, interactive: false, in: .circle)
@@ -643,7 +653,10 @@ struct SteddiNavOverlay: View {
     private var landscapeCompassIndicator: some View {
         Text(compassLabel)
             .font(.system(size: 16 * textScale, weight: .heavy, design: .rounded))
-            .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
+            // See compassIndicator: textPrimary + soft shadow guarantees the
+            // readout over a moving map, rather than the surface-sized accent.
+            .foregroundStyle(SteddiTheme.textPrimary.opacity(compassSector == nil ? 0.35 : 1))
+            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
             .frame(width: 50 * iconScale, height: 50 * iconScale)
             .steddiGlass(tint: nil, interactive: false, in: .circle)
     }
@@ -794,14 +807,20 @@ struct SteddiNavOverlay: View {
                     }
                 }
                 .overlay(
+                    // Over-limit thickens the housing ring as a NON-color cue
+                    // (perceivable without hue discrimination, WCAG 1.4.1) in
+                    // addition to the warm hue shift below.
                     Circle()
-                        .stroke(speedColor.opacity(0.3), lineWidth: 2)
+                        .stroke(speedColor.opacity(overLimit > 0 ? 0.5 : 0.3),
+                                lineWidth: overLimit > 0 ? 3 : 2)
                 )
 
-                // Speed arc gauge
+                // Speed arc gauge — thickens when over the limit so the gauge
+                // reads as "alert" by weight, not color alone.
                 Circle()
                     .trim(from: 0, to: min(1.0, engine.currentSpeedMph / max(1, (speedLimitMph ?? 65) * 1.3)))
-                    .stroke(speedColor.opacity(0.5), style: StrokeStyle(lineWidth: max(2, 3 * scale), lineCap: .round))
+                    .stroke(speedColor.opacity(overLimit > 0 ? 0.7 : 0.5),
+                            style: StrokeStyle(lineWidth: max(2, (overLimit > 0 ? 4 : 3) * scale), lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .padding(3 * scale)
 
@@ -854,6 +873,18 @@ struct SteddiNavOverlay: View {
                                 overLimit > 0 ? SteddiTheme.warmRedText : SteddiTheme.textMuted(highContrast: highContrast).opacity(0.5),
                                 lineWidth: 1.5))
                     )
+                    // NON-color over-limit cue: a warning glyph pinned to the
+                    // limit badge so "you are speeding" is perceivable by shape,
+                    // not just by amber/red hue (WCAG 1.4.1 / color-blind drivers).
+                    .overlay(alignment: .topTrailing) {
+                        if overLimit > 0 {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .font(.system(size: 11 * scale, weight: .bold))
+                                .foregroundStyle(SteddiTheme.warmRedText)
+                                .background(Circle().fill(SteddiTheme.surfacePrimary).padding(1))
+                                .offset(x: 5 * scale, y: -5 * scale)
+                        }
+                    }
                     .offset(x: 4 * scale, y: -4 * scale)
             }
         }
