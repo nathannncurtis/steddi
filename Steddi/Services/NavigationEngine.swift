@@ -29,6 +29,29 @@ struct OffRouteEvent {
     let currentStepIndex: Int
 }
 
+/// Pure decision for when the off-route recovery budget should reset.
+///
+/// The cap (`RouteRecoveryEngine.choose` abandons to destination once
+/// `recoveriesThisTrip >= 3`) is meant to hold across a WHOLE trip, not per
+/// leg. A multi-stop trip starts each leg through the same `begin*` navigation
+/// machinery, so resetting inside `begin*` unconditionally would re-arm the
+/// budget on every leg and defeat the cap. The rule:
+///
+/// - A standalone drive (no active trip) resets at its start.
+/// - A trip resets exactly once, when the trip begins; subsequent legs
+///   (which run with the trip already active) keep the running count.
+enum RecoveryBudget {
+    /// Whether a navigation session that is now starting should zero the
+    /// per-trip recovery counter.
+    ///
+    /// - Parameter isContinuingTripLeg: true when this start is a leg of a
+    ///   trip that is already underway (i.e. not the trip's first leg). Single
+    ///   drives and the first leg of a trip pass `false`.
+    static func shouldReset(isContinuingTripLeg: Bool) -> Bool {
+        !isContinuingTripLeg
+    }
+}
+
 /// Pure custom navigation engine. Works entirely from coordinates and steps.
 /// MKRoute is just an input adapter — the engine never touches Apple routing internals.
 @Observable

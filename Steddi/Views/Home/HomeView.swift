@@ -294,6 +294,22 @@ struct HomeView: View {
             // (cold launch from Siri / CarPlay / a notification deep link).
             consumePendingCommuteStart()
         }
+        .onDisappear {
+            // The whole HomeView subtree is being torn down. The happy paths
+            // (End / pause-between-legs) already call stopNavigation()+
+            // stopObserving(), so by here the engine is usually detached. But a
+            // forced subtree rebuild (e.g. SteddiRootView bumps its .id when
+            // Reduce Transparency toggles) discards this struct's @State box
+            // WITHOUT ending navigation, leaving the singleton's activeEngine
+            // alive with onOffRoute still capturing this dead view (engine →
+            // closure → @State box → engine) AND the manually-created
+            // locationFeedTask still spinning a zombie engine. Sever the closure
+            // on the orphaned engine and cancel the feed so neither leaks.
+            // HomeView re-wires onOffRoute when it starts the next session.
+            navStateManager.activeEngine?.onOffRoute = nil
+            locationFeedTask?.cancel()
+            locationFeedTask = nil
+        }
         .task {
             // TEST FLAG: set to true to jump straight into turn-by-turn on launch
             let testTBT = false
@@ -666,10 +682,13 @@ struct HomeView: View {
         self.activeSavedPolyline = nil
         self.activeRoadConditions = []
         self.navigationRoute = route
-        // New trip: the off-route recovery cap is PER-TRIP, so reset it here.
-        // Without this it accumulates across every drive and permanently
-        // disables recovery after a few lifetime deviations.
-        recoveriesThisTrip = 0
+        // The off-route recovery cap is PER-TRIP, so reset it only when a fresh
+        // session begins — never on a continuing trip leg, which would re-arm
+        // the budget every leg and defeat the cap (a trip resets once, in
+        // startTrip). A standalone drive has no active trip and resets here.
+        if RecoveryBudget.shouldReset(isContinuingTripLeg: activeTrip != nil) {
+            recoveriesThisTrip = 0
+        }
         let engine = NavigationEngine()
         engine.startNavigation(route: route)
         self.navigationEngine = engine
@@ -855,6 +874,10 @@ struct HomeView: View {
                                     // fails contrast on the sheet) while still
                                     // reading as inactive next to the accent label.
                                     .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textSecondary)
+                                    // Shrink-to-fit on one line so large Dynamic Type
+                                    // doesn't wrap/clip in the 280pt sidebar.
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 6)
                             }
@@ -900,13 +923,11 @@ struct HomeView: View {
     // MARK: - Bottom Sheet (portrait only)
 
     private var bottomSheet: some View {
+        // No grabber handle: this sheet is a fixed inline view (not a presented
+        // .sheet, and it has no DragGesture/detents), so a drag-indicator capsule
+        // would be a false affordance — it signals drag-to-resize that does not
+        // exist. The inner tab lists scroll internally for overflow.
         VStack(spacing: 0) {
-            // Drag indicator
-            Capsule()
-                .fill(SteddiTheme.textMuted.opacity(0.4))
-                .frame(width: 36, height: 4)
-                .padding(.top, 10)
-
             // Tab selector — the bar itself is a floating Liquid Glass capsule,
             // with a moving accent-glass pill sliding under the active tab
             // (matchedGeometry morph). Bar + pill share one GlassEffectContainer
@@ -929,6 +950,12 @@ struct HomeView: View {
                                 // not the surface-adaptive text-safe accent. Inactive
                                 // labels use textSecondary (textMuted fails on the bar).
                                 .foregroundStyle(sheetTab == tab ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
+                                // At large Dynamic Type the heading scales past the
+                                // ~1/3-width budget; shrink-to-fit on one line keeps
+                                // the single-row pill and the matched-geometry active
+                                // pill aligned instead of wrapping/clipping.
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
                                 .background {
@@ -955,7 +982,8 @@ struct HomeView: View {
                 )
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
+            // Top inset that the removed grabber used to provide.
+            .padding(.top, 14)
             .padding(.bottom, 4)
 
             SteadyLine(color: SteddiTheme.accent, height: 1)
@@ -1238,8 +1266,11 @@ struct HomeView: View {
 
         self.activeSavedPolyline = polyline
         self.navigationRoute = nil
-        // New trip: reset the per-trip off-route recovery cap (see beginNavigation).
-        recoveriesThisTrip = 0
+        // Reset the per-trip recovery cap only for a fresh session, never on a
+        // continuing trip leg (see beginNavigation / startTrip).
+        if RecoveryBudget.shouldReset(isContinuingTripLeg: activeTrip != nil) {
+            recoveriesThisTrip = 0
+        }
 
         let engine = NavigationEngine()
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
@@ -1586,6 +1617,12 @@ struct HomeView: View {
         guard let stop = trip.currentStop else { return }
         activeTrip = trip
         tripArrivalStop = nil
+        // A trip is one unit for the off-route recovery budget: reset once here,
+        // at the trip's start. The per-leg begin* paths skip the reset while a
+        // trip is active (activeTrip != nil), so the 3-recovery cap holds across
+        // every leg instead of re-arming each leg. advanceTripLeg never passes
+        // through here, so continuing legs keep the running count.
+        recoveriesThisTrip = 0
         try? modelContext.save()
         beginTripLeg(to: stop, trip: trip)
     }
@@ -1840,7 +1877,11 @@ struct HomeView: View {
                     .foregroundStyle(SteddiTheme.onAccent)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
-                    .background(SteddiTheme.accent, in: Capsule())
+                    // onAccent is computed to clear AA against accentBrand (the
+                    // raw brand hue), not the surface-adaptive text-safe accent —
+                    // filling with accent would be onAccent-on-text-safe-accent,
+                    // a ~3:1 dark-on-darkened pairing in light theme.
+                    .background(SteddiTheme.accentBrand, in: Capsule())
             }
 
             Button {

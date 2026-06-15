@@ -213,3 +213,85 @@ struct ChooseTests {
         #expect(RouteRecoveryEngine.proratedRemainingETA(fromAlong: 10000, totalDistance: 10000, expectedTravelTime: 1000) == 0)
     }
 }
+
+// MARK: - Per-trip recovery budget reset
+
+/// The 3-recovery cap (`RouteRecoveryEngine.choose`) is PER-TRIP. The reset
+/// decision (`RecoveryBudget.shouldReset`) is what keeps it per-trip rather than
+/// per-leg: a multi-stop trip must NOT re-arm the budget on every leg, or the
+/// cap would never bind. These tests pin that contract.
+@Suite("RecoveryBudget.shouldReset")
+struct RecoveryBudgetTests {
+
+    @Test("Standalone drive (no active trip) resets at its start")
+    func standaloneDriveResets() {
+        // begin* with activeTrip == nil → not a continuing leg → reset.
+        #expect(RecoveryBudget.shouldReset(isContinuingTripLeg: false))
+    }
+
+    @Test("First leg of a trip resets once (trip start)")
+    func firstLegResets() {
+        // startTrip resets the counter directly; the helper also confirms that
+        // a non-continuing start (the trip's first leg) is a reset point.
+        #expect(RecoveryBudget.shouldReset(isContinuingTripLeg: false))
+    }
+
+    @Test("Continuing trip leg does NOT reset — the cap holds across legs")
+    func continuingLegDoesNotReset() {
+        // begin* with activeTrip != nil (every leg after the first) → continuing
+        // leg → no reset, so the running count survives across legs.
+        #expect(!RecoveryBudget.shouldReset(isContinuingTripLeg: true))
+    }
+
+    /// End-to-end simulation of the HomeView reset wiring, proving the cap binds
+    /// across a multi-leg trip. Mirrors: startTrip resets once; each leg's begin*
+    /// resets only when NOT a continuing trip leg; choose() abandons at >= 3.
+    @Test("Multi-leg trip: recoveries accumulate across legs and hit the cap")
+    func capHoldsAcrossLegs() {
+        var recoveriesThisTrip = 0
+
+        // Apply the same reset rule begin* uses, given whether a trip is active.
+        func beginLeg(activeTrip: Bool) {
+            if RecoveryBudget.shouldReset(isContinuingTripLeg: activeTrip) {
+                recoveriesThisTrip = 0
+            }
+        }
+
+        // Same proven setup as `improvisingDriverWins`: a forward macro-leg
+        // candidate that choose() rejoins below the cap and abandons at >= 3.
+        let candidates = [
+            RejoinCandidate(coordinate: .init(latitude: 33.05, longitude: -117), alongDistance: 5000, kind: .macroLegEntry),
+            RejoinCandidate(coordinate: .init(latitude: 33.09, longitude: -117), alongDistance: 10000, kind: .destination),
+        ]
+        let options = [RecoveryOption(candidateIndex: 0, etaSeconds: 200, initialBearingDegrees: nil, beginsWithUTurn: false)]
+        func decide() -> RecoveryDecision {
+            RouteRecoveryEngine.choose(
+                candidates: candidates, options: options, event: event(along: 4000),
+                totalDistance: 10000, expectedTravelTime: 900, recoveriesThisTrip: recoveriesThisTrip
+            )
+        }
+
+        // Trip starts: startTrip zeroes the budget, first leg begins (active trip).
+        recoveriesThisTrip = 0
+        beginLeg(activeTrip: true) // first leg runs with activeTrip already set
+        #expect(recoveriesThisTrip == 0)
+
+        // Leg 1: two committed recoveries.
+        #expect(decide() != .abandonToDestination); recoveriesThisTrip += 1
+        #expect(decide() != .abandonToDestination); recoveriesThisTrip += 1
+
+        // Leg 2 auto-advances (activeTrip still set) — budget must NOT reset.
+        beginLeg(activeTrip: true)
+        #expect(recoveriesThisTrip == 2)
+
+        // A third recovery on leg 2 reaches the cap — choose abandons.
+        #expect(decide() != .abandonToDestination); recoveriesThisTrip += 1
+        #expect(recoveriesThisTrip == 3)
+        #expect(decide() == .abandonToDestination)
+
+        // A brand-new standalone drive (no trip) resets and recovers again.
+        beginLeg(activeTrip: false)
+        #expect(recoveriesThisTrip == 0)
+        #expect(decide() != .abandonToDestination)
+    }
+}
