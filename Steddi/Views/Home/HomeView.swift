@@ -7,6 +7,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LocationService.self) private var locationService
     @Environment(NavigationStateManager.self) private var navStateManager
+    @Environment(PendingCommuteStartStore.self) private var pendingCommuteStart
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
     @Query(sort: \Commute.createdAt) private var commutes: [Commute]
     @Query private var commuteTrips: [CommuteTrip]
@@ -288,6 +289,9 @@ struct HomeView: View {
             migrateExistingPinsToCategories()
             checkMilestoneDonation()
             LiveActivityService.shared.cleanupOrphanedActivities()
+            // Drain any start request that landed before this view attached
+            // (cold launch from Siri / CarPlay / a notification deep link).
+            consumePendingCommuteStart()
         }
         .task {
             // TEST FLAG: set to true to jump straight into turn-by-turn on launch
@@ -302,18 +306,14 @@ struct HomeView: View {
                 showPostArrival = true
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .steddiStartCommuteFromSiri)) { _ in
-            // Start the first active commute when triggered via Siri
-            if let commute = commutes.first(where: { $0.isActive }), !isNavigating {
-                let result = resolveCardResult(commute)
-                switch result {
-                case .confident(let direction, _):
-                    startCommute(commute, direction: direction)
-                case .ambiguous(_, _):
-                    // Can't show dialog from Siri — use default direction
-                    startCommute(commute, direction: .originToDestination)
-                }
-            }
+        // Drain start requests raised from outside the SwiftUI tree (Siri,
+        // CarPlay dashboard, notification "Start Commute" / deep link). The
+        // store is the single shared mailbox: producers stash a request that
+        // can race a cold launch, and we consume it both here (reactively while
+        // foregrounded) and on `.onAppear` below (covering the cold-launch case
+        // where the request landed before this view existed).
+        .onChange(of: pendingCommuteStart.version) { _, _ in
+            consumePendingCommuteStart()
         }
         // Distance is calculated locally — ETAs fetched async in background
         .fullScreenCover(isPresented: $showRoutePreview) {
@@ -1058,6 +1058,36 @@ struct HomeView: View {
             return (name, dir)
         case .ambiguous(let originName, let destName):
             return ("\(originName) ↔ \(destName)", .originToDestination)
+        }
+    }
+
+    /// Consume a queued start request (Siri / CarPlay / notification deep
+    /// link). Resolves the commute + direction and routes through the same
+    /// `startCommute` path the in-app cards use, so every entry point behaves
+    /// identically. No-op while already navigating.
+    private func consumePendingCommuteStart() {
+        guard let action = pendingCommuteStart.consume() else { return }
+        guard !isNavigating else { return }
+
+        switch action {
+        case .specific(let commuteId, let direction):
+            guard let commute = commutes.first(where: { $0.id == commuteId }) else { return }
+            startCommute(commute, direction: direction ?? resolvedStartDirection(commute))
+        case .firstActive:
+            guard let commute = commutes.first(where: { $0.isActive }) else { return }
+            startCommute(commute, direction: resolvedStartDirection(commute))
+        }
+    }
+
+    /// Best-guess direction when a request doesn't carry one — proximity/schedule
+    /// via the resolver, falling back to heading out. Can't surface the
+    /// direction picker for an out-of-band start, so ambiguity defaults out.
+    private func resolvedStartDirection(_ commute: Commute) -> CommuteDirection {
+        switch resolveCardResult(commute) {
+        case .confident(let direction, _):
+            return direction
+        case .ambiguous:
+            return .originToDestination
         }
     }
 
@@ -2502,4 +2532,5 @@ private struct AddLocationSheet: View {
     HomeView()
         .modelContainer(for: PinnedLocation.self, inMemory: true)
         .environment(LocationService())
+        .environment(PendingCommuteStartStore())
 }
