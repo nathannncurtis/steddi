@@ -25,11 +25,14 @@ struct OnboardingTurnByTurnView: View {
                 Text("Turn-by-turn, done Steddi's way")
                     .font(.title2.weight(.bold))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(SteddiTheme.textPrimary)
+                    // Fixed light-on-dark: this card floats on the dark
+                    // cinematic backdrop in every theme (theme tokens go
+                    // near-black in Light and vanish here).
+                    .foregroundStyle(SteddiTheme.onboardingTextPrimary)
 
                 Text("Steddi runs its own navigation — clear maneuvers, your speed, no hand-off to another app.")
                     .font(.body)
-                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                     .multilineTextAlignment(.center)
             }
         }
@@ -63,10 +66,10 @@ struct OnboardingTurnByTurnView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("400 ft")
                     .font(.headline.weight(.bold))
-                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .foregroundStyle(SteddiTheme.onboardingTextPrimary)
                 Text("Turn right")
                     .font(.caption)
-                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .foregroundStyle(SteddiTheme.onboardingTextSecondary)
             }
         }
         .padding(.horizontal, 16)
@@ -81,7 +84,9 @@ struct OnboardingTurnByTurnView: View {
             // Track.
             Circle()
                 .trim(from: 0.0, to: 0.75)
-                .stroke(SteddiTheme.textMuted.opacity(0.25),
+                // Fixed light-on-dark track: the muted theme token resolves
+                // near-black in Light and would disappear on this dark card.
+                .stroke(SteddiTheme.onboardingTextMuted.opacity(0.55),
                         style: StrokeStyle(lineWidth: 7, lineCap: .round))
                 .rotationEffect(.degrees(135))
             // Sweep to ~"60%" of the arc.
@@ -93,10 +98,10 @@ struct OnboardingTurnByTurnView: View {
             VStack(spacing: 0) {
                 Text("32")
                     .font(.title3.weight(.bold))
-                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .foregroundStyle(SteddiTheme.onboardingTextPrimary)
                 Text("mph")
                     .font(.caption2)
-                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .foregroundStyle(SteddiTheme.onboardingTextSecondary)
             }
         }
         .frame(width: 84, height: 84)
