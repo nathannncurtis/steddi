@@ -74,15 +74,30 @@ final class LiveActivityService {
 
         let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(600))
 
+        // Guard against updating an activity the system has already torn down
+        // (permission revoked, dismissed, or ended): a stale handle reports a
+        // non-active state. Surface it instead of silently no-oping.
         Task {
+            guard activity.activityState == .active else {
+                print("[STEDDI] Skipping Live Activity update — activity not active (state: \(activity.activityState))")
+                return
+            }
             await activity.update(content)
         }
     }
 
     /// End the Live Activity.
+    ///
+    /// Claims `currentActivity` atomically on the MainActor (reads then nils it
+    /// before spawning the async end) so a second concurrent call's guard fails
+    /// and can't double-end / clobber the handle. All end paths
+    /// (endActivity, endActivityImmediately, the auto-end on arrival) share this
+    /// claim-then-act discipline.
     func endActivity() {
         tripContext = nil
+        // Atomic claim: read + clear on the MainActor before any await.
         guard let activity = currentActivity else { return }
+        currentActivity = nil
 
         let finalState = NavigationAttributes.ContentState(
             instruction: "You have arrived",
@@ -99,7 +114,6 @@ final class LiveActivityService {
 
         Task {
             await activity.end(content, dismissalPolicy: .after(.now + 30))
-            currentActivity = nil
         }
     }
 
