@@ -36,13 +36,16 @@ struct TripCardView: View {
 
                     Text(progressBadge)
                         .font(SteddiTheme.mono(11))
-                        // Resting badge text is body-size metadata — use
-                        // textSecondary so "5 stops" clears 4.5:1 on near-black.
-                        .foregroundStyle(trip.isInProgress ? SteddiTheme.accent : SteddiTheme.textSecondary)
+                        // In-progress badge keeps the accent identity but as a
+                        // solid accentBrand fill with onAccent text (the legible
+                        // on-fill pairing) — never accent-on-accentSubtle, which
+                        // fails AA for this small label. Resting badge is body-
+                        // size metadata: textSecondary clears 4.5:1 on near-black.
+                        .foregroundStyle(trip.isInProgress ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(
-                            (trip.isInProgress ? SteddiTheme.accentSubtle : SteddiTheme.surfaceElevated.opacity(0.6)),
+                            (trip.isInProgress ? SteddiTheme.accentBrand : SteddiTheme.surfaceElevated.opacity(0.6)),
                             in: Capsule()
                         )
 
