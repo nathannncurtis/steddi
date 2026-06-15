@@ -124,6 +124,25 @@ struct GraphSpatialIndex: Sendable {
     static func cellRange(_ a: Double, _ b: Double) -> ClosedRange<Int> {
         cellIndex(min(a, b))...cellIndex(max(a, b))
     }
+
+    /// The neighbor-cell ring radius needed for `snap` to cover `maxDistanceMeters`
+    /// at `latitude`. A query point can sit anywhere in its cell, so the closest
+    /// guaranteed distance from the point to the outer edge of a radius-`r` ring is
+    /// `r` whole cells (worst case: the point sits on the near boundary). To never
+    /// miss an edge inside the snap radius the ring must therefore span at least
+    /// `ceil(maxDistanceMeters / metersPerCell)` cells. Cells are narrowest in
+    /// longitude (`cos(lat)` shrinks east-west spacing), so we size against that
+    /// conservative axis. Always ≥ 1 to preserve the original 3×3 behavior.
+    static func cellSearchRadius(forMaxDistanceMeters maxDistanceMeters: Double, atLatitude latitude: Double) -> Int {
+        guard maxDistanceMeters > 0 else { return 1 }
+        let metersPerDegreeLat = 111_320.0
+        // Longitude meters-per-degree shrink with latitude; clamp the cosine to a
+        // small floor so an extreme/garbage latitude can't blow the radius up.
+        let cosLat = max(0.1, cos(latitude * .pi / 180))
+        let metersPerCell = cellSizeDegrees * metersPerDegreeLat * cosLat
+        guard metersPerCell > 0 else { return 1 }
+        return max(1, Int(ceil(maxDistanceMeters / metersPerCell)))
+    }
 }
 
 /// The result of snapping an arbitrary coordinate onto the graph: which edge,
@@ -182,9 +201,20 @@ struct RoadGraph: Sendable {
     }
 
     /// Snap a coordinate to the nearest point on the nearest edge. Scans the
-    /// cell containing `coord` plus its 8 neighbors (3×3), gated to
-    /// `maxDistanceMeters`. `heading`, when given, prefers edges whose local
-    /// bearing aligns (mod 180) within `headingToleranceDegrees`.
+    /// cell containing `coord` plus a square ring of neighbors sized to cover
+    /// `maxDistanceMeters`, gated to `maxDistanceMeters`. `heading`, when given,
+    /// prefers edges whose local bearing aligns (mod 180) within
+    /// `headingToleranceDegrees`.
+    ///
+    /// The ring radius is derived from `maxDistanceMeters` rather than fixed at a
+    /// 3×3 block: with `cellSizeDegrees = 0.001` one cell is only ~78–111 m wide
+    /// (smallest in longitude at high US latitudes), so a fixed 3×3 window cannot
+    /// reach the 200 m snap radius the router uses for an origin/destination "a
+    /// parking lot away" from the nearest edge — valid snaps two or more cells out
+    /// would be silently missed. We size the ring so the GUARANTEED search window
+    /// (≥ one cell from the query point to the ring edge) covers the full snap
+    /// radius across US latitudes, using the conservative (smallest) meters-per-
+    /// cell on the longitude axis via `cos(lat)`.
     func snap(
         _ coord: CLLocationCoordinate2D,
         heading: Double? = nil,
@@ -194,10 +224,14 @@ struct RoadGraph: Sendable {
         guard !edges.isEmpty else { return nil }
         let centerLat = GraphSpatialIndex.cellIndex(coord.latitude)
         let centerLon = GraphSpatialIndex.cellIndex(coord.longitude)
+        let radius = GraphSpatialIndex.cellSearchRadius(
+            forMaxDistanceMeters: maxDistanceMeters,
+            atLatitude: coord.latitude
+        )
 
         var candidates = Set<EdgeIndex>()
-        for dLat in -1...1 {
-            for dLon in -1...1 {
+        for dLat in -radius...radius {
+            for dLon in -radius...radius {
                 if let cell = snapIndex.grid[GraphSpatialIndex.Cell(lat: centerLat + dLat, lon: centerLon + dLon)] {
                     candidates.formUnion(cell)
                 }

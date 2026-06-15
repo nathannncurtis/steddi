@@ -115,7 +115,7 @@ enum StepSynthesizer {
 
         // Departure step: head out along the first edge's initial bearing.
         let headBearing = RouteGeometry.bearing(from: polyline[0], to: polyline[1])
-        var pendingDistance = edgeLength(edges[0], result: result, in: graph)
+        var pendingDistance = edgeLength(at: 0, result: result, in: graph)
         var pendingCoordinate = polyline[0]
 
         steps.append(NavStep(
@@ -134,7 +134,7 @@ enum StepSynthesizer {
             let nodeCoord = node.coordinate
 
             let turn = DefaultCostModel.classifyTurn(from: incoming, to: outgoing, in: graph)
-            let edgeLen = edgeLength(edges[i], result: result, in: graph)
+            let edgeLen = edgeLength(at: i, result: result, in: graph)
 
             if let phrase = instruction(for: turn) {
                 // Close out the leg leading up to this maneuver as the distance on
@@ -189,8 +189,17 @@ enum StepSynthesizer {
 
     // MARK: - Helpers
 
-    /// The travel length of an edge in meters, charging only the partial portion
-    /// for the leading/trailing edges of a mid-edge start/end.
+    /// The travel length of the edge at position `i` in `result.edgePath`, in
+    /// meters, charging only the partial portion for the leading/trailing edges of
+    /// a mid-edge start/end.
+    ///
+    /// The leading/trailing edge is identified by POSITION in the path (first/last
+    /// array index), mirroring `stitchedPolyline`, NOT by matching the EdgeIndex
+    /// VALUE. When the same edge index appears at more than one position — e.g. a
+    /// same-edge start/end with `startFraction > endFraction` that loops the block,
+    /// so the edge seeds the path AND is appended as the trailing edge — a
+    /// value-based test would mark the FIRST occurrence as both first and last and
+    /// charge the wrong (full, untrimmed) length, diverging from the drawn polyline.
     ///
     /// For partial (trimmed) edges the length is measured from the SAME trimmed
     /// geometry that `stitchedPolyline` produces — a haversine walk over the
@@ -198,10 +207,11 @@ enum StepSynthesizer {
     /// reported step distance consistent with the polyline actually drawn and
     /// driven (the interpolated cut point sits slightly off the great circle, so
     /// the linear `full * fraction` estimate drifts from the displayed geometry).
-    private static func edgeLength(_ edgeIndex: EdgeIndex, result: SearchResult, in graph: RoadGraph) -> Double {
+    private static func edgeLength(at i: Int, result: SearchResult, in graph: RoadGraph) -> Double {
+        let edgeIndex = result.edgePath[i]
         let full = Double(graph.edges[Int(edgeIndex)].lengthMeters)
-        let isFirst = edgeIndex == result.edgePath.first && result.startFraction > 0
-        let isLast = edgeIndex == result.edgePath.last && result.endFraction < 1
+        let isFirst = i == 0 && result.startFraction > 0
+        let isLast = i == result.edgePath.count - 1 && result.endFraction < 1
         guard isFirst || isLast else { return full }
 
         var coords = Array(graph.geometry(of: edgeIndex))
