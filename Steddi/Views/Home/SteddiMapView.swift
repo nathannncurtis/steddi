@@ -265,11 +265,25 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         // Theme- and contrast-aware: light surface in light mode, dark in dark
         // mode, and fully opaque under Increase Contrast so it never washes out
         // over the map (was a hardcoded dark translucent fill for both themes).
+        // Default alpha raised 0.9 → 0.95 so the fill reads as a solid chip
+        // rather than a translucent wash that lets bright map detail bleed through.
         btn.backgroundColor = UIColor { traits in
             let white: CGFloat = traits.userInterfaceStyle == .dark ? 0.1 : 0.96
-            let alpha: CGFloat = traits.accessibilityContrast == .high ? 1.0 : 0.9
+            let alpha: CGFloat = traits.accessibilityContrast == .high ? 1.0 : 0.95
             return UIColor(white: white, alpha: alpha)
         }
+        // Give the button a visible BOUNDARY independent of fill-vs-map
+        // luminance: over the near-white light-map cartography the 0.96 fill was
+        // within a couple percent of the tiles, so the circle's edge vanished.
+        // A hairline stroke in the contrasting foreground color + a soft drop
+        // shadow make the 44pt affordance read on any tile (this is the only
+        // exit from free-look back to follow-mode mid-drive).
+        btn.layer.borderWidth = 1
+        Self.applyRecenterBorderColor(to: btn)
+        btn.layer.shadowColor = UIColor.black.cgColor
+        btn.layer.shadowOpacity = 0.2
+        btn.layer.shadowRadius = 6
+        btn.layer.shadowOffset = CGSize(width: 0, height: 2)
         btn.layer.cornerRadius = 22
         btn.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
         btn.addTarget(self, action: #selector(recenterTapped), for: .touchUpInside)
@@ -307,6 +321,27 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
 
     @objc private func themeModeChanged() {
         applyThemeStyle()
+        // borderColor is a frozen CGColor (CALayer can't resolve a dynamic
+        // UIColor across a theme switch), so recompute it for the new style.
+        if let btn = recenterButton { Self.applyRecenterBorderColor(to: btn) }
+    }
+
+    /// Hairline border that contrasts the recenter button's own fill, resolved
+    /// against the button's effective light/dark style. Frozen as a CGColor, so
+    /// it is re-applied on every theme switch (see themeModeChanged).
+    private static func applyRecenterBorderColor(to btn: UIButton) {
+        let style = SteddiTheme.currentThemeMode.mapInterfaceStyle
+        let isDark: Bool = {
+            switch style {
+            case .dark: return true
+            case .light: return false
+            default: return UITraitCollection.current.userInterfaceStyle == .dark
+            }
+        }()
+        let white: Double = isDark ? 0.1 : 0.96
+        let fill = RGBColor(white, white, white)
+        btn.layer.borderColor = ContrastRatio.contrastingForeground(on: fill).uiColor
+            .withAlphaComponent(0.25).cgColor
     }
 
     @objc private func accentColorChanged() {
