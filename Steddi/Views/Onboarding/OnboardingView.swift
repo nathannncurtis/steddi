@@ -62,12 +62,16 @@ struct OnboardingView: View {
         .overlay(alignment: .top) { settlePill }
         // The entire onboarding flow floats on a FIXED dark cinematic backdrop
         // (beatBackground == .black / the hero's dark map) regardless of the
-        // resolved app theme. Pin the flow to a dark color scheme so the system
-        // status-bar glyphs (clock / wifi / battery) stay LIGHT over that dark
-        // backdrop — in the Light app theme the root's `.preferredColorScheme(.light)`
-        // would otherwise render dark glyphs that vanish on the dark surface.
-        // This only governs the onboarding tree; the root swaps to Home (with its
-        // own scheme) when the gate flips, so the fall-into-Home morph is intact.
+        // resolved app theme. Pin the onboarding SUBTREE's environment colorScheme
+        // to dark so any adaptive content colors resolve for the dark backdrop.
+        //
+        // NOTE: this does NOT control the system status-bar glyph polarity. The
+        // status bar follows the WINDOW's interface style, which the hosting
+        // controller resolves from the ROOT's `.preferredColorScheme` — an ancestor
+        // preference shadows this descendant one before it reaches the host. The
+        // window-level flip that keeps the clock/wifi/battery LIGHT over the dark
+        // backdrop in every theme lives at the root (SteddiRootView.resolvedColor
+        // Scheme returns `.dark` while onboarding is active). See that comment.
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showDonation, onDismiss: beginSettle) {
             DonationView(fromOnboarding: true)
@@ -114,13 +118,12 @@ struct OnboardingView: View {
     /// Every beat floats on the FIXED dark cinematic backdrop — the hero over
     /// its own full-bleed dark map, the showcase/ask beats over the showpiece
     /// card's black/accent gradient. A FIXED `.black` (not the adaptive
-    /// `surfacePrimary`, which is near-WHITE in the Light theme) keeps the
-    /// status-bar region's SwiftUI surface dark on the hero too, so the
-    /// flow's `.preferredColorScheme(.dark)` resolves LIGHT status-bar glyphs
-    /// over the dark hero map in every theme — matching the other beats (whose
-    /// black backdrop already carries the light status bar). With
-    /// `surfacePrimary` the hero's unsafe-area backing went light in the Light
-    /// theme and the clock/wifi/battery rendered dark-on-dark over the map.
+    /// `surfacePrimary`, which is near-WHITE in the Light theme) keeps the whole
+    /// surface — including the status-bar region's backing on the hero — dark in
+    /// every theme. With `surfacePrimary` the hero's unsafe-area backing went
+    /// light in the Light theme behind the dark map. (The status-bar GLYPH
+    /// polarity itself is handled at the root window level — see the root's
+    /// `resolvedColorScheme`; this just keeps the SURFACE under it dark.)
     private var beatBackground: Color { .black }
 
     // MARK: - Beats
