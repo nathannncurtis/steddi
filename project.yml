@@ -11,6 +11,10 @@ targets:
     platform: iOS
     sources:
       - Steddi
+      # Shared with the SteddiLiveActivity extension: a single ActivityAttributes
+      # source of truth compiled into both targets so the type can't silently
+      # drift across the app/extension process boundary.
+      - Shared/NavigationAttributes.swift
     info:
       path: Steddi/Info.plist
       properties:
@@ -87,6 +91,9 @@ targets:
     platform: iOS
     sources:
       - SteddiLiveActivity
+      # Same single NavigationAttributes source shared with the Steddi app
+      # target — keeps the Activity<NavigationAttributes> type identical here.
+      - Shared/NavigationAttributes.swift
     info:
       path: SteddiLiveActivity/Info.plist
       properties:
