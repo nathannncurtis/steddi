@@ -1009,6 +1009,10 @@ struct HomeView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background(SteddiTheme.accentSubtle, in: Capsule())
+                            // Keep the pill's visual size but expand the tappable
+                            // area to the 44pt minimum (the capsule is ~34pt tall).
+                            .frame(minHeight: 44)
+                            .contentShape(Capsule())
                     }
                     .padding(.top, 4)
                 }
@@ -1029,6 +1033,10 @@ struct HomeView: View {
                             Label("New Commute", systemImage: "plus")
                                 .font(SteddiTheme.heading(13))
                                 .foregroundStyle(SteddiTheme.accent)
+                                // Bare text link is only ~22pt tall; expand the hit
+                                // area to the 44pt minimum without changing the type.
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .padding(.top, 4)
                     }
