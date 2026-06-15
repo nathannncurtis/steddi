@@ -68,8 +68,14 @@ enum StepSynthesizer {
             var coords = Array(graph.geometry(of: edgeIndex))
             guard coords.count >= 2 else { continue }
 
-            let isFirst = i == 0 && result.startFraction > 0
-            let isLast = i == result.edgePath.count - 1 && result.endFraction < 1
+            // A partial trim applies only for a strictly-interior fraction. A
+            // boundary fraction (start==0 / end==1, including a node endpoint
+            // snapped exactly to a vertex) means the FULL edge geometry is the
+            // travelled geometry — trimming it would either no-op (the trim guards
+            // reject 0/1) or, if mis-gated, draw/charge the full terminal edge and
+            // overshoot the real endpoint. Gate on the open interval (0,1).
+            let isFirst = i == 0 && result.startFraction > 0 && result.startFraction < 1
+            let isLast = i == result.edgePath.count - 1 && result.endFraction < 1 && result.endFraction > 0
             // Single-edge route (start == end edge): BOTH trims apply to this one
             // edge. Cut the sub-segment [startFraction, endFraction] in ONE pass
             // against the ORIGINAL geometry — composing trimLeading then
@@ -210,8 +216,11 @@ enum StepSynthesizer {
     private static func edgeLength(at i: Int, result: SearchResult, in graph: RoadGraph) -> Double {
         let edgeIndex = result.edgePath[i]
         let full = Double(graph.edges[Int(edgeIndex)].lengthMeters)
-        let isFirst = i == 0 && result.startFraction > 0
-        let isLast = i == result.edgePath.count - 1 && result.endFraction < 1
+        // Mirror `stitchedPolyline`: only an open-interval (0,1) fraction is a
+        // partial edge. A boundary fraction means the full edge length is the
+        // travelled length, so this returns `full` for any node-snapped endpoint.
+        let isFirst = i == 0 && result.startFraction > 0 && result.startFraction < 1
+        let isLast = i == result.edgePath.count - 1 && result.endFraction < 1 && result.endFraction > 0
         guard isFirst || isLast else { return full }
 
         var coords = Array(graph.geometry(of: edgeIndex))
