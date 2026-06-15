@@ -136,9 +136,27 @@ struct RoutedZone: Sendable, Equatable {
             return false
         case let .corridor(polyline, width):
             guard polyline.count >= 2 else { return false }
+            // A route VERTEX within the buffer of any corridor segment (covers a
+            // route that starts/ends or turns inside the corridor).
             for p in pts {
                 for j in 0..<(polyline.count - 1) {
                     if RouteGeometry.projectOntoSegment(point: p, segStart: polyline[j], segEnd: polyline[j + 1]).distance <= width {
+                        return true
+                    }
+                }
+            }
+            // A route SEGMENT that comes within the buffer of any corridor segment
+            // WITHOUT either endpoint being within `width` — catches the long,
+            // straight 2-vertex edge (freeway/arterial stored as just its two
+            // endpoints) that crosses a narrow corridor perpendicular with both
+            // endpoints farther than `width` from the centerline. Symmetric with
+            // the polygon case; without it a hard no-go corridor is silently
+            // bypassed on long edges.
+            guard pts.count >= 2 else { return false }
+            for i in 0..<(pts.count - 1) {
+                let a = pts[i], b = pts[i + 1]
+                for j in 0..<(polyline.count - 1) {
+                    if RoutedZone.segmentToSegmentDistance(a, b, polyline[j], polyline[j + 1]) <= width {
                         return true
                     }
                 }
@@ -191,6 +209,24 @@ struct RoutedZone: Sendable, Equatable {
         if d3 == 0 && onSegment(p1, p2, p3) { return true }
         if d4 == 0 && onSegment(p1, p2, p4) { return true }
         return false
+    }
+
+    /// Shortest distance (m) between two segments a-b and c-d. Zero when they
+    /// geometrically cross; otherwise the minimum of the four endpoint-to-opposite-
+    /// segment projections. Used to test a route segment against a corridor segment
+    /// (a buffered polyline), so a long straight edge crossing a narrow corridor
+    /// between its endpoints is still caught. Planar lon/lat — fine at street scale.
+    static func segmentToSegmentDistance(
+        _ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D,
+        _ c: CLLocationCoordinate2D, _ d: CLLocationCoordinate2D
+    ) -> Double {
+        if segmentsIntersect(a, b, c, d) { return 0 }
+        return min(
+            RouteGeometry.projectOntoSegment(point: a, segStart: c, segEnd: d).distance,
+            RouteGeometry.projectOntoSegment(point: b, segStart: c, segEnd: d).distance,
+            RouteGeometry.projectOntoSegment(point: c, segStart: a, segEnd: b).distance,
+            RouteGeometry.projectOntoSegment(point: d, segStart: a, segEnd: b).distance
+        )
     }
 
     /// Signed area of triangle (a, b, c): >0 counter-clockwise, <0 clockwise,

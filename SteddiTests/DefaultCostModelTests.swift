@@ -305,6 +305,51 @@ struct ZoneCostTests {
         // Collinear overlap.
         #expect(RoutedZone.segmentsIntersect(c(0, 0), c(2, 0), c(1, 0), c(3, 0)))
     }
+
+    // A narrow E-W corridor centerline that crosses the S->N road perpendicular
+    // at its midpoint (lat 34.0025). The road runs along lon -117.0000; the
+    // corridor centerline spans lon -117.0010..-116.9990, so BOTH corridor
+    // endpoints are ~90 m from the road (> 30 m width) and BOTH road endpoints
+    // (lat 34.0000 / 34.0050) are ~277 m from the centerline. No route vertex is
+    // within the buffer, yet the edge runs straight through the corridor.
+    private func crossCorridor() -> [CLLocationCoordinate2D] {
+        [
+            CLLocationCoordinate2D(latitude: 34.0025, longitude: -117.0010),
+            CLLocationCoordinate2D(latitude: 34.0025, longitude: -116.9990),
+        ]
+    }
+
+    @Test("Corridor zone catches an edge crossing it between vertices")
+    func corridorCrossingEdgeExcluded() {
+        // lineGraph: a straight S->N edge from (34.0000,-117) to (34.0050,-117).
+        let g = lineGraph()
+        let e = edge(in: g, from: 1, to: 2)!
+        let centerline = crossCorridor()
+        // Sanity: neither route endpoint is within the 30 m buffer of the corridor.
+        let width = 30.0
+        for v in [CLLocationCoordinate2D(latitude: 34.0000, longitude: -117.0000),
+                  CLLocationCoordinate2D(latitude: 34.0050, longitude: -117.0000)] {
+            #expect(RouteGeometry.distance(from: v, toPolyline: centerline) > width)
+        }
+        let zone = RoutedZone(shape: .corridor(polyline: centerline, widthMeters: width))
+        let cost = DefaultCostModel(context: RoutingContext(hardZones: [zone])).edgeCost(e, in: g)
+        #expect(cost == .infinity)
+    }
+
+    @Test("Corridor zone leaves an edge that does not cross it passable")
+    func corridorNonCrossingEdgePassable() {
+        // The same E-W corridor, but shifted well east of the road: no crossing,
+        // no vertex within the buffer.
+        let g = lineGraph()
+        let e = edge(in: g, from: 1, to: 2)!
+        let away = [
+            CLLocationCoordinate2D(latitude: 34.0025, longitude: -116.9010),
+            CLLocationCoordinate2D(latitude: 34.0025, longitude: -116.8990),
+        ]
+        let zone = RoutedZone(shape: .corridor(polyline: away, widthMeters: 30))
+        let cost = DefaultCostModel(context: RoutingContext(hardZones: [zone])).edgeCost(e, in: g)
+        #expect(cost < .infinity)
+    }
 }
 
 // MARK: - Access restrictions
