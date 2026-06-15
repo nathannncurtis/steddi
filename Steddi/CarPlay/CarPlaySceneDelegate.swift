@@ -18,6 +18,10 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var modelContainer: ModelContainer?
     private var liveUpdateTask: Task<Void, Never>?
     private var phoneNavWatchTask: Task<Void, Never>?
+    /// Single auto-recenter timer armed after a free-look pan. Held so each new
+    /// pan resets the window (rather than stacking timers) and so it can be
+    /// cancelled when navigation ends or CarPlay disconnects.
+    private var recenterTask: Task<Void, Never>?
 
     private var stateManager: NavigationStateManager { NavigationStateManager.shared }
 
@@ -94,6 +98,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         phoneNavWatchTask = nil
         liveUpdateTask?.cancel()
         liveUpdateTask = nil
+        recenterTask?.cancel()
+        recenterTask = nil
         dismissNavigation()
         NowPlayingService.shared.unregisterCommands()
         mapController = nil
@@ -189,13 +195,19 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                         .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
                         item.setImage(img)
                     }
-                    item.handler = { [weak self] _, completion in
-                        if let dest = commute.destination {
+                    // Capture plain value copies, not the @Model. The list can
+                    // sit on screen for minutes; touching the SwiftData object
+                    // (or its lazily-faulted coordinate) on tap could fault on a
+                    // row deleted from the main context in the meantime.
+                    if let dest = commute.destination {
+                        let destName = dest.name
+                        let destCoord = dest.coordinate
+                        item.handler = { [weak self] _, completion in
                             Task { @MainActor in
-                                await self?.showRoutePreview(name: dest.name, coordinate: dest.coordinate)
+                                await self?.showRoutePreview(name: destName, coordinate: destCoord)
                             }
+                            completion()
                         }
-                        completion()
                     }
                     items.append(item)
                 }
@@ -230,9 +242,15 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                         .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
                         item.setImage(img)
                     }
+                    // Capture plain value copies, not the @Model — see
+                    // showCommutesList. The coordinate is a lazily-faulted
+                    // property, so reading it now (not on tap) avoids faulting a
+                    // row the user may delete on the phone while this list shows.
+                    let placeName = location.name
+                    let placeCoord = location.coordinate
                     item.handler = { [weak self] _, completion in
                         Task { @MainActor in
-                            await self?.showRoutePreview(name: location.name, coordinate: location.coordinate)
+                            await self?.showRoutePreview(name: placeName, coordinate: placeCoord)
                         }
                         completion()
                     }
@@ -491,6 +509,10 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private func dismissNavigation() {
         liveUpdateTask?.cancel()
         liveUpdateTask = nil
+        // A free-look timer queued during navigation must not fire after it
+        // ends, snapping the now-idle browsing camera back to follow mode.
+        recenterTask?.cancel()
+        recenterTask = nil
         isShowingNavigation = false
         navigationSession?.finishTrip()
         navigationSession = nil
@@ -507,6 +529,10 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 extension CarPlaySceneDelegate: CPMapTemplateDelegate {
 
     func mapTemplate(_ mapTemplate: CPMapTemplate, panBeganWith direction: CPMapTemplate.PanDirection) {
+        // A new pan restarts the free-look window — cancel any pending
+        // auto-recenter so it can't fire mid-inspection.
+        recenterTask?.cancel()
+        recenterTask = nil
         mapController?.setFreeLook(true)
     }
 
@@ -524,10 +550,16 @@ extension CarPlaySceneDelegate: CPMapTemplateDelegate {
     }
 
     func mapTemplate(_ mapTemplate: CPMapTemplate, panEndedWith direction: CPMapTemplate.PanDirection) {
-        Task { @MainActor in
+        // Replace any in-flight timer so only the most recent pan's 5s window is
+        // live — repeated pans reset the window instead of stacking timers that
+        // would yank the camera back mid-inspection.
+        recenterTask?.cancel()
+        recenterTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(5))
-            mapController?.setFreeLook(false)
-            mapController?.recenter()
+            guard let self, !Task.isCancelled else { return }
+            self.recenterTask = nil
+            self.mapController?.setFreeLook(false)
+            self.mapController?.recenter()
         }
     }
 

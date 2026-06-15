@@ -231,16 +231,7 @@ struct HomeView: View {
                         is3DNav = is3D
                     },
                     onSwitchRoute: { route in
-                        // Reroute to the fallback
-                        let target: PinnedLocation? = activeDirection == .originToDestination ? activeCommute?.destination : activeCommute?.origin
-                        guard let target else { return }
-                        locationFeedTask?.cancel()
-                        locationFeedTask = nil
-                        navigationEngine?.stopNavigation()
-                        navStateManager.stopObserving()
-                        isNavigating = false
-                        navigationRoute = nil
-                        navigateWithSavedRoute(route, to: target)
+                        switchToRoute(route)
                     },
                     onReport: { type, coordinate in
                         let report = Report(type: type, latitude: coordinate.latitude, longitude: coordinate.longitude)
@@ -436,8 +427,10 @@ struct HomeView: View {
             get: { navStateManager.isCarPlayActive && navStateManager.isNavigating },
             set: { _ in }
         )) {
-            PhoneCompanionView()
-                .environment(navStateManager)
+            PhoneCompanionView(onSwitchRoute: { route in
+                switchToRoute(route)
+            })
+            .environment(navStateManager)
         }
         .onReceive(NotificationCenter.default.publisher(for: .steddiTestArrival)) { _ in
             // steddi://arrive — trigger post-arrival flow for testing
@@ -452,6 +445,11 @@ struct HomeView: View {
                 GPSPoint(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
             }
             showPostArrival = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .steddiShowPlaces)) { _ in
+            // CarPlay dashboard "Recent Places" deep link foregrounded the app —
+            // surface the Places tab so the driver lands where they expect.
+            withAnimation(TransitionKit.quickFade) { sheetTab = .places }
         }
         .onReceive(NotificationCenter.default.publisher(for: .steddiNavigateToLocation)) { notification in
             // steddi://navigate and CarPlay Start Navigation both post this
@@ -1129,6 +1127,22 @@ struct HomeView: View {
             print("[STEDDI-NAV] NO preferred route found for direction \(direction.rawValue) — showing preview")
             navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
         }
+    }
+
+    /// Switch the active commute onto a suggested faster/fallback route. Shared
+    /// by the on-phone nav overlay's reroute card and the CarPlay phone-companion
+    /// reroute card so both surfaces perform the identical route swap.
+    private func switchToRoute(_ route: Route) {
+        // Reroute to the fallback
+        let target: PinnedLocation? = activeDirection == .originToDestination ? activeCommute?.destination : activeCommute?.origin
+        guard let target else { return }
+        locationFeedTask?.cancel()
+        locationFeedTask = nil
+        navigationEngine?.stopNavigation()
+        navStateManager.stopObserving()
+        isNavigating = false
+        navigationRoute = nil
+        navigateWithSavedRoute(route, to: target)
     }
 
     /// Navigate using a saved route's polyline with custom turn-by-turn logic.

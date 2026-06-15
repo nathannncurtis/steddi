@@ -7,6 +7,13 @@ struct PhoneCompanionView: View {
     @Environment(NavigationStateManager.self) private var navState
     @AppStorage("accentColor") private var accentColor = "lavender"
 
+    /// Performs the actual route swap when the driver accepts a reroute
+    /// suggestion. Plumbed from HomeView so the CarPlay companion reuses the
+    /// exact same handler as the on-phone nav overlay's reroute card; without
+    /// it the "Switch" button would only dismiss the card and leave the driver
+    /// on the slower route.
+    var onSwitchRoute: ((Route) -> Void)? = nil
+
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
         ZStack {
@@ -43,6 +50,7 @@ struct PhoneCompanionView: View {
                         timeSavingsMinutes: Int(suggestion.savingsMinutes),
                         percentageSavings: Int(suggestion.savingsPercentage * 100),
                         onSwitch: {
+                            onSwitchRoute?(suggestion.route)
                             navState.rerouteSuggestion = nil
                         },
                         onStay: {

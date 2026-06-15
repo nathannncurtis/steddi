@@ -117,7 +117,19 @@ final class OSMSpeedLimitService {
             )
             return Self.overpassQuery(for: sampled)
         }.value
-        guard let fetched = await fetch(query: query) else { return }
+        guard let fetched = await fetch(query: query) else {
+            // The new route's prefetch failed (all mirrors 429/5xx, a bad-query
+            // 4xx, or cancellation). If this is still the newest generation,
+            // drop any previously-loaded route's index instead of leaving it
+            // installed — otherwise speedLimit(at:) keeps serving the abandoned
+            // route's limits wherever the new route incidentally runs near the
+            // old one. A newer prefetch already superseded us: leave its data
+            // alone.
+            if generation == prefetchGeneration {
+                clearIndex()
+            }
+            return
+        }
 
         // Cache the result regardless (it is keyed by this polyline), but only
         // the newest prefetch may install ways for lookup.
@@ -150,6 +162,20 @@ final class OSMSpeedLimitService {
         segments = index.segments
         grid = index.grid
         loadedRouteKey = routeKey
+        lastWayIndex = nil
+        resetChallenger()
+    }
+
+    /// Drop the in-memory index after a failed prefetch. With no segments,
+    /// `speedLimit(at:)` returns nil (callers fall back to the per-step
+    /// instruction estimate) instead of answering from the abandoned route's
+    /// geometry, and `loadedRouteKey` goes nil so callers can tell nothing
+    /// valid is loaded — never reporting the stale route as still current.
+    private func clearIndex() {
+        wayLimits = []
+        segments = []
+        grid = [:]
+        loadedRouteKey = nil
         lastWayIndex = nil
         resetChallenger()
     }
