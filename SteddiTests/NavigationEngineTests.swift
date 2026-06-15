@@ -826,6 +826,99 @@ struct SavedETASanityTests {
     }
 }
 
+// MARK: - Speed Limit Step-Advance
+
+@Suite("NavigationEngine speed limit on step-advance")
+@MainActor
+struct NavigationEngineSpeedLimitStepTests {
+
+    /// Straight route running north from (33, -117), ~111m per 0.001 deg.
+    private func straightRoute(segments: Int) -> [CLLocationCoordinate2D] {
+        (0...segments).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+    }
+
+    private func fix(lat: Double, lon: Double, t: TimeInterval) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: 0, courseAccuracy: 5, speed: 13, speedAccuracy: 1,
+            timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
+        )
+    }
+
+    /// Two steps whose instructions estimate to DIFFERENT limits (interstate 65
+    /// then a residential lane 25), with the second step's coordinate placed on
+    /// the route so a forward fix triggers advanceStepIfNeeded.
+    private func twoStepRoute() -> (polyline: [CLLocationCoordinate2D], steps: [NavStep]) {
+        let polyline = straightRoute(segments: 20)
+        let steps = [
+            NavStep(instruction: "Merge onto I-215", distance: 1100, coordinate: polyline[0], maneuverSymbol: "arrow.merge"),
+            NavStep(instruction: "Turn right onto Maple Ln", distance: 0, coordinate: polyline[10], maneuverSymbol: "arrow.turn.up.right"),
+        ]
+        return (polyline, steps)
+    }
+
+    @Test("Live OSM limit is not clobbered by the step estimate on advance (no flicker)")
+    func liveProviderSurvivesStepAdvance() {
+        let engine = NavigationEngine()
+        let (polyline, steps) = twoStepRoute()
+
+        // Provider always returns a live (non-estimated) OSM value of 50,
+        // regardless of position — simulating continuous OSM coverage.
+        engine.speedLimitProvider = { _, _ in (mph: 50, isEstimated: false) }
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        // At the start, the live provider value wins over the step-0 estimate.
+        #expect(engine.speedLimitMph == 50)
+        #expect(engine.speedLimitIsEstimated == false)
+
+        // Drive forward through the second step's coordinate (polyline[10]) so
+        // advanceStepIfNeeded fires. The estimate for "Maple Ln" is 25; the live
+        // OSM value of 50 must NOT flip to it.
+        for i in 0...10 {
+            engine.updateLocation(fix(lat: 33.0 + Double(i) * 0.001, lon: -117.0, t: Double(i)))
+        }
+
+        #expect(engine.currentStepIndex == 1)
+        #expect(engine.speedLimitMph == 50)
+        #expect(engine.speedLimitIsEstimated == false)
+        engine.stopNavigation()
+    }
+
+    @Test("New road's estimate shows when provider has no OSM data (no stale stick)")
+    func newRoadEstimateShowsWithoutProviderData() {
+        let engine = NavigationEngine()
+        let (polyline, steps) = twoStepRoute()
+
+        // Provider returns a live OSM value ONLY for the first step's road
+        // (north of the second step's coordinate it has no data → nil). This is
+        // the regression a naive `if speedLimitIsEstimated` guard would cause:
+        // the stale 55 from step 0 would stick and the new road's 25 estimate
+        // would never show.
+        let boundaryLat = polyline[10].latitude
+        engine.speedLimitProvider = { coord, _ in
+            coord.latitude < boundaryLat ? (mph: 55, isEstimated: false) : nil
+        }
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        // Step 0 road has live OSM data.
+        #expect(engine.speedLimitMph == 55)
+        #expect(engine.speedLimitIsEstimated == false)
+
+        // Drive to the second step's coordinate. The new road ("Maple Ln") has
+        // no OSM data, so the readout must fall back to its estimate (25),
+        // NOT keep the stale 55 from the previous road.
+        for i in 0...10 {
+            engine.updateLocation(fix(lat: 33.0 + Double(i) * 0.001, lon: -117.0, t: Double(i)))
+        }
+
+        #expect(engine.currentStepIndex == 1)
+        #expect(engine.speedLimitMph == 25)
+        #expect(engine.speedLimitIsEstimated == true)
+        engine.stopNavigation()
+    }
+}
+
 // MARK: - Legacy Saved Step Filtering
 
 @Suite("Route.savedNavSteps legacy filtering")

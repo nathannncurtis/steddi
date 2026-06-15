@@ -389,6 +389,31 @@ final class NavigationEngine {
         speedLimitIsEstimated = provided.isEstimated
     }
 
+    /// Resolve the speed limit for a freshly-advanced step. The instruction
+    /// estimate is only a fallback: if the OSM provider has live data for the
+    /// new step's road we publish that immediately so a step-advance never
+    /// flickers a live limit back to the estimate. When the provider has no
+    /// match for the new road, we publish the new step's estimate rather than
+    /// letting a stale provider value from the previous road stick.
+    ///
+    /// Why re-derive here instead of waiting for the next fix: `applyStep` runs
+    /// inside `advanceStepIfNeeded`, AFTER `updateSpeedLimit` already ran this
+    /// fix. Without this, the readout would show the estimate until the next
+    /// fix re-queried the provider — the exact flicker we're fixing.
+    private func resolveSpeedLimitForStep(_ step: NavStep) {
+        let estimate = Self.estimateSpeedLimit(from: step.instruction)
+        // Probe the provider at the new step's start so the limit matches the
+        // road being entered, not the position one fix ago.
+        if let provider = speedLimitProvider,
+           let provided = provider(step.coordinate, headingDegrees) {
+            speedLimitMph = provided.mph
+            speedLimitIsEstimated = provided.isEstimated
+        } else {
+            speedLimitMph = estimate
+            speedLimitIsEstimated = true
+        }
+    }
+
     // MARK: - Step Logic
 
     private func applyStep(at index: Int) {
@@ -400,7 +425,7 @@ final class NavigationEngine {
         stepDistance = Self.formatDistance(step.distance)
         maneuverType = step.maneuverSymbol
         roadName = Self.extractRoadName(from: step.instruction)
-        speedLimitMph = Self.estimateSpeedLimit(from: step.instruction)
+        resolveSpeedLimitForStep(step)
 
         if !step.instruction.isEmpty {
             VoiceGuidanceService.shared.speakWithDistance(step.instruction, distance: step.distance)
