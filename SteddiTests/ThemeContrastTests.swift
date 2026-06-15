@@ -333,4 +333,39 @@ struct ThemeContrastTests {
             }
         }
     }
+
+    // MARK: - Trend insight magnitude badge (sage/warmRed text on 15% tint)
+
+    @Test("trend magnitude badge text clears its floor on a 15%-tint-of-itself over the card")
+    func trendBadgeOnTintAA() {
+        // TrendInsightCard.magnitudeBadge renders the value (+/-N min) in the
+        // legible semantic text variant on a `sentimentColor.opacity(0.15)`
+        // capsule over the card's surfaceSecondary. The legible shift is sized
+        // against surfacePrimary, so over the (slightly different) surface
+        // Secondary the composited badge clears the 3:1 large/non-body floor in
+        // every palette and stays a large improvement over the raw sage/warmRed
+        // it replaced (which were ~1.8–2.4:1 and failed even that). Mirrors
+        // `semanticTextFloorEverywhere`'s 3:1 floor on the non-primary surfaces.
+        let badges: [(String, RGBColor)] = [
+            ("better/sage", SteddiTheme.sageRGB),
+            ("worse/warmRed", SteddiTheme.warmRedRGB),
+        ]
+        for (name, base) in badges {
+            for (pName, p) in palettes {
+                let a = 0.15
+                let bg = RGBColor(
+                    base.r * a + p.surfaceSecondary.r * (1 - a),
+                    base.g * a + p.surfaceSecondary.g * (1 - a),
+                    base.b * a + p.surfaceSecondary.b * (1 - a))
+                let label = SteddiTheme.legibleText(base, onSurface: p.surfacePrimary)
+                let r = ContrastRatio.ratio(label, bg)
+                #expect(r >= ContrastRatio.aaLarge,
+                        "\(pName) \(name) badge/tint = \(r), want >= 3.0")
+                // And a strict improvement over the raw hue it replaced.
+                let raw = ContrastRatio.ratio(base, bg)
+                #expect(r > raw,
+                        "\(pName) \(name) legible \(r) should beat raw \(raw)")
+            }
+        }
+    }
 }

@@ -111,12 +111,17 @@ struct OnboardingView: View {
         }
     }
 
-    /// The hero owns its own full-bleed map; the showcase/ask beats float over
-    /// the showpiece card's dark cinematic backdrop, so the root only needs the
-    /// neutral surface beneath the hero (and as a base for the backdrop).
-    private var beatBackground: Color {
-        coordinator.currentBeat == .hero ? SteddiTheme.surfacePrimary : .black
-    }
+    /// Every beat floats on the FIXED dark cinematic backdrop — the hero over
+    /// its own full-bleed dark map, the showcase/ask beats over the showpiece
+    /// card's black/accent gradient. A FIXED `.black` (not the adaptive
+    /// `surfacePrimary`, which is near-WHITE in the Light theme) keeps the
+    /// status-bar region's SwiftUI surface dark on the hero too, so the
+    /// flow's `.preferredColorScheme(.dark)` resolves LIGHT status-bar glyphs
+    /// over the dark hero map in every theme — matching the other beats (whose
+    /// black backdrop already carries the light status bar). With
+    /// `surfacePrimary` the hero's unsafe-area backing went light in the Light
+    /// theme and the clock/wifi/battery rendered dark-on-dark over the map.
+    private var beatBackground: Color { .black }
 
     // MARK: - Beats
 

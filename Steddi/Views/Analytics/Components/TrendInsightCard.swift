@@ -6,10 +6,27 @@ import Charts
 struct TrendInsightCard: View {
     let insight: TrendInsight
 
+    /// FILL / decoration hue — the raw semantic color, for the large bold
+    /// sentiment glyph, its tint circle, the card stroke, and the sparkline,
+    /// where contrast is carried by size/decoration, not small-text legibility.
     private var sentimentColor: Color {
         switch insight.sentiment {
         case .better: return SteddiTheme.sage
         case .worse: return SteddiTheme.warmRed
+        case .steady: return SteddiTheme.accent
+        }
+    }
+
+    /// TEXT color for the small magnitude VALUE drawn on a surface (the 15%-tint
+    /// capsule lets the surface through, so this is text-on-surface, not
+    /// text-on-fill). Raw sage/warmRed wash out as text in light/grey
+    /// (sage 2.30:1, warmRed 1.77:1), so use the surface-adaptive legible
+    /// variants per SteddiTheme's text-vs-fill rule. `.steady` already used the
+    /// text-safe accent.
+    private var sentimentTextColor: Color {
+        switch insight.sentiment {
+        case .better: return SteddiTheme.sageText
+        case .worse: return SteddiTheme.warmRedText
         case .steady: return SteddiTheme.accent
         }
     }
@@ -68,7 +85,9 @@ struct TrendInsightCard: View {
     private var magnitudeBadge: some View {
         Text(badgeText)
             .font(SteddiTheme.mono(12))
-            .foregroundStyle(sentimentColor)
+            // Value text on a 15%-tint (text-on-surface) capsule → the legible
+            // surface-adaptive variant, not the raw hue (washes out in light/grey).
+            .foregroundStyle(sentimentTextColor)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(Capsule().fill(sentimentColor.opacity(0.15)))
