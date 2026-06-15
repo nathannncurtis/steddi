@@ -251,7 +251,17 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         // Recenter button (hidden until free-look)
         let btn = UIButton(type: .system)
         btn.setImage(UIImage(systemName: "location.fill"), for: .normal)
-        btn.tintColor = SteddiTheme.accentUIColor
+        // Glyph that CONTRASTS the fill, not the raw brand accent. The brand
+        // accents are mid/light hues — on the near-white light-mode fill below
+        // they fail the 3:1 large-glyph floor (gold ~2.2:1, lavender ~2.7:1).
+        // `contrastingForeground(on:)` returns near-black on the light fill and
+        // near-white on the dark fill, so the location arrow clears contrast in
+        // every theme (the fill carries the brand surface; the glyph stays legible).
+        btn.tintColor = UIColor { traits in
+            let white: Double = traits.userInterfaceStyle == .dark ? 0.1 : 0.96
+            let fill = RGBColor(white, white, white)
+            return ContrastRatio.contrastingForeground(on: fill).uiColor
+        }
         // Theme- and contrast-aware: light surface in light mode, dark in dark
         // mode, and fully opaque under Increase Contrast so it never washes out
         // over the map (was a hardcoded dark translucent fill for both themes).
