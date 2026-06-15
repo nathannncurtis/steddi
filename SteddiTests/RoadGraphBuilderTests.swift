@@ -279,6 +279,51 @@ struct RoadGraphBuilderAttributeTests {
         #expect(dest.edges[0].attrs.contains(.destinationOnly))
     }
 
+    /// An asymmetric two-way road (lanes:forward != lanes:backward) must give each
+    /// directed edge the OTHER direction's lane count as oncoming — the forward
+    /// edge faces the backward lanes, the reverse edge faces the forward lanes.
+    @Test("Asymmetric lanes:forward/backward give each direction its own oncoming count")
+    func asymmetricOncomingLanes() {
+        // A two-way way 1->2 with 3 forward lanes and 1 backward lane (4 total).
+        let graph = buildGraph(
+            nodeJSON(1, 0.0, 0.0),
+            nodeJSON(2, 0.0, 0.001),
+            wayElementJSON(100, nodes: [1, 2], tags: [
+                "highway": "primary",
+                "lanes": "4",
+                "lanes:forward": "3",
+                "lanes:backward": "1"
+            ])
+        )
+        #expect(graph.edges.count == 2)
+        let fwd = graph.edges.first { $0.from == graph.osmToIndex[1] && $0.to == graph.osmToIndex[2] }!
+        let rev = graph.edges.first { $0.from == graph.osmToIndex[2] && $0.to == graph.osmToIndex[1] }!
+        // Forward driver faces the 1 backward lane; reverse driver faces 3 forward.
+        #expect(fwd.oncomingLanes == 1)
+        #expect(rev.oncomingLanes == 3)
+    }
+
+    /// With only `lanes:forward` (no explicit backward), the backward count is
+    /// derived as total - forward for the forward edge, and the reverse edge faces
+    /// the explicit forward lanes.
+    @Test("lanes:forward alone derives the missing backward side per direction")
+    func oncomingFromForwardOnly() {
+        // lanes=4, lanes:forward=3 → backward = 1.
+        let graph = buildGraph(
+            nodeJSON(1, 0.0, 0.0),
+            nodeJSON(2, 0.0, 0.001),
+            wayElementJSON(100, nodes: [1, 2], tags: [
+                "highway": "primary",
+                "lanes": "4",
+                "lanes:forward": "3"
+            ])
+        )
+        let fwd = graph.edges.first { $0.from == graph.osmToIndex[1] && $0.to == graph.osmToIndex[2] }!
+        let rev = graph.edges.first { $0.from == graph.osmToIndex[2] && $0.to == graph.osmToIndex[1] }!
+        #expect(fwd.oncomingLanes == 1)  // total - forward
+        #expect(rev.oncomingLanes == 3)  // the forward lanes
+    }
+
     @Test("Non-drivable highway classes are dropped")
     func nonDrivableDropped() {
         let graph = buildGraph(

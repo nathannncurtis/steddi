@@ -347,6 +347,28 @@ struct OSMTagParsingOncomingTests {
     func noDataAssumesOne() {
         #expect(OSMTagParsing.oncomingLaneCount(lanes: nil, oneway: .both) == 1)
     }
+
+    @Test("Asymmetric split: each direction faces the other side's lanes")
+    func asymmetricPerDirection() {
+        // lanes=4, forward=3, backward=1. A forward-traveling driver faces the 1
+        // backward lane; a reverse-traveling driver faces the 3 forward lanes.
+        #expect(OSMTagParsing.oncomingLaneCount(
+            lanes: "4", lanesForward: "3", lanesBackward: "1",
+            oneway: .both, traveling: .forward) == 1)
+        #expect(OSMTagParsing.oncomingLaneCount(
+            lanes: "4", lanesForward: "3", lanesBackward: "1",
+            oneway: .both, traveling: .reverse) == 3)
+    }
+
+    @Test("Reverse direction derives the forward lanes when only lanes:forward is set")
+    func reverseDerivesForward() {
+        // lanes=4, forward=3, backward implied 1. Reverse driver faces forward=3.
+        #expect(OSMTagParsing.oncomingLaneCount(
+            lanes: "4", lanesForward: "3", oneway: .both, traveling: .reverse) == 3)
+        // Forward driver faces total - forward = 1.
+        #expect(OSMTagParsing.oncomingLaneCount(
+            lanes: "4", lanesForward: "3", oneway: .both, traveling: .forward) == 1)
+    }
 }
 
 // MARK: - Road class

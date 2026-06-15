@@ -213,20 +213,50 @@ enum OSMTagParsing {
         }
     }
 
+    /// Which OSM direction of travel an oncoming-lane estimate is for. A two-way
+    /// way is split into a forward edge (node order) and a reverse edge (against
+    /// node order); each faces the OTHER direction's lanes as oncoming, so the
+    /// count must be resolved per-edge, not shared (`lanes:forward`/`lanes:backward`
+    /// are asymmetric on real roads).
+    enum TravelDirection: Sendable, Equatable {
+        case forward   // along OSM node order — oncoming = the backward lanes
+        case reverse   // against OSM node order — oncoming = the forward lanes
+    }
+
     /// Estimate the count of oncoming lanes a driver must cross for an unprotected
-    /// left, from `lanes`/`lanes:forward`/`oneway`. For a two-way road, oncoming ≈
+    /// left, from `lanes`/`lanes:forward`/`lanes:backward`/`oneway`, for the given
+    /// direction of travel. For a two-way road with an explicit directional split
+    /// the oncoming count is the OTHER direction's lane count; otherwise oncoming ≈
     /// half the total lanes (min 1). A oneway road has zero oncoming. Used by the
     /// Phase-4 cost model; lives here so all lane reasoning is in one place.
     static func oncomingLaneCount(
         lanes: String?,
         lanesForward: String? = nil,
-        oneway: OnewayDirection
+        lanesBackward: String? = nil,
+        oneway: OnewayDirection,
+        traveling: TravelDirection = .forward
     ) -> Int {
         if oneway != .both { return 0 }
-        if let forward = lanesForward.flatMap(Int.init), let total = lanes.flatMap(Int.init), total > forward {
-            return max(1, total - forward)
+        let total = lanes.flatMap(Int.init)
+        let forward = lanesForward.flatMap(Int.init)
+        let backward = lanesBackward.flatMap(Int.init)
+
+        // Oncoming for a forward-traveling driver is the backward lanes; for a
+        // reverse-traveling driver it is the forward lanes. Prefer the explicit
+        // directional tag, then derive the missing side from `total` minus the
+        // known side, so an asymmetric split is honored in both directions.
+        let oncoming: Int?
+        switch traveling {
+        case .forward:
+            oncoming = backward ?? (total.flatMap { t in forward.map { t - $0 } })
+        case .reverse:
+            oncoming = forward ?? (total.flatMap { t in backward.map { t - $0 } })
         }
-        if let total = lanes.flatMap(Int.init), total > 0 {
+        if let oncoming, oncoming > 0 {
+            return max(1, oncoming)
+        }
+
+        if let total, total > 0 {
             return max(1, total / 2)
         }
         // No lane data: assume one oncoming lane (conservative single carriageway).
