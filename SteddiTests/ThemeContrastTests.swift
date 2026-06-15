@@ -164,6 +164,27 @@ struct ThemeContrastTests {
         }
     }
 
+    @Test("the .steddiPrimary pairing (onAccent on accentBrand) clears AA on every accent")
+    func steddiPrimaryButtonPairingAA() {
+        // The canonical primary CTA `.buttonStyle(.steddiPrimary)` fills a Capsule
+        // with `accentBrand` (the unshifted brand hue) and draws its label in
+        // `onAccent` — the exact pairing this asserts. This is the contrast seam
+        // for the app-wide CTA fix: if a future accent swatch or the `onAccent`
+        // pairing drifts so the primary button's label/fill drops below AA, this
+        // fails loudly (the bug it replaces, `.glassProminent.tint(accent)`'s
+        // forced white label, fails AA on these accents — see
+        // `whiteOnAccentRegression`).
+        for option in SteddiTheme.AccentOption.allCases {
+            // `onAccentRGB` is exactly what the `onAccent` SwiftUI color resolves
+            // to over this fill; `accentBrand` is the literal capsule fill.
+            let label = ContrastRatio.contrastingForeground(on: option.rgb) // == onAccentRGB for this fill
+            let fill = option.rgb                                            // == accentBrand for this accent
+            let r = ContrastRatio.ratio(label, fill)
+            #expect(r >= ContrastRatio.aaBody,
+                    ".steddiPrimary onAccent/accentBrand(\(option.rawValue)) = \(r), want >= 4.5")
+        }
+    }
+
     @Test("white-on-accent-fill failed AA (documents the bug onAccent fixes)")
     func whiteOnAccentRegression() {
         // Hardcoded `.white` glyphs on the accent fill — the pattern onAccent
