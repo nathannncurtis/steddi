@@ -23,7 +23,7 @@ struct PlaceIconPickerView: View {
                     VStack(spacing: 4) {
                         Image(systemName: option.symbol)
                             .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(isSelected ? .white : SteddiTheme.accent)
+                            .foregroundStyle(isSelected ? SteddiTheme.onAccent : SteddiTheme.accent)
                             .frame(width: 44, height: 44)
                             .background(
                                 Circle()
