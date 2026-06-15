@@ -189,6 +189,68 @@ final class CommuteNotificationService {
         }
     }
 
+    // MARK: - Model Snapshot (thread-safety boundary)
+
+    /// A plain, `Sendable` snapshot of everything the async notification/ETA work
+    /// needs from a `@Model Commute` (and its routes/trips). `@Model` objects are
+    /// bound to the `ModelContext` that created them and are NOT `Sendable`; after
+    /// an `await` the async function can resume on a different cooperative-pool
+    /// thread, so touching the model (or its lazily-faulted relationships) there
+    /// is a SwiftData thread-confinement violation. Every model property the
+    /// post-`await` work reads is therefore extracted into this value struct
+    /// synchronously on the context's executor BEFORE any suspension point, and
+    /// only the snapshot crosses awaits.
+    private struct CommuteSnapshot: Sendable {
+        let id: UUID
+        let name: String
+        let notificationsEnabled: Bool
+        let notificationLeadMinutes: Int
+        let quietHoursStart: Int?
+        let quietHoursEnd: Int?
+        let direction: CommuteDirection
+        let expectedDepartureHours: [Int]
+        let fromLearnedHistory: Bool
+        let destinationCoordinate: CLLocationCoordinate2D?
+        let destinationName: String
+        /// Preferred route's stored typical duration (seconds) for `direction`.
+        let typicalDurationSeconds: TimeInterval?
+    }
+
+    /// Build a `CommuteSnapshot` by reading every needed `@Model` property while
+    /// still pinned to the context's executor (called before any `await`). All
+    /// direction resolution, learned/scheduled-hour analysis, destination lookup
+    /// and preferred-route reads happen here so the async work never re-touches
+    /// the model. Returns nil when notifications are disabled for this commute.
+    private func snapshot(for commute: Commute, allTrips: [CommuteTrip], now: Date) -> CommuteSnapshot? {
+        guard commute.notificationsEnabled else { return nil }
+
+        // Direction for this window: schedule rules first, then next-scheduled.
+        let direction = CommuteDirectionResolver.scheduledDirection(commute: commute, now: now)
+            ?? CommuteDirectionResolver.nextScheduledDirection(commute: commute, now: now)
+            ?? .originToDestination
+
+        let learned = Self.learnedDepartureHours(commute: commute, trips: allTrips, now: now)
+        let scheduled = Self.scheduledDepartureHours(commute: commute, direction: direction, now: now)
+        let expectedHours = learned.isEmpty ? scheduled : learned
+
+        let (destCoord, destName) = destination(for: commute, direction: direction)
+
+        return CommuteSnapshot(
+            id: commute.id,
+            name: commute.name,
+            notificationsEnabled: commute.notificationsEnabled,
+            notificationLeadMinutes: commute.notificationLeadMinutes,
+            quietHoursStart: commute.quietHoursStart,
+            quietHoursEnd: commute.quietHoursEnd,
+            direction: direction,
+            expectedDepartureHours: expectedHours,
+            fromLearnedHistory: !learned.isEmpty,
+            destinationCoordinate: destCoord,
+            destinationName: destName,
+            typicalDurationSeconds: commute.preferredRoute(for: direction)?.typicalDurationSeconds
+        )
+    }
+
     // MARK: - Notification Pass
 
     /// Evaluate every active commute and dispatch alerts where the engine says
@@ -215,12 +277,19 @@ final class CommuteNotificationService {
         // widget alone, so the last commute in the loop can't arbitrarily win.
         let widgetCommuteID = nextDepartureCommuteID(commutes: commutes, trips: allTrips, now: now)
 
-        for commute in commutes {
+        // Snapshot every commute's model fields synchronously (still on the
+        // context's executor) BEFORE any await — the @Model objects must not be
+        // touched once the async ETA/weather work suspends and resumes on another
+        // thread. Only Sendable snapshots cross the awaits below.
+        let snapshots: [CommuteSnapshot] = commutes.compactMap {
+            snapshot(for: $0, allTrips: allTrips, now: now)
+        }
+
+        for snapshot in snapshots {
             await evaluateAndDispatch(
-                commute: commute,
-                allTrips: allTrips,
+                snapshot: snapshot,
                 now: now,
-                pushIdleETA: commute.id == widgetCommuteID
+                pushIdleETA: snapshot.id == widgetCommuteID
             )
         }
     }
@@ -251,65 +320,52 @@ final class CommuteNotificationService {
         }
         let trips = (try? context.fetch(FetchDescriptor<CommuteTrip>())) ?? []
 
+        // Snapshot the chosen commute's model fields synchronously, before the
+        // ETA await below — the @Model must not be touched after the network
+        // suspension resumes on another thread.
         guard let widgetCommuteID = nextDepartureCommuteID(commutes: commutes, trips: trips, now: now),
               let commute = commutes.first(where: { $0.id == widgetCommuteID }),
-              commute.notificationsEnabled
+              let snapshot = snapshot(for: commute, allTrips: trips, now: now)
         else { return }
-
-        let direction = CommuteDirectionResolver.scheduledDirection(commute: commute, now: now)
-            ?? CommuteDirectionResolver.nextScheduledDirection(commute: commute, now: now)
-            ?? .originToDestination
-        let (destCoord, destName) = destination(for: commute, direction: direction)
 
         // Live ETA only when a fix exists; otherwise fall back to typical so the
         // widget still shows something useful before the first drive.
         var etaSeconds: TimeInterval?
-        if let here = locationProvider()?.coordinate, let dest = destCoord {
+        if let here = locationProvider()?.coordinate, let dest = snapshot.destinationCoordinate {
             do {
                 etaSeconds = try await directionsService.fetchDirectETA(from: here, to: dest)
             } catch {
-                serviceLog.notice("idle ETA fetch failed for \(commute.name, privacy: .public); using typical duration: \(error.localizedDescription, privacy: .public)")
+                serviceLog.notice("idle ETA fetch failed for \(snapshot.name, privacy: .public); using typical duration: \(error.localizedDescription, privacy: .public)")
             }
         }
-        let typical = commute.preferredRoute(for: direction)?.typicalDurationSeconds
 
         await pushIdleCommuteETA(
-            commuteName: commute.name,
-            destinationName: destName,
-            etaSeconds: etaSeconds ?? typical
+            commuteName: snapshot.name,
+            destinationName: snapshot.destinationName,
+            etaSeconds: etaSeconds ?? snapshot.typicalDurationSeconds
         )
     }
 
-    private func evaluateAndDispatch(commute: Commute, allTrips: [CommuteTrip], now: Date, pushIdleETA: Bool) async {
-        guard commute.notificationsEnabled else { return }
-
-        // Direction for this window: schedule rules first, then next-scheduled.
-        let direction = CommuteDirectionResolver.scheduledDirection(commute: commute, now: now)
-            ?? CommuteDirectionResolver.nextScheduledDirection(commute: commute, now: now)
-            ?? .originToDestination
-
-        let learned = Self.learnedDepartureHours(commute: commute, trips: allTrips, now: now)
-        let scheduled = Self.scheduledDepartureHours(commute: commute, direction: direction, now: now)
-        let expectedHours = learned.isEmpty ? scheduled : learned
-
-        // Resolve destination coordinate + name for the chosen direction.
-        let (destCoord, destName) = destination(for: commute, direction: direction)
-
+    /// Evaluate a single commute from its `Sendable` snapshot. The snapshot was
+    /// built synchronously on the context's executor before this is called, so no
+    /// `@Model` object is touched here — all reads cross the `await` boundaries
+    /// safely.
+    private func evaluateAndDispatch(snapshot: CommuteSnapshot, now: Date, pushIdleETA: Bool) async {
         // ETA: requires both a current location and a destination coordinate.
         // A failed fetch (network/invalid coords) must not be silently swallowed
         // — log it so a suppressed notification is diagnosable. The decision
         // engine falls back to the typical duration below when currentETA is nil.
         var currentETA: TimeInterval?
-        if let here = locationProvider()?.coordinate, let dest = destCoord {
+        if let here = locationProvider()?.coordinate, let dest = snapshot.destinationCoordinate {
             do {
                 currentETA = try await directionsService.fetchDirectETA(from: here, to: dest)
             } catch {
-                serviceLog.notice("ETA fetch failed for \(commute.name, privacy: .public); falling back to typical duration: \(error.localizedDescription, privacy: .public)")
+                serviceLog.notice("ETA fetch failed for \(snapshot.name, privacy: .public); falling back to typical duration: \(error.localizedDescription, privacy: .public)")
             }
         }
 
         // Typical baseline: preferred route's stored typical duration.
-        let typical = commute.preferredRoute(for: direction)?.typicalDurationSeconds
+        let typical = snapshot.typicalDurationSeconds
 
         // Pre-drive widget: this commute owns the next departure window, so push
         // its freshly-computed ETA to the idle home-screen widget. Reuse exactly
@@ -320,51 +376,51 @@ final class CommuteNotificationService {
         // widget timeline itself.
         if pushIdleETA {
             await pushIdleCommuteETA(
-                commuteName: commute.name,
-                destinationName: destName,
+                commuteName: snapshot.name,
+                destinationName: snapshot.destinationName,
                 etaSeconds: currentETA ?? typical
             )
         }
 
         // Weather for the destination (degrades to .unavailable gracefully).
         let weather: WeatherCondition
-        if let dest = destCoord {
+        if let dest = snapshot.destinationCoordinate {
             weather = await weatherService.condition(for: dest)
         } else {
             weather = .unavailable
         }
 
         let input = CommuteNotificationDecisionEngine.Input(
-            notificationsEnabled: commute.notificationsEnabled,
+            notificationsEnabled: snapshot.notificationsEnabled,
             globallyEnabled: globallyEnabled,
-            leadMinutes: commute.notificationLeadMinutes,
-            quietHoursStart: commute.quietHoursStart,
-            quietHoursEnd: commute.quietHoursEnd,
-            expectedDepartureHours: expectedHours,
-            fromLearnedHistory: !learned.isEmpty,
+            leadMinutes: snapshot.notificationLeadMinutes,
+            quietHoursStart: snapshot.quietHoursStart,
+            quietHoursEnd: snapshot.quietHoursEnd,
+            expectedDepartureHours: snapshot.expectedDepartureHours,
+            fromLearnedHistory: snapshot.fromLearnedHistory,
             currentETA: currentETA,
             typicalDuration: typical,
             weather: weather,
             weatherSensitivity: weatherSensitivity,
-            lastNotificationTime: notificationCenter.lastNotificationTime(commuteId: commute.id),
+            lastNotificationTime: notificationCenter.lastNotificationTime(commuteId: snapshot.id),
             now: now,
-            destinationName: destName
+            destinationName: snapshot.destinationName
         )
 
         let decision = CommuteNotificationDecisionEngine.evaluate(input)
         switch decision {
         case .skip(let reason):
-            serviceLog.debug("skip \(commute.name, privacy: .public): \(reason, privacy: .public)")
+            serviceLog.debug("skip \(snapshot.name, privacy: .public): \(reason, privacy: .public)")
         case .notify(let message, let actionType, let leadMinutes):
             let title = Self.title(for: actionType, leadMinutes: leadMinutes)
             let deepLink = CommuteNotificationCenter.startCommuteDeepLink(
-                commuteId: commute.id, direction: direction
+                commuteId: snapshot.id, direction: snapshot.direction
             )
             // Fire roughly now — the background pass already runs close to the
             // departure window. A tiny delay keeps the trigger valid.
             await notificationCenter.scheduleAlert(
-                commuteId: commute.id,
-                direction: direction,
+                commuteId: snapshot.id,
+                direction: snapshot.direction,
                 title: title,
                 body: message,
                 deepLink: deepLink,
