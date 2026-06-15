@@ -202,7 +202,7 @@ struct SteddiNavOverlay: View {
                             onSwitchRoute?(suggestion.route)
                             navState.rerouteSuggestion = nil
                         },
-                        onStay: { navState.rerouteSuggestion = nil }
+                        onStay: { navState.dismissRerouteSuggestion() }
                     )
                     .padding(.bottom, 8)
                 }

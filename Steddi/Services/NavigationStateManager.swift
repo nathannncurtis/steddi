@@ -60,6 +60,24 @@ final class NavigationStateManager {
     var rerouteSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)? = nil
     var currentRemainingETA: TimeInterval = 0
 
+    /// The route the driver most recently declined (tapped "Stay") plus when,
+    /// and the savings they rejected. The reroute loop suppresses re-suggesting
+    /// that same route during a cooldown window unless it becomes materially
+    /// better, so a dismissed card doesn't immediately nag again on the next
+    /// cycle. Cleared at session start/end.
+    @ObservationIgnored
+    private var dismissedRouteID: UUID?
+    @ObservationIgnored
+    private var dismissedAt: Date?
+    @ObservationIgnored
+    private var dismissedSavingsSeconds: TimeInterval = 0
+
+    /// How long a just-declined route stays suppressed after "Stay".
+    private static let rerouteDismissCooldown: TimeInterval = 600 // 10 min
+    /// A re-suggestion within the cooldown is only allowed if the new savings
+    /// beats what was rejected by at least this much — "materially better".
+    private static let rerouteResuggestMargin: TimeInterval = 120 // 2 min
+
     var upcomingSteps: [UpcomingStep] = []
 
     /// The active navigation engine — shared so CarPlay can read the same state
@@ -156,31 +174,36 @@ final class NavigationStateManager {
 
                     guard let engine = self.activeEngine,
                           engine.isNavigating,
-                          let currentCoord = engine.currentCoordinate,
-                          let activeDestination = engine.routePolylineCoordinates.last else { continue }
+                          let currentCoord = engine.currentCoordinate else { continue }
 
-                    // Comparability: the candidate ETA below is an MKDirections
-                    // live-traffic point-to-point estimate from the current
-                    // position to the fallback's destination. The active route's
-                    // remaining ETA MUST be derived the same way, otherwise we'd
-                    // be subtracting two numbers on different bases — engine
-                    // `etaSeconds` is an avg-speed/typical-duration model skewed
-                    // by the driver's own running speed mean, so mixing it with
-                    // MKDirections biases EVERY suggestion (crawling inflates the
-                    // engine estimate and over-triggers; cruising deflates it and
-                    // suppresses legitimate reroutes). Compute the current
-                    // route's remaining ETA via the SAME MKDirections path used
-                    // for candidates so a saving is a genuine like-for-like one.
+                    let activePolyline = engine.routePolylineCoordinates
+                    guard activePolyline.count >= 2 else { continue }
+
+                    // Comparability — the crux of the reroute decision. Both
+                    // numbers below MUST be path-aware ETAs that follow their own
+                    // route's geometry. Every route in a commute shares the same
+                    // origin/destination, so a plain point-to-point ETA collapses
+                    // them all to the SAME value (the open-road shortest path),
+                    // making savings ~0 forever and the feature dead. So compute
+                    // the active route's REMAINING ETA along the part of its own
+                    // polyline still ahead of the driver, and each candidate's
+                    // ETA along the candidate's polyline — they share an endpoint
+                    // but differ by path, so a genuinely faster route shows real
+                    // savings while an equal/slower one shows none.
+                    let remainingPolyline = DirectionsService.remainingPolyline(
+                        of: activePolyline,
+                        from: currentCoord
+                    )
                     let remainingETA: TimeInterval
                     do {
-                        remainingETA = try await directionsService.fetchDirectETA(
+                        remainingETA = try await directionsService.fetchETA(
                             from: currentCoord,
-                            to: activeDestination
+                            along: PolylineEncoder.encode(remainingPolyline, precision: 6)
                         )
                     } catch {
                         // Couldn't get a comparable baseline this cycle — skip
-                        // rather than fall back to the engine model and compare
-                        // incomparable numbers.
+                        // rather than fall back to a non-path-aware estimate and
+                        // compare incomparable numbers.
                         continue
                     }
 
@@ -222,6 +245,16 @@ final class NavigationStateManager {
                                 basePercentage: commute.thresholdPercentage,
                                 hardMinuteFloor: commute.hardMinuteFloor
                             )
+
+                            // Don't re-surface a route the driver just declined
+                            // (tapped "Stay") until the cooldown lapses or it
+                            // becomes materially faster than what was rejected.
+                            if self.isRerouteSuppressed(
+                                routeID: fallback.id,
+                                savingsSeconds: decision.savingsSeconds
+                            ) {
+                                continue
+                            }
 
                             if decision.shouldReroute, decision.savingsSeconds > bestSavings {
                                 bestSavings = decision.savingsSeconds
@@ -302,6 +335,37 @@ final class NavigationStateManager {
         stopObserving()
     }
 
+    /// The driver tapped "Stay" (or the card auto-dismissed). Clear the visible
+    /// suggestion AND remember the declined route + its rejected savings so the
+    /// reroute loop won't re-surface the same route on the next cycle within the
+    /// cooldown window unless it becomes materially better. UI should call this
+    /// instead of setting `rerouteSuggestion = nil` directly, so the decline is
+    /// actually recorded.
+    func dismissRerouteSuggestion() {
+        if let suggestion = rerouteSuggestion {
+            dismissedRouteID = suggestion.route.id
+            dismissedAt = Date()
+            dismissedSavingsSeconds = suggestion.savingsMinutes * 60.0
+        }
+        rerouteSuggestion = nil
+    }
+
+    /// Whether a candidate route is currently suppressed because the driver just
+    /// declined it. Suppressed while inside the cooldown window, unless the new
+    /// savings beats the rejected savings by a material margin.
+    /// `internal` (not `private`) so the cooldown policy is unit-testable.
+    func isRerouteSuppressed(routeID: UUID, savingsSeconds: TimeInterval, now: Date = Date()) -> Bool {
+        guard routeID == dismissedRouteID, let dismissedAt else { return false }
+        guard now.timeIntervalSince(dismissedAt) < Self.rerouteDismissCooldown else { return false }
+        return savingsSeconds < dismissedSavingsSeconds + Self.rerouteResuggestMargin
+    }
+
+    private func clearDismissedReroute() {
+        dismissedRouteID = nil
+        dismissedAt = nil
+        dismissedSavingsSeconds = 0
+    }
+
     func stopObserving() {
         pollingTask?.cancel()
         rerouteTask?.cancel()
@@ -340,6 +404,7 @@ final class NavigationStateManager {
         rerouteSuggestion = nil
         currentRemainingETA = 0
         upcomingSteps = []
+        clearDismissedReroute()
     }
 
     // MARK: - Widget Session

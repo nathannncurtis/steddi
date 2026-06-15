@@ -82,19 +82,42 @@ final class DirectionsService {
         return Self.directionsRoute(from: mkRoute)
     }
 
-    /// Get the current ETA from a position to the route's destination.
-    /// The `along` polyline parameter is accepted for API compatibility but
-    /// the ETA is calculated as a simple origin-to-destination request.
+    /// Path-aware ETA: the live travel time from `origin` to the destination
+    /// *following the given polyline's geometry*, not the open-road shortest
+    /// path to its endpoint.
+    ///
+    /// This is what makes route-vs-route comparison meaningful. All routes in a
+    /// commute share one origin/destination, so two routes only differ by the
+    /// path between them — a plain point-to-point ETA collapses every candidate
+    /// to the same number (MKDirections picks its own fastest path regardless of
+    /// which saved polyline we passed), which is exactly the bug that made the
+    /// opportunistic reroute unable to ever fire. Here the polyline is pinned as
+    /// OSRM via points so the duration reflects the candidate's actual roads.
+    ///
+    /// Falls back to the direct origin-to-endpoint ETA only if the via-route
+    /// can't be computed, so a transient OSRM failure degrades gracefully rather
+    /// than throwing the cycle away.
     func fetchETA(
         from origin: CLLocationCoordinate2D,
         along encodedPolyline: String
     ) async throws -> TimeInterval {
-        // Decode polyline to get the destination (last coordinate)
         let routeCoords = PolylineEncoder.decode(encodedPolyline, precision: 6)
         guard let destinationCoord = routeCoords.last else {
             throw DirectionsError.noRoute
         }
 
+        // Pin the route's own geometry as via points so the ETA follows the
+        // path. Prepend the current origin so the leg from the driver's
+        // position onto the route is included. Spike-clean and down-sample to
+        // stay within OSRM's coordinate limit / URL size (the same pattern as
+        // the inflated-planned-duration migration in HomeView).
+        let pinned = [origin] + Self.sampledViaPoints(from: RouteGeometry.removeSpikes(routeCoords))
+        if let viaRoute = try? await fetchViaRoute(points: pinned), viaRoute.duration > 0 {
+            return viaRoute.duration
+        }
+
+        // Via-route unavailable — degrade to a direct endpoint estimate so the
+        // caller still gets a (less precise) comparable number.
         return try await fetchDirectETA(from: origin, to: destinationCoord)
     }
 
@@ -262,6 +285,42 @@ final class DirectionsService {
         return (0..<maxPoints).map { i in
             coords[Int(round(Double(i) * Double(coords.count - 1) / Double(maxPoints - 1)))]
         }
+    }
+
+    /// The portion of `polyline` still ahead of `position` — the snapped point
+    /// followed by every vertex from the nearest segment onward. Used to compute
+    /// the active route's REMAINING ETA along its own geometry (so it compares
+    /// like-for-like against a candidate's full-geometry ETA): a fresh
+    /// destination-only estimate from the current position would ignore the
+    /// roads the driver is committed to and bias the savings.
+    ///
+    /// Returns the whole polyline if it has fewer than two vertices (nothing to
+    /// project onto), and at minimum a two-point line (snapped position ->
+    /// destination) so the result is always routable.
+    static func remainingPolyline(
+        of polyline: [CLLocationCoordinate2D],
+        from position: CLLocationCoordinate2D
+    ) -> [CLLocationCoordinate2D] {
+        guard polyline.count >= 2 else { return polyline }
+
+        var bestSegment = 0
+        var bestSnapped = polyline[0]
+        var bestPerp = Double.greatestFiniteMagnitude
+        for i in 0..<(polyline.count - 1) {
+            let projection = RouteGeometry.projectOntoSegment(
+                point: position, segStart: polyline[i], segEnd: polyline[i + 1]
+            )
+            if projection.distance < bestPerp {
+                bestPerp = projection.distance
+                bestSnapped = projection.snapped
+                bestSegment = i
+            }
+        }
+
+        // Snapped position, then the rest of the route from the next vertex on.
+        var remaining: [CLLocationCoordinate2D] = [bestSnapped]
+        remaining.append(contentsOf: polyline[(bestSegment + 1)...])
+        return remaining.count >= 2 ? remaining : [bestSnapped, polyline[polyline.count - 1]]
     }
 
     static func isArrivalStep(_ step: DirectionsStep) -> Bool {
