@@ -66,11 +66,17 @@ struct OnboardingEmergencyView: View {
                 } label: {
                     Label("Add Contact", systemImage: "person.crop.circle.badge.plus")
                         .font(.headline)
+                        // On-fill label: a system-white label on the light/mid
+                        // brand accents fails WCAG AA; `contrastingGlyph` is the
+                        // in-flight accent's luminance-correct on-fill color.
+                        .foregroundStyle(coordinator.selectedAccent.contrastingGlyph)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 4)
                 }
-                .buttonStyle(.glassProminent)
-                .tint(coordinator.selectedAccent.color)
+                // In-flight accent glass fill + luminance-correct label instead
+                // of `.glassProminent` (which forces an AA-failing white label).
+                .buttonStyle(.plain)
+                .steddiGlass(tint: coordinator.selectedAccent.color, interactive: true, in: Capsule())
             } else {
                 Button {
                     HapticService.shared.fire(.uiToggle)

@@ -18,8 +18,13 @@ struct OnboardingPermissionsView: View {
     var onContinue: () -> Void
     /// Defers the prompt and advances.
     var onNotNow: () -> Void
-    /// Live accent so the in-card primary matches the chosen theme.
-    var accent: Color = SteddiTheme.accent
+    /// Live accent so the in-card primary matches the chosen theme. This is the
+    /// IN-FLIGHT pick held on the coordinator (not yet persisted), so it's passed
+    /// in rather than read from `SteddiTheme.accentBrand` (which lags a beat).
+    var accent: Color = SteddiTheme.accentBrand
+    /// Luminance-correct on-fill label color for `accent` (the in-flight accent's
+    /// `contrastingGlyph`). A system-white label fails AA on the light accents.
+    var onAccentLabel: Color = SteddiTheme.onAccent
 
     @State private var pulse = false
 
@@ -58,11 +63,17 @@ struct OnboardingPermissionsView: View {
                 } label: {
                     Text("Continue")
                         .font(.headline)
+                        // On-fill label: a system-white label on the light/mid
+                        // brand accents fails WCAG AA; this is the in-flight
+                        // accent's luminance-correct on-fill color.
+                        .foregroundStyle(onAccentLabel)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 4)
                 }
-                .buttonStyle(.glassProminent)
-                .tint(accent)
+                // In-flight accent glass fill + luminance-correct label instead
+                // of `.glassProminent` (which forces an AA-failing white label).
+                .buttonStyle(.plain)
+                .steddiGlass(tint: accent, interactive: true, in: Capsule())
 
                 Button("Not now") {
                     onNotNow()
