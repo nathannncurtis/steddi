@@ -13,8 +13,15 @@ struct CheckCommuteETAIntent: AppIntent {
         let container: ModelContainer
         do {
             container = try ModelStoreLocator.makeReadOnlySharedContainer()
-        } catch {
+        } catch ModelStoreLocator.StoreError.sharedStoreUnavailable {
+            // No store on disk yet — the user genuinely has no commutes.
             return respond("You haven't set up any commutes yet.")
+        } catch {
+            // The store exists but the read-only container couldn't OPEN it. The
+            // migration-needed case surfaces here (the read-only store can't
+            // migrate), so steer the user to open the app — the same copy the
+            // fetch path uses — instead of falsely claiming they have no commutes.
+            return respond("I couldn't read your commutes right now. Open Steddi once to finish updating, then try again.")
         }
 
         let context = ModelContext(container)
