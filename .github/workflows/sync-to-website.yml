@@ -16,7 +16,7 @@ jobs:
         run: |
           mkdir -p output
 
-          # Recent commits (last 20, message + date only — no code, no files)
+          # Recent commits (last 50, message + date only — no code, no files)
           # Filter out any mentions of internal tools
           git log --pretty=format:'{"date":"%ad","message":"%s"}' --date=short -50 | \
             python3 -c "
@@ -32,15 +32,34 @@ jobs:
           # Copy constitution
           cp docs/IMPLEMENTATION_PLAN.md output/CONSTITUTION.md 2>/dev/null || echo "# No constitution" > output/CONSTITUTION.md
 
-      - name: Push to website repo
-        uses: dmnemec/copy_file_to_another_repo_action@main
-        env:
-          API_TOKEN_GITHUB: ${{ secrets.WEBSITE_DEPLOY_TOKEN }}
+      - name: Checkout website repo
+        uses: actions/checkout@v4
         with:
-          source_file: 'output/'
-          destination_repo: 'nathannncurtis/steddi-website'
-          destination_folder: 'public/data'
-          user_email: 'nathancurtis951@gmail.com'
-          user_name: 'Nathan Curtis'
-          destination_branch: 'master'
-          commit_message: 'sync: update activity from steddi repo'
+          repository: nathannncurtis/steddi-website
+          token: ${{ secrets.WEBSITE_DEPLOY_TOKEN }}
+          path: website
+          ref: master
+
+      - name: Copy activity into website public/data
+        run: |
+          mkdir -p website/public/data
+          # Copy generated files flat into public/data (not into a nested dir)
+          cp output/commits.json   website/public/data/commits.json
+          cp output/TODO.md        website/public/data/TODO.md
+          cp output/CONSTITUTION.md website/public/data/CONSTITUTION.md
+          # Remove the stale nested output/ dir from a previous broken sync, if present
+          rm -rf website/public/data/output
+
+      - name: Commit and push to website repo
+        run: |
+          cd website
+          git config user.name  'Nathan Curtis'
+          git config user.email 'nathancurtis951@gmail.com'
+          git add public/data/commits.json public/data/TODO.md public/data/CONSTITUTION.md
+          git rm -r --cached --ignore-unmatch public/data/output >/dev/null 2>&1 || true
+          if git diff --cached --quiet; then
+            echo "No activity changes to sync."
+            exit 0
+          fi
+          git commit -m 'sync: update activity from steddi repo'
+          git push origin master
