@@ -41,12 +41,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             appLog.fault("UNCAUGHT EXCEPTION: \(exception.name.rawValue): \(exception.reason ?? "no reason")\n\(exception.callStackSymbols.joined(separator: "\n"))")
         }
 
-        // Register the SAVE_ROUTE category and become the notification delegate at
-        // launch (neither prompts the user). We deliberately do NOT request
-        // notification permission here — per the onboarding spec it is never asked
-        // at first launch; the arrival/SAVE_ROUTE prompt is deferred to the first
-        // arrival (HomeView), mirroring the in-context location/commute flows.
-        ArrivalNotificationService.shared.registerCategory()
+        // Register BOTH notification categories (SAVE_ROUTE + COMMUTE_ALERT) in a
+        // single setNotificationCategories call and become the notification
+        // delegate at launch (neither prompts the user). One combined call owns
+        // the full set, so the two registrants can never clobber each other via
+        // interleaved read-modify-writes against the shared global set. We
+        // deliberately do NOT request notification permission here — per the
+        // onboarding spec it is never asked at first launch; the
+        // arrival/SAVE_ROUTE prompt is deferred to the first arrival (HomeView),
+        // mirroring the in-context location/commute flows.
+        CommuteNotificationCenter.registerAllCategories()
         ArrivalNotificationService.shared.setupDelegate()
 
         // Finish any out-of-band tip (consumable) transactions so they don't sit
@@ -69,9 +73,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // that happens from Settings or the first scheduled commute.
         commuteNotificationService.registerBackgroundTask()
         Task {
-            // Register the COMMUTE_ALERT category and arm the first refresh if
-            // the user already granted permission in a prior session.
-            await CommuteNotificationCenter.shared.registerCategory()
+            // Categories are already registered synchronously above via
+            // CommuteNotificationCenter.registerAllCategories(); here we only arm
+            // the first refresh if the user granted permission in a prior session.
             await commuteNotificationService.refreshAuthorizationStatus()
             if commuteNotificationService.authorizationStatus == .authorized {
                 commuteNotificationService.scheduleBackgroundRefresh()

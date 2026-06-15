@@ -54,9 +54,40 @@ final class CommuteNotificationCenter {
 
     // MARK: - Category Registration
 
-    /// Register the COMMUTE_ALERT category. Merges with any categories another
-    /// service already registered so we don't clobber SAVE_ROUTE.
+    /// Register every notification category the app uses (SAVE_ROUTE +
+    /// COMMUTE_ALERT) in a SINGLE `setNotificationCategories` call.
+    ///
+    /// `setNotificationCategories` REPLACES the entire global category set, so a
+    /// per-service read-current → union-mine → set is a lost-update race: two
+    /// registrants whose reads interleave each observe the pre-other set and the
+    /// last writer wins, silently dropping the other category for the whole
+    /// session (a tapped commute alert with no action buttons, or a save prompt
+    /// missing its Save button). Writing the full set in one authoritative call
+    /// removes the read-modify-write entirely, so both categories always survive.
+    ///
+    /// This is the single owner; every site that (re)registers categories — launch
+    /// and post-authorization — routes through here.
+    static func registerAllCategories() {
+        let categories: Set<UNNotificationCategory> = [
+            ArrivalNotificationService.shared.category,
+            CommuteNotificationCenter.shared.category
+        ]
+        UNUserNotificationCenter.current().setNotificationCategories(categories)
+    }
+
+    /// Re-register the full category set (defensive call after the user grants
+    /// authorization). Kept as an instance method so existing call sites are
+    /// unchanged; it writes the whole set, never just COMMUTE_ALERT, so it can
+    /// never clobber SAVE_ROUTE.
     func registerCategory() async {
+        Self.registerAllCategories()
+    }
+
+    /// The COMMUTE_ALERT category definition (smart-commute departure alert).
+    /// Exposed so `registerAllCategories()` can register it together with the
+    /// SAVE_ROUTE category in a single `setNotificationCategories` call — see
+    /// that method for why a per-service read-modify-write is unsafe.
+    var category: UNNotificationCategory {
         let start = UNNotificationAction(
             identifier: Self.startActionIdentifier,
             title: "Start Commute",
@@ -72,17 +103,12 @@ final class CommuteNotificationCenter {
             title: "Dismiss",
             options: [.destructive]
         )
-        let category = UNNotificationCategory(
+        return UNNotificationCategory(
             identifier: Self.categoryIdentifier,
             actions: [start, snooze, dismiss],
             intentIdentifiers: [],
             options: []
         )
-
-        var existing = await center.notificationCategories()
-        existing = existing.filter { $0.identifier != Self.categoryIdentifier }
-        existing.insert(category)
-        center.setNotificationCategories(existing)
     }
 
     // MARK: - Cooldown Bookkeeping
