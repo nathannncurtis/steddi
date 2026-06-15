@@ -19,6 +19,8 @@ struct HomeView: View {
     @State private var sheetTab: SheetTab = .commutes
     /// Flips true on first commutes-tab appearance to stagger the cards in.
     @State private var commuteCardsAppeared = false
+    /// Namespace for the moving accent-glass pill behind the active sheet tab.
+    @Namespace private var sheetTabNamespace
 
     enum SheetTab: String, CaseIterable {
         case commutes = "Commutes"
@@ -884,17 +886,29 @@ struct HomeView: View {
                 .frame(width: 36, height: 4)
                 .padding(.top, 10)
 
-            // Tab selector
-            HStack(spacing: 0) {
-                ForEach(SheetTab.allCases, id: \.self) { tab in
-                    Button {
-                        withAnimation(TransitionKit.quickFade) { sheetTab = tab }
-                    } label: {
-                        Text(tab.rawValue)
-                            .font(SteddiTheme.heading(14))
-                            .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textMuted)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+            // Tab selector — a moving accent-glass pill slides under the active
+            // tab (matchedGeometry morph). The sheet body beneath stays solid.
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 0) {
+                    ForEach(SheetTab.allCases, id: \.self) { tab in
+                        Button {
+                            withAnimation(TransitionKit.quickFade) { sheetTab = tab }
+                        } label: {
+                            Text(tab.rawValue)
+                                .font(SteddiTheme.heading(14))
+                                .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textMuted)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background {
+                                    if sheetTab == tab {
+                                        Capsule()
+                                            .fill(.clear)
+                                            .steddiGlass(tint: SteddiTheme.accent, interactive: false, in: Capsule())
+                                            .glassEffectID("sheet.tab.active", in: sheetTabNamespace)
+                                            .glassEffectTransition(.matchedGeometry)
+                                    }
+                                }
+                        }
                     }
                 }
             }
