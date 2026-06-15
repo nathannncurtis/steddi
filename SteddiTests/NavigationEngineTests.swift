@@ -513,6 +513,67 @@ struct NavigationEngineOffRouteTests {
         #expect(fireUpdate == deviationStart + 4)
     }
 
+    /// Straight route running north; ~111m per 0.001 deg of latitude.
+    private static func straightRoute(segments: Int) -> [CLLocationCoordinate2D] {
+        (0...segments).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+    }
+
+    private static func offFix(lat: Double, lon: Double, t: TimeInterval) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: -1, courseAccuracy: -1, speed: 13, speedAccuracy: 1,
+            timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
+        )
+    }
+
+    /// Once a deviation fires the in-recovery latch suppresses all further
+    /// off-route events — so when the recovery pipeline can't reroute, guidance
+    /// would freeze forever. clearOffRouteRecovery() must re-arm the detector so
+    /// a fresh deviation can fire again.
+    @Test("clearOffRouteRecovery re-arms off-route detection after a no-reroute recovery")
+    func clearingLatchReArmsOffRoute() throws {
+        let engine = NavigationEngine()
+        let polyline = Self.straightRoute(segments: 40)
+        let steps = [
+            NavStep(instruction: "", distance: 4400, coordinate: polyline[0], maneuverSymbol: "location.fill"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[40], maneuverSymbol: "flag.fill")
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        var fireCount = 0
+        engine.onOffRoute = { _ in fireCount += 1 }
+
+        // Pass the grace period on-route (well within the 80m corridor).
+        var t = 0.0
+        for i in 0..<12 {
+            engine.updateLocation(Self.offFix(lat: 33.0 + Double(i) * 0.0005, lon: -117.0, t: t))
+            t += 1
+        }
+        #expect(fireCount == 0)
+
+        // Sustained deviation far east of the line (~280m): fires exactly once,
+        // then the latch suppresses every subsequent off-route fix.
+        for _ in 0..<10 {
+            engine.updateLocation(Self.offFix(lat: 33.006, lon: -116.9970, t: t))
+            t += 1
+        }
+        #expect(fireCount == 1)
+
+        // Recovery produced no splice: clear the latch (re-arm the detector).
+        engine.clearOffRouteRecovery()
+
+        // Still off the corridor — a fresh deviation episode must fire again
+        // instead of staying frozen for the rest of the leg.
+        for _ in 0..<10 {
+            engine.updateLocation(Self.offFix(lat: 33.007, lon: -116.9970, t: t))
+            t += 1
+        }
+        #expect(fireCount == 2)
+
+        engine.stopNavigation()
+    }
+
     /// Interpolate a waypoint path into evenly spaced synthetic CLLocations at a fixed cadence.
     private static func driveLocations(
         along path: [CLLocationCoordinate2D],

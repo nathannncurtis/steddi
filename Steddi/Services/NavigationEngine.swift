@@ -264,6 +264,22 @@ final class NavigationEngine {
         onOffRoute = nil
     }
 
+    /// Called by the recovery pipeline when a confirmed deviation could NOT be
+    /// turned into a reroute (no rejoin candidates, all recovery fetches failed,
+    /// or a deliberate abandon-to-destination decision). The in-recovery latch
+    /// would otherwise stay set forever: `checkOffRoute` short-circuits every
+    /// subsequent fix (freezing step/ETA advancement) and suppresses all further
+    /// off-route events, so guidance would be stuck for the rest of the leg even
+    /// if the driver never re-enters the corridor. Clearing it here re-arms the
+    /// detector — guidance resumes (the engine keeps advancing toward the
+    /// destination along the existing geometry) and, if the driver stays off the
+    /// corridor, a fresh deviation episode can accrue and fire a new event
+    /// (subject to the recovery handler's own cooldown) so recovery can retry.
+    func clearOffRouteRecovery() {
+        isRecoveringOffRoute = false
+        offRouteCount = 0
+    }
+
     // MARK: - Location Updates
 
     func updateLocation(_ location: CLLocation) {
