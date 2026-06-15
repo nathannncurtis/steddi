@@ -19,6 +19,25 @@ enum RoadGraphSerializer {
     /// Fixed-point factor for precision-6 coordinates.
     private static let coordFactor = 1_000_000.0
 
+    /// Valid WGS-84 coordinate ranges.
+    private static let latRange = -90.0...90.0
+    private static let lonRange = -180.0...180.0
+
+    /// Encode a latitude/longitude to a precision-6 fixed-point `Int32`.
+    /// Out-of-range or non-finite inputs are clamped to the valid WGS-84 bounds
+    /// before scaling so the multiply can never exceed `Int32` and silently wrap
+    /// (the unchecked `Int32(_:)` cast would trap or wrap on overflow). The
+    /// clamped magnitudes (±180e6) sit comfortably inside `Int32`.
+    private static func encodeLat(_ lat: Double) -> Int32 {
+        let clamped = min(max(lat.isFinite ? lat : 0, latRange.lowerBound), latRange.upperBound)
+        return Int32((clamped * coordFactor).rounded())
+    }
+
+    private static func encodeLon(_ lon: Double) -> Int32 {
+        let clamped = min(max(lon.isFinite ? lon : 0, lonRange.lowerBound), lonRange.upperBound)
+        return Int32((clamped * coordFactor).rounded())
+    }
+
     // MARK: - Serialize
 
     static func serialize(_ graph: RoadGraph) -> Data {
@@ -31,8 +50,8 @@ enum RoadGraphSerializer {
         var prevLat: Int32 = 0
         var prevLon: Int32 = 0
         for coord in graph.geometry {
-            let lat = Int32((coord.latitude * coordFactor).rounded())
-            let lon = Int32((coord.longitude * coordFactor).rounded())
+            let lat = encodeLat(coord.latitude)
+            let lon = encodeLon(coord.longitude)
             writer.writeVarintSigned(Int64(lat) - Int64(prevLat))
             writer.writeVarintSigned(Int64(lon) - Int64(prevLon))
             prevLat = lat
@@ -43,8 +62,8 @@ enum RoadGraphSerializer {
         writer.writeU32(UInt32(graph.nodes.count))
         for node in graph.nodes {
             writer.writeI64(node.osmID)
-            writer.writeI32(Int32((node.coordinate.latitude * coordFactor).rounded()))
-            writer.writeI32(Int32((node.coordinate.longitude * coordFactor).rounded()))
+            writer.writeI32(encodeLat(node.coordinate.latitude))
+            writer.writeI32(encodeLon(node.coordinate.longitude))
             writer.writeI32(node.firstEdge)
             writer.writeI32(node.edgeCount)
             var flags: UInt8 = 0
@@ -92,10 +111,13 @@ enum RoadGraphSerializer {
             guard let dLat = reader.readVarintSigned(), let dLon = reader.readVarintSigned() else { return nil }
             prevLat = Int32(truncatingIfNeeded: Int64(prevLat) + dLat)
             prevLon = Int32(truncatingIfNeeded: Int64(prevLon) + dLon)
-            geometry.append(CLLocationCoordinate2D(
-                latitude: Double(prevLat) / coordFactor,
-                longitude: Double(prevLon) / coordFactor
-            ))
+            let lat = Double(prevLat) / coordFactor
+            let lon = Double(prevLon) / coordFactor
+            // A corrupt/foreign blob can decode into out-of-range coordinates
+            // (deltas wrap via truncatingIfNeeded); reject so the loader falls
+            // back to MapKit rather than feeding bad geometry into snapping.
+            guard latRange.contains(lat), lonRange.contains(lon) else { return nil }
+            geometry.append(CLLocationCoordinate2D(latitude: lat, longitude: lon))
         }
 
         guard let nodeCount = reader.readU32() else { return nil }
@@ -110,12 +132,15 @@ enum RoadGraphSerializer {
                   let firstEdge = reader.readI32(),
                   let edgeCount = reader.readI32(),
                   let flags = reader.readU8() else { return nil }
+            let nodeLat = Double(lat) / coordFactor
+            let nodeLon = Double(lon) / coordFactor
+            guard latRange.contains(nodeLat), lonRange.contains(nodeLon) else { return nil }
             osmToIndex[osmID] = NodeIndex(index)
             nodes.append(GraphNode(
                 osmID: osmID,
                 coordinate: CLLocationCoordinate2D(
-                    latitude: Double(lat) / coordFactor,
-                    longitude: Double(lon) / coordFactor
+                    latitude: nodeLat,
+                    longitude: nodeLon
                 ),
                 firstEdge: firstEdge,
                 edgeCount: edgeCount,
