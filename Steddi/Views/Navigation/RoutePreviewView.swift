@@ -226,14 +226,19 @@ struct NavigationPreviewMap: UIViewRepresentable {
         // Remove old overlays
         mapView.removeOverlays(mapView.overlays)
 
+        // Identify the primary BEFORE adding overlays: MapKit can request the
+        // renderer synchronously inside addOverlay, so if primaryPolyline isn't
+        // set yet the primary fails its identity check and renders in the dimmed
+        // alternate style — invisible at a wide zoom. (This was the missing-route-
+        // line bug in preview.)
+        context.coordinator.primaryPolyline = route.polyline
+
         // Add alternate routes (dimmed)
         for alt in alternateRoutes {
             mapView.addOverlay(alt.polyline, level: .aboveRoads)
         }
         // Add primary route on top
         mapView.addOverlay(route.polyline, level: .aboveRoads)
-
-        context.coordinator.primaryPolyline = route.polyline
 
         // Fit map to show entire route with padding
         let rect = route.polyline.boundingMapRect
