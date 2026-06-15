@@ -210,9 +210,14 @@ enum PrefLearner {
                     segments.append(MatchedSegment(edge: cur, meters: accumulated))
                 }
                 current = snap.edge
-                // The step into the first point of a NEW edge belongs to the
-                // transition, not this edge; start the new accumulator at 0.
-                accumulated = 0
+                // Credit the transition step (last point on the prior edge → first
+                // point on this one) to the edge being ENTERED. Starting the new
+                // accumulator at 0 would zero out any edge a trace crosses with a
+                // single snapped point, dropping it before the minSegmentMeters
+                // filter and biasing the road-class tally toward long edges. `step`
+                // is already 0 when the chain broke (unsnapped/skipped point), so
+                // this never credits ground covered off-graph.
+                accumulated = step
             }
         }
         if let cur = current {
