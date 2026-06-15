@@ -46,6 +46,7 @@
 		2889D28E24DAAF75495F7667 /* OSMSpeedLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0915E4648A701076C8332B3 /* OSMSpeedLimitService.swift */; };
 		29D50A254B65DCCEDE9BD86E /* IconPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DA34462C207C379281EC748 /* IconPickerView.swift */; };
 		2AEF9F7425BFE6E93765EB72 /* NavigationStateManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */; };
+		2BD970ABAE0354088EDA0519 /* ContrastRatio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EFF4B06D4FB4955CEA5934A /* ContrastRatio.swift */; };
 		2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
 		35F5485D167737BF995FD280 /* CorridorValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3052F1FB67E6754BA5AE313 /* CorridorValidator.swift */; };
@@ -150,12 +151,11 @@
 		B15142D572255FF13A24D7D1 /* ReviewURLs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27D80F6C8C3FC05676314FFB /* ReviewURLs.swift */; };
 		B18FC0A307B656BBD7096743 /* BinaryHeapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D83B764A6EC175443541145 /* BinaryHeapTests.swift */; };
 		B697491FBDB6DEAA201BF5FC /* ThemePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777F9439E5905A75A1BBDB95 /* ThemePalette.swift */; };
-		A1B2C3D4E5F600000000000A /* ContrastRatio.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000000B /* ContrastRatio.swift */; };
-		A1B2C3D4E5F600000000000C /* ThemeContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000000D /* ThemeContrastTests.swift */; };
 		B72EA015CC0BDA5C9464DFAD /* ZoneValidationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11174913BB8D28369D82EC58 /* ZoneValidationEngineTests.swift */; };
 		B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */; };
 		B837AA53B33E9D4C1C280DC4 /* OneShotLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62DF374E45DA04124F9CB3C2 /* OneShotLocation.swift */; };
 		B89C3A80892FD0596BAA0543 /* OSMSpeedLimitServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3380F79E0670137420A0A6AC /* OSMSpeedLimitServiceTests.swift */; };
+		BAF5E4B4C4A763C1B3B0B9B7 /* ThemeContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B34FE1AC285419AA48A10C0 /* ThemeContrastTests.swift */; };
 		BBD8CE5458D4AF8EEC64F0CF /* RouteRendererAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84BB3073ACC1430E3C7BDBAC /* RouteRendererAnimations.swift */; };
 		BC2BE54BE878F0FF9889AC8D /* OnboardingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6291CE98BB2552CD248E6CB /* OnboardingCoordinator.swift */; };
 		BC4D9A553D571EB8DFDC29AD /* CommuteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29048E65BF78AEB095A5D599 /* CommuteListView.swift */; };
@@ -274,6 +274,7 @@
 		139001D61F9DF7A2C5C5060C /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		13C5F1F39D468193229849C6 /* SteddiShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiShortcuts.swift; sourceTree = "<group>"; };
 		16AB94C51A9F3471AE9B4826 /* NavigationStateManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManagerTests.swift; sourceTree = "<group>"; };
+		1B34FE1AC285419AA48A10C0 /* ThemeContrastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeContrastTests.swift; sourceTree = "<group>"; };
 		1D932805B66B86200A9B9645 /* CommuteAnalyticsAggregate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteAnalyticsAggregate.swift; sourceTree = "<group>"; };
 		1DF2357BC61FE13D4126E3D0 /* OSMTagParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMTagParsingTests.swift; sourceTree = "<group>"; };
 		215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeRevisionTrait.swift; sourceTree = "<group>"; };
@@ -305,6 +306,7 @@
 		3B4F33590D3CEB7AA217E684 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		3B70B7427245EDC2DFDCA33F /* POIDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POIDiscoveryTests.swift; sourceTree = "<group>"; };
 		3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SteddiLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		3EFF4B06D4FB4955CEA5934A /* ContrastRatio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContrastRatio.swift; sourceTree = "<group>"; };
 		3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineEncoderTests.swift; sourceTree = "<group>"; };
 		40841EB3367948433AC5D433 /* SpeedCameraAlertTone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedCameraAlertTone.swift; sourceTree = "<group>"; };
 		41A765371F7D3E908A2FB941 /* RoadGraphSerializerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadGraphSerializerTests.swift; sourceTree = "<group>"; };
@@ -353,8 +355,6 @@
 		7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayModeServiceTests.swift; sourceTree = "<group>"; };
 		770C65D4283DB277ED143EA4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		777F9439E5905A75A1BBDB95 /* ThemePalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePalette.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F600000000000B /* ContrastRatio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContrastRatio.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F600000000000D /* ThemeContrastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeContrastTests.swift; sourceTree = "<group>"; };
 		77FDA01EA3986E1BFD4347DE /* CustomRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomRouter.swift; sourceTree = "<group>"; };
 		798937A1E2AA43874413C040 /* DriveRowCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveRowCard.swift; sourceTree = "<group>"; };
 		7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryHeap.swift; sourceTree = "<group>"; };
@@ -648,7 +648,7 @@
 				31B70EAA3BE8D424563A79EB /* RoutePreferenceActiveTests.swift */,
 				5B7D3F80DC55A1A5E68D3DA5 /* RouteRecoveryEngineTests.swift */,
 				C45863BA13BEC729818B3EC3 /* SpeedCameraServiceTests.swift */,
-				A1B2C3D4E5F600000000000D /* ThemeContrastTests.swift */,
+				1B34FE1AC285419AA48A10C0 /* ThemeContrastTests.swift */,
 				622A4EBF2DCE91568A12E937 /* ThemeEngineTests.swift */,
 				42C53B70A81A76FE0196BE90 /* TripProgressionTests.swift */,
 				CB09DC3C7363B1075209C683 /* VoiceGuidanceServiceTests.swift */,
@@ -916,9 +916,9 @@
 			isa = PBXGroup;
 			children = (
 				EA0E2C23211EDCF54BC1F47D /* AccessibilityAnimations.swift */,
+				3EFF4B06D4FB4955CEA5934A /* ContrastRatio.swift */,
 				7583BEE7230D81C23D5FC1A7 /* DynamicThemeComponents.swift */,
 				CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */,
-				A1B2C3D4E5F600000000000B /* ContrastRatio.swift */,
 				A814B57D3AF2BAF2600A6BBE /* SteddiGlass.swift */,
 				37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */,
 				F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */,
@@ -1100,6 +1100,7 @@
 				A0A759065A0F307E3D4BE984 /* CommuteNotificationsSettingsView.swift in Sources */,
 				10B77539D184CC20A29F7036 /* CommuteTrip.swift in Sources */,
 				650E6F734C0E0EFE2B9BEBBF /* CommuteWeatherService.swift in Sources */,
+				2BD970ABAE0354088EDA0519 /* ContrastRatio.swift in Sources */,
 				35F5485D167737BF995FD280 /* CorridorValidator.swift in Sources */,
 				C4A0314513C0EDA3FFC980BB /* CustomRouteBuilder.swift in Sources */,
 				61EDBB67DD27445DF1471AC7 /* CustomRouter.swift in Sources */,
@@ -1193,7 +1194,6 @@
 				E8518F81F0D9BA02AAEA282D /* SteddiNavOverlay.swift in Sources */,
 				DCC1D471EDEA2EBDAE0FD263 /* SteddiRoutePrefBadge.swift in Sources */,
 				139B1E17264CCF63189264A6 /* SteddiShortcuts.swift in Sources */,
-				A1B2C3D4E5F600000000000A /* ContrastRatio.swift in Sources */,
 				C66388228809F040F25E9BBF /* SteddiTheme.swift in Sources */,
 				E57B119F4519657429765563 /* StepSynthesizer.swift in Sources */,
 				75C718A237AFFBD58B0D2195 /* ThemeEngine.swift in Sources */,
@@ -1278,7 +1278,7 @@
 				99EEC9FDF103CFA359D55326 /* RoutePreferenceActiveTests.swift in Sources */,
 				F37B3C0B2FD46D546EB6BE9B /* RouteRecoveryEngineTests.swift in Sources */,
 				8B9C51FAAFDDCCB654984532 /* SpeedCameraServiceTests.swift in Sources */,
-				A1B2C3D4E5F600000000000C /* ThemeContrastTests.swift in Sources */,
+				BAF5E4B4C4A763C1B3B0B9B7 /* ThemeContrastTests.swift in Sources */,
 				F77FC27F57FDECE474D81093 /* ThemeEngineTests.swift in Sources */,
 				DF73C0BF9350C7CA1709AC80 /* TripProgressionTests.swift in Sources */,
 				CE0E87101839B1C3153234A1 /* VoiceGuidanceServiceTests.swift in Sources */,
