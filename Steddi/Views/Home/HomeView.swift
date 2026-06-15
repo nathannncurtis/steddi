@@ -691,40 +691,36 @@ struct HomeView: View {
     // MARK: - Top Bar
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            Button {
-                showSearch = true
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(SteddiTheme.accent)
-                    Text("Where to?")
-                        .font(SteddiTheme.heading(17))
-                        .foregroundStyle(SteddiTheme.textPrimary)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background {
-                    Capsule()
-                        .fill(SteddiTheme.surfacePrimary.opacity(0.9))
-                        .overlay(Capsule().stroke(SteddiTheme.accent.opacity(0.15), lineWidth: 1))
-                }
-            }
-
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(SteddiTheme.textSecondary)
-                    .frame(width: 44, height: 44)
-                    .background {
-                        Circle()
-                            .fill(SteddiTheme.surfacePrimary.opacity(0.9))
-                            .overlay(Circle().stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1))
+        // Search pill + gear grouped as one floating glass cluster over the map.
+        GlassEffectContainer(spacing: 12) {
+            HStack(spacing: 12) {
+                Button {
+                    showSearch = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(SteddiTheme.accent)
+                        Text("Where to?")
+                            .font(SteddiTheme.heading(17))
+                            .foregroundStyle(SteddiTheme.textPrimary)
+                        Spacer()
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    // Neutral glass — the accent lives in the leading icon.
+                    .steddiGlass(tint: nil, interactive: true, in: Capsule())
+                }
+
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(SteddiTheme.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .steddiGlass(tint: nil, interactive: true, in: .circle)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -789,33 +785,41 @@ struct HomeView: View {
                         onDismiss: { showSearch = false }
                     )
                 } else {
-                    // Search + settings row
-                    HStack(spacing: 8) {
-                        Button { showSearch = true } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.body.weight(.medium))
-                                    .foregroundStyle(SteddiTheme.accent)
-                                Text("Where to?")
-                                    .font(SteddiTheme.heading(15))
-                                    .foregroundStyle(SteddiTheme.textPrimary)
-                                Spacer()
+                    // Search + settings row — grouped glass cluster.
+                    GlassEffectContainer(spacing: 8) {
+                        HStack(spacing: 8) {
+                            Button { showSearch = true } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.body.weight(.medium))
+                                        .foregroundStyle(SteddiTheme.accent)
+                                    Text("Where to?")
+                                        .font(SteddiTheme.heading(15))
+                                        .foregroundStyle(SteddiTheme.textPrimary)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .steddiGlass(
+                                    tint: nil,
+                                    interactive: true,
+                                    in: Capsule(),
+                                    fallbackFill: SteddiTheme.surfaceSecondary
+                                )
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background {
-                                Capsule()
-                                    .fill(SteddiTheme.surfaceSecondary.opacity(0.8))
-                                    .overlay(Capsule().stroke(SteddiTheme.accent.opacity(0.1), lineWidth: 1))
-                            }
-                        }
 
-                        Button { showSettings = true } label: {
-                            Image(systemName: "gearshape.fill")
-                                .font(.caption)
-                                .foregroundStyle(SteddiTheme.textSecondary)
-                                .frame(width: 36, height: 36)
-                                .background(SteddiTheme.surfaceSecondary.opacity(0.8), in: Circle())
+                            Button { showSettings = true } label: {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(SteddiTheme.textSecondary)
+                                    .frame(width: 36, height: 36)
+                                    .steddiGlass(
+                                        tint: nil,
+                                        interactive: true,
+                                        in: .circle,
+                                        fallbackFill: SteddiTheme.surfaceSecondary
+                                    )
+                            }
                         }
                     }
                     .padding(.horizontal, 12)
