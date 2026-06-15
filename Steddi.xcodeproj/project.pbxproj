@@ -147,6 +147,7 @@
 		A780066C24DF0AD042F0B658 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C25F38675758DD0FE5C92BE /* Trip.swift */; };
 		A931B34FA42864F04AF2C173 /* RoadGraphSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B1D9F685121E1DE09756F5 /* RoadGraphSerializer.swift */; };
 		ADE93A5C25BF03FD9C09DA8C /* NoGoZoneGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 686B69CCF442D219E251586F /* NoGoZoneGeometryTests.swift */; };
+		AF8C07FDFE411CD730E25816 /* GeocodingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD54F3F4C5DBC6DB03812683 /* GeocodingServiceTests.swift */; };
 		B0541610F5744E370D400A2E /* PreferenceLearner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850B39F7F33A77AC75421D3E /* PreferenceLearner.swift */; };
 		B15142D572255FF13A24D7D1 /* ReviewURLs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27D80F6C8C3FC05676314FFB /* ReviewURLs.swift */; };
 		B18FC0A307B656BBD7096743 /* BinaryHeapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D83B764A6EC175443541145 /* BinaryHeapTests.swift */; };
@@ -441,6 +442,7 @@
 		DC2E5727AB85A25415DB0AAD /* RoadCondition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadCondition.swift; sourceTree = "<group>"; };
 		DD3458B0B5C9B20BC65519CC /* NowPlayingMiniBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingMiniBar.swift; sourceTree = "<group>"; };
 		DD469486D86528327AFC385D /* TripEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripEditorView.swift; sourceTree = "<group>"; };
+		DD54F3F4C5DBC6DB03812683 /* GeocodingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodingServiceTests.swift; sourceTree = "<group>"; };
 		DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDuckingServiceTests.swift; sourceTree = "<group>"; };
 		DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavPoseInterpolator.swift; sourceTree = "<group>"; };
 		E0261D3246F7A3D3DB86D524 /* SteddiLiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiLiveActivityBundle.swift; sourceTree = "<group>"; };
@@ -622,6 +624,7 @@
 				07515D6A20C58D593333BA9C /* CustomRouterPhase5Tests.swift */,
 				E0F16028B16E55D125568971 /* DefaultCostModelTests.swift */,
 				7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */,
+				DD54F3F4C5DBC6DB03812683 /* GeocodingServiceTests.swift */,
 				08B46BB7337E920209A89889 /* HapticServiceTests.swift */,
 				FE2000CD9239BB50E6449738 /* MapMatchingServiceTests.swift */,
 				E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */,
@@ -1262,6 +1265,7 @@
 				BFE4D70580CE8AF786A28BA9 /* CustomRouterPhase5Tests.swift in Sources */,
 				73DCCB458D54BAA367DB7502 /* DefaultCostModelTests.swift in Sources */,
 				A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */,
+				AF8C07FDFE411CD730E25816 /* GeocodingServiceTests.swift in Sources */,
 				8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */,
 				EC2A22C59A5539845B5C4173 /* MapMatchingServiceTests.swift in Sources */,
 				9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */,

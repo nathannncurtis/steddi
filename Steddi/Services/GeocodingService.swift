@@ -29,7 +29,13 @@ final class GeocodingService {
         let localSearch = MKLocalSearch(request: request)
         let response = try await localSearch.start()
 
-        let parsed = response.mapItems.prefix(limit).enumerated().compactMap { (index, mapItem) -> (result: GeocodingResult, apiRank: Int)? in
+        // Parse a wider window than `limit` so the proximity re-rank can pull a
+        // nearby low-relevance result into the returned set. MKLocalSearch orders
+        // by relevance, so truncating to `limit` BEFORE scoring would discard a
+        // closer match Apple ranked just outside the cut. Cap the window so the
+        // sort cost stays bounded for pathologically large responses.
+        let window = limit * 3
+        let parsed = response.mapItems.prefix(window).enumerated().compactMap { (index, mapItem) -> (result: GeocodingResult, apiRank: Int)? in
             let name = mapItem.name ?? "Unknown"
             let coordinate = mapItem.location.coordinate
             let address = mapItem.addressRepresentations?.fullAddress(includingRegion: false, singleLine: true) ?? name
@@ -42,12 +48,25 @@ final class GeocodingService {
             return (result: geocodingResult, apiRank: index)
         }
 
-        // Re-rank by combined relevance + proximity score
+        return Self.rank(parsed, proximity: proximity, limit: limit)
+    }
+
+    /// Combined proximity + relevance ranking, applied over the FULL parsed
+    /// window and truncated to `limit` only AFTER sorting — so a nearer result
+    /// ranked just outside the relevance cut can still survive. Pure and static
+    /// so the ordering is unit-testable without MKLocalSearch.
+    static func rank(
+        _ parsed: [(result: GeocodingResult, apiRank: Int)],
+        proximity: CLLocationCoordinate2D?,
+        limit: Int
+    ) -> [GeocodingResult] {
+        // No proximity to bias toward: keep relevance order, truncate to `limit`.
         guard let prox = proximity else {
-            return parsed.map(\.result)
+            return parsed.prefix(limit).map(\.result)
         }
 
         let userLocation = CLLocation(latitude: prox.latitude, longitude: prox.longitude)
+        let denominator = max(Double(parsed.count), 1.0)
 
         return parsed.sorted { a, b in
             let distA = userLocation.distance(from: CLLocation(latitude: a.result.coordinate.latitude, longitude: a.result.coordinate.longitude))
@@ -59,15 +78,15 @@ final class GeocodingService {
             let distScoreB = min(distB / 50_000, 1.0)
 
             // API rank normalized to 0-1
-            let relevanceA = Double(a.apiRank) / max(Double(parsed.count), 1.0)
-            let relevanceB = Double(b.apiRank) / max(Double(parsed.count), 1.0)
+            let relevanceA = Double(a.apiRank) / denominator
+            let relevanceB = Double(b.apiRank) / denominator
 
             // Weight: 60% proximity, 40% relevance
             let scoreA = distScoreA * 0.6 + relevanceA * 0.4
             let scoreB = distScoreB * 0.6 + relevanceB * 0.4
 
             return scoreA < scoreB
-        }.map(\.result)
+        }.prefix(limit).map(\.result)
     }
 
 }
