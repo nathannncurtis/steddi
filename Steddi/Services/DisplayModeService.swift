@@ -68,7 +68,7 @@ final class DisplayModeService {
 
         for connector in Self.alwaysCutConnectors {
             if let range = trimmed.range(of: connector, options: .caseInsensitive),
-               cut == nil || range.lowerBound < cut! {
+               range.lowerBound < (cut ?? trimmed.endIndex) {
                 cut = range.lowerBound
             }
         }
@@ -77,7 +77,7 @@ final class DisplayModeService {
             var searchStart = trimmed.startIndex
             while let range = trimmed.range(of: connector, options: .caseInsensitive, range: searchStart..<trimmed.endIndex) {
                 if !trimmed[range.upperBound...].lowercased().hasPrefix("the ") {
-                    if cut == nil || range.lowerBound < cut! {
+                    if range.lowerBound < (cut ?? trimmed.endIndex) {
                         cut = range.lowerBound
                     }
                     break
