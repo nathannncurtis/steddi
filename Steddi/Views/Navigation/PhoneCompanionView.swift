@@ -47,7 +47,10 @@ struct PhoneCompanionView: View {
                     Spacer()
                     RerouteCardView(
                         routeName: suggestion.route.name ?? "Faster route",
-                        timeSavingsMinutes: Int(suggestion.savingsMinutes),
+                        // The engine only surfaces a vetted-worthwhile suggestion,
+                        // so a sub-minute saving must never render "Save ~0 min".
+                        // Round (not floor) and clamp to ≥1.
+                        timeSavingsMinutes: max(1, Int(suggestion.savingsMinutes.rounded())),
                         percentageSavings: Int(suggestion.savingsPercentage * 100),
                         onSwitch: {
                             onSwitchRoute?(suggestion.route)
