@@ -129,6 +129,34 @@ struct PrefLearnerMatchingTests {
         #expect(matched.isEmpty)
     }
 
+    @Test("An unsnapped gap is not attributed to any edge's distance")
+    func unsnappedGapNotAttributed() {
+        let g = pathGraph()
+        let n1 = g.nodes[Int(g.osmToIndex[1]!)].coordinate
+        let n2 = g.nodes[Int(g.osmToIndex[2]!)].coordinate
+        // First half of edge 1->2 (on-graph, consecutive).
+        let onEdge = densify(n1, n2, count: 4)
+        // A point ~1 km off-graph (beyond the 35 m snap radius) — the GPS dropped
+        // or wandered off the mapped network.
+        let far = CLLocationCoordinate2D(latitude: 34.01, longitude: -116.9995)
+        // Return to a point ~90% along edge 1->2 (unambiguously on that edge, not
+        // at the node where two edges meet).
+        let back = CLLocationCoordinate2D(
+            latitude: n1.latitude + 0.9 * (n2.latitude - n1.latitude),
+            longitude: n1.longitude + 0.9 * (n2.longitude - n1.longitude)
+        )
+        let trace = Array(onEdge.prefix(3)) + [far] + [back]
+        let matched = PrefLearner.matchedEdgeSequence(trace, graph: g, config: .default)
+        // Only edge 1->2 matched; the off-graph point is skipped entirely.
+        #expect(matched.count == 1)
+        let edge12 = matched[0]
+        // The credited distance must NOT include the ~1 km return leg across the
+        // gap — it should be at most the on-edge span actually walked (the edge is
+        // ~92 m). The old code attributed the far->n2 step (~1 km) to this edge.
+        let edgeLength = g.edges[Int(edge12.edge)].lengthMeters
+        #expect(edge12.meters <= edgeLength + 1)
+    }
+
     @Test("matchedPolyline is preferred over raw GPS when present")
     func prefersMatchedPolyline() {
         let g = pathGraph()

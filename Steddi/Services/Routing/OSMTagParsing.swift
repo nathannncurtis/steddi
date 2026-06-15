@@ -152,15 +152,34 @@ enum OSMTagParsing {
         let left: Bool
         let through: Bool
         let right: Bool
+        /// The lane permits a U-turn (`reverse`). A U-turn lane is NOT a left-turn
+        /// pocket — conflating the two wrongly signals a protected-left phase to
+        /// the cost model, so it carries its own flag.
+        var uTurn: Bool = false
         /// A lane that permits left and nothing else is a dedicated left pocket.
-        var isDedicatedLeft: Bool { left && !through && !right }
-        var isDedicatedRight: Bool { right && !through && !left }
+        /// A reverse/U-turn permission does not count — a `left;reverse` lane is a
+        /// shared left+U-turn pocket, but a `reverse`-only lane is not a left.
+        var isDedicatedLeft: Bool { left && !through && !right && !uTurn }
+        var isDedicatedRight: Bool { right && !through && !left && !uTurn }
     }
 
     /// Parse an OSM `turn:lanes` value (e.g. "left|through|through;right") into
     /// per-lane turn permissions, left-to-right. Returns an empty array for a
-    /// missing/empty tag. Unknown tokens (merge_to_left, slight_left, etc.) map
-    /// to their closest cardinal turn; "none"/"" is an unrestricted lane.
+    /// missing/empty tag. "none"/"" is an unrestricted (through) lane.
+    ///
+    /// Token mapping:
+    /// - `left`/`slight_left`/`sharp_left` → left; same for the right family.
+    /// - `through` → through.
+    /// - `reverse` → a U-turn lane (`uTurn`), NOT a left pocket. A `reverse`-only
+    ///   lane must not read as a dedicated left, or the cost model wrongly bills it
+    ///   a protected-left phase.
+    /// - `merge_to_left`/`merge_to_right` → through. These are NOT turns: the lane
+    ///   is ending and traffic must shift into the adjacent (left/right) lane while
+    ///   continuing straight. The `_to_left`/`_to_right` names the *adjacent lane to
+    ///   move into*, not a turn direction, so neither sets a turn flag. (The old
+    ///   code mapped them to a turn — and, because the substrings "left"/"right"
+    ///   also matched, set both flags at once — which was dead, contradictory
+    ///   disambiguation.)
     static func parseTurnLanes(_ raw: String?) -> [LaneTurns] {
         guard let raw = raw?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return [] }
         return raw.split(separator: "|", omittingEmptySubsequences: false).map { cell in
@@ -175,19 +194,22 @@ enum OSMTagParsing {
                 return LaneTurns(left: false, through: true, right: false)
             }
 
-            var left = false, through = false, right = false
+            var left = false, through = false, right = false, uTurn = false
             for token in tokens {
-                if token.contains("left") || token == "merge_to_right" || token == "reverse" {
-                    left = true
-                }
-                if token.contains("right") || token == "merge_to_left" {
-                    right = true
-                }
-                if token.contains("through") {
+                // Match the exact special tokens first so their substrings
+                // ("left"/"right") don't leak into the cardinal-turn checks below.
+                if token == "reverse" {
+                    uTurn = true
+                } else if token == "merge_to_left" || token == "merge_to_right" {
+                    // Lane ends; driver continues straight while changing lanes.
                     through = true
+                } else {
+                    if token.contains("left") { left = true }
+                    if token.contains("right") { right = true }
+                    if token.contains("through") { through = true }
                 }
             }
-            return LaneTurns(left: left, through: through, right: right)
+            return LaneTurns(left: left, through: through, right: right, uTurn: uTurn)
         }
     }
 

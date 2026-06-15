@@ -279,18 +279,29 @@ struct OSMTagParsingTurnLanesTests {
         #expect(lanes[1].right)
     }
 
-    @Test("reverse and merge tokens map to their nearest cardinal turn")
-    func reverseAndMerge() {
-        // A U-turn pocket: reverse maps to left (the cardinal direction a U-turn
-        // begins in for right-hand traffic).
+    @Test("reverse is a U-turn lane, not a dedicated left pocket")
+    func reverseIsUTurn() {
+        // `reverse` is a U-turn lane. It must NOT read as a dedicated left, or the
+        // cost model bills it a protected-left phase it doesn't have.
         let reverse = OSMTagParsing.parseTurnLanes("reverse")
-        #expect(reverse[0].left)
-        // merge_to_left means traffic moves rightward into the left lane.
+        #expect(reverse[0].uTurn)
+        #expect(!reverse[0].left)
+        #expect(!reverse[0].isDedicatedLeft)
+        // A shared left+U-turn pocket keeps left but is no longer "dedicated".
+        let leftReverse = OSMTagParsing.parseTurnLanes("left;reverse")
+        #expect(leftReverse[0].left && leftReverse[0].uTurn)
+        #expect(!leftReverse[0].isDedicatedLeft)
+    }
+
+    @Test("merge_to_left / merge_to_right are through lanes, not turns")
+    func mergeIsThrough() {
+        // A merge lane is ending; the driver continues straight while changing
+        // lanes. `_to_left`/`_to_right` names the adjacent lane to move into, not a
+        // turn — neither sets a turn flag.
         let mergeLeft = OSMTagParsing.parseTurnLanes("merge_to_left")
-        #expect(mergeLeft[0].right)
-        // merge_to_right moves leftward.
+        #expect(mergeLeft[0].through && !mergeLeft[0].left && !mergeLeft[0].right)
         let mergeRight = OSMTagParsing.parseTurnLanes("merge_to_right")
-        #expect(mergeRight[0].left)
+        #expect(mergeRight[0].through && !mergeRight[0].left && !mergeRight[0].right)
     }
 
     @Test("Trailing empty cell is preserved as an unrestricted lane")

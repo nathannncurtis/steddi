@@ -366,4 +366,110 @@ struct AStarSearchTests {
         )
         #expect(result == nil)
     }
+
+    // MARK: - Turn-aware optimality (edge-keyed state regression)
+
+    /// A cost where the turn penalty into one specific edge depends on which edge
+    /// you arrived on — the exact shape that breaks node-keyed A*. The cheaper
+    /// approach to the junction forces an expensive turn; the costlier approach
+    /// enables a free turn. Node-keyed search commits to the cheaper approach and
+    /// can never recover the cheaper downstream turn; edge-keyed search keeps both
+    /// approaches and finds the true optimum. Heuristic is 0 (trivially admissible).
+    private struct TurnTrapCost: SearchCost {
+        /// Per-edge traversal cost, keyed by (from, to) node index.
+        let edgeCosts: [EdgePair: Double]
+        /// The junction node M where the trap turn lives.
+        let junction: NodeIndex
+        /// The expensive approach edge (P -> M); turning M -> D off it costs a lot.
+        let expensiveApproach: EdgePair
+        /// The cheap approach edge (Q -> M); turning M -> D off it is free.
+        let cheapApproach: EdgePair
+        /// The trapped outgoing edge (M -> D).
+        let trappedOut: EdgePair
+        let trapPenalty: Double
+
+        struct EdgePair: Hashable { let from: NodeIndex; let to: NodeIndex }
+
+        func edgeCost(_ edge: GraphEdge, in graph: RoadGraph) -> Double {
+            edgeCosts[EdgePair(from: edge.from, to: edge.to)] ?? .infinity
+        }
+
+        func turnCost(from incoming: GraphEdge?, to outgoing: GraphEdge, at node: GraphNode, in graph: RoadGraph) -> Double {
+            guard let incoming else { return 0 }
+            let inPair = EdgePair(from: incoming.from, to: incoming.to)
+            let outPair = EdgePair(from: outgoing.from, to: outgoing.to)
+            // Only the trapped outgoing edge off the expensive approach is penalised.
+            if outPair == trappedOut && inPair == expensiveApproach { return trapPenalty }
+            return 0
+        }
+
+        func heuristic(from coordinate: CLLocationCoordinate2D, to target: CLLocationCoordinate2D, in graph: RoadGraph) -> Double {
+            0
+        }
+    }
+
+    /// Resolve a directed edge's index by its (fromOSM -> toOSM) node ids.
+    private func directedEdge(_ fromOSM: Int64, _ toOSM: Int64, in graph: RoadGraph) -> EdgeIndex? {
+        guard let from = graph.osmToIndex[fromOSM], let to = graph.osmToIndex[toOSM] else { return nil }
+        for e in graph.outEdgeRange(of: from) where graph.edges[Int(e)].to == to { return e }
+        return nil
+    }
+
+    @Test("edge-keyed A* beats the node-keyed turn trap: costlier approach wins for a cheaper turn")
+    func turnAwareOptimalityBeatsNodeKeyed() {
+        // S(1) reaches junction M(4) two ways:
+        //   cheap approach  S->P->M  (1 + 1 = 2)
+        //   costly approach S->Q->M  (1 + 3 = 4)
+        // From M the only way on is M->D(5)->G(6). Turning M->D off the CHEAP
+        // approach (P->M) costs +100; off the COSTLY approach (Q->M) it is free.
+        //   via P: 1 + 1 + 1 + 100 + 1 = 104
+        //   via Q: 1 + 3 + 1 +   0 + 1 = 6   (optimal)
+        // Node-keyed A* settles M via the cheaper P approach (g=2) and can only
+        // ever charge the +100 turn, yielding 104. Edge-keyed keeps both approach
+        // edges as distinct states and finds 6 through Q.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),       // S
+            node(2, 0.001, 0.0),     // P
+            node(3, -0.001, 0.0),    // Q
+            node(4, 0.0, 0.001),     // M (junction)
+            node(5, 0.0, 0.002),     // D
+            node(6, 0.0, 0.003),     // G
+            way(100, [1, 2], tags: ["highway": "residential"]),  // S-P
+            way(101, [1, 3], tags: ["highway": "residential"]),  // S-Q
+            way(102, [2, 4], tags: ["highway": "residential"]),  // P-M
+            way(103, [3, 4], tags: ["highway": "residential"]),  // Q-M
+            way(104, [4, 5], tags: ["highway": "residential"]),  // M-D
+            way(105, [5, 6], tags: ["highway": "residential"])   // D-G
+        )
+        let M = graph.osmToIndex[4]!
+        let cost = TurnTrapCost(
+            edgeCosts: [
+                .init(from: graph.osmToIndex[1]!, to: graph.osmToIndex[2]!): 1,  // S->P
+                .init(from: graph.osmToIndex[2]!, to: graph.osmToIndex[4]!): 1,  // P->M
+                .init(from: graph.osmToIndex[1]!, to: graph.osmToIndex[3]!): 1,  // S->Q
+                .init(from: graph.osmToIndex[3]!, to: graph.osmToIndex[4]!): 3,  // Q->M
+                .init(from: graph.osmToIndex[4]!, to: graph.osmToIndex[5]!): 1,  // M->D
+                .init(from: graph.osmToIndex[5]!, to: graph.osmToIndex[6]!): 1,  // D->G
+            ],
+            junction: M,
+            expensiveApproach: .init(from: graph.osmToIndex[2]!, to: M),  // P->M
+            cheapApproach: .init(from: graph.osmToIndex[3]!, to: M),      // Q->M
+            trappedOut: .init(from: M, to: graph.osmToIndex[5]!),         // M->D
+            trapPenalty: 100
+        )
+
+        let s = NodeIndex(graph.osmToIndex[1]!)
+        let g = NodeIndex(graph.osmToIndex[6]!)
+        guard let result = search.search(from: .node(s), to: .node(g), in: graph, cost: cost) else {
+            Issue.record("no path S->G"); return
+        }
+        // The true optimum is 6 via Q. The old node-keyed search returns 104.
+        #expect(abs(result.totalCost - 6) < 1e-9,
+                "expected turn-aware optimum 6 via Q, got \(result.totalCost)")
+        // The route must pass through Q (node 3), not P (node 2).
+        let qEdge = directedEdge(3, 4, in: graph)!
+        let pEdge = directedEdge(2, 4, in: graph)!
+        #expect(result.edgePath.contains(qEdge), "route should approach M via Q")
+        #expect(!result.edgePath.contains(pEdge), "route should NOT approach M via the trapped P")
+    }
 }
