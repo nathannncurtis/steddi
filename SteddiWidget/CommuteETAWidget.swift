@@ -26,9 +26,24 @@ struct CommuteETAEntry: TimelineEntry {
     let etaUpdatedAt: Date?
 
     /// The ETA is considered stale (worth labeling as last-known) when it isn't
-    /// live and was computed outside the freshness window.
+    /// a live navigation value and isn't a verifiably-fresh idle value.
+    ///
+    /// Robustness note (coordinates with NavigationStateManager.clearWidgetSession,
+    /// owned elsewhere): when a drive ends, the last live write left a ~near-arrival
+    /// ETA (e.g. 1–2 min) with a *recent* timestamp and `isNavigating` flips to
+    /// false — that terminal value must NOT be presented as the upcoming-commute
+    /// ETA. The writer side clears/recomputes the idle ETA on nav end; the widget
+    /// must stay correct regardless of exactly how it does so. So:
+    /// - While navigating: never stale (the live ETA is authoritative).
+    /// - Not navigating with no timestamp: treat as stale — we can't prove the
+    ///   value is a fresh pre-drive computation, so label it rather than imply it
+    ///   is a live current ETA.
+    /// - Not navigating with a timestamp: stale once outside the freshness window.
+    /// A cleared ETA (see `etaMinutes`) renders as "No ETA yet" and never reaches
+    /// the stale path.
     var isStale: Bool {
-        guard !isNavigating, let updated = etaUpdatedAt else { return false }
+        if isNavigating { return false }
+        guard let updated = etaUpdatedAt else { return true }
         return date.timeIntervalSince(updated) > etaFreshnessWindow
     }
 }
@@ -65,7 +80,9 @@ struct CommuteETAProvider: TimelineProvider {
         return CommuteETAEntry(
             date: .now,
             commuteName: name,
-            etaMinutes: eta == 0 ? nil : eta,
+            // 0 is the cleared/idle sentinel (e.g. clearWidgetSession on nav end);
+            // any non-positive value means "no ETA to show" rather than a real one.
+            etaMinutes: eta > 0 ? eta : nil,
             destinationName: dest,
             isNavigating: isNav,
             etaUpdatedAt: updatedRaw > 0 ? Date(timeIntervalSince1970: updatedRaw) : nil
