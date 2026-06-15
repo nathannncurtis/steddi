@@ -791,6 +791,12 @@ struct SteddiNavOverlay: View {
                     Text("\(Int(engine.currentSpeedMph))")
                         .font(SteddiTheme.mono(22 * scale))
                         .foregroundStyle(speedTextColor)
+                        // The font scales with OS Dynamic Type but the housing is
+                        // fixed (64*iconScale), so shrink-to-fit rather than clip:
+                        // a 3-digit speed at the accessibility ceiling must stay
+                        // inside the circle (safety readout — never spill/clip).
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
 
                     Text("mph")
                         // Floor the unit caption so it stays legible: at the
@@ -814,6 +820,10 @@ struct SteddiNavOverlay: View {
                     .foregroundStyle(overLimit > 0 ? SteddiTheme.warmRedText
                                      : engine.speedLimitIsEstimated ? SteddiTheme.textMuted(highContrast: highContrast)
                                      : SteddiTheme.textPrimary)
+                    // Same fixed badge circle (22*scale) vs Dynamic-Type-scaled
+                    // font: shrink a 3-digit limit to fit instead of clipping.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                     .frame(width: 22 * scale, height: 22 * scale)
                     .background(
                         Circle()
