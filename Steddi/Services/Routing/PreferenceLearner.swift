@@ -186,12 +186,23 @@ enum PrefLearner {
         var segments: [MatchedSegment] = []
         var current: EdgeIndex?
         var accumulated: Double = 0
+        // Index of the most recent point that successfully snapped. A step's
+        // distance may be attributed to an edge ONLY when it connects two
+        // CONSECUTIVELY-snapped points (no unsnapped/skipped point between them);
+        // otherwise we'd credit an edge for ground the driver covered off-graph.
+        var lastSnappedIndex: Int?
 
         for i in 0..<trace.count {
             guard let snap = graph.snap(trace[i], maxDistanceMeters: config.snapMaxDistanceMeters) else {
-                continue
+                continue   // unsnapped point: breaks the consecutive-snap chain
             }
-            let step = i > 0 ? RouteGeometry.haversineDistance(from: trace[i - 1], to: trace[i]) : 0
+            // Step distance counts only when the previous trace point also snapped
+            // and is immediately adjacent (i - 1). A gap (skip) contributes 0.
+            let step = (lastSnappedIndex == i - 1)
+                ? RouteGeometry.haversineDistance(from: trace[i - 1], to: trace[i])
+                : 0
+            lastSnappedIndex = i
+
             if let cur = current, cur == snap.edge {
                 accumulated += step
             } else {
