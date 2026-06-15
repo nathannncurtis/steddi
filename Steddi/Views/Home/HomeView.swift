@@ -900,7 +900,11 @@ struct HomeView: View {
                         } label: {
                             Text(tab.rawValue)
                                 .font(SteddiTheme.heading(14))
-                                .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textMuted)
+                                // Active label rides on the accent-glass pill, so it
+                                // needs an on-accent foreground (not the accent itself,
+                                // which washes out against the tinted pill). Inactive
+                                // labels stay muted on the neutral glass bar.
+                                .foregroundStyle(sheetTab == tab ? SteddiTheme.textPrimary : SteddiTheme.textMuted)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
                                 .background {
