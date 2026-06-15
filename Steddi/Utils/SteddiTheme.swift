@@ -297,7 +297,7 @@ enum ThemeMode: String, CaseIterable {
     /// Uses UTC time + longitude to derive local solar time — independent of device timezone.
     static func sunIsUp(at coordinate: CLLocationCoordinate2D, date: Date) -> Bool {
         var utcCal = Calendar(identifier: .gregorian)
-        utcCal.timeZone = TimeZone(identifier: "UTC")!
+        utcCal.timeZone = TimeZone(identifier: "UTC") ?? TimeZone(secondsFromGMT: 0) ?? .gmt
 
         let dayOfYear = Double(utcCal.ordinality(of: .day, in: .year, for: date) ?? 1)
         let lat = coordinate.latitude
