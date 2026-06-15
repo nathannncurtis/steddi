@@ -294,6 +294,22 @@ struct HomeView: View {
             // (cold launch from Siri / CarPlay / a notification deep link).
             consumePendingCommuteStart()
         }
+        .onDisappear {
+            // The whole HomeView subtree is being torn down. The happy paths
+            // (End / pause-between-legs) already call stopNavigation()+
+            // stopObserving(), so by here the engine is usually detached. But a
+            // forced subtree rebuild (e.g. SteddiRootView bumps its .id when
+            // Reduce Transparency toggles) discards this struct's @State box
+            // WITHOUT ending navigation, leaving the singleton's activeEngine
+            // alive with onOffRoute still capturing this dead view (engine →
+            // closure → @State box → engine) AND the manually-created
+            // locationFeedTask still spinning a zombie engine. Sever the closure
+            // on the orphaned engine and cancel the feed so neither leaks.
+            // HomeView re-wires onOffRoute when it starts the next session.
+            navStateManager.activeEngine?.onOffRoute = nil
+            locationFeedTask?.cancel()
+            locationFeedTask = nil
+        }
         .task {
             // TEST FLAG: set to true to jump straight into turn-by-turn on launch
             let testTBT = false
