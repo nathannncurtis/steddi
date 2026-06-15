@@ -422,8 +422,22 @@ final class NavigationEngine {
 
         updateHeading(location: location, projection: projection, speedMPS: speedMPS)
         updateSpeedLimit(location: location)
-        checkRoadConditionProximity()
-        checkSpeedCameraProximity()
+
+        // Direction/position-sensitive proximity alerts probe the snapped
+        // position. While off-route (deviation latched, or this fix is beyond the
+        // off-route corridor) that snapped point is the projection of an
+        // off-corridor fix onto a route the driver has left — meaningless for
+        // "is this feature ahead of me." Skip the checks and drop the banner so a
+        // stale snapped point can't chime for a camera/condition the driver is no
+        // longer near. They resume once the driver is back on the corridor.
+        let offCorridor = isRecoveringOffRoute
+            || (projection.map { $0.perpendicularDistance > offRouteDistance } ?? false)
+        if offCorridor {
+            approachingCamera = nil
+        } else {
+            checkRoadConditionProximity()
+            checkSpeedCameraProximity()
+        }
 
         // Decaying (EWMA) speed estimate: weight recent moving fixes so the ETA
         // tracks current conditions instead of a frozen whole-drive mean. The
