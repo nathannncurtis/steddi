@@ -178,17 +178,32 @@ enum StepSynthesizer {
 
     // MARK: - Helpers
 
-    /// The travel length of an edge in meters, charging only the partial fraction
+    /// The travel length of an edge in meters, charging only the partial portion
     /// for the leading/trailing edges of a mid-edge start/end.
+    ///
+    /// For partial (trimmed) edges the length is measured from the SAME trimmed
+    /// geometry that `stitchedPolyline` produces — a haversine walk over the
+    /// trimmed coords — rather than `lengthMeters * fraction`. That keeps the
+    /// reported step distance consistent with the polyline actually drawn and
+    /// driven (the interpolated cut point sits slightly off the great circle, so
+    /// the linear `full * fraction` estimate drifts from the displayed geometry).
     private static func edgeLength(_ edgeIndex: EdgeIndex, result: SearchResult, in graph: RoadGraph) -> Double {
         let full = Double(graph.edges[Int(edgeIndex)].lengthMeters)
-        if edgeIndex == result.edgePath.first && result.startFraction > 0 {
-            return full * (1 - result.startFraction)
+        let isFirst = edgeIndex == result.edgePath.first && result.startFraction > 0
+        let isLast = edgeIndex == result.edgePath.last && result.endFraction < 1
+        guard isFirst || isLast else { return full }
+
+        var coords = Array(graph.geometry(of: edgeIndex))
+        guard coords.count >= 2 else {
+            // No geometry to measure — fall back to the linear estimate.
+            var len = full
+            if isFirst { len *= (1 - result.startFraction) }
+            if isLast { len *= result.endFraction }
+            return len
         }
-        if edgeIndex == result.edgePath.last && result.endFraction < 1 {
-            return full * result.endFraction
-        }
-        return full
+        if isFirst { coords = trimLeading(coords, fraction: result.startFraction) ?? coords }
+        if isLast { coords = trimTrailing(coords, fraction: result.endFraction) ?? coords }
+        return RouteGeometry.cumulativeDistances(coords).last ?? full
     }
 
     private static func withDistance(_ step: NavStep, _ distance: Double) -> NavStep {
