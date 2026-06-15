@@ -106,6 +106,13 @@ struct SettingsView: View {
                                                 .frame(width: 44, height: 44)
                                         }
                                     }
+                                    // Keep the 36pt visual swatch, but pad the
+                                    // label out to a >=44x44 hit region and make
+                                    // the whole region tappable (Apple's minimum
+                                    // tap target). contentShape ensures the empty
+                                    // padding still receives the tap.
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(option.displayName)

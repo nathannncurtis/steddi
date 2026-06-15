@@ -221,7 +221,12 @@ struct OnboardingView: View {
             if coordinator.currentBeat.allowsSkip && !coordinator.currentBeat.autoAdvances {
                 Button("Skip setup") { skip() }
                     .font(.subheadline)
-                    .foregroundStyle(coordinator.currentBeat == .hero ? .white.opacity(0.85) : SteddiTheme.textSecondary)
+                    // The onboarding hero/card backdrop is a fixed dark cinematic
+                    // surface, not theme-colored — so the skip must stay light in
+                    // every resolved theme. A theme `textSecondary` would resolve
+                    // dark in Light and fail AA on the dark backdrop. Match the
+                    // hero copy's near-white (mirrors `skipIntroButton`).
+                    .foregroundStyle(.white.opacity(0.85))
                     .disabled(coordinator.isTransitioning)
                     .accessibilityHint("Skips the rest of setup and goes to the app")
             }
