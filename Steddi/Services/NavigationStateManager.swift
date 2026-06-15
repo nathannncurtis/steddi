@@ -128,8 +128,12 @@ final class NavigationStateManager {
                           engine.isNavigating,
                           let currentCoord = engine.currentCoordinate else { continue }
 
-                    // Use the engine's ETA (in seconds) — etaMinutes * 60 as approximation
-                    let remainingETA = Double(engine.etaMinutes) * 60.0
+                    // Use the engine's precise ETA in seconds. etaMinutes is
+                    // ceiled to the nearest minute with a 1-minute floor, which
+                    // both loses sub-minute precision and inflates short
+                    // segments — feeding that into RerouteEngine.evaluate would
+                    // suppress legitimate savings on short remaining legs.
+                    let remainingETA = engine.etaSeconds
                     self.currentRemainingETA = remainingETA
 
                     let fallbacks = commute.orderedRoutes(for: direction).filter { $0.rank > 0 }
