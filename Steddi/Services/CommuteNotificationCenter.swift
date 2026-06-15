@@ -4,12 +4,6 @@ import os
 
 private let notifLog = Logger(subsystem: "to.nathancurtis.steddi", category: "CommuteNotificationCenter")
 
-extension Notification.Name {
-    /// Posted when the user taps "Start Commute" on a commute alert. userInfo
-    /// carries the steddi:// deep link so existing handlers can route it.
-    static let steddiStartCommuteFromNotification = Notification.Name("steddiStartCommuteFromNotification")
-}
-
 /// Thin wrapper over `UNUserNotificationCenter` for the smart-commute alerts.
 /// Owns: the COMMUTE_ALERT category + actions, per-commute notification IDs,
 /// dedupe against pending requests, cooldown timestamp bookkeeping, and the

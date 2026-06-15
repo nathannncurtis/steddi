@@ -92,10 +92,76 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        if response.notification.request.identifier == ArrivalNotificationService.notificationIdentifier {
+        let request = response.notification.request
+
+        // SAVE_ROUTE — post-arrival "save this route?" prompt.
+        if request.identifier == ArrivalNotificationService.notificationIdentifier {
             if response.actionIdentifier == "SAVE" || response.actionIdentifier == UNNotificationDefaultActionIdentifier {
                 NotificationCenter.default.post(name: .steddiSaveRouteFromNotification, object: nil)
             }
+            return
         }
+
+        // COMMUTE_ALERT — smart-commute departure alert.
+        if request.identifier.hasPrefix(CommuteNotificationCenter.identifierPrefix) {
+            await handleCommuteAlert(response: response)
+        }
+    }
+
+    /// Route a COMMUTE_ALERT response: "Start Commute" (or tapping the body)
+    /// kicks off navigation via the shared start mechanism; "Remind Me Later"
+    /// reschedules the same alert; "Dismiss" does nothing.
+    private func handleCommuteAlert(response: UNNotificationResponse) async {
+        let content = response.notification.request.content
+        let info = content.userInfo
+
+        switch response.actionIdentifier {
+        case CommuteNotificationCenter.startActionIdentifier,
+             UNNotificationDefaultActionIdentifier:
+            await startCommute(from: info)
+
+        case CommuteNotificationCenter.snoozeActionIdentifier:
+            await rescheduleCommuteAlert(content: content, info: info)
+
+        default:
+            // DISMISS / dismiss-from-banner — nothing to do.
+            break
+        }
+    }
+
+    /// Hand off to the durable start store so the request survives a cold launch
+    /// (the .foreground action may relaunch the app before HomeView attaches).
+    private func startCommute(from info: [AnyHashable: Any]) async {
+        guard let commuteIdStr = info["commuteId"] as? String,
+              let commuteId = UUID(uuidString: commuteIdStr) else { return }
+        let direction = (info["direction"] as? String).flatMap(CommuteDirection.init(rawValue:))
+        await MainActor.run {
+            PendingCommuteStartStore.shared.request(
+                .specific(commuteId: commuteId, direction: direction)
+            )
+        }
+    }
+
+    /// Re-arm the commute alert ~15 minutes out, preserving its content and
+    /// deep link. Cancels the spent request first so the stable per-commute id
+    /// can be reused (and so the dedupe check sees a clear slot).
+    private func rescheduleCommuteAlert(content: UNNotificationContent, info: [AnyHashable: Any]) async {
+        guard let commuteIdStr = info["commuteId"] as? String,
+              let commuteId = UUID(uuidString: commuteIdStr),
+              let directionStr = info["direction"] as? String,
+              let direction = CommuteDirection(rawValue: directionStr),
+              let deepLinkStr = info["deepLink"] as? String,
+              let deepLink = URL(string: deepLinkStr) else { return }
+
+        let center = CommuteNotificationCenter.shared
+        center.cancelAlert(commuteId: commuteId, direction: direction)
+        await center.scheduleAlert(
+            commuteId: commuteId,
+            direction: direction,
+            title: content.title,
+            body: content.body,
+            deepLink: deepLink,
+            fireAfter: CommuteNotificationCenter.snoozeSeconds
+        )
     }
 }
