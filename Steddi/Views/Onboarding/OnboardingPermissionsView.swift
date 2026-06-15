@@ -40,11 +40,14 @@ struct OnboardingPermissionsView: View {
                 Text("Which way are you heading?")
                     .font(.title2.weight(.bold))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(SteddiTheme.textPrimary)
+                    // Fixed light-on-dark: this card floats on the dark
+                    // cinematic backdrop in every theme (theme tokens go
+                    // near-black in Light and vanish here).
+                    .foregroundStyle(SteddiTheme.onboardingTextPrimary)
 
                 Text("Steddi tracks the route you actually take, not a guess. Your location stays on your device.")
                     .font(.body)
-                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -65,7 +68,7 @@ struct OnboardingPermissionsView: View {
                     onNotNow()
                 }
                 .font(.subheadline)
-                .foregroundStyle(SteddiTheme.textSecondary)
+                .foregroundStyle(SteddiTheme.onboardingTextSecondary)
             }
         }
         .padding(28)
