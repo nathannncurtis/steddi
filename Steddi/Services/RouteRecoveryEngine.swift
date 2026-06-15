@@ -98,8 +98,9 @@ enum RouteRecoveryEngine {
     // MARK: - Rejoin Candidates
 
     /// Up to 4 candidates, all strictly FORWARD of the deviation point —
-    /// U-turns can't be the default because nothing behind the driver is
-    /// ever offered. The destination is always the final fallback candidate.
+    /// except the destination, which is always the final fallback candidate
+    /// regardless of forward position. U-turns can't be the default because
+    /// nothing behind the driver is ever offered.
     static func rejoinCandidates(
         event: OffRouteEvent,
         legs: [MacroLeg],
@@ -147,9 +148,14 @@ enum RouteRecoveryEngine {
         }
 
         // Forward-only invariant, dedupe near-identical along positions, cap 4.
+        // Non-destination candidates must also stay strictly BEFORE the
+        // destination: on a short route a candidate at/past totalDistance (from
+        // bad upstream data) can slip through the nearEnd scoring filter and
+        // become artificially attractive. The destination is exempt — it's the
+        // give-up fallback and sits at totalDistance by definition.
         var seen: [Double] = []
         return candidates
-            .filter { $0.alongDistance >= floorAlong || $0.kind == .destination }
+            .filter { $0.kind == .destination || ($0.alongDistance >= floorAlong && $0.alongDistance < totalDistance) }
             .filter { candidate in
                 if seen.contains(where: { abs($0 - candidate.alongDistance) < 100 }) { return false }
                 seen.append(candidate.alongDistance)
