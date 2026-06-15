@@ -247,6 +247,81 @@ struct ServicePassTests {
     }
 }
 
+// MARK: - Idle Pre-Drive Widget: next-commute selection
+
+/// The idle widget shows ONE commute, so the pre-drive ETA must come from the
+/// commute whose departure window comes soonest. These exercise that selection
+/// (the new logic) directly, without racing on the shared App Group widget
+/// defaults that the parallel widget-sync suite also mutates.
+@Suite("CommuteNotificationService next-departure selection")
+struct ServiceNextDepartureTests {
+
+    private func service(_ container: ModelContainer) -> CommuteNotificationService {
+        CommuteNotificationService(modelContainer: container, defaults: freshDefaults())
+    }
+
+    @Test("Picks the commute whose scheduled departure is soonest")
+    func picksEarliestDeparture() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+
+        // Querying at Monday 06:00. Morning departs at 7 (sooner); evening at 17.
+        let morning = Commute(name: "Morning")
+        morning.isActive = true
+        morning.scheduleToDestStartHour = 7
+        let evening = Commute(name: "Evening")
+        evening.isActive = true
+        evening.scheduleToOriginStartHour = 17
+        context.insert(morning)
+        context.insert(evening)
+        try context.save()
+
+        let commutes = try context.fetch(FetchDescriptor<Commute>())
+        let trips = try context.fetch(FetchDescriptor<CommuteTrip>())
+        let id = service(container).nextDepartureCommuteID(commutes: commutes, trips: trips, now: try at(hour: 6))
+        #expect(id == morning.id)
+    }
+
+    @Test("Skips commutes with notifications disabled")
+    func skipsNotificationsDisabled() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+
+        // The sooner window belongs to a commute with notifications off, so the
+        // later-but-eligible commute must be chosen.
+        let off = Commute(name: "Off")
+        off.isActive = true
+        off.notificationsEnabled = false
+        off.scheduleToDestStartHour = 7
+        let on = Commute(name: "On")
+        on.isActive = true
+        on.scheduleToDestStartHour = 9
+        context.insert(off)
+        context.insert(on)
+        try context.save()
+
+        let commutes = try context.fetch(FetchDescriptor<Commute>())
+        let trips = try context.fetch(FetchDescriptor<CommuteTrip>())
+        let id = service(container).nextDepartureCommuteID(commutes: commutes, trips: trips, now: try at(hour: 6))
+        #expect(id == on.id)
+    }
+
+    @Test("Returns nil when no commute has an upcoming departure")
+    func nilWhenNoSchedule() throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+        let commute = Commute(name: "Unscheduled")
+        commute.isActive = true
+        context.insert(commute)
+        try context.save()
+
+        let commutes = try context.fetch(FetchDescriptor<Commute>())
+        let trips = try context.fetch(FetchDescriptor<CommuteTrip>())
+        let id = service(container).nextDepartureCommuteID(commutes: commutes, trips: trips, now: try at(hour: 6))
+        #expect(id == nil)
+    }
+}
+
 // MARK: - CommuteTrip Cascade Delete
 
 @Suite("Commute cascade-deletes its trips")
