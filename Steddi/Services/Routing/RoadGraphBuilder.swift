@@ -135,7 +135,7 @@ enum RoadGraphBuilder {
             let from: NodeIndex
             let to: NodeIndex
             let coords: [CLLocationCoordinate2D]
-            let lengthMeters: Float
+            let lengthMeters: Double
             let freeFlowSpeedMPS: Float
             let osmWayID: OSMNodeID
             let roadClass: RoadClass
@@ -183,7 +183,7 @@ enum RoadGraphBuilder {
                        let toIdx = acc.nodeIndex,
                        segmentCoords.count >= 2,
                        fromIdx != toIdx {
-                        let length = Float(polylineLength(segmentCoords))
+                        let length = polylineLength(segmentCoords)
                         if direction.allowsForward {
                             pending.append(PendingEdge(
                                 from: fromIdx, to: toIdx, coords: segmentCoords,

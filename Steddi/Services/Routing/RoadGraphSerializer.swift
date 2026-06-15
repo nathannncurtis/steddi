@@ -11,7 +11,8 @@ enum RoadGraphSerializer {
 
     /// Bump when the on-disk layout changes; an older/newer byte makes
     /// `deserialize` return nil so the loader re-fetches rather than misreads.
-    static let formatVersion: UInt8 = 2
+    /// v3: `lengthMeters` widened from `Float` (4 bytes) to `Double` (8 bytes).
+    static let formatVersion: UInt8 = 3
 
     /// 4-byte magic ("SRG1") so a truncated/foreign file is rejected fast.
     private static let magic: [UInt8] = [0x53, 0x52, 0x47, 0x31]
@@ -80,7 +81,7 @@ enum RoadGraphSerializer {
             writer.writeI32(edge.to)
             writer.writeI32(edge.geometryRange.lowerBound)
             writer.writeI32(edge.geometryRange.upperBound)
-            writer.writeF32(edge.lengthMeters)
+            writer.writeF64(edge.lengthMeters)
             writer.writeF32(edge.freeFlowSpeedMPS)
             writer.writeI64(edge.osmWayID)
             writer.writeU8(edge.roadClass.rawValue)
@@ -158,7 +159,7 @@ enum RoadGraphSerializer {
                   let to = reader.readI32(),
                   let lower = reader.readI32(),
                   let upper = reader.readI32(),
-                  let length = reader.readF32(),
+                  let length = reader.readF64(),
                   let speed = reader.readF32(),
                   let wayID = reader.readI64(),
                   let classRaw = reader.readU8(),
@@ -241,6 +242,11 @@ private struct ByteWriter {
 
     mutating func writeF32(_ v: Float) { writeU32(v.bitPattern) }
 
+    mutating func writeF64(_ v: Double) {
+        let u = v.bitPattern
+        for shift in stride(from: 0, to: 64, by: 8) { data.append(UInt8((u >> shift) & 0xff)) }
+    }
+
     /// Zig-zag + LEB128 varint for a signed delta.
     mutating func writeVarintSigned(_ v: Int64) {
         var zig = UInt64(bitPattern: (v << 1) ^ (v >> 63))
@@ -307,6 +313,15 @@ private struct ByteReader {
     }
 
     mutating func readF32() -> Float? { readU32().map { Float(bitPattern: $0) } }
+
+    mutating func readF64() -> Double? {
+        var u: UInt64 = 0
+        for shift in stride(from: 0, to: 64, by: 8) {
+            guard let b = next() else { return nil }
+            u |= UInt64(b) << shift
+        }
+        return Double(bitPattern: u)
+    }
 
     mutating func readVarintSigned() -> Int64? {
         var result: UInt64 = 0

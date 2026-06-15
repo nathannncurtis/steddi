@@ -84,6 +84,18 @@ struct RoadGraphSerializerTests {
         }
     }
 
+    @Test("Round-trip preserves lengthMeters at full Double precision")
+    func roundTripLengthMetersDoublePrecision() throws {
+        let graph = buildSampleGraph()
+        let restored = try #require(RoadGraphSerializer.deserialize(RoadGraphSerializer.serialize(graph)))
+        // lengthMeters is serialized as F64 now; the value survives bit-exact,
+        // including the sub-meter precision a Float field/serialization would have
+        // truncated (the truncation is what let snap fractions overflow past 1.0).
+        for (original, copy) in zip(graph.edges, restored.edges) {
+            #expect(original.lengthMeters == copy.lengthMeters)
+        }
+    }
+
     @Test("Round-trip preserves geometry coordinates within precision-6")
     func roundTripGeometry() throws {
         let graph = buildSampleGraph()

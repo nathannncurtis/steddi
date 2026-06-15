@@ -82,7 +82,11 @@ struct GraphEdge: Sendable, Equatable {
     /// The slice includes both endpoint coordinates, so a straight edge is 2
     /// coords and `geometryRange.count >= 2` always holds.
     let geometryRange: Range<Int32>
-    let lengthMeters: Float
+    /// Edge arc length in meters. `Double` end-to-end: snapping accumulates
+    /// full-precision haversine segment lengths and divides by this total, so a
+    /// `Float`-truncated length could read slightly short and push the projected
+    /// fraction past 1.0 (silently clamped), corrupting partial-edge cost scaling.
+    let lengthMeters: Double
     /// Free-flow speed in m/s from `maxspeed`, or the highway-class default.
     let freeFlowSpeedMPS: Float
     /// Source OSM way id — stable identity for learning (§5.4) and diagnostics.
@@ -231,7 +235,7 @@ struct RoadGraph: Sendable {
                 if strictlyCloser || tiedButLowerIndex {
                     let segLen = RouteGeometry.haversineDistance(from: a, to: b)
                     let along = cumulative + segLen * t
-                    let total = Double(edges[Int(edgeIndex)].lengthMeters)
+                    let total = edges[Int(edgeIndex)].lengthMeters
                     let fraction = total > 0 ? min(1, max(0, along / total)) : 0
                     best = GraphSnap(edge: edgeIndex, fraction: fraction, snapped: snapped, distanceMeters: perp)
                 }
