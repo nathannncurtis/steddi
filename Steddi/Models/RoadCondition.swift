@@ -141,6 +141,33 @@ enum RoadConditionKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// Fill to use for a SELECTED chip whose label/glyph sits ON the fill. Mirrors
+    /// `color` except the accent kinds use the raw brand hue (`accentBrand`) so the
+    /// paired on-fill foreground (`selectedChipForeground`) clears AA — the text-
+    /// safe `accent` fill + onAccent collapses to ~3:1 in light.
+    var selectedChipFill: Color {
+        switch self {
+        case .pothole:      return SteddiTheme.warmRed
+        case .construction: return SteddiTheme.warningAmber
+        case .roughSurface: return SteddiTheme.accentBrand
+        case .debris:       return SteddiTheme.warningAmber
+        case .other:        return SteddiTheme.accentBrand
+        }
+    }
+
+    /// AA-correct foreground for a label/glyph drawn ON `selectedChipFill`. Never
+    /// hardcoded white — white-on-amber is 2.05:1 and white-on-warmRed 3.78:1, both
+    /// failing WCAG AA in every theme. Picks the legible near-black/white per fill.
+    var selectedChipForeground: Color {
+        switch self {
+        case .pothole:      return SteddiTheme.contrastingForeground(on: SteddiTheme.warmRedRGB)
+        case .construction: return SteddiTheme.contrastingForeground(on: SteddiTheme.warningAmberRGB)
+        case .debris:       return SteddiTheme.contrastingForeground(on: SteddiTheme.warningAmberRGB)
+        case .roughSurface: return SteddiTheme.onAccent
+        case .other:        return SteddiTheme.onAccent
+        }
+    }
+
     /// Voice phrasing for the proximity heads-up, e.g. "Pothole ahead".
     var spokenName: String {
         switch self {

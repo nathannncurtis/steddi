@@ -262,9 +262,11 @@ struct PostArrivalSheet: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .padding(.horizontal, 6)
-            .foregroundStyle(isSelected ? .white : SteddiTheme.textSecondary)
+            // On-fill label: the AA-correct foreground for the selected fill (never
+            // hardcoded white — white-on-amber 2.05:1 / white-on-warmRed 3.78:1).
+            .foregroundStyle(isSelected ? kind.selectedChipForeground : SteddiTheme.textSecondary)
             .background(
-                isSelected ? kind.color : SteddiTheme.surfaceSecondary,
+                isSelected ? kind.selectedChipFill : SteddiTheme.surfaceSecondary,
                 in: RoundedRectangle(cornerRadius: 10)
             )
         }
