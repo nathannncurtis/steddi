@@ -5,8 +5,20 @@ struct CommuteListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Commute.createdAt, order: .reverse) private var commutes: [Commute]
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx = ThemeModeEx.dynamic.rawValue
 
     @State private var showNewCommute = false
+
+    /// Pin system chrome (List background, NewCommuteSheet Form, keyboards,
+    /// pickers) to the active Steddi theme. This sheet is presented from
+    /// HomeView, which does not re-pin across the .sheet boundary, so without
+    /// this the Form can render in the device appearance while the rest of the
+    /// app tracks the Steddi theme — a visible light-form-on-dark-app seam (and
+    /// near-white accent text on a light grouped background in Grey mode).
+    /// Mirrors SettingsView.resolvedColorScheme.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
@@ -43,6 +55,7 @@ struct CommuteListView: View {
         .sheet(isPresented: $showNewCommute) {
             NewCommuteSheet()
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     private func commuteRow(_ commute: Commute) -> some View {
@@ -85,12 +98,20 @@ struct CommuteListView: View {
 private struct NewCommuteSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx = ThemeModeEx.dynamic.rawValue
 
     @State private var name = ""
     @State private var origin: PinnedLocation?
     @State private var destination: PinnedLocation?
     @State private var showOriginPicker = false
     @State private var showDestinationPicker = false
+
+    /// A presented sheet gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin it here too — the
+    /// Form, keyboard, and pickers must track the active Steddi theme.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     var body: some View {
         NavigationStack {
@@ -169,6 +190,7 @@ private struct NewCommuteSheet: View {
                 }
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     private func createCommute() {
