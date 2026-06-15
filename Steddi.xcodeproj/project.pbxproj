@@ -13,7 +13,6 @@
 		0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04087916791CAF8B1AFD67AA /* TripProgression.swift */; };
 		060FD9747D8AFA4FD3A8E008 /* PlaceCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B14495FE74113349D84A50 /* PlaceCategory.swift */; };
 		06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */; };
-		FE01FA11BACC0DE000000001 /* PersistedEnumFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE01FA11BACC0DE000000002 /* PersistedEnumFallbackTests.swift */; };
 		0786561020231240135F9738 /* TripPlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD8704B61414025699515828 /* TripPlannerView.swift */; };
 		080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */; };
 		08796FC9A55896C0A9E97422 /* AStarSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC0E15BFE14314BA0D75D10 /* AStarSearchTests.swift */; };
@@ -75,6 +74,7 @@
 		57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */; };
 		5822FFAEECCEC7E5E31C3D1C /* NavPoseInterpolator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */; };
 		588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EB5BD45FD5C3961CFC647C /* PhoneCompanionView.swift */; };
+		58B6CA47C48CD5134BB34AD0 /* PersistedEnumFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D8DB6F60416DA34EB0E0951 /* PersistedEnumFallbackTests.swift */; };
 		59451CAF3B36B885AB85F921 /* ZoneBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E319751B2B97D0465371DA38 /* ZoneBadgeView.swift */; };
 		5950C1B577E6BD5476A0FBB9 /* NowPlayingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38C089A52E68514BB12E0C0 /* NowPlayingServiceTests.swift */; };
 		5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADE05CCCE2E6BA708ED405BF /* TrendInsightCard.swift */; };
@@ -292,7 +292,6 @@
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
 		2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiWidgetBundle.swift; sourceTree = "<group>"; };
 		2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsServiceTests.swift; sourceTree = "<group>"; };
-		FE01FA11BACC0DE000000002 /* PersistedEnumFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedEnumFallbackTests.swift; sourceTree = "<group>"; };
 		2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngineTests.swift; sourceTree = "<group>"; };
 		2BCA75D43D11EA6F5D4123D8 /* CameraReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraReport.swift; sourceTree = "<group>"; };
 		2DA34462C207C379281EC748 /* IconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPickerView.swift; sourceTree = "<group>"; };
@@ -364,6 +363,7 @@
 		7A1E3F76EA952209C1DEEC3C /* BinaryHeap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryHeap.swift; sourceTree = "<group>"; };
 		7B9A55B8249D3C15F639FD40 /* NavigationAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationAttributes.swift; sourceTree = "<group>"; };
 		7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedHapticsView.swift; sourceTree = "<group>"; };
+		7D8DB6F60416DA34EB0E0951 /* PersistedEnumFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedEnumFallbackTests.swift; sourceTree = "<group>"; };
 		7E2AD9EEDA9797E406B435ED /* TripListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripListView.swift; sourceTree = "<group>"; };
 		80E59AB1F96A5750EF1F970E /* MeasurementUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementUnit.swift; sourceTree = "<group>"; };
 		816FF4F6A26EA4AE4AECA534 /* TripArrivalPromptSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripArrivalPromptSheet.swift; sourceTree = "<group>"; };
@@ -613,7 +613,6 @@
 			isa = PBXGroup;
 			children = (
 				2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */,
-				FE01FA11BACC0DE000000002 /* PersistedEnumFallbackTests.swift */,
 				BFC0E15BFE14314BA0D75D10 /* AStarSearchTests.swift */,
 				DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */,
 				4D83B764A6EC175443541145 /* BinaryHeapTests.swift */,
@@ -642,6 +641,7 @@
 				3380F79E0670137420A0A6AC /* OSMSpeedLimitServiceTests.swift */,
 				1DF2357BC61FE13D4126E3D0 /* OSMTagParsingTests.swift */,
 				E3FE9F1E95BC1F9738DBC186 /* PendingCommuteStartStoreTests.swift */,
+				7D8DB6F60416DA34EB0E0951 /* PersistedEnumFallbackTests.swift */,
 				3B70B7427245EDC2DFDCA33F /* POIDiscoveryTests.swift */,
 				3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */,
 				E4948500BFF4831029CD8477 /* PreferenceLearnerInvariantHardeningTests.swift */,
@@ -1256,7 +1256,6 @@
 			files = (
 				08796FC9A55896C0A9E97422 /* AStarSearchTests.swift in Sources */,
 				06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */,
-				FE01FA11BACC0DE000000001 /* PersistedEnumFallbackTests.swift in Sources */,
 				5D8C6D53390B98A19A081299 /* AudioDuckingServiceTests.swift in Sources */,
 				B18FC0A307B656BBD7096743 /* BinaryHeapTests.swift in Sources */,
 				B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */,
@@ -1285,6 +1284,7 @@
 				1B70D80153C16FE9D1D1C8C8 /* OneShotLocationTests.swift in Sources */,
 				0B4B8A0683044E51CD7D29AE /* POIDiscoveryTests.swift in Sources */,
 				3C6ECCF87073C9F5713AC231 /* PendingCommuteStartStoreTests.swift in Sources */,
+				58B6CA47C48CD5134BB34AD0 /* PersistedEnumFallbackTests.swift in Sources */,
 				44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */,
 				1FE6CCB15A3CE08B8026FB33 /* PreferenceLearnerInvariantHardeningTests.swift in Sources */,
 				4641591AC55A72F04A852898 /* PreferenceLearnerTests.swift in Sources */,
