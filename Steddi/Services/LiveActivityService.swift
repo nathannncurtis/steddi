@@ -93,7 +93,14 @@ final class LiveActivityService {
     /// and can't double-end / clobber the handle. All end paths
     /// (endActivity, endActivityImmediately, the auto-end on arrival) share this
     /// claim-then-act discipline.
-    func endActivity() {
+    ///
+    /// `immediate` removes the activity from the Lock Screen / Dynamic Island
+    /// right away instead of letting it linger 30s. Pass `true` for a trip leg
+    /// handoff — the next leg's activity starts almost immediately, so the
+    /// finished leg must clear at once or two nav activities stack. Reserve the
+    /// default 30s linger for a true final arrival, where a brief "You have
+    /// arrived" glance is wanted and nothing replaces it.
+    func endActivity(immediate: Bool = false) {
         tripContext = nil
         // Atomic claim: read + clear on the MainActor before any await.
         guard let activity = currentActivity else { return }
@@ -111,9 +118,10 @@ final class LiveActivityService {
         )
 
         let content = ActivityContent(state: finalState, staleDate: nil)
+        let policy: ActivityUIDismissalPolicy = immediate ? .immediate : .after(.now + 30)
 
         Task {
-            await activity.end(content, dismissalPolicy: .after(.now + 30))
+            await activity.end(content, dismissalPolicy: policy)
         }
     }
 
