@@ -30,13 +30,15 @@ final class MapMatchingService {
         while start < points.count {
             let end = min(start + maxCoordinatesPerRequest, points.count)
             chunks.append(Array(points[start..<end]))
+            // Once we've consumed the whole trace, stop — otherwise a tail
+            // shorter than `overlap` leaves `start = end - overlap` stuck below
+            // points.count and the loop spins forever.
+            if end == points.count { break }
             start = end - overlap
-            if start >= points.count { break }
         }
 
         // Match each chunk and stitch polylines
         var allCoordinates: [CLLocationCoordinate2D] = []
-        var totalDistance: Double = 0
 
         for (index, chunk) in chunks.enumerated() {
             let result = try await matchChunk(chunk)
@@ -49,9 +51,11 @@ final class MapMatchingService {
                 let skipCount = min(overlap, coords.count)
                 allCoordinates.append(contentsOf: coords.dropFirst(skipCount))
             }
-            totalDistance += result.distanceMeters
         }
 
+        // Distance is measured from the final stitched polyline, not summed per
+        // chunk — summing would double-count the overlapping segments.
+        let totalDistance = RouteGeometry.cumulativeDistances(allCoordinates).last ?? 0
         let polyline = PolylineEncoder.encode(allCoordinates)
         return MatchedRoute(encodedPolyline: polyline, coordinates: allCoordinates, distanceMeters: totalDistance)
     }
