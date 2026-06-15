@@ -237,6 +237,20 @@ enum CorridorValidator {
         }
         let startEdge = graph.edges[Int(startSnap.edge)]
         let endEdge = graph.edges[Int(endSnap.edge)]
+
+        // Same-edge degenerate: origin and destination snap onto the SAME directed
+        // edge with the start at/behind the end. The router (AStarSearch same-edge
+        // branch) keeps the whole journey inside that one edge and returns the
+        // partial sub-cost `full * (endFraction - startFraction)`. Mirror that here
+        // so the differential comparison stays apples-to-apples — routing around
+        // the graph from startEdge.to to endEdge.from (the code below) would return
+        // a large detour or nil for a one-way edge, disagreeing with the router.
+        if startSnap.edge == endSnap.edge, startSnap.fraction <= endSnap.fraction {
+            let full = cost.edgeCost(startEdge, in: graph)
+            guard full.isFinite else { return nil }
+            return full * (endSnap.fraction - startSnap.fraction)
+        }
+
         let startNode = startEdge.to            // travel from snap to the edge's downstream node
         let goalNode = endEdge.from             // reach the upstream node of the goal edge
 

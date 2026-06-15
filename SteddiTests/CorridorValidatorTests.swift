@@ -100,6 +100,28 @@ struct GridValidatorTests {
         #expect(result != nil)
         #expect(!(result?.edgePath.isEmpty ?? true))
     }
+
+    @Test("reference shortest cost matches the router on a same-edge origin/destination")
+    func referenceMatchesRouterSameEdge() {
+        let g = gridGraph()
+        let cost = TravelTimeCost()
+        // Two points mid-way along the bottom edge 11→21 (lat 34.0000, between
+        // lon -117.0000 and -116.9990). Both snap onto the SAME directed edge with
+        // origin behind destination, so the router takes its same-edge branch and
+        // the reference must agree (not route around the grid).
+        let originSE = coord(34.0000, -116.99970)   // ~30% along 11→21
+        let destSE = coord(34.0000, -116.99930)     // ~70% along 11→21
+
+        let v = CorridorValidator.validate(from: originSE, to: destSE, in: g, cost: cost)
+        let ref = CorridorValidator.referenceShortestCost(from: originSE, to: destSE, in: g, cost: cost)
+        #expect(v != nil)
+        #expect(ref != nil)
+        guard let v, let ref else { return }
+        // Confirm this really exercised the same-edge degenerate branch.
+        #expect(v.searchResult.edgePath.count == 1)
+        // Router sub-cost and the reference must agree (both = full * Δfraction).
+        #expect(abs(v.searchResult.totalCost - ref) < 0.01)
+    }
 }
 
 // MARK: - Fixture 2: a one-way couplet (parallel one-way pair)
