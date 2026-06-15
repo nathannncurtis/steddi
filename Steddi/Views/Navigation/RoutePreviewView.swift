@@ -151,7 +151,11 @@ struct RoutePreviewView: View {
             Text(indicator.label)
                 .font(SteddiTheme.body(13))
         }
-        .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textSecondary)
+        // Active chip's label+icon sit on accentSubtle (accent@15%); raw accent
+        // as text there fails AA in every theme (1.4–4.6:1, same as the route
+        // chip), so use textPrimary — the accent identity stays in the fill +
+        // stroke. Mirrors routeChip's treatment.
+        .foregroundStyle(isActive ? SteddiTheme.textPrimary : SteddiTheme.textSecondary)
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(
@@ -252,13 +256,19 @@ struct NavigationPreviewMap: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let polyline = overlay as? MKPolyline {
-                let renderer = MKPolylineRenderer(polyline: polyline)
+                // Contrasting casing under each route line so the colored stroke
+                // stays legible over varied map tiles (the raw brand accent washes
+                // out over light cartography / park-green fills otherwise).
+                let renderer = CasedPolylineRenderer(polyline: polyline)
                 if polyline === primaryPolyline {
                     renderer.strokeColor = SteddiTheme.accentUIColor
                     renderer.lineWidth = 6
                 } else {
+                    // Dimmed alternates carry a softer casing so the outline
+                    // doesn't overpower the faint line.
                     renderer.strokeColor = SteddiTheme.accentUIColor.withAlphaComponent(0.25)
                     renderer.lineWidth = 4
+                    renderer.casingColor = RouteCasing.current.withAlphaComponent(0.35)
                 }
                 renderer.lineCap = .round
                 renderer.lineJoin = .round
