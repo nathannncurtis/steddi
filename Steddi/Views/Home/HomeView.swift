@@ -1747,7 +1747,12 @@ struct HomeView: View {
         tripAutoAdvanceTask = nil
         tripArrivalStop = nil
         showTripArrivalPrompt = false
-        LiveActivityService.shared.endActivity()
+        // Leg handoff: the next leg's Live Activity starts almost immediately, so
+        // end the finished leg's at once (.immediate) — the default 30s linger
+        // would leave two nav activities stacked on the Lock Screen / Dynamic
+        // Island for ~30s. The lingering dismissal is reserved for true final
+        // arrivals (endTripNavigation / commute end), where nothing replaces it.
+        LiveActivityService.shared.endActivity(immediate: true)
         beginTripLeg(to: stop, trip: trip)
     }
 

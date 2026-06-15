@@ -13,6 +13,7 @@
 		0395362D815ED5F96D0A0C9B /* TripProgression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04087916791CAF8B1AFD67AA /* TripProgression.swift */; };
 		060FD9747D8AFA4FD3A8E008 /* PlaceCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B14495FE74113349D84A50 /* PlaceCategory.swift */; };
 		06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */; };
+		FE01FA11BACC0DE000000001 /* PersistedEnumFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE01FA11BACC0DE000000002 /* PersistedEnumFallbackTests.swift */; };
 		0786561020231240135F9738 /* TripPlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD8704B61414025699515828 /* TripPlannerView.swift */; };
 		080C03CF7A9E624CAA232141 /* CommuteAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9269096D1EE035DDBD3D2CD3 /* CommuteAnalyticsView.swift */; };
 		08796FC9A55896C0A9E97422 /* AStarSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC0E15BFE14314BA0D75D10 /* AStarSearchTests.swift */; };
@@ -291,6 +292,7 @@
 		29048E65BF78AEB095A5D599 /* CommuteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteListView.swift; sourceTree = "<group>"; };
 		2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiWidgetBundle.swift; sourceTree = "<group>"; };
 		2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsServiceTests.swift; sourceTree = "<group>"; };
+		FE01FA11BACC0DE000000002 /* PersistedEnumFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedEnumFallbackTests.swift; sourceTree = "<group>"; };
 		2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngineTests.swift; sourceTree = "<group>"; };
 		2BCA75D43D11EA6F5D4123D8 /* CameraReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraReport.swift; sourceTree = "<group>"; };
 		2DA34462C207C379281EC748 /* IconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPickerView.swift; sourceTree = "<group>"; };
@@ -611,6 +613,7 @@
 			isa = PBXGroup;
 			children = (
 				2AF07B6E4A4351FFA1D0BD04 /* AnalyticsServiceTests.swift */,
+				FE01FA11BACC0DE000000002 /* PersistedEnumFallbackTests.swift */,
 				BFC0E15BFE14314BA0D75D10 /* AStarSearchTests.swift */,
 				DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */,
 				4D83B764A6EC175443541145 /* BinaryHeapTests.swift */,
@@ -1253,6 +1256,7 @@
 			files = (
 				08796FC9A55896C0A9E97422 /* AStarSearchTests.swift in Sources */,
 				06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */,
+				FE01FA11BACC0DE000000001 /* PersistedEnumFallbackTests.swift in Sources */,
 				5D8C6D53390B98A19A081299 /* AudioDuckingServiceTests.swift in Sources */,
 				B18FC0A307B656BBD7096743 /* BinaryHeapTests.swift in Sources */,
 				B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */,

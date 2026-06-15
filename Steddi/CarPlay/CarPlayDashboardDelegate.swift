@@ -14,6 +14,12 @@ class CarPlayDashboardDelegate: UIResponder, CPTemplateApplicationDashboardScene
     /// phone app is suspended.
     private var dashboardScene: CPTemplateApplicationDashboardScene?
 
+    /// The 2s button-refresh loop. Stored so a rapid disconnect/reconnect can't
+    /// leave a stale loop running alongside a new one — cancelled on disconnect
+    /// and before each (re)connect. Mirrors the task discipline in
+    /// `CarPlaySceneDelegate` (phoneNavWatchTask / liveUpdateTask).
+    private var pollTask: Task<Void, Never>?
+
     private var stateManager: NavigationStateManager { NavigationStateManager.shared }
 
     func templateApplicationDashboardScene(
@@ -27,10 +33,14 @@ class CarPlayDashboardDelegate: UIResponder, CPTemplateApplicationDashboardScene
 
         updateDashboardButtons()
 
-        // Poll for navigation state changes to update buttons
-        Task { @MainActor [weak self] in
-            while let self, self.dashboardController != nil {
+        // Poll for navigation state changes to update buttons. Cancel any prior
+        // loop first so a reconnect within the 2s tick window can't leave the
+        // old loop spinning alongside this one.
+        pollTask?.cancel()
+        pollTask = Task { @MainActor [weak self] in
+            while let self, self.dashboardController != nil, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
                 self.updateDashboardButtons()
             }
         }
@@ -41,6 +51,8 @@ class CarPlayDashboardDelegate: UIResponder, CPTemplateApplicationDashboardScene
         didDisconnect dashboardController: CPDashboardController,
         from window: UIWindow
     ) {
+        pollTask?.cancel()
+        pollTask = nil
         self.dashboardController = nil
         self.dashboardWindow = nil
         self.dashboardScene = nil
