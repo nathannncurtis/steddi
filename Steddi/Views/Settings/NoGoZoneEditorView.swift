@@ -281,7 +281,7 @@ struct NoGoZoneEditorView: View {
     private func errorBanner(_ message: String) -> some View {
         Text(message)
             .font(SteddiTheme.body(13))
-            .foregroundStyle(SteddiTheme.warmRed)
+            .foregroundStyle(SteddiTheme.warmRedText)
             .padding(.horizontal, 16).padding(.vertical, 10)
             .background(SteddiTheme.surfacePrimary.opacity(0.92), in: Capsule())
             .padding(.bottom, 8)

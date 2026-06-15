@@ -335,7 +335,9 @@ struct TripPlannerMap: UIViewRepresentable {
                 let text = "\(stop.number)" as NSString
                 let attributes: [NSAttributedString.Key: Any] = [
                     .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
-                    .foregroundColor: UIColor.white
+                    // The pin fills with the (light pastel) brand accent, so a
+                    // white digit washes out — use the on-accent contrasting color.
+                    .foregroundColor: UIColor(SteddiTheme.onAccentRGB.color)
                 ]
                 let textSize = text.size(withAttributes: attributes)
                 text.draw(

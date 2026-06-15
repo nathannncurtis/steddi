@@ -76,7 +76,7 @@ struct CommuteNotificationsSettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Notifications disabled", systemImage: "bell.slash")
                 .font(.body.weight(.medium))
-                .foregroundStyle(SteddiTheme.warmRed)
+                .foregroundStyle(SteddiTheme.warmRedText)
             Text("Enable notifications for Steddi in the Settings app to get commute alerts.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -109,7 +109,7 @@ struct CommuteNotificationsSettingsView: View {
             if !weatherService.hasBudget {
                 Text("Monthly weather limit reached — alerts use traffic only until next month.")
                     .font(.caption)
-                    .foregroundStyle(SteddiTheme.warmRed)
+                    .foregroundStyle(SteddiTheme.warmRedText)
             }
         }
         .padding(.vertical, 2)
