@@ -719,6 +719,13 @@ struct HomeView: View {
         if RecoveryBudget.shouldReset(isContinuingTripLeg: activeTrip != nil) {
             recoveriesThisTrip = 0
         }
+        // The recovery request debounce is PER-ENGINE, not per-trip: a fresh
+        // engine has no prior reroute to suppress. Reset it unconditionally so a
+        // recovery that fired within 30s before this start (a route switch or a
+        // continuous-mode leg handoff) can't silently suppress the first genuine
+        // off-route on the new leg's geometry.
+        lastRecoveryAt = nil
+        isRecoveryInFlight = false
         let engine = NavigationEngine()
         engine.startNavigation(route: route)
         self.navigationEngine = engine
@@ -1326,6 +1333,11 @@ struct HomeView: View {
         if RecoveryBudget.shouldReset(isContinuingTripLeg: activeTrip != nil) {
             recoveriesThisTrip = 0
         }
+        // Per-engine recovery debounce — clear it for the fresh engine so the
+        // prior leg/route's cooldown can't suppress the new geometry's first
+        // off-route (see beginNavigation for the full rationale).
+        lastRecoveryAt = nil
+        isRecoveryInFlight = false
 
         let engine = NavigationEngine()
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
