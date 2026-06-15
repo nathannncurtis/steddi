@@ -11,6 +11,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     private var interfaceController: CPInterfaceController?
     private var carWindow: CPWindow?
+    /// Retained so "Start Navigation" can foreground/cold-launch the phone scene
+    /// via `open(_:options:)`. In a CarPlay-only session there is no phone scene
+    /// or HomeView, so a bare NotificationCenter post would evaporate; opening
+    /// the deep link is what brings the app up to drain the durable nav route.
+    private var templateScene: CPTemplateApplicationScene?
     private var mapController: CarPlayMapController?
     private var mapTemplate: CPMapTemplate?
     private var navigationSession: CPNavigationSession?
@@ -32,6 +37,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         didConnect interfaceController: CPInterfaceController,
         to window: CPWindow
     ) {
+        self.templateScene = templateApplicationScene
         connectCarPlay(interfaceController: interfaceController, window: window)
     }
 
@@ -39,6 +45,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         _ templateApplicationScene: CPTemplateApplicationScene,
         didConnect interfaceController: CPInterfaceController
     ) {
+        self.templateScene = templateApplicationScene
         let window = templateApplicationScene.carWindow
         connectCarPlay(interfaceController: interfaceController, window: window)
     }
@@ -111,6 +118,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         mapTemplate = nil
         self.interfaceController = nil
         self.carWindow = nil
+        self.templateScene = nil
 
         Task { @MainActor in
             stateManager.isCarPlayActive = false
@@ -544,11 +552,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let startAction = CPAlertAction(title: "Start Navigation", style: .default) { [weak self] _ in
             self?.interfaceController?.dismissTemplate(animated: true) { _, _ in }
             self?.interfaceController?.popToRootTemplate(animated: false) { _, _ in }
-            NotificationCenter.default.post(
-                name: .steddiNavigateToLocation,
-                object: nil,
-                userInfo: ["lat": coordinate.latitude, "lng": coordinate.longitude, "name": name]
-            )
+            self?.startNavigation(to: name, coordinate: coordinate)
         }
 
         let cancelAction = CPAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
@@ -562,6 +566,40 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 actions: [startAction, cancelAction]
             )
             interfaceController.presentTemplate(alert, animated: true) { _, _ in }
+        }
+    }
+
+    /// Start navigation to a coordinate from the CarPlay route preview.
+    ///
+    /// In a CarPlay-only session (driver got in with the phone locked / Steddi
+    /// not running) there is no phone scene and no HomeView, so the old
+    /// `NotificationCenter.post(.steddiNavigateToLocation)` had no subscriber and
+    /// did nothing — the headline browse-and-go flow was a dead control. Mirror
+    /// the proven dashboard "Start Commute" pattern instead:
+    ///  1. Queue a durable nav route so the request survives until HomeView
+    ///     attaches (covers the cold-launch race a bare post loses).
+    ///  2. `open()` the `steddi://navigate` deep link, which foregrounds — or
+    ///     cold-launches — the phone scene. Tapping the CarPlay alert alone never
+    ///     brings the phone app up, so the open() call is what actually starts
+    ///     navigation (the phone scene's CarWindow drives the CarPlay nav UI
+    ///     via NavigationStateManager once HomeView calls startObserving).
+    @MainActor
+    private func startNavigation(to name: String, coordinate: CLLocationCoordinate2D) {
+        PendingUIRouteStore.shared.request(.navigate(name: name, coordinate: coordinate))
+
+        var components = URLComponents()
+        components.scheme = "steddi"
+        components.host = "navigate"
+        components.queryItems = [
+            URLQueryItem(name: "lat", value: String(coordinate.latitude)),
+            URLQueryItem(name: "lng", value: String(coordinate.longitude)),
+            URLQueryItem(name: "name", value: name)
+        ]
+        guard let url = components.url else { return }
+        templateScene?.open(url, options: nil) { success in
+            if !success {
+                carplayLog.error("CarPlay: failed to open phone scene for Start Navigation")
+            }
         }
     }
 

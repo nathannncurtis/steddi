@@ -1,6 +1,7 @@
 import UIKit
 import SwiftUI
 import SwiftData
+import CoreLocation
 
 class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -27,6 +28,7 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             .environment(appDelegate.commuteNotificationService)
             .environment(NavigationStateManager.shared)
             .environment(PendingCommuteStartStore.shared)
+            .environment(PendingUIRouteStore.shared)
 
         let window = UIWindow(windowScene: windowScene)
         switch SteddiTheme.currentThemeModeEx {
@@ -121,11 +123,19 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             if let latStr = params["lat"], let lngStr = params["lng"],
                let lat = Double(latStr), let lng = Double(lngStr) {
                 let name = params["name"] ?? "Destination"
-                NotificationCenter.default.post(
-                    name: .steddiNavigateToLocation,
-                    object: nil,
-                    userInfo: ["lat": lat, "lng": lng, "name": name]
-                )
+                // Durable hand-off: this URL can arrive during cold-launch scene
+                // connection, before HomeView attaches its observers, so a bare
+                // post would evaporate. HomeView drains the store on appear and
+                // reactively. (CarPlay route-preview "Start Navigation" deep-links
+                // here too — see CarPlaySceneDelegate.)
+                MainActor.assumeIsolated {
+                    PendingUIRouteStore.shared.request(
+                        .navigate(
+                            name: name,
+                            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                        )
+                    )
+                }
             } else if let commuteIdStr = params["commuteId"], let commuteId = UUID(uuidString: commuteIdStr) {
                 // Smart-commute notification "Start Commute" deep link:
                 // steddi://navigate?commuteId=<id>&direction=<dir>
@@ -151,8 +161,13 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
         case "places":
             // CarPlay dashboard "Recent Places" button — foreground the app on
-            // its Places tab so the driver can pick a destination.
-            NotificationCenter.default.post(name: .steddiShowPlaces, object: nil)
+            // its Places tab so the driver can pick a destination. Durable
+            // hand-off: on a cold launch this URL lands before HomeView attaches
+            // its observer, so a bare post would be lost and the app would open
+            // on the default Commutes tab. HomeView drains the store on appear.
+            MainActor.assumeIsolated {
+                PendingUIRouteStore.shared.request(.showPlaces)
+            }
         case "search":
             if let query = params["q"] {
                 NotificationCenter.default.post(
@@ -176,9 +191,7 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
 // MARK: - URL Scheme Notifications
 
 extension Notification.Name {
-    static let steddiNavigateToLocation = Notification.Name("steddiNavigateToLocation")
     static let steddiSearchQuery = Notification.Name("steddiSearchQuery")
-    static let steddiShowPlaces = Notification.Name("steddiShowPlaces")
     static let steddiTestArrival = Notification.Name("steddiTestArrival")
     static let steddiResetOnboarding = Notification.Name("steddiResetOnboarding")
 }
