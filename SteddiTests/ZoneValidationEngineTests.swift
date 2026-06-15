@@ -181,6 +181,96 @@ struct ZoneValidationEngineTests {
         #expect(result.isValid)
     }
 
+    // MARK: - Segment crossing (zone pierced between two outside vertices)
+
+    @Test("Route segment crossing a circle between two outside vertices is flagged")
+    func circleCrossedMidSegment() {
+        // A small 100m-radius circle at the origin. Both route vertices sit
+        // ~222m from the center (outside the radius), but the connecting segment
+        // runs straight through the center. A vertex-only test misses this;
+        // the segment-vs-circle test must flag it.
+        let route = polyline([
+            CLLocationCoordinate2D(latitude: 0, longitude: -0.002),
+            CLLocationCoordinate2D(latitude: 0, longitude: 0.002),
+        ])
+        let zone = NoGoZone(latitude: 0, longitude: 0, radiusMeters: 100)
+        // Sanity: neither vertex is within the radius.
+        #expect(!RouteGeometry.isPoint(CLLocationCoordinate2D(latitude: 0, longitude: -0.002),
+                                       withinCircleCenter: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+                                       radiusMeters: 100))
+        let result = engine.validateRoute(route, againstZones: [zone])
+        #expect(!result.isValid)
+        #expect(result.violations.first?.violationType == .pointInZone)
+    }
+
+    @Test("Route segment crossing a polygon between two outside vertices is flagged")
+    func polygonCrossedMidSegment() {
+        // A small square zone. Both route vertices lie outside the square, but
+        // the segment crosses straight through it (entering one edge, leaving
+        // the opposite). No vertex is inside, so only segment-vs-edge catches it.
+        let square = [
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 0.001),
+            CLLocationCoordinate2D(latitude: 0.001, longitude: 0.001),
+            CLLocationCoordinate2D(latitude: 0.001, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+        ]
+        let zone = NoGoZone(geometry: .polygon(encodedPolyline: PolylineEncoder.encode(square, precision: 6)))
+        let route = polyline([
+            CLLocationCoordinate2D(latitude: 0.0005, longitude: -0.001),  // west of the square
+            CLLocationCoordinate2D(latitude: 0.0005, longitude: 0.002),   // east of the square
+        ])
+        // Sanity: neither vertex is inside the square.
+        #expect(!RouteGeometry.isPoint(CLLocationCoordinate2D(latitude: 0.0005, longitude: -0.001), insidePolygon: square))
+        #expect(!RouteGeometry.isPoint(CLLocationCoordinate2D(latitude: 0.0005, longitude: 0.002), insidePolygon: square))
+        let result = engine.validateRoute(route, againstZones: [zone])
+        #expect(!result.isValid)
+        #expect(result.violations.first?.violationType == .polygonViolation)
+    }
+
+    @Test("Route segment crossing a narrow corridor between two outside vertices is flagged")
+    func corridorCrossedMidSegment() {
+        // A narrow north-south corridor (30m buffer). The route runs east-west
+        // and crosses the corridor perpendicular; both route vertices sit far
+        // (~hundreds of m) from the centerline, but the segment passes through
+        // the buffer. Only segment-to-segment distance catches this.
+        let centerline = [
+            CLLocationCoordinate2D(latitude: -0.001, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0.001, longitude: 0),
+        ]
+        let zone = NoGoZone(geometry: .corridor(
+            encodedPolyline: PolylineEncoder.encode(centerline, precision: 6),
+            bufferMeters: 30
+        ))
+        let route = polyline([
+            CLLocationCoordinate2D(latitude: 0, longitude: -0.002),  // ~222m west of centerline
+            CLLocationCoordinate2D(latitude: 0, longitude: 0.002),   // ~222m east of centerline
+        ])
+        // Sanity: each route vertex is well outside the 30m buffer.
+        #expect(RouteGeometry.distance(from: CLLocationCoordinate2D(latitude: 0, longitude: -0.002),
+                                       toPolyline: centerline) > 30)
+        let result = engine.validateRoute(route, againstZones: [zone])
+        #expect(!result.isValid)
+        if case .corridorViolation(let d) = result.violations.first?.violationType {
+            #expect(d <= 30)
+        } else {
+            Issue.record("expected corridor violation on the crossed segment")
+        }
+    }
+
+    @Test("Vertex-only sampling would miss a small zone on a sparse segment (regression)")
+    func sparseSegmentVertexOnlyMiss() {
+        // Reproduce the exact false-negative the segment fix closes: a 100m
+        // circle whose midpoint the segment pierces while both ~222m-distant
+        // vertices fall outside. validateRoute must now flag it.
+        let route = polyline([
+            CLLocationCoordinate2D(latitude: -0.002, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0.002, longitude: 0),
+        ])
+        let zone = NoGoZone(latitude: 0, longitude: 0, radiusMeters: 100)
+        #expect(!engine.validateRoute(route, againstZones: [zone]).isValid)
+    }
+
     @Test("A point exactly on the corridor centerline is a violation")
     func corridorOnCenterline() {
         let centerline = [

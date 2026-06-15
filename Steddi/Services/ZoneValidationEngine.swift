@@ -39,15 +39,33 @@ final class ZoneValidationEngine {
 
     /// Whether a single route violates a single geometry, and how. Returns the
     /// nearest/most-severe contact for richer messaging where applicable.
+    ///
+    /// Tests the route's SEGMENTS, not merely its vertices. MKDirections/OSRM
+    /// place a vertex only at a shape change, so a straight run can be hundreds
+    /// of meters between consecutive vertices; a small zone sitting on that
+    /// segment between two outside vertices would be missed by a vertex-only
+    /// test, and the route would drive straight through an avoided area. The
+    /// segment-vs-zone predicates mirror `RoutedZone.intersects` (the hard
+    /// no-go check in `DefaultCostModel`) so validation and routing agree.
     private func violationType(
         routeCoords: [CLLocationCoordinate2D],
         geometry: ZoneGeometry
     ) -> ViolationType? {
         switch geometry {
         case .circle(let center, let radiusMeters):
-            for coord in routeCoords {
-                if RouteGeometry.isPoint(coord, withinCircleCenter: center, radiusMeters: radiusMeters) {
+            for i in routeCoords.indices {
+                // Vertex inside the circle (covers a route that starts/ends or
+                // turns inside the zone).
+                if RouteGeometry.isPoint(routeCoords[i], withinCircleCenter: center, radiusMeters: radiusMeters) {
                     return .pointInZone
+                }
+                // Segment passing within the radius with neither endpoint inside
+                // (the straight edge that pierces a small zone between vertices).
+                if i + 1 < routeCoords.count {
+                    let d = RouteGeometry.projectOntoSegment(
+                        point: center, segStart: routeCoords[i], segEnd: routeCoords[i + 1]
+                    ).distance
+                    if d <= radiusMeters { return .pointInZone }
                 }
             }
             return nil
@@ -59,17 +77,67 @@ final class ZoneValidationEngine {
             guard let centerline = PolylineEncoder.decodeValidated(encodedPolyline, precision: 6),
                   !centerline.isEmpty else { return nil }
             var nearest = Double.greatestFiniteMagnitude
+            // Vertex-to-centerline distance (point-to-segment under the hood).
             for coord in routeCoords {
                 let d = RouteGeometry.distance(from: coord, toPolyline: centerline)
                 if d < nearest { nearest = d }
+            }
+            // Segment-to-segment distance: catches a long straight route edge
+            // crossing a narrow corridor perpendicular with both endpoints
+            // farther than `bufferMeters` from the centerline. Symmetric with
+            // the polygon/circle cases above.
+            if routeCoords.count >= 2, centerline.count >= 2 {
+                for i in 0..<(routeCoords.count - 1) {
+                    let a = routeCoords[i], b = routeCoords[i + 1]
+                    for j in 0..<(centerline.count - 1) {
+                        let d = RoutedZone.segmentToSegmentDistance(a, b, centerline[j], centerline[j + 1])
+                        if d < nearest { nearest = d }
+                    }
+                }
             }
             return nearest <= bufferMeters ? .corridorViolation(distanceMeters: nearest) : nil
 
         case .polygon(let encodedPolyline):
             guard let polygon = PolylineEncoder.decodeValidated(encodedPolyline, precision: 6) else { return nil }
+            // A route VERTEX inside the polygon (covers a route that starts/ends
+            // or turns inside the zone).
             for coord in routeCoords {
                 if RouteGeometry.isPoint(coord, insidePolygon: polygon) {
                     return .polygonViolation
+                }
+            }
+            // Drop a duplicated closing vertex so the wrap-around edge isn't
+            // tested twice; the boundary scan below closes the ring itself.
+            var ring = polygon
+            if ring.count >= 2, let first = ring.first, let last = ring.last,
+               first.latitude == last.latitude, first.longitude == last.longitude {
+                ring.removeLast()
+            }
+            guard ring.count >= 3, routeCoords.count >= 2 else { return nil }
+            // A route SEGMENT that crosses a polygon boundary edge — catches the
+            // straight edge running through a zone smaller than the block with
+            // neither endpoint inside.
+            for i in 0..<(routeCoords.count - 1) {
+                let a = routeCoords[i], b = routeCoords[i + 1]
+                var k = ring.count - 1
+                for j in 0..<ring.count {
+                    if RoutedZone.segmentsIntersect(a, b, ring[k], ring[j]) {
+                        return .polygonViolation
+                    }
+                    k = j
+                }
+            }
+            // A polygon wholly contained within a single route segment crosses
+            // no boundary edge and contains no route vertex; catch it via
+            // polygon-vertex-to-route-segment distance, mirroring RoutedZone.
+            for v in ring {
+                for i in 0..<(routeCoords.count - 1) {
+                    let proj = RouteGeometry.projectOntoSegment(
+                        point: v, segStart: routeCoords[i], segEnd: routeCoords[i + 1]
+                    )
+                    if proj.distance <= RoutedZone.containedVertexToleranceMeters {
+                        return .polygonViolation
+                    }
                 }
             }
             return nil
