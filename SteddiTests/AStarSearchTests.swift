@@ -275,6 +275,38 @@ struct AStarSearchTests {
         #expect(abs(snap.snapped.latitude) < 1e-6)   // snapped back onto the y=0 line
     }
 
+    @Test("snap finds an edge ~150 m away, outside the old 3x3 cell window")
+    func snapBeyondOldWindow() {
+        // A short north-south meridian edge at longitude 0.0009 (longitude cell 0),
+        // up at latitude 45° where one 0.001° cell is only ~79 m wide in longitude.
+        // The probe sits ~150 m EAST of it — within the 200 m router snap radius but
+        // two longitude cells away (cell 2), so the OLD fixed 3×3 (radius-1) window
+        // could never reach it and `snap` returned nil. The radius now scales with
+        // `maxDistanceMeters`, so the edge is found.
+        let graph = buildGraph(
+            node(1, 45.0, 0.0009),
+            node(2, 45.0008, 0.0009),
+            way(100, [1, 2], tags: ["highway": "primary"])
+        )
+        let probe = CLLocationCoordinate2D(latitude: 45.0004, longitude: 0.002805619074132702)
+
+        // Sanity: the edge really is in a longitude cell two cells from the probe,
+        // i.e. outside the old radius-1 window (which only covered cells 1...3 here).
+        let edgeLonCell = GraphSpatialIndex.cellIndex(0.0009)
+        let probeLonCell = GraphSpatialIndex.cellIndex(probe.longitude)
+        #expect(abs(probeLonCell - edgeLonCell) >= 2)
+
+        // The old 3×3 window misses it; the radius-scaled window finds it within 200 m.
+        #expect(graph.snap(probe, maxDistanceMeters: 200) != nil)
+        guard let snap = graph.snap(probe, maxDistanceMeters: 200) else {
+            Issue.record("snap should have found the edge within the 200 m radius"); return
+        }
+        #expect(snap.distanceMeters > 100 && snap.distanceMeters < 200)
+
+        // And the gate is still honored: a 50 m radius must NOT reach a ~150 m edge.
+        #expect(graph.snap(probe, maxDistanceMeters: 50) == nil)
+    }
+
     @Test("mid-edge start and end produce a partial-cost path")
     func midEdgeStartEnd() {
         // A straight 3-edge chain 1-2-3-4 along the equator, each ~111 m primary.
