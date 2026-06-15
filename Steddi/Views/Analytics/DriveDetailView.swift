@@ -69,7 +69,10 @@ struct DriveDetailView: View {
             StatCard(
                 value: AnalyticsFormat.minutesValue(seconds: detail.trafficSeconds),
                 label: "In traffic", unit: "min", icon: "car.rear.waves.up",
-                tint: detail.trafficSeconds > 0 ? SteddiTheme.warmRed : SteddiTheme.sage
+                // Value is drawn AS TEXT on a surface, so use the surface-adaptive
+                // legible variants (not the raw fill hues, which fail AA in
+                // light/grey) — matches AggregateStatsCards and StatCard's preview.
+                tint: detail.trafficSeconds > 0 ? SteddiTheme.warmRedText : SteddiTheme.sageText
             )
             StatCard(
                 value: detail.averageSpeedMps.map { AnalyticsFormat.speedValue(mps: $0, unit: units) } ?? "—",
