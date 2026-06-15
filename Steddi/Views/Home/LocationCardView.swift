@@ -66,7 +66,7 @@ struct LocationCardView<Menu: View>: View {
                         HStack(spacing: 6) {
                             Text("\(eta) min")
                                 .font(SteddiTheme.mono(13))
-                                .foregroundStyle(trafficStatus.color)
+                                .foregroundStyle(trafficStatus.textColor)
 
                             if let delay = delayMinutes, delay > 2 {
                                 Text("+\(delay)")
