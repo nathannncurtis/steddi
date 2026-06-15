@@ -242,6 +242,30 @@ enum SteddiTheme {
     static var textSecondary: Color { dynamicColor { $0.textSecondary } }
     static var textMuted: Color { dynamicColor { $0.textMuted } }
 
+    // MARK: - Fixed light-on-dark (onboarding cinematic backdrop)
+
+    /// The onboarding showpiece floats its beats on a FIXED dark cinematic
+    /// backdrop (`OnboardingView.beatBackground = .black` + the showpiece card's
+    /// black/accent gradient), independent of the resolved app theme. The
+    /// adaptive `textPrimary/textSecondary/textMuted` tokens resolve near-black in
+    /// the Light theme (and dynamic-by-day), so card copy drawn in them collapses
+    /// to near-black-on-black and is illegible there. These fixed light tiers
+    /// keep that copy readable on the dark backdrop in EVERY theme — the same rule
+    /// the skip footer already follows with `.white.opacity(0.85)`. Use ONLY for
+    /// text/glyphs inside the onboarding dark-backdrop beats; everywhere else the
+    /// adaptive theme tokens are correct.
+    static let onboardingTextPrimary = Color.white
+    static let onboardingTextSecondary = Color.white.opacity(0.8)
+    static let onboardingTextMuted = Color.white.opacity(0.45)
+
+    /// Fixed dark surface for the onboarding card's Reduce-Transparency / high-
+    /// contrast fallback fill. When glass is unavailable, `steddiGlass` paints a
+    /// solid `fallbackFill`; the default `surfaceSecondary` is near-WHITE in the
+    /// Light theme, which would make the card a light box under the fixed-white
+    /// onboarding copy. This keeps the card dark so that copy stays legible in
+    /// every theme even with Reduce Transparency on.
+    static let onboardingCardFallbackFill = Color(red: 0.12, green: 0.12, blue: 0.13)
+
     /// Build a dynamic SwiftUI color whose UIKit provider (a) reads the live
     /// `ThemeEngine.snapshot` so the value is always current, and (b) touches
     /// `traitCollection.themeRevision` so the provider registers a dependency on
