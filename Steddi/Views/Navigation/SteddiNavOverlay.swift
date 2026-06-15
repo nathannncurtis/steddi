@@ -345,18 +345,15 @@ struct SteddiNavOverlay: View {
                         }
                     }
 
-                    Button(action: onEndNavigation) {
-                        Text("End")
-                            .font(.system(size: 17 * textScale, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 20 * controlScale)
-                            .padding(.vertical, 10 * controlScale)
-                            .background(SteddiTheme.warmRed, in: Capsule())
-                    }
+                    Button("End", action: onEndNavigation)
+                        .font(.system(size: 17 * textScale, weight: .semibold))
+                        .padding(.horizontal, 20 * controlScale)
+                        .padding(.vertical, 10 * controlScale)
+                        .buttonStyle(.glassProminent)
+                        .tint(SteddiTheme.warmRed)
                 }
                 .padding(12)
-                .background(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.95, highContrast: highContrast)), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
-                .shadow(color: .black.opacity(0.3), radius: 8, y: -2)
+                .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.mediumShape, fallbackStrokeOpacity: 0.08)
             }
             .padding(.leading, 50) // clear notch
             .padding(.bottom, 6)
@@ -672,15 +669,13 @@ struct SteddiNavOverlay: View {
             }
             .frame(maxWidth: .infinity)
 
-            // End button — right
-            Button(action: onEndNavigation) {
-                Text("End")
-                    .font(.system(size: 17 * textScale, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 24 * controlScale)
-                    .padding(.vertical, 12 * controlScale)
-                    .background(SteddiTheme.warmRed, in: Capsule())
-            }
+            // End button — right. Destructive, so warm-red prominent glass.
+            Button("End", action: onEndNavigation)
+                .font(.system(size: 17 * textScale, weight: .semibold))
+                .padding(.horizontal, 24 * controlScale)
+                .padding(.vertical, 12 * controlScale)
+                .buttonStyle(.glassProminent)
+                .tint(SteddiTheme.warmRed)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)

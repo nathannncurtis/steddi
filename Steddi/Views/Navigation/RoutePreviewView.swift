@@ -19,6 +19,7 @@ struct RoutePreviewView: View {
     private var activeRoute: MKRoute { selectedRoute ?? route }
 
     var body: some View {
+        let _ = accentColor // force SwiftUI re-render on accent change
         ZStack {
             // Map showing the route
             NavigationPreviewMap(
@@ -87,37 +88,32 @@ struct RoutePreviewView: View {
 
                     // Action buttons
                     HStack(spacing: 12) {
-                        Button(action: onCancel) {
-                            Text("Cancel")
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(SteddiTheme.textSecondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(SteddiTheme.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
-                        }
+                        // Secondary: neutral glass.
+                        Button("Cancel", action: onCancel)
+                            .font(.body.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .buttonStyle(.glass)
 
-                        Button {
+                        // Primary CTA: prominent accent glass.
+                        Button("Start") {
                             onStart(activeRoute)
-                        } label: {
-                            Text("Start")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
                         }
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .buttonStyle(.glassProminent)
+                        .tint(SteddiTheme.accent)
                     }
                 }
                 .padding(24)
-                .background {
-                    UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
-                                .fill(SteddiTheme.surfacePrimary.opacity(0.85))
-                        )
-                        .shadow(color: .black.opacity(0.4), radius: 20, y: -5)
-                }
+                // Single neutral glass layer replaces the material+surface double
+                // background — the card is information-dense, so no tint.
+                .steddiGlass(
+                    tint: nil,
+                    interactive: false,
+                    in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
+                )
             }
         }
     }

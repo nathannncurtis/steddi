@@ -72,25 +72,26 @@ struct RerouteCardView: View {
 
                 // Action buttons
                 HStack(spacing: 12) {
+                    // Secondary: neutral glass.
                     Button("Stay") {
                         hide()
                         onStay()
                     }
                     .font(.system(size: 17 * textScale, weight: .medium))
-                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14 * controlScale)
-                    .background(SteddiTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 14))
+                    .buttonStyle(.glass)
 
+                    // Primary CTA: prominent accent glass.
                     Button("Switch") {
                         hide()
                         onSwitch()
                     }
                     .font(.system(size: 17 * textScale, weight: .semibold))
-                    .foregroundStyle(SteddiTheme.surfacePrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14 * controlScale)
-                    .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                    .buttonStyle(.glassProminent)
+                    .tint(SteddiTheme.accent)
                 }
             }
             .padding(20)
