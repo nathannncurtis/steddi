@@ -99,8 +99,12 @@ enum RoadGraphBuilder {
         // then materialize in encounter order for deterministic indices.
         var promoted = Set<OSMNodeID>()
         for way in validWays {
-            promoted.insert(way.nodeIDs.first!)
-            promoted.insert(way.nodeIDs.last!)
+            // validWays only holds ways with >= 2 present nodes (guarded above),
+            // so first/last exist; bind safely so this doesn't trap if that
+            // invariant is ever weakened by a refactor.
+            guard let firstNode = way.nodeIDs.first, let lastNode = way.nodeIDs.last else { continue }
+            promoted.insert(firstNode)
+            promoted.insert(lastNode)
             for nodeID in way.nodeIDs where (nodeAcc[nodeID]?.wayRefCount ?? 0) >= 2 {
                 promoted.insert(nodeID)
             }
