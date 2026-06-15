@@ -823,7 +823,10 @@ struct SteddiNavOverlay: View {
                         // an unfloored 9*scale renders ~6pt — unreadable on glass
                         // in a moving vehicle. Keep it scaling above the floor.
                         .font(SteddiTheme.body(max(11, 9 * scale)))
-                        .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
+                        // Sits on the same translucent neutral glass housing as
+                        // the sibling readouts — textSecondary, not textMuted,
+                        // whose AA guarantee holds only against solid surfaces.
+                        .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                 }
             }
             .frame(width: size, height: size)
