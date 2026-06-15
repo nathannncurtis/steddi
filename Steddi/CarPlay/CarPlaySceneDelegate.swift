@@ -368,7 +368,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
         let routeCoords = stateManager.activeRouteCoords
         if !routeCoords.isEmpty {
-            mapController?.startNavigation(routeCoords: routeCoords)
+            // The chase-cam session is already running (isInNavigation == true),
+            // so startNavigation would early-return and never re-target. syncRoute
+            // is purpose-built to rebase a live session: it swaps the overlay and
+            // rebuilds the arc-length geometry/interpolator for the new leg.
+            mapController?.syncRoute(routeCoords)
         }
 
         // Replace the CPTrip so the destination marker/estimates track the new
