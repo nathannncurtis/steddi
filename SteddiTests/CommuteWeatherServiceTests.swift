@@ -100,6 +100,84 @@ struct WeatherCacheKeyTests {
     }
 }
 
+// MARK: - Worst-Condition Window Bounding
+
+@Suite("CommuteWeatherService worst-condition window")
+struct WeatherWorstConditionTests {
+
+    private let clear: (severity: Steddi.WeatherSeverity, summary: String) = (.clear, "")
+    private let heavyRain: (severity: Steddi.WeatherSeverity, summary: String) = (.harsh, "Heavy rain")
+    private let steadyRain: (severity: Steddi.WeatherSeverity, summary: String) = (.moderate, "Steady rain")
+
+    private func at(_ now: Date, plus hours: Double) -> Date {
+        now.addingTimeInterval(hours * 3600)
+    }
+
+    @Test("A past harsh hour does NOT inflate severity (ignored below the lower bound)")
+    func pastHarshIgnored() {
+        let now = Date()
+        // Heavy rain an hour ago that has since cleared; everything from now on is clear.
+        let hourly: [(date: Date, severity: (severity: Steddi.WeatherSeverity, summary: String))] = [
+            (at(now, plus: -1), heavyRain),
+            (at(now, plus: 1), clear),
+            (at(now, plus: 2), clear),
+        ]
+        let result = CommuteWeatherService.worstCondition(current: clear, hourly: hourly, now: now)
+        #expect(result.severity == .clear)
+        #expect(result.summary.isEmpty)
+    }
+
+    @Test("A future harsh hour inside the 12h window IS reflected")
+    func futureHarshReflected() {
+        let now = Date()
+        let hourly: [(date: Date, severity: (severity: Steddi.WeatherSeverity, summary: String))] = [
+            (at(now, plus: -2), heavyRain),   // past — ignored
+            (at(now, plus: 3), heavyRain),    // future — counts
+        ]
+        let result = CommuteWeatherService.worstCondition(current: clear, hourly: hourly, now: now)
+        #expect(result.severity == .harsh)
+        #expect(result.summary == "Heavy rain")
+    }
+
+    @Test("Hours beyond the 12h horizon are excluded")
+    func beyondHorizonExcluded() {
+        let now = Date()
+        let hourly: [(date: Date, severity: (severity: Steddi.WeatherSeverity, summary: String))] = [
+            (at(now, plus: 13), heavyRain),   // outside [now, now+12h]
+            (at(now, plus: 4), steadyRain),   // inside
+        ]
+        let result = CommuteWeatherService.worstCondition(current: clear, hourly: hourly, now: now)
+        #expect(result.severity == .moderate)
+        #expect(result.summary == "Steady rain")
+    }
+
+    @Test("The exact now boundary is included; just before it is not")
+    func nowBoundaryInclusive() {
+        let now = Date()
+        let justBefore: [(date: Date, severity: (severity: Steddi.WeatherSeverity, summary: String))] = [
+            (at(now, plus: -0.01), heavyRain)
+        ]
+        #expect(CommuteWeatherService.worstCondition(current: clear, hourly: justBefore, now: now).severity == .clear)
+
+        let exactlyNow: [(date: Date, severity: (severity: Steddi.WeatherSeverity, summary: String))] = [
+            (now, heavyRain)
+        ]
+        #expect(CommuteWeatherService.worstCondition(current: clear, hourly: exactlyNow, now: now).severity == .harsh)
+    }
+
+    @Test("Current condition stands when no future hour is worse")
+    func currentConditionStands() {
+        let now = Date()
+        let hourly: [(date: Date, severity: (severity: Steddi.WeatherSeverity, summary: String))] = [
+            (at(now, plus: 1), clear),
+            (at(now, plus: 2), steadyRain),
+        ]
+        let result = CommuteWeatherService.worstCondition(current: heavyRain, hourly: hourly, now: now)
+        #expect(result.severity == .harsh)
+        #expect(result.summary == "Heavy rain")
+    }
+}
+
 // MARK: - Severity Mapping (WeatherKit-gated)
 
 #if canImport(WeatherKit)
