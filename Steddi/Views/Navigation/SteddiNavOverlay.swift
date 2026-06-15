@@ -604,13 +604,14 @@ struct SteddiNavOverlay: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 20 * controlScale, weight: .medium))
-                .foregroundStyle(SteddiTheme.accent)
+                .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textMuted(highContrast: highContrast))
                 .rotationEffect(.degrees(rotationDegrees))
                 .frame(width: 50 * controlScale, height: 50 * controlScale)
-                // Glass replaces the solid circle + manual shadow; active
-                // toggles (voice on, 3D on) carry the accent tint.
+                // Always-neutral glass so the glyph never sits accent-on-accent
+                // and vanishes — active state reads through the accent glyph and
+                // its shape, matching the portrait floating controls.
                 .steddiGlass(
-                    tint: isActive ? SteddiTheme.accent : nil,
+                    tint: nil,
                     interactive: true,
                     in: .circle
                 )
@@ -623,10 +624,12 @@ struct SteddiNavOverlay: View {
             .font(.system(size: 17 * controlScale, weight: .medium))
             .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textMuted(highContrast: highContrast))
             .frame(width: 44 * controlScale, height: 44 * controlScale)
-            // Glass replaces the solid circle + manual shadow; active controls
-            // (voice on, 3D on) carry the accent tint, inactive read neutral.
+            // Always-neutral glass so the glyph never sits accent-on-accent and
+            // vanishes — the active state reads through the glyph color (accent)
+            // and its shape (e.g. speaker.wave vs speaker.slash), matching the
+            // compass and report controls in the same cluster.
             .steddiGlass(
-                tint: isActive ? SteddiTheme.accent : nil,
+                tint: nil,
                 interactive: true,
                 in: .circle
             )
