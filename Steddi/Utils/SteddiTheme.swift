@@ -250,13 +250,31 @@ enum SteddiTheme {
     /// adaptive `textPrimary/textSecondary/textMuted` tokens resolve near-black in
     /// the Light theme (and dynamic-by-day), so card copy drawn in them collapses
     /// to near-black-on-black and is illegible there. These fixed light tiers
-    /// keep that copy readable on the dark backdrop in EVERY theme — the same rule
-    /// the skip footer already follows with `.white.opacity(0.85)`. Use ONLY for
-    /// text/glyphs inside the onboarding dark-backdrop beats; everywhere else the
-    /// adaptive theme tokens are correct.
+    /// keep that copy readable in EVERY theme — the same rule the skip footer
+    /// already follows with `.white.opacity(0.85)`. Use ONLY for text/glyphs
+    /// inside the onboarding beats; everywhere else the adaptive theme tokens are
+    /// correct.
+    ///
+    /// CONTRAST — sized for BOTH surfaces the copy actually sits on:
+    ///   • The hero/footer chrome sits directly on the near-black backdrop, where
+    ///     even the muted tier is far above AA.
+    ///   • The showcase/ask beats (routeRules / turnByTurn / permissions /
+    ///     theme / emergency) render *inside* the morphing Liquid Glass card,
+    ///     which is `.regular` glass over the dark backdrop — i.e. a noticeably
+    ///     LIGHTER, frosted panel. The original tiers (secondary 0.8, muted 0.45)
+    ///     were chosen for a flat dark card; on the lighter frosted panel the
+    ///     white-secondary and especially white-muted copy go borderline. The
+    ///     tiers below are raised (secondary 0.8→0.92, muted 0.45→0.66) so
+    ///     secondary/muted copy clears comfortable contrast on the lighter frosted
+    ///     card while staying obviously legible on the dark backdrop too. The
+    ///     three tiers stay visually ranked (primary > secondary > muted).
+    ///
+    /// The decorative graphic strokes (route-rules dashed line, speedo track)
+    /// layer their own `.opacity(...)` on top of `onboardingTextMuted`; the raise
+    /// only makes those slightly more present on the dark card, which is fine.
     static let onboardingTextPrimary = Color.white
-    static let onboardingTextSecondary = Color.white.opacity(0.8)
-    static let onboardingTextMuted = Color.white.opacity(0.45)
+    static let onboardingTextSecondary = Color.white.opacity(0.92)
+    static let onboardingTextMuted = Color.white.opacity(0.66)
 
     /// Fixed dark surface for the onboarding card's Reduce-Transparency / high-
     /// contrast fallback fill. When glass is unavailable, `steddiGlass` paints a
