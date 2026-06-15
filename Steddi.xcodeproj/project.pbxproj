@@ -50,6 +50,7 @@
 		2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
 		35F5485D167737BF995FD280 /* CorridorValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3052F1FB67E6754BA5AE313 /* CorridorValidator.swift */; };
+		37E231EC67E84618C9C36D56 /* CheckCommuteETAIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB8A4F976CE18333497A882 /* CheckCommuteETAIntentTests.swift */; };
 		3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */; };
 		389C5498B6C852FD1ECFC8E6 /* RouteProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4804C43D26E852AC0742468A /* RouteProvider.swift */; };
 		3C6ECCF87073C9F5713AC231 /* PendingCommuteStartStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FE9F1E95BC1F9738DBC186 /* PendingCommuteStartStoreTests.swift */; };
@@ -155,7 +156,6 @@
 		B697491FBDB6DEAA201BF5FC /* ThemePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777F9439E5905A75A1BBDB95 /* ThemePalette.swift */; };
 		B72EA015CC0BDA5C9464DFAD /* ZoneValidationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11174913BB8D28369D82EC58 /* ZoneValidationEngineTests.swift */; };
 		B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */; };
-		AACF4D3E0000000000000001 /* CheckCommuteETAIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACF4D3E0000000000000002 /* CheckCommuteETAIntentTests.swift */; };
 		B837AA53B33E9D4C1C280DC4 /* OneShotLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62DF374E45DA04124F9CB3C2 /* OneShotLocation.swift */; };
 		B89C3A80892FD0596BAA0543 /* OSMSpeedLimitServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3380F79E0670137420A0A6AC /* OSMSpeedLimitServiceTests.swift */; };
 		BAF5E4B4C4A763C1B3B0B9B7 /* ThemeContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B34FE1AC285419AA48A10C0 /* ThemeContrastTests.swift */; };
@@ -273,6 +273,7 @@
 		08B46BB7337E920209A89889 /* HapticServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticServiceTests.swift; sourceTree = "<group>"; };
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0B99A3381CC68B028C99DD0E /* TripStop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripStop.swift; sourceTree = "<group>"; };
+		0BB8A4F976CE18333497A882 /* CheckCommuteETAIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckCommuteETAIntentTests.swift; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
 		0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingPermissionsView.swift; sourceTree = "<group>"; };
 		11174913BB8D28369D82EC58 /* ZoneValidationEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneValidationEngineTests.swift; sourceTree = "<group>"; };
@@ -347,7 +348,6 @@
 		6AA2D7C2DA35A6ABC14E3F1A /* RoadGraphBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadGraphBuilderTests.swift; sourceTree = "<group>"; };
 		6AC5299003A0A378AC5AB4BB /* CommuteNotificationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationServiceTests.swift; sourceTree = "<group>"; };
 		6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDirectionResolverTests.swift; sourceTree = "<group>"; };
-		AACF4D3E0000000000000002 /* CheckCommuteETAIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckCommuteETAIntentTests.swift; sourceTree = "<group>"; };
 		7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
 		7072F1B4A4ECF3043E6462BF /* SteddiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SteddiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		71155E230D450D007980A661 /* OnboardingEmergencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingEmergencyView.swift; sourceTree = "<group>"; };
@@ -618,8 +618,8 @@
 				BFC0E15BFE14314BA0D75D10 /* AStarSearchTests.swift */,
 				DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */,
 				4D83B764A6EC175443541145 /* BinaryHeapTests.swift */,
+				0BB8A4F976CE18333497A882 /* CheckCommuteETAIntentTests.swift */,
 				6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */,
-				AACF4D3E0000000000000002 /* CheckCommuteETAIntentTests.swift */,
 				D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */,
 				2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */,
 				6AC5299003A0A378AC5AB4BB /* CommuteNotificationServiceTests.swift */,
@@ -1261,8 +1261,8 @@
 				06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */,
 				5D8C6D53390B98A19A081299 /* AudioDuckingServiceTests.swift in Sources */,
 				B18FC0A307B656BBD7096743 /* BinaryHeapTests.swift in Sources */,
+				37E231EC67E84618C9C36D56 /* CheckCommuteETAIntentTests.swift in Sources */,
 				B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */,
-				AACF4D3E0000000000000001 /* CheckCommuteETAIntentTests.swift in Sources */,
 				4BD906E8F1CE5635D024B12D /* CommuteNotificationCenterTests.swift in Sources */,
 				0A7AF0449A2474692CB7DC6F /* CommuteNotificationDecisionEngineTests.swift in Sources */,
 				0A97941AFC4A5EBA2F145262 /* CommuteNotificationServiceTests.swift in Sources */,
