@@ -922,10 +922,18 @@ final class NavigationEngine {
         return "\(Int(miles)) mi"
     }
 
-    nonisolated static func formatArrivalTime(_ secondsRemaining: TimeInterval) -> String {
-        let arrival = Date().addingTimeInterval(secondsRemaining)
+    nonisolated static func formatArrivalTime(
+        _ secondsRemaining: TimeInterval,
+        now: Date = Date(),
+        locale: Locale = .current
+    ) -> String {
+        let arrival = now.addingTimeInterval(secondsRemaining)
         let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
+        formatter.locale = locale
+        // "jmm" is the locale-aware hour:minute template — it resolves to a 12h
+        // clock (with AM/PM) or a 24h clock per the locale's own preference,
+        // instead of forcing "h:mm a" which breaks 24h locales.
+        formatter.setLocalizedDateFormatFromTemplate("jmm")
         return formatter.string(from: arrival)
     }
 

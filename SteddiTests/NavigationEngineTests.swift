@@ -174,18 +174,29 @@ struct NavigationEngineFormatDistanceTests {
 @Suite("NavigationEngine.formatArrivalTime")
 struct NavigationEngineFormatArrivalTimeTests {
 
-    @Test("Returns h:mm a format")
+    // Pin the locale: the arrival clock is now locale-aware (a 24h locale must
+    // render a 24h clock), so the old hardcoded "h:mm a" expectation only holds
+    // under a 12h locale. Test that contract explicitly rather than relying on
+    // the host's `.current` locale (which on a 24h-configured machine would
+    // legitimately produce no AM/PM marker).
+    @Test("12-hour locale renders an h:mm a clock")
     func returnsCorrectFormat() {
-        let result = NavigationEngine.formatArrivalTime(3600)
-        #expect(result.contains(try! Regex(#"\d{1,2}:\d{2} (AM|PM)"#)))
+        let result = NavigationEngine.formatArrivalTime(
+            3600, locale: Locale(identifier: "en_US")
+        )
+        #expect(result.contains(try! Regex(#"\d{1,2}:\d{2}\s?(AM|PM)"#)))
     }
 
-    @Test("Zero seconds gives current time")
+    @Test("Zero seconds gives the current time (locale-aware)")
     func zeroSecondsGivesNow() {
-        let result = NavigationEngine.formatArrivalTime(0)
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        let result = NavigationEngine.formatArrivalTime(
+            0, now: now, locale: Locale(identifier: "en_US")
+        )
         let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        let expected = formatter.string(from: Date())
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.setLocalizedDateFormatFromTemplate("jmm")
+        let expected = formatter.string(from: now)
         #expect(result == expected)
     }
 }
@@ -1275,6 +1286,56 @@ struct NavigationEngineSpeedLimitStepTests {
         // And it must never have been queried heading-less for that road.
         #expect(!headingsAtStep1.contains { $0 == nil })
         engine.stopNavigation()
+    }
+}
+
+// MARK: - Arrival Time Formatting (locale-aware)
+
+@Suite("NavigationEngine.formatArrivalTime locale-awareness")
+struct NavigationEngineArrivalTimeTests {
+
+    // Fixed reference instant so the formatted clock time is deterministic.
+    // 1_750_000_000 = 2025-06-15 14:13:20 UTC.
+    private let now = Date(timeIntervalSince1970: 1_750_000_000)
+
+    @Test("24-hour locale renders a 24h clock with no AM/PM marker")
+    func twentyFourHourLocale() {
+        // de_DE prefers a 24h clock; the result must not carry an AM/PM marker
+        // and must not be the forced 12h "h:mm a" format.
+        let formatted = NavigationEngine.formatArrivalTime(
+            600, now: now, locale: Locale(identifier: "de_DE")
+        )
+        let upper = formatted.uppercased()
+        #expect(!upper.contains("AM"))
+        #expect(!upper.contains("PM"))
+        // A 24h render of a PM time has an hour > 12, e.g. "16:23" for this
+        // instant+600s in a UTC-aligned 24h locale; assert it parses back via a
+        // matching 24h formatter rather than pinning an exact string (TZ-safe).
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "de_DE")
+        parser.setLocalizedDateFormatFromTemplate("jmm")
+        #expect(parser.date(from: formatted) != nil)
+    }
+
+    @Test("12-hour locale renders an AM/PM marker")
+    func twelveHourLocale() {
+        let formatted = NavigationEngine.formatArrivalTime(
+            600, now: now, locale: Locale(identifier: "en_US")
+        )
+        let upper = formatted.uppercased()
+        #expect(upper.contains("AM") || upper.contains("PM"))
+    }
+
+    @Test("Same instant differs in 12h vs 24h locale (no hardcoded clock)")
+    func localeActuallyChangesOutput() {
+        let twelve = NavigationEngine.formatArrivalTime(
+            600, now: now, locale: Locale(identifier: "en_US")
+        )
+        let twentyFour = NavigationEngine.formatArrivalTime(
+            600, now: now, locale: Locale(identifier: "de_DE")
+        )
+        // If the clock were hardcoded to "h:mm a" these would be identical.
+        #expect(twelve != twentyFour)
     }
 }
 
