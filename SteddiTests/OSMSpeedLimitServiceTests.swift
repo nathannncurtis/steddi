@@ -401,6 +401,51 @@ struct OSMSpeedLimitCacheTests {
         #expect(result?.isEstimated == false)
     }
 
+    /// Models the off-route splice recovery re-prefetch (HomeView.splice ->
+    /// wireSpeedLimits). After an off-route splice rebuilds the route onto a
+    /// recovery detour, wireSpeedLimits is re-called with the new combined
+    /// geometry. This must re-key the index onto the detour corridor: the
+    /// detour's road resolves to its posted limit, and the ORIGINAL corridor's
+    /// limit is no longer served (otherwise the driver gets a stale limit on
+    /// the detour wherever it brushes an old way).
+    @Test("Re-prefetch onto a recovery corridor swaps the index off the original route")
+    func reprefetchSwapsCorridor() async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // Original corridor: a residential road at 25 mph.
+        let originalLine = [coord(0, 0), coord(0.001, 0)]
+        let originalRoad = coord(0.0005, 0)
+        // Recovery detour corridor: a disjoint road at 45 mph.
+        let detourLine = [coord(0.01, 0.01), coord(0.011, 0.01)]
+        let detourRoad = coord(0.0105, 0.01)
+
+        let transport = TransportStub { request in
+            // Serve whichever way matches the prefetch's bounding region. The
+            // detour query is centered far from the original, so a single stub
+            // keyed on the request body distinguishes them.
+            let body = request.httpBody.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            if body.contains("0.01") {
+                return httpOK(overpassData(wayJSON(id: 2, highway: "secondary", maxspeed: "45 mph", coords: [(0.01, 0.01), (0.011, 0.01)])), url: request.url)
+            }
+            return httpOK(overpassData(wayJSON(id: 1, highway: "residential", maxspeed: "25 mph", coords: [(0, 0), (0.001, 0)])), url: request.url)
+        }
+        let service = OSMSpeedLimitService(transport: transport.transport, cacheDirectory: directory)
+
+        // Original route prefetch (mirrors beginNavigation's wireSpeedLimits).
+        await service.prefetch(for: originalLine, routeKey: "original")
+        #expect(service.loadedRouteKey == "original")
+        #expect(service.speedLimit(at: originalRoad, heading: nil)?.mph == 25)
+
+        // Splice re-prefetch onto the recovery detour (the new combined geometry).
+        await service.prefetch(for: detourLine, routeKey: "detour")
+        #expect(service.loadedRouteKey == "detour")
+        // The detour's posted limit is now available on the geometry we steer onto.
+        #expect(service.speedLimit(at: detourRoad, heading: nil)?.mph == 45)
+        // The original corridor's stale limit is gone — the index swapped fully.
+        #expect(service.speedLimit(at: originalRoad, heading: nil) == nil)
+    }
+
     @Test("Cache hit short-circuits the network")
     func cacheHitSkipsNetwork() async {
         let directory = tempCacheDirectory()

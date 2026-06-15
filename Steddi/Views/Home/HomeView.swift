@@ -2108,6 +2108,18 @@ struct HomeView: View {
         )
         activeSavedPolyline = combined
         navStateManager.activeRouteCoords = combined
+
+        // The restart re-pointed the engine at the combined geometry, but the
+        // OSM speed-limit and camera indexes are still warmed for the ORIGINAL
+        // corridor. Re-wire both so their prefetch re-keys to the recovery
+        // detour — otherwise the driver gets no posted-limit/OSM-camera data on
+        // the exact geometry we're now steering onto (and could even be served a
+        // stale original-route limit where the detour brushes an old way).
+        // Mirrors how beginNavigation/beginCustomNavigation wire a fresh engine;
+        // the provider closures survive the in-place restart, so this only
+        // refreshes the corridor prefetch/index for the new polyline.
+        wireSpeedLimits(for: engine)
+        wireSpeedCameras(for: engine)
         return true
     }
 
