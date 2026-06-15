@@ -101,16 +101,19 @@ protocol PathSearch {
 ///
 /// Key design points carried from the spec:
 /// - **Open set:** the indexed `BinaryHeap` keyed by `f = g + h`.
-/// - **Dense state:** g-scores, came-from edge, and closed flag are `[Float]` /
-///   `[Int32]` arrays indexed by `NodeIndex`, not dictionaries — CSR + dense
-///   arrays is the whole performance point.
-/// - **Turn cost needs predecessor context.** A turn cost depends on
-///   `(incoming edge → node → outgoing edge)`, so the search records, per node,
-///   the incoming edge that produced its best `g` (`cameFromEdge`). When
-///   relaxing an out-edge we charge `turnCost(cameFromEdge → outEdge)`. This is
-///   the spec's "carry incoming edge" formulation; it is exact for turn
-///   penalties that depend only on the immediate predecessor edge (everything in
-///   §5.1).
+/// - **Edge-keyed state.** Turn costs depend on `(incoming edge → node →
+///   outgoing edge)`, so the node alone is NOT a valid search state: a node-keyed
+///   search commits to a single incoming edge per node and can never trade a
+///   costlier approach for a cheaper downstream turn, which breaks turn-aware
+///   optimality (the engine's whole purpose). The state is therefore the
+///   **directed edge just traversed** — `g[e]` is the optimal cost to arrive
+///   having crossed edge `e` (i.e. standing at `e.to`). Two different approach
+///   edges to the same node are distinct states, so the search keeps both and
+///   picks whichever yields the cheaper continuation. Exact for any turn penalty
+///   that depends on the immediate predecessor edge (everything in §5.1).
+/// - **Dense state:** g-scores, came-from edge, and closed flag are `[Double]` /
+///   `[Int32]` arrays indexed by `EdgeIndex` (into `graph.edges`), not
+///   dictionaries — CSR + dense arrays is the whole performance point.
 /// - **Snap-to-graph overlay.** Arbitrary coordinates are snapped onto an edge
 ///   (`GraphSpatialIndex.snap`), and the search runs on a thin overlay that
 ///   splices the mid-edge start/end without mutating the shared, cacheable
@@ -165,63 +168,110 @@ struct AStarSearch: PathSearch {
             )
         }
 
-        let nodeCount = graph.nodes.count
-        var gScore = [Double](repeating: .infinity, count: nodeCount)
-        var cameFromEdge = [Int32](repeating: -1, count: nodeCount)   // edge index into graph.edges
-        var closed = [Bool](repeating: false, count: nodeCount)
+        // Edge-keyed A*: the state is the directed edge just traversed (we are
+        // standing at `edge.to`). `gScore[e]` is the optimal cost to arrive having
+        // crossed edge `e`; `cameFromEdge[e]` is the edge crossed immediately
+        // before `e` (-1 if `e` is a seed edge with no predecessor). This keeps
+        // distinct approach edges to the same node as distinct states so a costlier
+        // approach can win when it enables a cheaper downstream turn.
+        let edgeCount = graph.edges.count
+        var gScore = [Double](repeating: .infinity, count: edgeCount)
+        var cameFromEdge = [Int32](repeating: -1, count: edgeCount)   // predecessor edge index
+        var closed = [Bool](repeating: false, count: edgeCount)
 
-        var heap = BinaryHeap<Double>(minimumCapacity: nodeCount)
+        var heap = BinaryHeap<Double>(minimumCapacity: edgeCount)
 
+        // Degenerate node-start arrival: a node start whose node IS already the
+        // goal node. No edge is traversed, so there is no edge state to settle —
+        // reconstruct the empty interior path directly (cost 0, plus any trailing
+        // partial). Mirrors the old "pop the start node == goal node" exit.
+        for entry in start.entries where entry.viaEdge < 0 && entry.node == goal.node {
+            return reconstruct(
+                goalNode: goal,
+                arrivalEdge: -1,
+                gAtGoal: entry.g,
+                cameFromEdge: cameFromEdge,
+                start: start,
+                in: graph
+            )
+        }
+
+        // Seed the open set. A mid-edge start arrives having "traversed" its
+        // leading partial edge, so its edge state is that edge directly. A node
+        // start has no incoming edge, so relax each out-edge of the start node
+        // with a nil-incoming turn (the origin maneuver) to produce the first edge
+        // states.
         for entry in start.entries {
-            let startNode = entry.node
-            if entry.g < gScore[Int(startNode)] {
-                gScore[Int(startNode)] = entry.g
-                cameFromEdge[Int(startNode)] = entry.viaEdge
-                let h = cost.heuristic(from: graph.nodes[Int(startNode)].coordinate, to: target, in: graph)
-                heap.push(Int(startNode), priority: entry.g + h)
+            if entry.viaEdge >= 0 {
+                let e = Int(entry.viaEdge)
+                if entry.g < gScore[e] {
+                    gScore[e] = entry.g
+                    cameFromEdge[e] = -1
+                    let h = cost.heuristic(from: graph.nodes[Int(entry.node)].coordinate, to: target, in: graph)
+                    heap.push(e, priority: entry.g + h)
+                }
+            } else {
+                let startNode = entry.node
+                let node = graph.nodes[Int(startNode)]
+                for edgeIndex in graph.outEdgeRange(of: startNode) {
+                    let edge = graph.edges[Int(edgeIndex)]
+                    let stepEdge = cost.edgeCost(edge, in: graph)
+                    guard stepEdge.isFinite else { continue }
+                    let stepTurn = cost.turnCost(from: nil, to: edge, at: node, in: graph)
+                    guard stepTurn.isFinite else { continue }
+                    let g = entry.g + stepEdge + stepTurn
+                    let e = Int(edgeIndex)
+                    if g < gScore[e] {
+                        gScore[e] = g
+                        cameFromEdge[e] = -1
+                        let h = cost.heuristic(from: graph.nodes[Int(edge.to)].coordinate, to: target, in: graph)
+                        heap.push(e, priority: g + h)
+                    }
+                }
             }
         }
 
         while let popped = heap.popMin() {
-            let current = NodeIndex(popped.id)
-            if closed[Int(current)] { continue }
-            closed[Int(current)] = true
+            let currentEdgeIndex = Int32(popped.id)
+            if closed[Int(currentEdgeIndex)] { continue }
+            closed[Int(currentEdgeIndex)] = true
 
-            // Goal reached: the popped node is the goal's upstream graph node.
-            if current == goal.node {
+            let currentEdge = graph.edges[Int(currentEdgeIndex)]
+            let v = currentEdge.to   // node we are standing at, having crossed this edge
+
+            // Goal reached: we have arrived at the goal's upstream graph node via
+            // some edge. The first such edge popped is the optimal arrival (A*
+            // settles in nondecreasing f order). The trailing partial cost is
+            // added in reconstruct so it never perturbs the heuristic.
+            if v == goal.node {
                 return reconstruct(
                     goalNode: goal,
-                    gScore: gScore,
+                    arrivalEdge: currentEdgeIndex,
+                    gAtGoal: gScore[Int(currentEdgeIndex)],
                     cameFromEdge: cameFromEdge,
                     start: start,
                     in: graph
                 )
             }
 
-            let incomingEdgeIndex = cameFromEdge[Int(current)]
-            let incomingEdge: GraphEdge? = incomingEdgeIndex >= 0 ? graph.edges[Int(incomingEdgeIndex)] : nil
-            let currentNode = graph.nodes[Int(current)]
-            let gCurrent = gScore[Int(current)]
+            let gCurrent = gScore[Int(currentEdgeIndex)]
+            let vNode = graph.nodes[Int(v)]
 
-            let range = graph.outEdgeRange(of: current)
-            for edgeIndex in range {
-                let edge = graph.edges[Int(edgeIndex)]
-                let neighbor = edge.to
-                if closed[Int(neighbor)] { continue }
+            for outIndex in graph.outEdgeRange(of: v) {
+                let out = graph.edges[Int(outIndex)]
+                if closed[Int(outIndex)] { continue }
 
-                let stepEdge = cost.edgeCost(edge, in: graph)
+                let stepEdge = cost.edgeCost(out, in: graph)
                 guard stepEdge.isFinite else { continue }
-                let stepTurn = cost.turnCost(from: incomingEdge, to: edge, at: currentNode, in: graph)
+                let stepTurn = cost.turnCost(from: currentEdge, to: out, at: vNode, in: graph)
                 guard stepTurn.isFinite else { continue }
 
-                // If this edge is the goal's terminal partial edge, charge only
-                // the partial-length portion when arriving at the goal node.
                 let tentativeG = gCurrent + stepEdge + stepTurn
-                if tentativeG < gScore[Int(neighbor)] {
-                    gScore[Int(neighbor)] = tentativeG
-                    cameFromEdge[Int(neighbor)] = Int32(edgeIndex)
-                    let h = cost.heuristic(from: graph.nodes[Int(neighbor)].coordinate, to: target, in: graph)
-                    heap.push(Int(neighbor), priority: tentativeG + h)
+                if tentativeG < gScore[Int(outIndex)] {
+                    gScore[Int(outIndex)] = tentativeG
+                    cameFromEdge[Int(outIndex)] = currentEdgeIndex
+                    let h = cost.heuristic(from: graph.nodes[Int(out.to)].coordinate, to: target, in: graph)
+                    heap.push(Int(outIndex), priority: tentativeG + h)
                 }
             }
         }
@@ -337,48 +387,46 @@ struct AStarSearch: PathSearch {
 
     private func reconstruct(
         goalNode goal: ResolvedGoal,
-        gScore: [Double],
+        arrivalEdge: EdgeIndex,
+        gAtGoal: Double,
         cameFromEdge: [Int32],
         start: ResolvedOrigin,
         in graph: RoadGraph
     ) -> SearchResult {
-        // Walk `cameFromEdge` back from the goal node to a start node. Stop when
-        // we reach a node whose incoming edge is the leading partial edge (or -1
-        // for a node start), which marks the true origin.
+        // Walk the edge-keyed `cameFromEdge` back from the arrival edge to a seed
+        // edge. Each step collects the traversed edge and the node it departed
+        // from; the chain terminates at a seed edge (predecessor -1). The leading
+        // partial start edge, when it is the seed, is included by this walk (it is
+        // a real edge state) — we must NOT also prepend it below, so the leading
+        // edge is prepended only for a NODE start (where no edge state carries it).
         var edges: [EdgeIndex] = []
         var nodes: [NodeIndex] = [goal.node]
 
-        var current = goal.node
-        while true {
-            let viaEdge = cameFromEdge[Int(current)]
-            if viaEdge < 0 { break }                 // node start reached
-            if viaEdge == start.leadingEdge {
-                // The leading partial edge is the origin's synthetic incoming
-                // edge — it's prepended below, not walked as an interior edge.
-                break
-            }
-            edges.append(viaEdge)
-            let predecessor = graph.edges[Int(viaEdge)].from
+        var current = arrivalEdge   // -1 only for the degenerate node-start == goal case
+        while current >= 0 {
+            edges.append(current)
+            let predecessor = graph.edges[Int(current)].from
             nodes.append(predecessor)
-            current = predecessor
+            current = cameFromEdge[Int(current)]
         }
 
         // We built the path goal→origin; reverse to origin→goal order.
         edges.reverse()
         nodes.reverse()
 
-        // Prepend the leading partial start edge, if any.
-        if start.leadingEdge >= 0 {
-            edges.insert(start.leadingEdge, at: 0)
-            nodes.insert(graph.edges[Int(start.leadingEdge)].from, at: 0)
-        }
+        // For a NODE start the first interior edge already begins at the start
+        // node, so nothing is prepended. For a MID-EDGE start the leading partial
+        // edge IS the seed edge and is therefore already the first element of
+        // `edges` (with its `from` node leading `nodes`) — also nothing to add.
+        // The leading edge is never double-counted.
+
         // Append the trailing partial end edge, if any.
         if goal.trailingEdge >= 0 {
             edges.append(goal.trailingEdge)
             nodes.append(graph.edges[Int(goal.trailingEdge)].to)
         }
 
-        let total = gScore[Int(goal.node)] + goal.trailingCost
+        let total = gAtGoal + goal.trailingCost
         return SearchResult(
             nodePath: nodes,
             edgePath: edges,
