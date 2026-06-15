@@ -2287,10 +2287,16 @@ struct HomeView: View {
         // superseded engine regardless of how splice is reached.
         guard isNavigationLive(engine) else { return false }
 
+        // preservingAlerts: this is an in-place restart onto continued geometry
+        // (the recovery detour stitched onto the saved tail), not a fresh drive.
+        // Cameras/conditions the driver already passed and was warned about can
+        // still fall inside the combined corridor near the rejoin origin; carry
+        // the per-session debounce sets across so they don't re-chime.
         engine.startNavigation(
             polyline: combined,
             steps: combinedSteps,
-            expectedTravelTime: recovery.duration + remaining
+            expectedTravelTime: recovery.duration + remaining,
+            preservingAlerts: true
         )
         activeSavedPolyline = combined
         navStateManager.activeRouteCoords = combined
@@ -2363,8 +2369,18 @@ struct HomeView: View {
                 }
                 .first ?? response.routes[0]
 
+            // This is an in-place mid-drive reroute, not a fresh drive. Carry
+            // the per-session alert debounce across the stop()/start() so a
+            // camera/condition the driver already passed near the reroute origin
+            // doesn't re-chime. stopNavigation() wipes the sets, so snapshot
+            // first and re-seed after the restart.
+            let alertSnapshot = engine.alertedSetsSnapshot
             engine.stopNavigation()
-            engine.startNavigation(route: bestRoute)
+            engine.startNavigation(route: bestRoute, preservingAlerts: true)
+            engine.restoreAlertedSets(
+                cameraIDs: alertSnapshot.cameraIDs,
+                conditionIDs: alertSnapshot.conditionIDs
+            )
             navigationRoute = bestRoute
 
             engine.onOffRoute = { event in
