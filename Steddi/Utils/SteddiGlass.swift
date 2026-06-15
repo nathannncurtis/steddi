@@ -202,3 +202,57 @@ extension ButtonStyle where Self == SteddiPrimaryButtonStyle {
         .init(tint: tint)
     }
 }
+
+// MARK: - The destructive CTA — `.buttonStyle(.steddiDestructive)`
+
+/// Steddi's destructive prominent action — End Navigation, Call emergency
+/// contact, and any other "warm-red, do-this-deliberately" CTA.
+///
+/// Same machinery as ``SteddiPrimaryButtonStyle`` (interactive `warmRed` glass
+/// tint on a `Capsule`, Reduce-Motion press-scale, solid `warmRed` fallback
+/// when glass is off) — but the **foreground is the AA-correct on-fill color
+/// for `warmRed`** rather than a hardcoded `.white`.
+///
+/// THE FIX THIS REPLACES: destructive buttons were drawn as `.white` text on a
+/// `warmRed` fill (and the nav overlay used `.glassProminent.tint(warmRed)`,
+/// which forces the same white label). White-on-warmRed is only ~3.79:1 — it
+/// passes the 3.0 large-text floor for a bold ≥17pt label but FAILS the 4.5
+/// body floor the codebase holds these semantic fills to
+/// (`ThemeContrastTests.contrastingForegroundSemanticFillsAA`), and silently
+/// drops below AA-large if `warmRed` is ever lightened or the label shrinks
+/// under Dynamic Type. `contrastingForeground(on: warmRedRGB)` resolves to the
+/// near-black on-fill glyph (warmRed luminance 0.227 > flip 0.179) at ~5.55:1,
+/// clearing the full body floor with margin on every Dynamic-Type size.
+///
+/// USAGE — identical to `.steddiPrimary`; the style owns weight + foreground +
+/// fill, so the label needs no `.foregroundStyle`:
+/// ```swift
+/// Button("End", action: end).buttonStyle(.steddiDestructive)
+/// ```
+struct SteddiDestructiveButtonStyle: ButtonStyle {
+    /// AA-legible foreground for the warmRed fill — the near-black on-fill glyph
+    /// (warmRed is mid-tone, luminance 0.227 > the 0.179 flip), at ~5.55:1.
+    private var foreground: Color { SteddiTheme.contrastingForeground(on: SteddiTheme.warmRedRGB) }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .fontWeight(.bold)
+            .foregroundStyle(foreground)
+            .scaleEffect(SteddiMotion.shouldAnimate && configuration.isPressed ? TransitionKit.pressScale : 1)
+            .animation(TransitionKit.buttonSpring, value: configuration.isPressed)
+            .steddiGlass(
+                tint: SteddiTheme.warmRed,
+                interactive: true,
+                in: Capsule(),
+                // Solid warmRed when glass is off so the destructive CTA stays
+                // prominent and the near-black on-fill label stays legible.
+                fallbackFill: SteddiTheme.warmRed
+            )
+    }
+}
+
+extension ButtonStyle where Self == SteddiDestructiveButtonStyle {
+    /// The canonical destructive CTA — warmRed glass fill with the AA-correct
+    /// on-fill (near-black) label. See ``SteddiDestructiveButtonStyle``.
+    static var steddiDestructive: SteddiDestructiveButtonStyle { SteddiDestructiveButtonStyle() }
+}

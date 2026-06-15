@@ -282,7 +282,17 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     }
 
     private func applyThemeStyle() {
-        mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
+        let style = SteddiTheme.currentThemeMode.mapInterfaceStyle
+        // Apply on BOTH the container view and the map view. Setting it only on
+        // the MKMapView in `viewDidLoad` (before the view is in a window) let
+        // MapKit fetch its first cartography tiles against the inherited
+        // scene/window style — so the Dark / dynamic-night map rendered LIGHT at
+        // cold launch until the next `.steddiThemeModeChanged` (which never fires
+        // for a fresh map). Overriding the container view's trait first
+        // propagates the dark style down before the map renders, and reasserting
+        // it on the map view makes the cold-launch cartography deterministic.
+        view.overrideUserInterfaceStyle = style
+        mapView.overrideUserInterfaceStyle = style
     }
 
     @objc private func themeModeChanged() {

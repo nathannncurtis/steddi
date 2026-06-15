@@ -129,12 +129,13 @@ struct EmergencyView: View {
             } label: {
                 Label("Call \(emergencyContact)", systemImage: "phone.fill")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 28)
                     .padding(.vertical, 16)
-                    .background(SteddiTheme.warmRed, in: RoundedRectangle(cornerRadius: 14))
             }
-            .buttonStyle(.steddiPress)
+            // Destructive/high-stakes CTA: warmRed fill + the AA-correct on-fill
+            // label from the style (was hardcoded white-on-warmRed = 3.79:1,
+            // sub-AA for the highest-stakes button in the app).
+            .buttonStyle(.steddiDestructive)
             .accessibilityLabel("Call your emergency contact")
             .accessibilityHint("Dials \(emergencyContact).")
             .contextMenu {

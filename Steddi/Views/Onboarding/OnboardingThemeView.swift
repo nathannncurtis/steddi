@@ -182,12 +182,20 @@ struct OnboardingThemeView: View {
                         if card.recommended {
                             Text("Recommended")
                                 .font(.caption2.weight(.semibold))
-                                // Fixed light on a neutral wash — accent-on-accent
-                                // (over the accent-tinted card) was near-invisible.
+                                // White text on a fixed DARK pill — self-contained
+                                // and accent-independent. A translucent-WHITE wash
+                                // (the prior fix) composited light over the
+                                // accent-tinted, already-white-washed selected
+                                // card, so white-on-white-wash was the
+                                // least-legible string on the beat (~2.4:1). A
+                                // near-opaque dark capsule makes white read on
+                                // EVERY accent tint (white on black.opacity(0.35)
+                                // over the dark card clears AA with margin), the
+                                // same on-fill rule the swatch ring/check follow.
                                 .foregroundStyle(SteddiTheme.onboardingTextPrimary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.white.opacity(0.2), in: Capsule())
+                                .background(Color.black.opacity(0.35), in: Capsule())
                         }
                     }
                     Text(card.description)

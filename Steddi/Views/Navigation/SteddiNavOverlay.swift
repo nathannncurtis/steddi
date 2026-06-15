@@ -372,12 +372,17 @@ struct SteddiNavOverlay: View {
                         }
                     }
 
+                    // Destructive CTA: warmRed glass fill + the AA-correct
+                    // on-fill label from the style. Was `.glassProminent
+                    // .tint(warmRed)` — the forced-white-label path the codebase
+                    // bans (white-on-warmRed only clears the 3:1 large floor and
+                    // silently drops below AA if warmRed lightens or the label
+                    // shrinks under Dynamic Type).
                     Button("End", action: onEndNavigation)
                         .font(.system(size: 17 * textScale, weight: .semibold))
                         .padding(.horizontal, 20 * controlScale)
                         .padding(.vertical, 10 * controlScale)
-                        .buttonStyle(.glassProminent)
-                        .tint(SteddiTheme.warmRed)
+                        .buttonStyle(.steddiDestructive)
                 }
                 .padding(12)
                 .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.mediumShape, fallbackStrokeOpacity: 0.08)
@@ -706,13 +711,14 @@ struct SteddiNavOverlay: View {
             }
             .frame(maxWidth: .infinity)
 
-            // End button — right. Destructive, so warm-red prominent glass.
+            // End button — right. Destructive CTA: warmRed glass fill + the
+            // AA-correct on-fill label from the style (was `.glassProminent
+            // .tint(warmRed)`, the forced-white-label path the codebase bans).
             Button("End", action: onEndNavigation)
                 .font(.system(size: 17 * textScale, weight: .semibold))
                 .padding(.horizontal, 24 * controlScale)
                 .padding(.vertical, 12 * controlScale)
-                .buttonStyle(.glassProminent)
-                .tint(SteddiTheme.warmRed)
+                .buttonStyle(.steddiDestructive)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)

@@ -26,8 +26,15 @@ struct PlaceIconPickerView: View {
                             .foregroundStyle(isSelected ? SteddiTheme.onAccent : SteddiTheme.accent)
                             .frame(width: 44, height: 44)
                             .background(
+                                // Selected glyph pairs `onAccent` with the
+                                // `accentBrand` FILL (the documented on-fill
+                                // pairing, AA on every accent). Filling with the
+                                // text-safe `accent` collapsed onAccent-on-fill to
+                                // ~3:1 in light mode (near-black glyph on the
+                                // darkened text-safe accent) — onAccent is sized
+                                // against the brand hue, not the text-safe shift.
                                 Circle()
-                                    .fill(isSelected ? SteddiTheme.accent : SteddiTheme.accentSubtle)
+                                    .fill(isSelected ? SteddiTheme.accentBrand : SteddiTheme.accentSubtle)
                             )
                         Text(option.label)
                             .font(.caption2)

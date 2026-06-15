@@ -8,6 +8,9 @@ struct DaysOfWeekPicker: View {
 
     // index 0 -> weekday 1 (Sunday), … index 6 -> weekday 7 (Saturday)
     private let labels = ["S", "M", "T", "W", "T", "F", "S"]
+    // Full weekday names so VoiceOver disambiguates the duplicate single-letter
+    // glyphs (two "S" = Sun/Sat, two "T" = Tue/Thu read identically otherwise).
+    private let fullNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
     var body: some View {
         HStack(spacing: 8) {
@@ -28,13 +31,22 @@ struct DaysOfWeekPicker: View {
                         // near-white pastel the accent becomes in grey.
                         .foregroundStyle(isOn ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 38)
+                        // 44pt minimum tap target (was 38) — the cell stays
+                        // visually compact but the hit area meets the HIG floor,
+                        // matching the IconPickerView convention.
+                        .frame(height: 44)
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
                         .background(
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(isOn ? SteddiTheme.accentBrand : SteddiTheme.surfaceElevated)
                         )
                 }
                 .buttonStyle(.plain)
+                // Distinct, stateful VoiceOver label — full weekday name plus the
+                // on/off trait so a non-sighted user can tell which day they're
+                // toggling (the single-letter glyphs are ambiguous).
+                .accessibilityLabel(fullNames[index])
+                .accessibilityAddTraits(isOn ? [.isSelected] : [])
             }
         }
     }

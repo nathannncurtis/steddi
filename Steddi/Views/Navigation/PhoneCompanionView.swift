@@ -278,11 +278,12 @@ struct PhoneCompanionView: View {
             } label: {
                 Text("End Navigation")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(SteddiTheme.warmRed, in: Capsule())
             }
+            // Destructive CTA: warmRed fill + AA-correct on-fill label from the
+            // style (was hardcoded white-on-warmRed = 3.79:1, sub-AA body).
+            .buttonStyle(.steddiDestructive)
             .padding(.trailing, 16)
         }
         .padding(.vertical, 14)
