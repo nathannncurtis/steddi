@@ -45,7 +45,13 @@ struct CheckCommuteETAIntent: AppIntent {
         // Resolve direction: proximity when we have a location fix, then the
         // active schedule window, then the next scheduled window, defaulting
         // to heading out (origin → destination).
-        let currentLocation = CLLocationManager().location
+        //
+        // A cold `CLLocationManager().location` is virtually always nil here:
+        // intents run without the app's running location service, so the
+        // property was never populated. Request a proper one-shot fix instead,
+        // failing gracefully (nil) on denial/timeout so direction falls back to
+        // the schedule.
+        let currentLocation = await OneShotLocation.current()
         let direction = resolveDirection(commute: commute, currentLocation: currentLocation)
 
         let destinationPin = direction == .originToDestination ? destination : origin
