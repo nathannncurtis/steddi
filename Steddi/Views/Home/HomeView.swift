@@ -1868,7 +1868,11 @@ struct HomeView: View {
                     .foregroundStyle(SteddiTheme.onAccent)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
-                    .background(SteddiTheme.accent, in: Capsule())
+                    // onAccent is computed to clear AA against accentBrand (the
+                    // raw brand hue), not the surface-adaptive text-safe accent —
+                    // filling with accent would be onAccent-on-text-safe-accent,
+                    // a ~3:1 dark-on-darkened pairing in light theme.
+                    .background(SteddiTheme.accentBrand, in: Capsule())
             }
 
             Button {
