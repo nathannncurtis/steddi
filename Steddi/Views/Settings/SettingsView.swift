@@ -101,8 +101,15 @@ struct SettingsView: View {
                                     }
                                     .overlay {
                                         if isSelected {
+                                            // Ring the selected swatch in textPrimary,
+                                            // not the raw accent: a light accent (e.g.
+                                            // gold ~2.3:1) on the near-white grouped
+                                            // List row gives a barely-visible ring.
+                                            // textPrimary is contrast-bearing against
+                                            // the row in either theme so the selected
+                                            // swatch reads on every accent.
                                             Circle()
-                                                .stroke(option.color, lineWidth: 3)
+                                                .stroke(SteddiTheme.textPrimary, lineWidth: 3)
                                                 .frame(width: 44, height: 44)
                                         }
                                     }
