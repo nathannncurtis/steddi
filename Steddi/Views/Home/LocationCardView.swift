@@ -19,6 +19,22 @@ struct LocationCardView<Menu: View>: View {
         return .heavy
     }
 
+    /// Legible foreground for the "+N" badge, drawn on the `trafficStatus.color`
+    /// FILL. White fails AA/3:1 on the amber (`.moderate`) and sage (`.clear`)
+    /// fills, so pick black/white per WCAG against each status's underlying fill
+    /// hue (`.moderate` defers to the accent-aware `onAccent`, since its fill is
+    /// the live accent brand). `.unknown` never reaches the badge (it only shows
+    /// when `delay > 2`, where `trafficStatus` is `.clear`/`.moderate`/`.heavy`),
+    /// so it falls back to the accent-aware on-fill color for completeness.
+    private var badgeForeground: Color {
+        switch trafficStatus {
+        case .clear: return SteddiTheme.contrastingForeground(on: SteddiTheme.sageRGB)
+        case .moderate: return SteddiTheme.onAccent
+        case .heavy: return SteddiTheme.contrastingForeground(on: SteddiTheme.warmRedRGB)
+        case .unknown: return SteddiTheme.onAccent
+        }
+    }
+
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
         Button(action: onTap) {
@@ -39,7 +55,7 @@ struct LocationCardView<Menu: View>: View {
                         if let category, category != .other {
                             Text(category.displayName)
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(category.themeColor)
+                                .foregroundStyle(category.labelColor)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(category.themeColor.opacity(0.15), in: Capsule())
@@ -55,7 +71,7 @@ struct LocationCardView<Menu: View>: View {
                             if let delay = delayMinutes, delay > 2 {
                                 Text("+\(delay)")
                                     .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(badgeForeground)
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 1)
                                     .background(trafficStatus.color, in: Capsule())
