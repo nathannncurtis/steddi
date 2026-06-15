@@ -16,6 +16,7 @@ targets:
       properties:
         UILaunchScreen: {}
         CFBundleDisplayName: Steddi
+        NSSupportsLiveActivities: true
         NSLocationWhenInUseUsageDescription: "Steddi needs your location to navigate and record routes."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Steddi needs background location access to continue navigation when the app is in the background."
         CFBundleURLTypes:
