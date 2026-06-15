@@ -747,7 +747,11 @@ struct SteddiNavOverlay: View {
                         .foregroundStyle(speedColor)
 
                     Text("mph")
-                        .font(SteddiTheme.body(9 * scale))
+                        // Floor the unit caption so it stays legible: at the
+                        // landscape/floating speedometer (size 44, scale ~0.69)
+                        // an unfloored 9*scale renders ~6pt — unreadable on glass
+                        // in a moving vehicle. Keep it scaling above the floor.
+                        .font(SteddiTheme.body(max(11, 9 * scale)))
                         .foregroundStyle(SteddiTheme.textMuted)
                 }
             }
