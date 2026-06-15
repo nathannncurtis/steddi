@@ -226,9 +226,16 @@ final class CommuteNotificationService {
         let (destCoord, destName) = destination(for: commute, direction: direction)
 
         // ETA: requires both a current location and a destination coordinate.
+        // A failed fetch (network/invalid coords) must not be silently swallowed
+        // — log it so a suppressed notification is diagnosable. The decision
+        // engine falls back to the typical duration below when currentETA is nil.
         var currentETA: TimeInterval?
         if let here = locationProvider()?.coordinate, let dest = destCoord {
-            currentETA = try? await directionsService.fetchDirectETA(from: here, to: dest)
+            do {
+                currentETA = try await directionsService.fetchDirectETA(from: here, to: dest)
+            } catch {
+                serviceLog.notice("ETA fetch failed for \(commute.name, privacy: .public); falling back to typical duration: \(error.localizedDescription, privacy: .public)")
+            }
         }
 
         // Typical baseline: preferred route's stored typical duration.
