@@ -93,6 +93,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             // reports (mobile traps after 6h, fixed cameras after a year).
             SpeedCameraService.shared.configure(container: modelContainer)
             SpeedCameraService.shared.sweepExpiredReports()
+
+            // Reap any Live Activity left over from a prior session at launch,
+            // regardless of which scene type brings the process up. HomeView.onAppear
+            // also calls this, but a CarPlay-first cold launch never creates HomeView,
+            // so the launch-time sweep is what makes the documented guarantee true on
+            // that path. Self-guards on an empty activity set; a true cold launch has
+            // no in-memory active nav, so it can't end a legitimately-live activity.
+            LiveActivityService.shared.cleanupOrphanedActivities()
         }
 
         return true
