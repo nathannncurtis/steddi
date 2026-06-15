@@ -886,9 +886,13 @@ struct HomeView: View {
                 .frame(width: 36, height: 4)
                 .padding(.top, 10)
 
-            // Tab selector — a moving accent-glass pill slides under the active
-            // tab (matchedGeometry morph). The sheet body beneath stays solid.
-            GlassEffectContainer(spacing: 8) {
+            // Tab selector — the bar itself is a floating Liquid Glass capsule,
+            // with a moving accent-glass pill sliding under the active tab
+            // (matchedGeometry morph). Bar + pill share one GlassEffectContainer
+            // so they compose into a single glass cluster rather than stacking
+            // two separate glass layers. The list content below stays on the
+            // solid sheet surface for legibility (no glass-on-glass).
+            GlassEffectContainer(spacing: 6) {
                 HStack(spacing: 0) {
                     ForEach(SheetTab.allCases, id: \.self) { tab in
                         Button {
@@ -911,12 +915,24 @@ struct HomeView: View {
                         }
                     }
                 }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                // The bar surface — a single subtle neutral glass layer behind
+                // the whole tab row so the nav menu reads as floating glass.
+                .steddiGlass(
+                    tint: nil,
+                    interactive: false,
+                    in: Capsule(),
+                    fallbackFill: SteddiTheme.surfaceSecondary
+                )
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+            .padding(.bottom, 4)
 
             SteadyLine(color: SteddiTheme.accent, height: 1)
                 .padding(.horizontal, 32)
+                .padding(.top, 4)
 
             // Content — crossfades between tabs.
             Group {
