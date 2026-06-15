@@ -450,6 +450,11 @@ struct HomeView: View {
             }
             showPostArrival = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .steddiShowPlaces)) { _ in
+            // CarPlay dashboard "Recent Places" deep link foregrounded the app —
+            // surface the Places tab so the driver lands where they expect.
+            withAnimation(TransitionKit.quickFade) { sheetTab = .places }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .steddiNavigateToLocation)) { notification in
             // steddi://navigate and CarPlay Start Navigation both post this
             guard let lat = notification.userInfo?["lat"] as? Double,

@@ -126,6 +126,18 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
                     )
                 }
             }
+        case "start-commute":
+            // CarPlay dashboard "Start Commute" button. Queue a durable
+            // first-active start request: this URL both foregrounds/launches the
+            // app and (on a cold launch) lands before HomeView attaches, so the
+            // store carries the intent until HomeView drains it on appear.
+            MainActor.assumeIsolated {
+                PendingCommuteStartStore.shared.request(.firstActive)
+            }
+        case "places":
+            // CarPlay dashboard "Recent Places" button — foreground the app on
+            // its Places tab so the driver can pick a destination.
+            NotificationCenter.default.post(name: .steddiShowPlaces, object: nil)
         case "search":
             if let query = params["q"] {
                 NotificationCenter.default.post(
@@ -151,6 +163,7 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
 extension Notification.Name {
     static let steddiNavigateToLocation = Notification.Name("steddiNavigateToLocation")
     static let steddiSearchQuery = Notification.Name("steddiSearchQuery")
+    static let steddiShowPlaces = Notification.Name("steddiShowPlaces")
     static let steddiTestArrival = Notification.Name("steddiTestArrival")
     static let steddiResetOnboarding = Notification.Name("steddiResetOnboarding")
 }
