@@ -1155,3 +1155,112 @@ struct ComputeStepAlongDistancesTests {
         #expect(alongs[0] == nil)
     }
 }
+
+// MARK: - Speed-Camera Heading Filter Tests
+
+/// Verifies the directional filters don't degrade to omni-directional at nav
+/// start before a GPS-derived travel bearing exists — a camera that would only
+/// be surfaced by a heading-less (omni-directional) lookup must NOT fire.
+@MainActor
+@Suite("NavigationEngine speed-camera heading filter")
+struct NavigationEngineCameraHeadingTests {
+
+    /// A west→east route (constant easterly bearing ~90°).
+    private static let route: [CLLocationCoordinate2D] = [
+        CLLocationCoordinate2D(latitude: 34.0, longitude: -118.50),
+        CLLocationCoordinate2D(latitude: 34.0, longitude: -118.40),
+        CLLocationCoordinate2D(latitude: 34.0, longitude: -118.30)
+    ]
+
+    private func makeEngine() -> NavigationEngine {
+        let engine = NavigationEngine()
+        let steps = [
+            NavStep(instruction: "Depart", distance: 0, coordinate: Self.route[0], maneuverSymbol: "location.fill"),
+            NavStep(instruction: "Arrive", distance: 0, coordinate: Self.route[2], maneuverSymbol: "flag.fill")
+        ]
+        engine.startNavigation(polyline: Self.route, steps: steps)
+        return engine
+    }
+
+    @Test("Stationary first fix on-route filters by the route bearing, not omni-directionally")
+    func firstFixUsesRouteBearing() {
+        let engine = makeEngine()
+
+        var receivedHeadings: [Double?] = []
+        // Simulate the real services: a heading-less (nil) lookup degrades to
+        // omni-directional and would surface a 'behind' camera. This stub only
+        // emits a camera when it is called with a nil heading — exactly the
+        // spurious case the fix must prevent.
+        engine.speedCameraProvider = { coord, heading in
+            receivedHeadings.append(heading)
+            guard heading == nil else { return nil }
+            return SpeedCameraAlert(
+                alertID: "behind-1",
+                kind: .speedCamera,
+                coordinate: coord,
+                distanceMeters: 120
+            )
+        }
+        var fired: [SpeedCameraAlert] = []
+        engine.onSpeedCameraApproaching = { fired.append($0) }
+
+        // A stationary fix at the route start: no valid GPS course/speed yet, so
+        // any travel bearing must come from the route geometry, not the GPS course.
+        let startFix = CLLocation(
+            coordinate: Self.route[0],
+            altitude: 0,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            course: -1,        // invalid course
+            speed: 0,          // not moving
+            timestamp: Date()
+        )
+        engine.updateLocation(startFix)
+
+        // The camera lookup was driven by the route's travel bearing (~east, 90°),
+        // never the nil that would degrade it to omni-directional.
+        #expect(!receivedHeadings.isEmpty)
+        #expect(receivedHeadings.allSatisfy { $0 != nil })
+        // So the omni-directional-only 'behind' camera never fired.
+        #expect(fired.isEmpty)
+        #expect(engine.approachingCamera == nil)
+    }
+
+    @Test("With no route bearing available, a heading-less camera lookup is suppressed")
+    func noBearingSuppressesCamera() {
+        // A degenerate single-coordinate route: there is no projector, so navPose
+        // (and thus the route-segment-bearing fallback) is nil. With no GPS
+        // heading either, directionalFilterBearing is nil and the alert must be
+        // suppressed rather than answered omni-directionally.
+        let engine = NavigationEngine()
+        let solo = CLLocationCoordinate2D(latitude: 34.0, longitude: -118.5)
+        let steps = [NavStep(instruction: "Depart", distance: 0, coordinate: solo, maneuverSymbol: "location.fill")]
+        engine.startNavigation(polyline: [solo], steps: steps)
+
+        var providerCalled = false
+        engine.speedCameraProvider = { coord, _ in
+            providerCalled = true
+            return SpeedCameraAlert(alertID: "any", kind: .speedCamera, coordinate: coord, distanceMeters: 100)
+        }
+        var fired: [SpeedCameraAlert] = []
+        engine.onSpeedCameraApproaching = { fired.append($0) }
+
+        let fix = CLLocation(
+            coordinate: solo,
+            altitude: 0,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            course: -1,
+            speed: 0,
+            timestamp: Date()
+        )
+        engine.updateLocation(fix)
+
+        #expect(engine.headingDegrees == nil)
+        // The provider is never consulted because there's no confident bearing,
+        // so no camera is surfaced behind the driver at nav start.
+        #expect(providerCalled == false)
+        #expect(fired.isEmpty)
+        #expect(engine.approachingCamera == nil)
+    }
+}

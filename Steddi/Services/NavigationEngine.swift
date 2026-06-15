@@ -435,8 +435,18 @@ final class NavigationEngine {
             approachingCamera = nil
             return
         }
+        // Until a travel bearing exists, a heading-less lookup degrades to
+        // omni-directional and could surface a camera *behind* the driver (e.g.
+        // crawling off-corridor out of a parking structure at nav start). The
+        // route segment bearing is the safe fallback while on-route; if even
+        // that is unavailable, suppress the alert rather than chime on a
+        // possibly-behind camera that the one-shot debounce would then lock in.
+        guard let bearing = directionalFilterBearing else {
+            approachingCamera = nil
+            return
+        }
         let probe = snappedCoordinate ?? currentCoordinate
-        guard let probe, let alert = provider(probe, headingDegrees) else {
+        guard let probe, let alert = provider(probe, bearing) else {
             // No camera in range — drop the banner. The debounce set keeps any
             // already-announced camera from re-chiming if it briefly re-enters.
             approachingCamera = nil
@@ -455,9 +465,24 @@ final class NavigationEngine {
     /// Falls back to the instruction heuristic set in applyStep when the
     /// provider has no match for this position.
     private func updateSpeedLimit(location: CLLocation) {
-        guard let provided = speedLimitProvider?(location.coordinate, headingDegrees) else { return }
+        // Use the same bearing the camera filter does: with no confident bearing
+        // the OSM lookup would skip its heading gate and could return the
+        // opposite carriageway's limit. Skip the update until a bearing exists so
+        // the readout doesn't momentarily flip to the wrong side of the road.
+        guard let bearing = directionalFilterBearing else { return }
+        guard let provided = speedLimitProvider?(location.coordinate, bearing) else { return }
         speedLimitMph = provided.mph
         speedLimitIsEstimated = provided.isEstimated
+    }
+
+    /// Bearing used to gate direction-sensitive lookups (cameras ahead, the
+    /// road's speed limit for this carriageway). Prefers the smoothed travel
+    /// bearing; before that exists, falls back to the route segment bearing while
+    /// on-route so a nav start that hasn't moved yet still filters by the route's
+    /// travel direction. nil only when neither is known — callers then suppress
+    /// the directional alert rather than answering omni-directionally.
+    private var directionalFilterBearing: Double? {
+        headingDegrees ?? navPose?.segmentBearingDegrees
     }
 
     /// Resolve the speed limit for a freshly-advanced step. The instruction
