@@ -146,6 +146,11 @@ final class ThemeEngine {
     private(set) var isTunnelDetected = false
 
     private var updateTimer: Timer?
+    /// Cadence the live `updateTimer` was scheduled at. Lets `scheduleNextUpdate`
+    /// coalesce rapid successive calls: if the required interval is unchanged and
+    /// a timer is already pending, we leave it running instead of thrashing
+    /// invalidate/recreate on every input update.
+    private var scheduledInterval: TimeInterval?
     private let locationProvider: () -> CLLocationCoordinate2D?
     private let now: () -> Date
     private let normsProvider = LocalNormsProvider()
@@ -449,7 +454,6 @@ final class ThemeEngine {
     /// Adaptive cadence: 1s while a transition animates, 10s inside the solar
     /// twilight band, 5min otherwise. Nothing here allocates per frame.
     private func scheduleNextUpdate(solarElevation: Double?) {
-        updateTimer?.invalidate()
         let interval: TimeInterval
         if currentState.activeTransition == .tunnel {
             interval = 1
@@ -461,6 +465,17 @@ final class ThemeEngine {
         } else {
             interval = 300
         }
+
+        // Coalesce: when the cadence is unchanged and a timer is already pending,
+        // let the in-flight timer keep running rather than invalidating and
+        // recreating it on every rapid input update. Only reschedule when the
+        // required interval actually changes (e.g. entering/leaving the tunnel
+        // or twilight band) or no timer is live.
+        if let existing = updateTimer, existing.isValid, scheduledInterval == interval {
+            return
+        }
+
+        updateTimer?.invalidate()
         let timer = Timer(timeInterval: interval, repeats: false) { _ in
             Task { @MainActor in
                 ThemeEngine.shared.updateThemeState()
@@ -469,6 +484,7 @@ final class ThemeEngine {
         timer.tolerance = interval * 0.1
         RunLoop.main.add(timer, forMode: .common)
         updateTimer = timer
+        scheduledInterval = interval
     }
 
     // MARK: - Bootstrap
