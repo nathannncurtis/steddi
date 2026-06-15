@@ -372,6 +372,187 @@ struct AStarSearchTests {
         #expect(abs(result.totalCost - expected) < 1e-6)
     }
 
+    // MARK: - Boundary snap (endpoint projects exactly onto a graph node)
+
+    /// A straight 3-edge chain 1-2-3-4 along the equator, each ~111 m primary —
+    /// the shared fixture for the boundary-snap tests below.
+    private func equatorChain() -> RoadGraph {
+        buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.001),
+            node(3, 0.0, 0.002),
+            node(4, 0.0, 0.003),
+            way(100, [1, 2], tags: ["highway": "primary", "maxspeed": "45 mph"]),
+            way(101, [2, 3], tags: ["highway": "primary", "maxspeed": "45 mph"]),
+            way(102, [3, 4], tags: ["highway": "primary", "maxspeed": "45 mph"])
+        )
+    }
+
+    @Test("destination snapping onto a node (fraction 1) terminates AT that node, no full-edge overshoot")
+    func destinationSnapsToNodeFractionOne() {
+        // The destination sits just PAST node 4 (the chain's far end), slightly
+        // north and east, so its foot on edge 3-4 clamps to the TO vertex: t=1 ⇒
+        // fraction=1.0 exactly. Pre-fix this returned a trailing partial edge with
+        // endFraction=1 and (for the symmetric origin case) overshot; here the
+        // destination must resolve to node 4 itself.
+        let graph = equatorChain()
+        let origin = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0005)   // mid edge 1-2
+        let dest = CLLocationCoordinate2D(latitude: 0.00001, longitude: 0.0035)       // past node 4
+        guard let snap = graph.snap(dest, maxDistanceMeters: 200) else {
+            Issue.record("destination snap failed"); return
+        }
+        #expect(snap.fraction == 1.0)   // exact clamp boundary
+
+        guard let result = search.search(from: .coordinate(origin), to: .coordinate(dest), in: graph, cost: cost) else {
+            Issue.record("no path"); return
+        }
+        // Terminates at a node, so there is no trailing partial edge: endFraction
+        // is the node sentinel 1, and the last node is node 4.
+        #expect(result.endFraction == 1)
+        let i4 = NodeIndex(graph.osmToIndex[4]!)
+        #expect(result.nodePath.last == i4)
+
+        // The drawn polyline must END at node 4's coordinate — NOT a block past it.
+        guard let synth = StepSynthesizer.synthesize(result, in: graph) else {
+            Issue.record("synthesis failed"); return
+        }
+        let node4 = graph.nodes[Int(i4)].coordinate
+        let endPoint = synth.coordinates.last!
+        #expect(RouteGeometry.haversineDistance(from: endPoint, to: node4) < 1.0,
+                "route should end at node 4, ended \(RouteGeometry.haversineDistance(from: endPoint, to: node4)) m away")
+
+        // Total distance equals origin→node4: from the snapped origin to node 2
+        // (~55 m), then 2-3 and 3-4 (~111 m each) — and crucially NOT one extra
+        // ~111 m edge of overshoot. Compare against the explicit node-4 destination.
+        let viaNode = search.search(from: .coordinate(origin), to: .node(i4), in: graph, cost: cost)
+        #expect(abs(result.totalCost - (viaNode?.totalCost ?? -1)) < 1e-6)
+    }
+
+    @Test("destination snapping onto a node (fraction 0) terminates AT the FROM node, no full-edge overshoot")
+    func destinationSnapsToNodeFractionZero() {
+        // The destination sits just BEFORE node 1 (the chain's near end), so its
+        // foot on edge 1-2 clamps to the FROM vertex: t=0 ⇒ fraction=0.0 exactly.
+        // This is the headline overshoot bug: pre-fix, resolveDestination returned
+        // trailingEdge=edge(1-2), endFraction=0, and stitchedPolyline drew the WHOLE
+        // edge to node 2 — a full block PAST the real destination at node 1.
+        let graph = equatorChain()
+        // Origin mid edge 3-4 travelling back toward node 1 needs a reverse edge;
+        // the ways are bidirectional so 4->3->2->1 exists. Place origin past node 4.
+        let origin = CLLocationCoordinate2D(latitude: 0.00001, longitude: 0.0025)     // mid edge 3-4
+        let dest = CLLocationCoordinate2D(latitude: 0.00001, longitude: -0.0005)      // before node 1
+        guard let snap = graph.snap(dest, maxDistanceMeters: 200) else {
+            Issue.record("destination snap failed"); return
+        }
+        #expect(snap.fraction == 0.0)   // exact clamp boundary
+
+        guard let result = search.search(from: .coordinate(origin), to: .coordinate(dest), in: graph, cost: cost) else {
+            Issue.record("no path"); return
+        }
+        #expect(result.endFraction == 1)   // node sentinel, no trailing partial
+        let i1 = NodeIndex(graph.osmToIndex[1]!)
+        #expect(result.nodePath.last == i1)
+
+        guard let synth = StepSynthesizer.synthesize(result, in: graph) else {
+            Issue.record("synthesis failed"); return
+        }
+        let node1 = graph.nodes[Int(i1)].coordinate
+        let endPoint = synth.coordinates.last!
+        let overshoot = RouteGeometry.haversineDistance(from: endPoint, to: node1)
+        #expect(overshoot < 1.0,
+                "route should END at node 1, ended \(overshoot) m away (full-edge overshoot bug)")
+
+        // Distance matches an explicit node-1 destination — no phantom extra edge.
+        let viaNode = search.search(from: .coordinate(origin), to: .node(i1), in: graph, cost: cost)
+        #expect(abs(result.totalCost - (viaNode?.totalCost ?? -1)) < 1e-6)
+    }
+
+    @Test("origin snapping onto a node (fraction 1) starts AT that node, no leading-edge overshoot")
+    func originSnapsToNodeFractionOne() {
+        // The origin sits just PAST node 4, clamping its foot on edge 3-4 to the
+        // TO vertex: fraction=1.0. Pre-fix resolveOrigin returned leadingEdge=edge,
+        // startFraction=1, and stitchedPolyline (isFirst true for 1) drew the FULL
+        // leading edge from node 3 — a block BEFORE the real origin at node 4.
+        let graph = equatorChain()
+        let origin = CLLocationCoordinate2D(latitude: 0.00001, longitude: 0.0035)     // past node 4
+        let dest = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0015)      // mid edge 2-3, heading back
+        guard let snap = graph.snap(origin, maxDistanceMeters: 200) else {
+            Issue.record("origin snap failed"); return
+        }
+        #expect(snap.fraction == 1.0)
+
+        guard let result = search.search(from: .coordinate(origin), to: .coordinate(dest), in: graph, cost: cost) else {
+            Issue.record("no path"); return
+        }
+        // No leading partial edge: startFraction is the node sentinel 0 and the
+        // first node is node 4.
+        #expect(result.startFraction == 0)
+        let i4 = NodeIndex(graph.osmToIndex[4]!)
+        #expect(result.nodePath.first == i4)
+
+        guard let synth = StepSynthesizer.synthesize(result, in: graph) else {
+            Issue.record("synthesis failed"); return
+        }
+        let node4 = graph.nodes[Int(i4)].coordinate
+        let startPoint = synth.coordinates.first!
+        #expect(RouteGeometry.haversineDistance(from: startPoint, to: node4) < 1.0,
+                "route should START at node 4, started \(RouteGeometry.haversineDistance(from: startPoint, to: node4)) m away")
+
+        // Distance matches starting explicitly from node 4 — no leading-edge overshoot.
+        let viaNode = search.search(from: .node(i4), to: .coordinate(dest), in: graph, cost: cost)
+        #expect(abs(result.totalCost - (viaNode?.totalCost ?? -1)) < 1e-6)
+    }
+
+    @Test("origin snapping onto a node (fraction 0) starts AT the FROM node")
+    func originSnapsToNodeFractionZero() {
+        // Origin just before node 1, clamping to the FROM vertex of edge 1-2:
+        // fraction=0.0. Must resolve to node 1 with no leading partial edge.
+        let graph = equatorChain()
+        let origin = CLLocationCoordinate2D(latitude: 0.00001, longitude: -0.0005)    // before node 1
+        let dest = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0015)      // mid edge 2-3
+        guard let snap = graph.snap(origin, maxDistanceMeters: 200) else {
+            Issue.record("origin snap failed"); return
+        }
+        #expect(snap.fraction == 0.0)
+
+        guard let result = search.search(from: .coordinate(origin), to: .coordinate(dest), in: graph, cost: cost) else {
+            Issue.record("no path"); return
+        }
+        #expect(result.startFraction == 0)
+        let i1 = NodeIndex(graph.osmToIndex[1]!)
+        #expect(result.nodePath.first == i1)
+
+        guard let synth = StepSynthesizer.synthesize(result, in: graph) else {
+            Issue.record("synthesis failed"); return
+        }
+        let node1 = graph.nodes[Int(i1)].coordinate
+        let startPoint = synth.coordinates.first!
+        #expect(RouteGeometry.haversineDistance(from: startPoint, to: node1) < 1.0)
+
+        let viaNode = search.search(from: .node(i1), to: .coordinate(dest), in: graph, cost: cost)
+        #expect(abs(result.totalCost - (viaNode?.totalCost ?? -1)) < 1e-6)
+    }
+
+    @Test("mid-edge fractions are unchanged by the boundary-snap fix")
+    func midEdgeFractionsUnchanged() {
+        // Regression guard: an interior snap (foot strictly between vertices) must
+        // still produce a partial leading/trailing edge with an open-interval
+        // fraction — the boundary normalization must NOT collapse it to a node.
+        let graph = equatorChain()
+        let start = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0005)     // mid edge 1-2
+        let end = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0025)       // mid edge 3-4
+        guard let result = search.search(from: .coordinate(start), to: .coordinate(end), in: graph, cost: cost) else {
+            Issue.record("no mid-edge path"); return
+        }
+        #expect(result.startFraction > 0 && result.startFraction < 1)
+        #expect(result.endFraction > 0 && result.endFraction < 1)
+        // Distinct from the full node-to-node traversal (a partial leading and
+        // trailing segment are cut off).
+        let i1 = NodeIndex(graph.osmToIndex[1]!)
+        let i4 = NodeIndex(graph.osmToIndex[4]!)
+        let full = search.search(from: .node(i1), to: .node(i4), in: graph, cost: cost)
+        #expect(result.totalCost < (full?.totalCost ?? .infinity))
+    }
+
     @Test("node-to-same-node degenerate path has zero cost")
     func sameNode() {
         let graph = buildGraph(
