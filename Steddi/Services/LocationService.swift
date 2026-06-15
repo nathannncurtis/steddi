@@ -30,6 +30,14 @@ final class LocationService {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.currentLocation = location
+                // Publish every fix to the process-wide store so the dynamic
+                // theme's solar day/night check (SteddiTheme.isDaytime) has a
+                // fresh coordinate whether or not navigation is running.
+                // Previously only NavigationEngine wrote here, so on the Home
+                // screen (the most common state) the solar check fell back to a
+                // crude clock heuristic until a drive began. Last-writer-wins, so
+                // the navigation feed forwarding the same fix is harmless.
+                LastKnownLocation.update(location.coordinate)
                 // Theming: every fix feeds tunnel detection. The service
                 // dedupes by fix timestamp, so the navigation loop forwarding
                 // the same fix is harmless.
