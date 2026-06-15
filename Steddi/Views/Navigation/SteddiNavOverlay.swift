@@ -703,22 +703,27 @@ struct SteddiNavOverlay: View {
             return SteddiTheme.textPrimary
         }()
 
-        let bgColor: Color = {
-            if overLimit > 8 { return SteddiTheme.warmRedSubtle }
-            return SteddiTheme.surfaceSecondary
-        }()
+        // Over-limit warning stays a SOLID warmRedSubtle fill — a safety readout
+        // must never lose contrast to translucency. Otherwise the housing is
+        // neutral glass.
+        let isWarning = overLimit > 8
 
         let scale = size / 64.0
 
         return ZStack(alignment: .topTrailing) {
             ZStack {
-                // Background circle
-                Circle()
-                    .fill(bgColor)
-                    .overlay(
-                        Circle()
-                            .stroke(speedColor.opacity(0.3), lineWidth: 2)
-                    )
+                // Background housing: solid in the warning state, glass otherwise.
+                Group {
+                    if isWarning {
+                        Circle().fill(SteddiTheme.warmRedSubtle)
+                    } else {
+                        Circle().fill(.clear).steddiGlass(tint: nil, interactive: false, in: .circle)
+                    }
+                }
+                .overlay(
+                    Circle()
+                        .stroke(speedColor.opacity(0.3), lineWidth: 2)
+                )
 
                 // Speed arc gauge
                 Circle()
