@@ -1528,3 +1528,93 @@ struct NavigationEngineCameraHeadingTests {
         #expect(engine.approachingCamera == nil)
     }
 }
+
+// MARK: - ETA decaying speed
+
+@Suite("NavigationEngine ETA decaying speed estimate")
+@MainActor
+struct NavigationEngineETATests {
+
+    /// Long straight route so there's always plenty of distance remaining and
+    /// ETA stays well clear of the arrival latch.
+    private func longRoute() -> [CLLocationCoordinate2D] {
+        (0...400).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.0009, longitude: -117.0) }
+    }
+
+    private func silentSteps(along polyline: [CLLocationCoordinate2D]) -> [NavStep] {
+        [
+            NavStep(instruction: "", distance: 100000, coordinate: polyline.first ?? CLLocationCoordinate2D(), maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline.last ?? CLLocationCoordinate2D(), maneuverSymbol: "flag.fill"),
+        ]
+    }
+
+    private func fix(at coord: CLLocationCoordinate2D, speed: Double, t: TimeInterval) -> CLLocation {
+        CLLocation(
+            coordinate: coord,
+            altitude: 0,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            course: 0,
+            courseAccuracy: 5,
+            speed: speed,
+            speedAccuracy: 1,
+            timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
+        )
+    }
+
+    @Test("A sustained recent slowdown lowers the ETA speed estimate (EWMA decays)")
+    func recentSlowdownLowersEstimate() {
+        let engine = NavigationEngine()
+        let polyline = longRoute()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        // Phase 1: a long fast highway stretch at 30 m/s (~67 mph). Stay early on
+        // the route so distance-remaining barely moves and ETA reflects speed.
+        var t = 0.0
+        for _ in 0..<120 {
+            engine.updateLocation(fix(at: polyline[1], speed: 30, t: t))
+            t += 1
+        }
+        let etaAfterFast = engine.etaSeconds
+        #expect(etaAfterFast > 0)
+
+        // Phase 2: hit sustained stop-and-go at 4 m/s (~9 mph) at roughly the
+        // same position. With a never-decaying cumulative mean the ETA would
+        // barely move (the thousands of fast samples dominate). An EWMA pulls the
+        // speed estimate down quickly, so the ETA climbs sharply.
+        for _ in 0..<60 {
+            engine.updateLocation(fix(at: polyline[1], speed: 4, t: t))
+            t += 1
+        }
+        let etaAfterSlow = engine.etaSeconds
+
+        // Recent slowdown must materially raise ETA (lower speed estimate). With
+        // a 6x speed drop the EWMA should at least roughly double the ETA; a
+        // frozen cumulative mean would move it only a few percent.
+        #expect(etaAfterSlow > etaAfterFast * 2)
+        engine.stopNavigation()
+    }
+
+    @Test("EWMA stays stable against single-fix speed jitter")
+    func ewmaIgnoresSingleSpike() {
+        let engine = NavigationEngine()
+        let polyline = longRoute()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        var t = 0.0
+        for _ in 0..<60 {
+            engine.updateLocation(fix(at: polyline[1], speed: 20, t: t))
+            t += 1
+        }
+        let etaSteady = engine.etaSeconds
+
+        // One wild GPS speed spike (60 m/s) should barely move the estimate.
+        engine.updateLocation(fix(at: polyline[1], speed: 60, t: t)); t += 1
+        let etaAfterSpike = engine.etaSeconds
+
+        // Within ~10% — a single fix at alpha 0.05 nudges the average only a little.
+        let delta = abs(etaAfterSpike - etaSteady) / etaSteady
+        #expect(delta < 0.10)
+        engine.stopNavigation()
+    }
+}

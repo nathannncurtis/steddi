@@ -147,8 +147,19 @@ final class NavigationEngine {
     private var projector: RouteProjector?
     private(set) var totalRouteDistance: Double = 0
     private(set) var originalExpectedTravelTime: TimeInterval = 0
+    /// Exponentially-weighted moving average of recent moving speed (m/s),
+    /// driving the live ETA. An EWMA (vs. a cumulative all-samples mean) lets
+    /// recent conditions dominate: after a long fast highway stretch, hitting
+    /// stop-and-go pulls the estimate down within a minute or two so the ETA
+    /// stops under-estimating time through the jam (and vice-versa). 0 until the
+    /// first moving sample seeds it.
     private var averageSpeedMPS: Double = 0
     private var speedSampleCount: Int = 0
+    /// EWMA smoothing factor per moving fix (~1Hz feed). ~0.05 gives an
+    /// effective window of ~20 fixes (~20s) — responsive to a sustained change
+    /// while still ignoring single-fix GPS speed jitter, so the ETA tracks
+    /// recent conditions without wild swings.
+    private let speedEWMAAlpha: Double = 0.05
     private var locationUpdateCount: Int = 0
 
     // Thresholds
@@ -414,9 +425,18 @@ final class NavigationEngine {
         checkRoadConditionProximity()
         checkSpeedCameraProximity()
 
+        // Decaying (EWMA) speed estimate: weight recent moving fixes so the ETA
+        // tracks current conditions instead of a frozen whole-drive mean. The
+        // >1 m/s gate still drops full stops so a red light doesn't drag the
+        // estimate to zero. The first moving sample seeds the average directly
+        // (no warm-up bias toward 0).
         if speedMPS > 1.0 {
+            if speedSampleCount == 0 {
+                averageSpeedMPS = speedMPS
+            } else {
+                averageSpeedMPS += speedEWMAAlpha * (speedMPS - averageSpeedMPS)
+            }
             speedSampleCount += 1
-            averageSpeedMPS += (speedMPS - averageSpeedMPS) / Double(speedSampleCount)
         }
 
         if checkArrival(location: location) { return }
