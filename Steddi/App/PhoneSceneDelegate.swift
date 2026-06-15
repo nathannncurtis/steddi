@@ -242,6 +242,19 @@ private struct SteddiRootView: View {
     }
 
     private var resolvedColorScheme: ColorScheme? {
+        // The whole onboarding flow floats on a FIXED dark cinematic backdrop, so
+        // the root host must resolve `.dark` for its duration — this is what drives
+        // the WINDOW's interface style and therefore the system status-bar glyph
+        // polarity (LIGHT clock/wifi/battery over the dark backdrop). A descendant
+        // `.preferredColorScheme(.dark)` inside OnboardingView cannot do this: an
+        // ancestor preferredColorScheme (this one) shadows the value bubbling up
+        // from its child before it reaches the hosting controller, so the bar would
+        // stay light-mode (dark glyphs) in the Light/dynamic-day theme. Gating here
+        // — at the root, above any inner scheme — is the only place that flips the
+        // window. Restored to the app theme the instant the gate flips to Home, so
+        // the fall-into-Home morph still lands on the correct app polarity.
+        guard hasCompletedOnboarding else { return .dark }
+
         let mode = ThemeModeEx(rawValue: themeModeEx) ?? .dynamic
         guard mode == .dynamic else { return mode.colorScheme }
         // Observation-tracked read: the body re-evaluates whenever the engine
