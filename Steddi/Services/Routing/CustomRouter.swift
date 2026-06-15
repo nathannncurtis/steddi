@@ -142,6 +142,12 @@ final class CustomRouter: RouteProvider {
         var stitchedCoords: [CLLocationCoordinate2D] = []
         var stitchedSteps: [NavStep] = []
         var freeFlowSeconds: TimeInterval = 0
+        // Distance carried over from a stripped departure (and any earlier leg that
+        // contributed no surviving step) waiting to be folded onto the next real
+        // step. Persists across legs so a TURN-LESS leg — whose whole distance lives
+        // on a departure step that is then stripped, with its arrival stripped too,
+        // leaving no surviving step in that leg — does not silently drop its length.
+        var carriedDistance: Double = 0
 
         for i in 0..<(stops.count - 1) {
             let result = search.search(
@@ -168,26 +174,44 @@ final class CustomRouter: RouteProvider {
             // leading departure: waypoints are pass-throughs, not stops (mirrors
             // DirectionsService.stitchTrimmedLegs / viaSteps).
             var legSteps = synthesis.steps
+            // Strip the TRAILING arrival BEFORE folding the stripped departure's
+            // carried distance. Order matters: a turn-less leg synthesizes exactly
+            // [departure(distance = whole leg length), arrival(distance = 0)], so the
+            // only surviving step after stripping the departure is the arrival — fold
+            // first and the arrival-strip would then carry that distance away with it.
+            // Stripping the arrival first leaves no step to mis-fold onto, so the
+            // leg's distance survives in `carriedDistance` and lands on the next
+            // real step (or, for the final leg, its kept arrival) below.
+            if i < stops.count - 2 {
+                while let last = legSteps.last, isArrival(last) { legSteps.removeLast() }
+            }
             if i > 0 {
                 // The departure "Head …" step carries the leg's LEAD-IN distance
                 // (waypoint → first maneuver; StepSynthesizer writes that onto the
-                // departure step). Removing it would drop that distance, so fold it
-                // forward onto the first surviving step — preserving the per-step
-                // distance totals and the distance-to-next-maneuver shown right
-                // after the stop.
-                var carriedDistance: Double = 0
+                // departure step). Removing it would drop that distance, so carry it
+                // forward — preserving the per-step distance totals and the
+                // distance-to-next-maneuver shown right after the stop.
                 while let first = legSteps.first, isDeparture(first) {
                     carriedDistance += first.distance
                     legSteps.removeFirst()
                 }
-                if carriedDistance > 0, let first = legSteps.first {
-                    legSteps[0] = withDistance(first, first.distance + carriedDistance)
-                }
             }
-            if i < stops.count - 2 {
-                while let last = legSteps.last, isArrival(last) { legSteps.removeLast() }
+            // Fold any carried distance onto this leg's first surviving step. A
+            // turn-less leg leaves `legSteps` empty here, so the carry simply rolls
+            // forward to the next leg (or, for the final leg, onto its kept arrival).
+            if carriedDistance > 0, let first = legSteps.first {
+                legSteps[0] = withDistance(first, first.distance + carriedDistance)
+                carriedDistance = 0
             }
             stitchedSteps.append(contentsOf: legSteps)
+        }
+
+        // Any distance still pending (a turn-less final leg, or a trailing run of
+        // turn-less legs that produced no surviving step) lands on the last step so
+        // the route's per-step distances still sum to the full driven length.
+        if carriedDistance > 0, let last = stitchedSteps.last {
+            stitchedSteps[stitchedSteps.count - 1] = withDistance(last, last.distance + carriedDistance)
+            carriedDistance = 0
         }
 
         guard stitchedCoords.count >= 2 else { return nil }

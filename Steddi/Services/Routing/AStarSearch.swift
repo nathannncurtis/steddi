@@ -148,24 +148,26 @@ struct AStarSearch: PathSearch {
         // the (possibly partial) start edge alone, handled below in `reconstruct`.
         let target = goal.targetCoordinate
 
-        // Same-edge degenerate: start and end snap to the SAME directed edge with
-        // the start at/behind the end. The whole journey lives inside that one
-        // edge, so A* must not run — reaching `goal.node` (= the edge's upstream
-        // node) only via the reverse edge would synthesize a topologically invalid
-        // round-trip like [A,B,A,B]. Return the direct sub-edge path instead.
-        if start.leadingEdge >= 0,
-           start.leadingEdge == goal.trailingEdge,
-           start.startFraction <= goal.endFraction {
-            let edge = graph.edges[Int(start.leadingEdge)]
-            let full = cost.edgeCost(edge, in: graph)
-            let subCost = full.isFinite ? full * (goal.endFraction - start.startFraction) : .infinity
-            return SearchResult(
-                nodePath: [edge.from, edge.to],
-                edgePath: [start.leadingEdge],
-                totalCost: subCost,
-                startFraction: start.startFraction,
-                endFraction: goal.endFraction
-            )
+        // Same-edge / same-physical-road degenerate: origin and destination snap
+        // onto the same physical street and the whole journey lives inside one
+        // directed edge, so A* must not run — reaching `goal.node` the long way
+        // would synthesize a full overshoot + U-turn (a topologically valid but
+        // markedly suboptimal round-trip). Pick the directed edge along which the
+        // origin precedes the destination and return the direct sub-edge path.
+        //
+        // Two cases collapse here:
+        //  1. Both snap to the SAME directed edge with start at/behind the end
+        //     (origin upstream of destination) — use that edge directly.
+        //  2. Both snap to the two opposite directed edges of a TWO-WAY street and
+        //     the natural forward approach reaches the destination from DOWNSTREAM
+        //     (origin ahead of destination). Terminating on the forward edge would
+        //     force the driver to the block end and U-turn back; instead terminate
+        //     on the co-located REVERSE edge so the route stops at the destination
+        //     from whichever side is reached first (a short reverse, no U-turn).
+        // One-way correctness is preserved: a one-way street has no co-located
+        // reverse edge, so case 2 never fires against it.
+        if let direct = sameRoadDirectPath(start: start, goal: goal, in: graph, cost: cost) {
+            return direct
         }
 
         // Edge-keyed A*: the state is the directed edge just traversed (we are
@@ -277,6 +279,112 @@ struct AStarSearch: PathSearch {
         }
 
         return nil   // no path
+    }
+
+    // MARK: - Same-road direct sub-segment
+
+    /// The co-located REVERSE directed edge of `edgeIndex` on a two-way street:
+    /// the edge over the same physical OSM way that runs in the opposite direction
+    /// (`from`/`to` swapped). Identified by matching `osmWayID` so a genuinely
+    /// distinct parallel road is never mistaken for the reverse twin. Returns -1
+    /// when none exists — most importantly for a ONE-WAY street, which emits only
+    /// one directed edge, so a search can never terminate against its flow.
+    private func coLocatedReverseEdge(of edgeIndex: Int32, in graph: RoadGraph) -> Int32 {
+        guard edgeIndex >= 0, Int(edgeIndex) < graph.edges.count else { return -1 }
+        let edge = graph.edges[Int(edgeIndex)]
+        for candidate in graph.outEdgeRange(of: edge.to) {
+            let rev = graph.edges[Int(candidate)]
+            if rev.to == edge.from && rev.osmWayID == edge.osmWayID {
+                return candidate
+            }
+        }
+        return -1
+    }
+
+    /// When the origin and destination snap onto the same physical street and the
+    /// entire trip lives inside one directed edge, return the direct sub-segment
+    /// path instead of running A* (which would route a full overshoot + U-turn).
+    /// Returns nil when the endpoints are not on the same physical road, or when
+    /// they ARE on the same forward edge but the destination is upstream of the
+    /// origin AND no reverse edge exists to reach it (a genuine one-way overshoot
+    /// the search must resolve normally). The chosen directed edge is whichever
+    /// one places the origin fraction at/behind the destination fraction.
+    private func sameRoadDirectPath(
+        start: ResolvedOrigin,
+        goal: ResolvedGoal,
+        in graph: RoadGraph,
+        cost: SearchCost
+    ) -> SearchResult? {
+        guard start.leadingEdge >= 0, goal.trailingEdge >= 0 else { return nil }
+
+        // Case 1: both endpoints on the SAME directed edge with the origin at/behind
+        // the destination — the journey is the forward sub-segment of that edge.
+        if start.leadingEdge == goal.trailingEdge, start.startFraction <= goal.endFraction {
+            return directSubSegment(
+                edgeIndex: start.leadingEdge,
+                from: start.startFraction,
+                to: goal.endFraction,
+                in: graph,
+                cost: cost
+            )
+        }
+
+        // Case 2: origin and destination snapped onto the same physical street but
+        // the origin is AHEAD of the destination along the bound directed edge —
+        // either both on the same forward edge with `startFraction > endFraction`,
+        // or each bound to one of the two opposite directed edges of the two-way.
+        // Both reduce to: travel runs the OPPOSITE way down the street. Re-express
+        // the trip on the co-located reverse edge of the origin's leading edge.
+        // On that reverse edge the origin sits at fraction `1 - startFraction` and
+        // the destination at `1 - endFraction` (when the destination was bound to
+        // the same forward edge as the origin) or directly at `endFraction` (when
+        // it was already bound to that reverse edge). Whichever, the result is a
+        // short reverse sub-segment that stops at the destination from the side
+        // first reached — no overshoot, no U-turn. A one-way street has no reverse
+        // edge, so this never fires against its flow.
+        let reverse = coLocatedReverseEdge(of: start.leadingEdge, in: graph)
+        guard reverse >= 0 else { return nil }
+        let reverseStart = 1 - start.startFraction
+        let reverseEnd: Double
+        if goal.trailingEdge == start.leadingEdge {
+            // Destination bound to the SAME forward edge as the origin: its position
+            // on the reverse edge is the complement of its forward fraction.
+            reverseEnd = 1 - goal.endFraction
+        } else if goal.trailingEdge == reverse {
+            // Destination already bound to the reverse edge: use its fraction as-is.
+            reverseEnd = goal.endFraction
+        } else {
+            return nil
+        }
+        guard reverseStart <= reverseEnd else { return nil }
+        return directSubSegment(
+            edgeIndex: reverse,
+            from: reverseStart,
+            to: reverseEnd,
+            in: graph,
+            cost: cost
+        )
+    }
+
+    /// The single-edge sub-segment path from fraction `from` to `to` along one
+    /// directed edge. `from <= to` is the caller's contract.
+    private func directSubSegment(
+        edgeIndex: Int32,
+        from: Double,
+        to: Double,
+        in graph: RoadGraph,
+        cost: SearchCost
+    ) -> SearchResult {
+        let edge = graph.edges[Int(edgeIndex)]
+        let full = cost.edgeCost(edge, in: graph)
+        let subCost = full.isFinite ? full * (to - from) : .infinity
+        return SearchResult(
+            nodePath: [edge.from, edge.to],
+            edgePath: [edgeIndex],
+            totalCost: subCost,
+            startFraction: from,
+            endFraction: to
+        )
     }
 
     // MARK: - Endpoint resolution (snap overlay)
