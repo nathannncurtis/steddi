@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftData
 @testable import Steddi
 
 // MARK: - Store Selection Tests
@@ -299,5 +300,106 @@ struct ModelStoreLocatorReadOnlyTests {
 
         let url = ModelStoreLocator.readOnlyStoreURL(groupURL: group, legacyCandidates: [legacy])
         #expect(url == nil)
+    }
+}
+
+// MARK: - Migration Plan / Read-Only Newer-Store Tests
+
+@Suite("ModelStoreLocator migration plan")
+struct ModelStoreLocatorMigrationTests {
+
+    private func makeTempStoreURL() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ModelStoreLocatorMigrationTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("Steddi.store")
+    }
+
+    @Test("Migration plan exposes the current versioned schema")
+    func planExposesCurrentSchema() {
+        #expect(ModelStoreLocator.migrationPlan is SteddiMigrationPlan.Type)
+        // The container schema is built from the plan's current versioned schema,
+        // so the two can never drift.
+        #expect(ModelStoreLocator.schema.entities.count == SteddiSchemaV1.models.count)
+        #expect(SteddiMigrationPlan.schemas.count == 1)
+    }
+
+    /// A store written by the current (read-write) schema reopens read-only with
+    /// the migration plan and serves a fetch — the healthy same-schema path the
+    /// commute-ETA intent depends on.
+    @Test("Read-only container opens a store written by the current schema")
+    func readOnlyOpensCurrentSchemaStore() throws {
+        let url = try makeTempStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        // Write with the full app schema + plan.
+        do {
+            let rw = try ModelContainer(
+                for: ModelStoreLocator.schema,
+                migrationPlan: ModelStoreLocator.migrationPlan,
+                configurations: [ModelConfiguration(url: url)]
+            )
+            let ctx = ModelContext(rw)
+            ctx.insert(Commute(name: "Work"))
+            try ctx.save()
+        }
+
+        // Reopen read-only with the plan and confirm a fetch succeeds.
+        let ro = try ModelContainer(
+            for: ModelStoreLocator.schema,
+            migrationPlan: ModelStoreLocator.migrationPlan,
+            configurations: [ModelConfiguration(url: url, allowsSave: false)]
+        )
+        let commutes = try ModelContext(ro).fetch(FetchDescriptor<Commute>())
+        #expect(commutes.count == 1)
+        #expect(commutes.first?.name == "Work")
+    }
+
+    /// Read-only stores cannot migrate in place — that's an unavoidable SwiftData
+    /// constraint (an in-place migration must WRITE the store). This pins the
+    /// contract the commute-ETA intent depends on: when the on-disk store needs a
+    /// migration the read-only container CANNOT perform, opening it throws a
+    /// distinguishable load error at OPEN time (CoreData 134110, surfaced as
+    /// SwiftDataError.loadIssueModelContainer) rather than opening and then
+    /// silently returning an empty result set. The migration plan does not — and
+    /// cannot — change this; the read-write app container performs the real
+    /// upgrade on next launch, after which the read-only open succeeds.
+    ///
+    /// Simulated by writing a store with the full schema, then opening it
+    /// read-only with a schema that omits an entity (the shape SwiftData treats
+    /// as "needs migration"). The throw is the seam the intent keys off of.
+    @Test("Read-only open of a store needing migration throws instead of silently emptying")
+    func readOnlyMigrationNeededThrows() throws {
+        let url = try makeTempStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        // Writer: the full current schema (all model types).
+        do {
+            let writer = try ModelContainer(
+                for: ModelStoreLocator.schema,
+                migrationPlan: ModelStoreLocator.migrationPlan,
+                configurations: [ModelConfiguration(url: url)]
+            )
+            let ctx = ModelContext(writer)
+            ctx.insert(Commute(name: "Work"))
+            try ctx.save()
+        }
+
+        // Reader: a schema that differs from what's on disk (omits entities), so
+        // SwiftData wants to migrate — which a read-only store can't do.
+        let mismatchedSchema = Schema([
+            PinnedLocation.self,
+            Commute.self,
+            Route.self,
+            DriveRecord.self,
+            NoGoZone.self,
+            CommuteTrip.self
+        ])
+        #expect(throws: (any Error).self) {
+            _ = try ModelContainer(
+                for: mismatchedSchema,
+                configurations: [ModelConfiguration(url: url, allowsSave: false)]
+            )
+        }
     }
 }
