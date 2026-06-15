@@ -42,6 +42,13 @@ enum PolylineEncoder {
     }
 
     /// Decode a polyline string to coordinates.
+    ///
+    /// Input can be network-sourced (OSRM/Overpass) or persisted geometry, so it
+    /// may be malformed: a non-charset byte (>= 0x80 or otherwise outside the
+    /// polyline alphabet) or a truncated continuation that never terminates.
+    /// Such input is treated as a hard decode failure — the decode aborts and
+    /// returns the coordinates accumulated so far rather than spinning the CPU
+    /// or allocating without bound.
     static func decode(_ encoded: String, precision: Int = 6) -> [CLLocationCoordinate2D] {
         let factor = pow(10.0, Double(precision))
         var coordinates: [CLLocationCoordinate2D] = []
@@ -50,9 +57,14 @@ enum PolylineEncoder {
         var lng = 0
 
         while index < encoded.endIndex {
-            lat += decodeValue(encoded, index: &index)
+            let startOfPair = index
+            guard let dLat = decodeValue(encoded, index: &index) else { break }
+            lat += dLat
             guard index < encoded.endIndex else { break }
-            lng += decodeValue(encoded, index: &index)
+            guard let dLng = decodeValue(encoded, index: &index) else { break }
+            lng += dLng
+            // Any pair that consumed no input would loop forever — bail out.
+            guard index > startOfPair else { break }
 
             coordinates.append(CLLocationCoordinate2D(
                 latitude: Double(lat) / factor,
@@ -78,21 +90,32 @@ enum PolylineEncoder {
         return encoded
     }
 
-    private static func decodeValue(_ encoded: String, index: inout String.Index) -> Int {
+    /// Decode one zig-zag varint. Returns nil on malformed input — a non-ASCII /
+    /// non-charset byte, or a continuation longer than a 32-bit value can hold
+    /// (a truncated/garbled stream that never sets the terminating low bit).
+    /// Always advances `index` past the offending byte so callers can never spin.
+    private static func decodeValue(_ encoded: String, index: inout String.Index) -> Int? {
         var result = 0
         var shift = 0
 
         while index < encoded.endIndex {
-            guard let ascii = encoded[index].asciiValue else {
-                break
+            guard let ascii = encoded[index].asciiValue, ascii >= 63 else {
+                // Non-charset byte: consume it so the caller makes progress, then fail.
+                index = encoded.index(after: index)
+                return nil
             }
             let byte = Int(ascii) - 63
             index = encoded.index(after: index)
             result |= (byte & 0x1F) << shift
             shift += 5
-            if byte < 0x20 { break }
+            if byte < 0x20 {
+                return (result & 1) != 0 ? ~(result >> 1) : (result >> 1)
+            }
+            // No terminating byte within 32 bits — over-long continuation, bail.
+            if shift >= 32 { return nil }
         }
 
-        return (result & 1) != 0 ? ~(result >> 1) : (result >> 1)
+        // Ran off the end without a terminating byte: truncated continuation.
+        return nil
     }
 }
