@@ -275,8 +275,15 @@ final class TunnelDetectionService {
     ) -> Bool {
         let coarse = radius / 111_000 * 2 + 0.001
         for segment in segments {
-            guard abs(coordinate.latitude - segment.start.latitude) < coarse
-                    || abs(coordinate.latitude - segment.end.latitude) < coarse else { continue }
+            // Full bounding-box pre-filter on BOTH axes, expanded by `coarse`. A
+            // latitude-only check would skip long N-S segments whose endpoints are
+            // far in latitude from a mid-segment point even though it sits on them.
+            let minLat = min(segment.start.latitude, segment.end.latitude) - coarse
+            let maxLat = max(segment.start.latitude, segment.end.latitude) + coarse
+            let minLon = min(segment.start.longitude, segment.end.longitude) - coarse
+            let maxLon = max(segment.start.longitude, segment.end.longitude) + coarse
+            guard coordinate.latitude >= minLat, coordinate.latitude <= maxLat,
+                  coordinate.longitude >= minLon, coordinate.longitude <= maxLon else { continue }
             if OSMSpeedLimitService.distanceToSegment(coordinate, segment.start, segment.end) <= radius {
                 return true
             }

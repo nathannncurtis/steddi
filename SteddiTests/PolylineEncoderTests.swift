@@ -70,6 +70,38 @@ struct PolylineEncoderTests {
         #expect(encoded.count < 100)
     }
 
+    @Test("Non-ASCII byte fails safely instead of hanging", .timeLimit(.minutes(1)))
+    func nonASCIIByteDoesNotHang() {
+        // Encode a valid prefix, then append multibyte / out-of-charset content
+        // that a corrupted or garbled routing response could carry. The decoder
+        // must terminate promptly, never spin the CPU or allocate without bound.
+        let valid = PolylineEncoder.encode([
+            CLLocationCoordinate2D(latitude: 38.5, longitude: -120.2),
+        ])
+
+        for garbage in ["🚗", "é", "\u{80}", "\u{FFFD}"] {
+            let decoded = PolylineEncoder.decode(valid + garbage)
+            // Returns what decoded cleanly so far; never an unbounded array.
+            #expect(decoded.count <= 1)
+        }
+    }
+
+    @Test("Truncated continuation fails safely", .timeLimit(.minutes(1)))
+    func truncatedContinuationDoesNotHang() {
+        // A lone continuation byte (high bit set, no terminating byte) is a
+        // truncated varint — must not loop or emit a phantom coordinate.
+        let decoded = PolylineEncoder.decode("\u{7e}\u{7e}\u{7e}")
+        #expect(decoded.isEmpty)
+    }
+
+    @Test("decodeValidated rejects malformed input without hanging", .timeLimit(.minutes(1)))
+    func validatedHandlesMalformed() {
+        // Pure garbage decodes to nothing, which is trivially in-bounds, so it
+        // returns []; the key assertion is that it returns at all (no spin).
+        let decoded = PolylineEncoder.decodeValidated("🚗garbage💥")
+        #expect(decoded == nil || decoded?.isEmpty == true)
+    }
+
     @Test("Many coordinates round-trip")
     func manyCoordinates() {
         var coords: [CLLocationCoordinate2D] = []
