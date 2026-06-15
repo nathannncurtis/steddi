@@ -65,40 +65,62 @@ struct OnboardingShowpieceCard<Content: View>: View {
         ZStack {
             backdrop
 
-            VStack(spacing: 0) {
-                Spacer(minLength: 12)
-
-                GlassEffectContainer(spacing: 24) {
-                    ZStack {
-                        content()
-                    }
-                    .frame(maxWidth: 360)
-                    .steddiGlass(
-                        tint: cardTint,
-                        in: RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge),
-                        fallbackFill: SteddiTheme.surfaceSecondary
-                    )
-                    .glassEffectID("onboarding.beatCard", in: beatCardNamespace)
-                    .glassEffectTransition(.matchedGeometry)
+            // The card is vertically centered when it fits, but a tall beat (the
+            // theme picker) under large Dynamic Type can exceed the screen. Wrap
+            // the centered column in a ScrollView whose content claims at least
+            // the full viewport height: when content fits it reads as centered
+            // (and doesn't bounce, per .basedOnSize); when it's taller than the
+            // screen it scrolls instead of being clipped by the surrounding
+            // Spacers. The glass id/namespace stay on the card itself, so the
+            // matchedGeometry morph between beats and into the settle pill is
+            // unaffected.
+            GeometryReader { geo in
+                ScrollView(.vertical) {
+                    cardColumn
+                        .frame(maxWidth: .infinity, minHeight: geo.size.height)
                 }
-                .padding(.horizontal, 24)
-
-                // Autoplay rhythm: the steady-line motif fills under the card so
-                // the viewer feels the reel advancing. Only shown when autoplay is
-                // armed (never under Reduce Motion / VoiceOver — the caller passes
-                // `nil` then).
-                if let autoplayProgress {
-                    progressHairline(autoplayProgress)
-                        .padding(.horizontal, 48)
-                        .padding(.top, 16)
-                        .transition(.opacity)
-                }
-
-                Spacer(minLength: 12)
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// The vertically-centered card column: the morphing glass card plus the
+    /// optional autoplay hairline, bracketed by flexible spacers so it sits in the
+    /// middle of whatever height it's given.
+    private var cardColumn: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 12)
+
+            GlassEffectContainer(spacing: 24) {
+                ZStack {
+                    content()
+                }
+                .frame(maxWidth: 360)
+                .steddiGlass(
+                    tint: cardTint,
+                    in: RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge),
+                    fallbackFill: SteddiTheme.surfaceSecondary
+                )
+                .glassEffectID("onboarding.beatCard", in: beatCardNamespace)
+                .glassEffectTransition(.matchedGeometry)
+            }
+            .padding(.horizontal, 24)
+
+            // Autoplay rhythm: the steady-line motif fills under the card so
+            // the viewer feels the reel advancing. Only shown when autoplay is
+            // armed (never under Reduce Motion / VoiceOver — the caller passes
+            // `nil` then).
+            if let autoplayProgress {
+                progressHairline(autoplayProgress)
+                    .padding(.horizontal, 48)
+                    .padding(.top, 16)
+                    .transition(.opacity)
+            }
+
+            Spacer(minLength: 12)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Backdrop parallax
