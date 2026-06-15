@@ -552,7 +552,14 @@ struct SteddiNavOverlay: View {
     private var compassIndicator: some View {
         Text(compassLabel)
             .font(.system(size: 15 * textScale, weight: .heavy, design: .rounded))
-            .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
+            // The compass letter is a READOUT riding neutral nav glass over a
+            // moving map, so it needs a treatment that holds against any tile —
+            // not the surface-sized text-safe accent (AA only proven on the solid
+            // surface). Use textPrimary (the strongest surface-adaptive token,
+            // promoted like the sibling nav readouts) plus a soft shadow so it
+            // separates from bright/varied cartography on every theme.
+            .foregroundStyle(SteddiTheme.textPrimary.opacity(compassSector == nil ? 0.35 : 1))
+            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
             .frame(width: 44 * iconScale, height: 44 * iconScale)
             // Neutral glass readout — not a toggle, so no accent tint.
             .steddiGlass(tint: nil, interactive: false, in: .circle)
@@ -646,7 +653,10 @@ struct SteddiNavOverlay: View {
     private var landscapeCompassIndicator: some View {
         Text(compassLabel)
             .font(.system(size: 16 * textScale, weight: .heavy, design: .rounded))
-            .foregroundStyle(SteddiTheme.accent.opacity(compassSector == nil ? 0.35 : 1))
+            // See compassIndicator: textPrimary + soft shadow guarantees the
+            // readout over a moving map, rather than the surface-sized accent.
+            .foregroundStyle(SteddiTheme.textPrimary.opacity(compassSector == nil ? 0.35 : 1))
+            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
             .frame(width: 50 * iconScale, height: 50 * iconScale)
             .steddiGlass(tint: nil, interactive: false, in: .circle)
     }
