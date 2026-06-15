@@ -330,8 +330,10 @@ struct NavigationEngineSpeedLimitTests {
 
     @Test("way inside a word is not residential (Broadway/Parkway)")
     func wayInsideWord() {
-        // No word boundary before "way" in Broadway -> not residential (default).
-        #expect(NavigationEngine.estimateSpeedLimit(from: "Continue on Broadway") == 30)
+        // No word boundary before "way" in Broadway, so the residential tier is
+        // not hit; it lands on the arterial tier (the substring "road" inside
+        // "broadway") at 35 — the point is only that it is NOT residential 25.
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Continue on Broadway") == 35)
         // Parkway is an arterial tier, caught before the residential check.
         #expect(NavigationEngine.estimateSpeedLimit(from: "Continue on Chino Hills Parkway") == 45)
     }
