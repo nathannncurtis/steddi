@@ -1002,3 +1002,156 @@ struct SavedNavStepsFilteringTests {
         #expect(steps.last?.maneuverSymbol == "flag.fill")
     }
 }
+
+// MARK: - Multi-Step Advance Tests
+
+@Suite("NavigationEngine multi-step advance")
+@MainActor
+struct NavigationEngineMultiStepAdvanceTests {
+
+    /// Straight route running north; ~111m per 0.001 deg of latitude.
+    private func straightRoute(segments: Int) -> [CLLocationCoordinate2D] {
+        (0...segments).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+    }
+
+    private func fix(lat: Double, lon: Double, t: TimeInterval) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: 0, courseAccuracy: 5, speed: 20, speedAccuracy: 1,
+            timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
+        )
+    }
+
+    /// Steps clustered tightly along the start of the route (recovery-splice
+    /// shape) followed by a far final step — a single fast fix that lands past
+    /// the cluster must consume all the cleared boundaries in one update, not
+    /// just one. The old one-step-per-fix cap left the displayed maneuver lagging.
+    @Test("A single fix past several clustered steps advances past all of them")
+    func advancesMultipleClusteredSteps() {
+        let engine = NavigationEngine()
+        let polyline = straightRoute(segments: 40)
+        // Four clustered starts within the first ~33m (well under the 40m
+        // transition distance of each other) plus a distant final step.
+        let steps = [
+            NavStep(instruction: "Head north", distance: 100, coordinate: polyline[0], maneuverSymbol: "location.fill"),
+            NavStep(instruction: "Step 1", distance: 100, coordinate: CLLocationCoordinate2D(latitude: 33.0001, longitude: -117.0), maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "Step 2", distance: 100, coordinate: CLLocationCoordinate2D(latitude: 33.0002, longitude: -117.0), maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "Step 3", distance: 100, coordinate: CLLocationCoordinate2D(latitude: 33.0003, longitude: -117.0), maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "Arrive", distance: 0, coordinate: polyline[40], maneuverSymbol: "flag.fill")
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        // One fix landing at step 3's coordinate — within transition distance of
+        // step 3 and clearly past steps 1 and 2.
+        engine.updateLocation(fix(lat: 33.0003, lon: -117.0, t: 1))
+
+        // Old behavior: index would be 1. New behavior: it jumps to 3.
+        #expect(engine.currentStepIndex == 3)
+        engine.stopNavigation()
+    }
+
+    /// A sparse-GPS jump far down the corridor (driver clearly progressing
+    /// on-route) must advance the step via projection-along-route, not stay
+    /// pinned at the first boundary just because no later step start happens to
+    /// be within haversine range of that single fix.
+    @Test("A sparse forward jump advances by projection along the route")
+    func advancesByProjectionOnSparseJump() {
+        let engine = NavigationEngine()
+        let polyline = straightRoute(segments: 40)
+        let steps = [
+            NavStep(instruction: "Head north", distance: 100, coordinate: polyline[0], maneuverSymbol: "location.fill"),
+            NavStep(instruction: "Step 1", distance: 100, coordinate: polyline[5], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "Step 2", distance: 100, coordinate: polyline[10], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "Arrive", distance: 0, coordinate: polyline[40], maneuverSymbol: "flag.fill")
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        // Pass the grace period on-route near the start.
+        for i in 0..<12 {
+            engine.updateLocation(fix(lat: 33.0 + Double(i) * 0.0001, lon: -117.0, t: Double(i)))
+        }
+        // Single jump to polyline[10] (step 2's start) — clearly past steps 1 & 2.
+        engine.updateLocation(fix(lat: polyline[10].latitude, lon: -117.0, t: 100))
+        #expect(engine.currentStepIndex == 2)
+        engine.stopNavigation()
+    }
+
+    /// A clear forward jump along the corridor must NOT be mis-counted as a
+    /// deviation even if a single fix's perpendicular distance momentarily
+    /// spikes (sparse GPS / tunnel exit). The forward-progress discount keeps
+    /// the off-route counter from accruing on genuine on-route progress.
+    @Test("Forward jumps along the route do not mis-trigger off-route")
+    func forwardJumpDoesNotMisTriggerOffRoute() {
+        let engine = NavigationEngine()
+        let polyline = straightRoute(segments: 60)
+        let steps = [
+            NavStep(instruction: "Head north", distance: 6600, coordinate: polyline[0], maneuverSymbol: "location.fill"),
+            NavStep(instruction: "Arrive", distance: 0, coordinate: polyline[60], maneuverSymbol: "flag.fill")
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        var fireCount = 0
+        engine.onOffRoute = { _ in fireCount += 1 }
+
+        // Pass the grace period on-route.
+        for i in 0..<12 {
+            engine.updateLocation(fix(lat: 33.0 + Double(i) * 0.0005, lon: -117.0, t: Double(i)))
+        }
+        #expect(fireCount == 0)
+
+        // Big forward jumps along the corridor (each ~330m further north), each
+        // with a tiny east offset that on its own could read as a near-edge
+        // deviation but is dominated by clear forward progress.
+        var t = 100.0
+        for i in 0..<8 {
+            let lat = 33.0070 + Double(i) * 0.003
+            engine.updateLocation(fix(lat: lat, lon: -117.0 + 0.0002, t: t))
+            t += 1
+        }
+        // Genuine on-route progress — no deviation should ever fire.
+        #expect(fireCount == 0)
+        engine.stopNavigation()
+    }
+}
+
+// MARK: - computeStepAlongDistances Tests
+
+@Suite("NavigationEngine.computeStepAlongDistances")
+struct ComputeStepAlongDistancesTests {
+
+    @Test("Step along-distances are monotonic and bounded by total route length")
+    func monotonicAlongDistances() throws {
+        let polyline = (0...20).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        let cumulative = RouteGeometry.cumulativeDistances(polyline)
+        let total = try #require(cumulative.last)
+
+        let steps = [
+            NavStep(instruction: "a", distance: 0, coordinate: polyline[0], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "b", distance: 0, coordinate: polyline[5], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "c", distance: 0, coordinate: polyline[12], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "d", distance: 0, coordinate: polyline[20], maneuverSymbol: "flag.fill")
+        ]
+        let alongs = NavigationEngine.computeStepAlongDistances(steps: steps, polyline: polyline)
+        #expect(alongs.count == steps.count)
+
+        var last = -1.0
+        for value in alongs {
+            let along = try #require(value)
+            #expect(along >= last)        // monotonic, since steps walk forward
+            #expect(along <= total + 1)   // never beyond the route end (+slack)
+            last = along
+        }
+        // First step is at the route start, last at the route end.
+        #expect(try #require(alongs.first!) < 1)
+        #expect(try #require(alongs.last!) > total - 1)
+    }
+
+    @Test("Degenerate polyline yields nil entries, not a crash")
+    func degeneratePolyline() {
+        let steps = [NavStep(instruction: "a", distance: 0, coordinate: CLLocationCoordinate2D(latitude: 33, longitude: -117), maneuverSymbol: "arrow.up")]
+        let alongs = NavigationEngine.computeStepAlongDistances(steps: steps, polyline: [])
+        #expect(alongs.count == 1)
+        #expect(alongs[0] == nil)
+    }
+}

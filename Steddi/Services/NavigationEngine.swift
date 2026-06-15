@@ -114,6 +114,13 @@ final class NavigationEngine {
     /// Active steps — read-only outside so the recovery pipeline can classify
     /// and splice them; only the engine mutates.
     private(set) var steps: [NavStep] = []
+    /// Arc-length position of each step's start along the route polyline,
+    /// parallel to `steps`. Lets step advancement compare the projected
+    /// distance-along-route against each step boundary in O(1) — so a single
+    /// fix can advance past several completed steps (sparse GPS, a tunnel exit,
+    /// or clustered recovery-splice steps) instead of being capped at one step
+    /// per fix. nil entries mark steps whose start couldn't be projected.
+    private var stepAlongDistances: [Double?] = []
     private var projector: RouteProjector?
     private(set) var totalRouteDistance: Double = 0
     private(set) var originalExpectedTravelTime: TimeInterval = 0
@@ -128,6 +135,14 @@ final class NavigationEngine {
     private var offRouteCount: Int = 0
     private let offRouteThreshold: Int = 5
     private let offRouteGracePeriod: Int = 10
+    /// Projected arc-length position at the previous fix — lets off-route
+    /// detection recognise a clear forward jump along the corridor (sparse GPS /
+    /// tunnel exit covering multiple steps in one fix) and NOT mis-count it as a
+    /// deviation just because a single fix's perpendicular distance spiked.
+    private var lastOffRouteAlongDistance: Double?
+    /// A single-fix forward jump beyond this (meters) is unambiguous on-route
+    /// progress, so any transient perpendicular spike on that fix is discounted.
+    private let offRouteForwardProgressMeters: Double = 60
     /// Identifies the active navigation session so the async saved-ETA sanity
     /// check can't apply a stale result to a newer route.
     private var navigationToken = UUID()
@@ -158,6 +173,7 @@ final class NavigationEngine {
         averageSpeedMPS = 0
         speedSampleCount = 0
         offRouteCount = 0
+        lastOffRouteAlongDistance = nil
         isRecoveringOffRoute = false
         locationUpdateCount = 0
         navigationToken = UUID()
@@ -171,6 +187,11 @@ final class NavigationEngine {
             : nil
         totalRouteDistance = projector?.totalDistance ?? 0
         originalExpectedTravelTime = expectedTravelTime ?? (totalRouteDistance / 13.4)
+
+        // Precompute each step's arc-length position so a single fix can advance
+        // past every step the projection has already cleared (sparse GPS /
+        // tunnel exit / clustered recovery steps) instead of one step per fix.
+        stepAlongDistances = Self.computeStepAlongDistances(steps: steps, polyline: polyline)
 
         if let expectedTravelTime, totalRouteDistance > 0 {
             scheduleSavedETASanityCheck(saved: expectedTravelTime)
@@ -219,6 +240,7 @@ final class NavigationEngine {
         TunnelDetectionService.shared.clearRoute()
         isNavigating = false
         steps = []
+        stepAlongDistances = []
         currentStepIndex = 0
         instruction = ""
         stepDistance = ""
@@ -247,6 +269,7 @@ final class NavigationEngine {
         averageSpeedMPS = 0
         speedSampleCount = 0
         offRouteCount = 0
+        lastOffRouteAlongDistance = nil
         isRecoveringOffRoute = false
         locationUpdateCount = 0
         alertedConditionIDs.removeAll()
@@ -278,6 +301,9 @@ final class NavigationEngine {
     func clearOffRouteRecovery() {
         isRecoveringOffRoute = false
         offRouteCount = 0
+        // Re-baseline forward-progress tracking so the first post-recovery fix
+        // (which may rescan to a new along-route position) isn't read as a jump.
+        lastOffRouteAlongDistance = nil
     }
 
     // MARK: - Location Updates
@@ -288,6 +314,12 @@ final class NavigationEngine {
         // Theming: the nav loop is the authoritative ~1Hz feed during
         // navigation (deduped against the LocationService forward).
         TunnelDetectionService.shared.updateLocation(location)
+
+        // Publish the fix to the process-wide last-known store so synchronous,
+        // nonisolated theming code (SteddiTheme.ThemeMode.isDaytime, read from
+        // map surfaces / CarPlay) can run the real solar check instead of a cold
+        // CLLocationManager whose `.location` is almost always nil.
+        LastKnownLocation.update(location.coordinate)
 
         currentCoordinate = location.coordinate
         locationUpdateCount += 1
@@ -327,7 +359,7 @@ final class NavigationEngine {
 
         if checkOffRoute(location: location, projection: projection) { return }
 
-        advanceStepIfNeeded(location: location)
+        advanceStepIfNeeded(location: location, projection: projection)
         updateDistancesAndETA(location: location, projection: projection)
     }
 
@@ -457,17 +489,62 @@ final class NavigationEngine {
         }
     }
 
-    private func advanceStepIfNeeded(location: CLLocation) {
-        let nextIndex = currentStepIndex + 1
-        guard nextIndex < steps.count else { return }
+    /// Advance the active step, consuming EVERY step the latest fix has already
+    /// cleared — not just one per fix. A step is cleared when the driver is
+    /// within `stepTransitionDistance` of its start OR when the projected
+    /// distance-along-route has moved past the step's start by that margin
+    /// (sparse GPS, a tunnel exit, or short clustered recovery-splice steps can
+    /// otherwise leave the displayed maneuver lagging several boundaries behind).
+    /// Capping at one step per fix is what made a fast multi-step jump briefly
+    /// announce a stale maneuver and confuse off-route detection.
+    private func advanceStepIfNeeded(location: CLLocation, projection: RouteProjection?) {
+        let along = projection?.distanceAlongRoute
+        var advanced = false
 
-        let nextStep = steps[nextIndex]
-        let distToNext = Self.haversineDistance(from: location.coordinate, to: nextStep.coordinate)
+        while currentStepIndex + 1 < steps.count {
+            let nextIndex = currentStepIndex + 1
+            let nextStep = steps[nextIndex]
 
-        if distToNext < stepTransitionDistance {
+            // Proximity to the next step's start (raw fix → step coordinate).
+            let distToNext = Self.haversineDistance(from: location.coordinate, to: nextStep.coordinate)
+            var passed = distToNext < stepTransitionDistance
+
+            // Projection progress: the snapped position has crossed this step's
+            // start (with the same transition margin). Lets a single fix consume
+            // multiple boundaries the driver clearly already passed, even when
+            // none of those starts is within haversine range of THIS fix.
+            if !passed, let along, let stepAlong = stepAlongDistanceIfPresent(nextIndex) {
+                passed = along >= stepAlong - stepTransitionDistance
+            }
+
+            guard passed else { break }
             currentStepIndex = nextIndex
-            applyStep(at: nextIndex)
+            advanced = true
+        }
+
+        if advanced {
+            applyStep(at: currentStepIndex)
             HapticService.shared.fire(.turnApproaching)
+        }
+    }
+
+    /// Safe lookup into the parallel `stepAlongDistances` array.
+    private func stepAlongDistanceIfPresent(_ index: Int) -> Double? {
+        guard index >= 0, index < stepAlongDistances.count else { return nil }
+        return stepAlongDistances[index]
+    }
+
+    /// Arc-length position of each step's start along the polyline, parallel to
+    /// `steps`. nil for steps whose start can't be projected (degenerate
+    /// polyline). Pure + nonisolated so it's directly unit-testable.
+    nonisolated static func computeStepAlongDistances(
+        steps: [NavStep],
+        polyline: [CLLocationCoordinate2D]
+    ) -> [Double?] {
+        guard polyline.count >= 2 else { return Array(repeating: nil, count: steps.count) }
+        let cumulative = RouteGeometry.cumulativeDistances(polyline)
+        return steps.map { step in
+            RouteGeometry.alongDistance(of: step.coordinate, polyline: polyline, cumulative: cumulative)
         }
     }
 
@@ -499,7 +576,28 @@ final class NavigationEngine {
     /// and guidance freezes instead of being pulled backward while off-route.
     private func checkOffRoute(location: CLLocation, projection: RouteProjection?) -> Bool {
         guard let projection else { return false }
+
+        // Forward-progress discount: if the projection advanced clearly along the
+        // corridor since the last fix, the driver is on-route even if THIS fix's
+        // perpendicular distance spiked (a multi-step jump from sparse GPS or a
+        // tunnel exit can momentarily snap wide). Treat that as on-route and
+        // clear any accruing deviation count so the jump can't mis-trigger.
+        let previousAlong = lastOffRouteAlongDistance
+        lastOffRouteAlongDistance = projection.distanceAlongRoute
+        let jumpedForwardOnRoute: Bool
+        if let previousAlong {
+            jumpedForwardOnRoute =
+                projection.distanceAlongRoute - previousAlong >= offRouteForwardProgressMeters
+        } else {
+            jumpedForwardOnRoute = false
+        }
+
         guard locationUpdateCount > offRouteGracePeriod else { return false }
+
+        if jumpedForwardOnRoute && !isRecoveringOffRoute {
+            offRouteCount = 0
+            return false
+        }
 
         if projection.perpendicularDistance > offRouteDistance {
             if isRecoveringOffRoute { return true }
@@ -705,5 +803,38 @@ final class NavigationEngine {
             if !name.isEmpty { return name }
         }
         return ""
+    }
+}
+
+// MARK: - Last-Known Location (process-wide)
+
+/// Process-wide cache of the most recent location fix, readable synchronously
+/// from any (nonisolated) context.
+///
+/// Some synchronous, non-actor-isolated code needs the user's coordinate without
+/// being able to `await` a fix or touch a `@MainActor` location service — most
+/// notably `SteddiTheme.ThemeMode.isDaytime`, which decides dynamic light/dark
+/// for map surfaces and CarPlay. A freshly-created `CLLocationManager().location`
+/// read cold is almost always nil (the property is only populated after updates
+/// start), so that path silently fell back to a fixed 7am–7pm clock. The live
+/// navigation feed (`NavigationEngine.updateLocation`) publishes every fix here
+/// so the real solar check has a coordinate to work with. Thread-safe via an
+/// unfair lock; last-writer-wins.
+enum LastKnownLocation {
+    nonisolated(unsafe) private static var coordinate: CLLocationCoordinate2D?
+    private static let lock = NSLock()
+
+    /// Record the latest fix. Called from the live location feed.
+    static func update(_ coordinate: CLLocationCoordinate2D) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.coordinate = coordinate
+    }
+
+    /// The most recent fix, or nil if none has been recorded this process.
+    static var current: CLLocationCoordinate2D? {
+        lock.lock()
+        defer { lock.unlock() }
+        return coordinate
     }
 }
