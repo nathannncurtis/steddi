@@ -65,7 +65,14 @@ final class RoadConditionMarkerView: MKMarkerAnnotationView {
         clusteringIdentifier = Self.clusteringIdentifier
         canShowCallout = true
         glyphImage = UIImage(systemName: condition.kind.icon)
-        markerTintColor = UIColor(condition.kind.color)
+        // Pair the marker fill with its AA-correct on-fill glyph rather than
+        // letting MKMarkerAnnotationView keep its default WHITE glyph: white on
+        // amber is ~2.05:1 and on the light-shifted accent collapses to near-
+        // invisible. selectedChipFill uses the unshifted brand hue for accent
+        // kinds and selectedChipForeground is its contrast-checked counterpart
+        // (the same chip doctrine used elsewhere for road-condition badges).
+        markerTintColor = UIColor(condition.kind.selectedChipFill)
+        glyphTintColor = UIColor(condition.kind.selectedChipForeground)
         displayPriority = .defaultLow  // yields to the nav puck when crowded
     }
 }
