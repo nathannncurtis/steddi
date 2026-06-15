@@ -104,6 +104,7 @@
 		7E32DA2B3210AC9C231EB76A /* RoadGraphBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 942A3B6981E7B85F855A4276 /* RoadGraphBuilder.swift */; };
 		8064E549623A586B1C7565A9 /* ThresholdExplainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E14E307ADADA3C9D2C69 /* ThresholdExplainerView.swift */; };
 		80DA5BC56FE71CEAFF04ACB3 /* TripListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2AD9EEDA9797E406B435ED /* TripListView.swift */; };
+		8179BB10F4287F8EAD598C47 /* SteddiGlass.swift in Sources */ = {isa = PBXBuildFile; fileRef = A814B57D3AF2BAF2600A6BBE /* SteddiGlass.swift */; };
 		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
 		85A049022E0338B7E5E8B084 /* CommuteETAWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */; };
 		863EC5C3A2B5B58404659A8E /* CommuteNotificationCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A0E3F3AA6904204FBFAD41 /* CommuteNotificationCenter.swift */; };
@@ -372,6 +373,7 @@
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A563FC81AD7AEC2AFCF76C10 /* LearnedWeightsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnedWeightsStore.swift; sourceTree = "<group>"; };
 		A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometryTests.swift; sourceTree = "<group>"; };
+		A814B57D3AF2BAF2600A6BBE /* SteddiGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiGlass.swift; sourceTree = "<group>"; };
 		A81C670FE3F2A159034A946B /* CorridorValidatorHardeningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorridorValidatorHardeningTests.swift; sourceTree = "<group>"; };
 		A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManager.swift; sourceTree = "<group>"; };
 		AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeButtonStyle.swift; sourceTree = "<group>"; };
@@ -887,6 +889,7 @@
 				EA0E2C23211EDCF54BC1F47D /* AccessibilityAnimations.swift */,
 				7583BEE7230D81C23D5FC1A7 /* DynamicThemeComponents.swift */,
 				CB097CBE7D4D3497C2426D6B /* PolylineEncoder.swift */,
+				A814B57D3AF2BAF2600A6BBE /* SteddiGlass.swift */,
 				37BD53CF03F94FE2453AE8D9 /* SteddiTheme.swift */,
 				F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */,
 				777F9439E5905A75A1BBDB95 /* ThemePalette.swift */,
@@ -1150,6 +1153,7 @@
 				0F3934AF29FC26B9237BB52A /* StartCommuteIntent.swift in Sources */,
 				EB572C700ACE8CD2D7EE501D /* StatCard.swift in Sources */,
 				D6B767CB2D44DC662461C6D8 /* SteddiApp.swift in Sources */,
+				8179BB10F4287F8EAD598C47 /* SteddiGlass.swift in Sources */,
 				BD1C568D975011C4982302FB /* SteddiMapView.swift in Sources */,
 				E8518F81F0D9BA02AAEA282D /* SteddiNavOverlay.swift in Sources */,
 				DCC1D471EDEA2EBDAE0FD263 /* SteddiRoutePrefBadge.swift in Sources */,

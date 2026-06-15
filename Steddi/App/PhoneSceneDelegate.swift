@@ -159,6 +159,10 @@ private struct SteddiRootView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx = ThemeModeEx.dynamic.rawValue
 
+    /// Bumped when Reduce Transparency toggles so `SteddiGlass`-backed chrome
+    /// re-resolves between live glass and the solid `SteddiTheme` fallback.
+    @State private var glassRevision = 0
+
     var body: some View {
         Group {
             if hasCompletedOnboarding {
@@ -166,6 +170,14 @@ private struct SteddiRootView: View {
             } else {
                 OnboardingView()
             }
+        }
+        .id(glassRevision)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIAccessibility.reduceTransparencyStatusDidChangeNotification
+            )
+        ) { _ in
+            glassRevision &+= 1
         }
         .preferredColorScheme(resolvedColorScheme)
         .safeAreaInset(edge: .top) {
