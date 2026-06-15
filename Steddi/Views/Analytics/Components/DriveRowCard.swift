@@ -31,7 +31,9 @@ struct DriveRowCard: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(SteddiTheme.textMuted)
+                // Tappable affordance — promote to textSecondary under high
+                // contrast so it clears the 3:1 non-text floor on near-black.
+                .foregroundStyle(SteddiTheme.textMuted(highContrast: DisplayModeService.shared.useHighContrast))
         }
         .padding(16)
         .background {
