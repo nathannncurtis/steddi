@@ -664,7 +664,13 @@ final class AnalyticsService {
             driveCount += bucket.driveCount
             totalDriving += bucket.totalDrivingSeconds
             totalTraffic += bucket.totalTrafficSeconds
-            for idx in 0..<min(7, bucket.weekdayDurationSums.count) {
+            // Both weekday arrays are indexed with the same `idx`; if a corrupt
+            // bucket has mismatched lengths, indexing the shorter one with the
+            // longer's count would crash. Only iterate over the range valid for
+            // BOTH arrays so a malformed bucket is partially-merged at worst,
+            // never fatal.
+            let weekdayCount = min(7, bucket.weekdayDurationSums.count, bucket.weekdayDriveCounts.count)
+            for idx in 0..<weekdayCount {
                 sums[idx] += bucket.weekdayDurationSums[idx]
                 counts[idx] += bucket.weekdayDriveCounts[idx]
             }
