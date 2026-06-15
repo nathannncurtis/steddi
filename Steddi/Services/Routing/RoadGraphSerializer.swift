@@ -154,6 +154,28 @@ enum RoadGraphSerializer {
 
         guard let maxSpeed = reader.readF32() else { return nil }
 
+        // Structural validation: a corrupt or foreign blob can decode into a
+        // well-formed `RoadGraph` value whose indices point out of bounds, which
+        // would crash the search at the point of use. Reject such graphs here so
+        // the loader falls back to MapKit rather than trusting bad data. Every
+        // edge endpoint must index a node; every node's CSR window and every
+        // edge's geometry slice must stay within their backing arrays.
+        let totalNodes = nodes.count
+        let totalEdges = edges.count
+        let totalGeometry = geometry.count
+        for node in nodes {
+            let first = Int(node.firstEdge)
+            let count = Int(node.edgeCount)
+            guard count >= 0, first >= 0, first <= totalEdges, first + count <= totalEdges else { return nil }
+        }
+        for edge in edges {
+            guard Int(edge.from) >= 0, Int(edge.from) < totalNodes,
+                  Int(edge.to) >= 0, Int(edge.to) < totalNodes else { return nil }
+            let lower = Int(edge.geometryRange.lowerBound)
+            let upper = Int(edge.geometryRange.upperBound)
+            guard lower >= 0, upper >= lower, upper <= totalGeometry else { return nil }
+        }
+
         let snapIndex = RoadGraphBuilder.buildSnapIndex(edges: edges, geometry: geometry)
         return RoadGraph(
             nodes: nodes,

@@ -260,7 +260,9 @@ struct AStarSearch: PathSearch {
             guard let snap = graph.snap(coord, heading: heading, maxDistanceMeters: snapMaxDistanceMeters) else {
                 return nil
             }
+            guard snap.edge >= 0, Int(snap.edge) < graph.edges.count else { return nil }
             let edge = graph.edges[Int(snap.edge)]
+            guard Int(edge.to) >= 0, Int(edge.to) < graph.nodes.count else { return nil }
             // Mid-edge start: travel runs from the snapped point to the edge's
             // downstream node (`edge.to`). Its partial cost is the edge cost
             // scaled by the remaining fraction (1 - snap.fraction).
@@ -291,7 +293,9 @@ struct AStarSearch: PathSearch {
             guard let snap = graph.snap(coord, heading: heading, maxDistanceMeters: snapMaxDistanceMeters) else {
                 return nil
             }
+            guard snap.edge >= 0, Int(snap.edge) < graph.edges.count else { return nil }
             let edge = graph.edges[Int(snap.edge)]
+            guard Int(edge.from) >= 0, Int(edge.from) < graph.nodes.count else { return nil }
             // Mid-edge end: A* must reach the edge's upstream node (`edge.from`),
             // then travel the partial edge cost to the snapped end. The heuristic
             // aims at `edge.from`'s coordinate so it stays a lower bound on

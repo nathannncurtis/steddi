@@ -165,9 +165,15 @@ struct RoadGraph: Sendable {
         return n.firstEdge ..< (n.firstEdge + EdgeIndex(n.edgeCount))
     }
 
-    /// The geometry coordinates of an edge, in travel direction.
+    /// The geometry coordinates of an edge, in travel direction. Returns an
+    /// empty slice for an out-of-bounds edge index — `RoadGraphSerializer`
+    /// validates indices on load, so this guard only fires on programmer error,
+    /// but it keeps the access defensively crash-free.
     func geometry(of edge: EdgeIndex) -> ArraySlice<CLLocationCoordinate2D> {
+        guard edge >= 0, Int(edge) < edges.count else { return ArraySlice() }
         let range = edges[Int(edge)].geometryRange
+        guard range.lowerBound >= 0, range.upperBound <= Int32(geometry.count),
+              range.lowerBound <= range.upperBound else { return ArraySlice() }
         return geometry[Int(range.lowerBound)..<Int(range.upperBound)]
     }
 
