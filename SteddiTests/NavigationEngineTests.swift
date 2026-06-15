@@ -613,6 +613,270 @@ struct NavigationEngineOffRouteTests {
     }
 }
 
+// MARK: - Off-Route Latch Re-Arm Matrix
+
+/// Every terminal path of the HomeView off-route recovery handler must leave the
+/// engine's in-recovery latch in a state where a FUTURE genuine deviation can
+/// still fire — never a permanent freeze. The HomeView paths all funnel to the
+/// same engine primitive: a non-progressing exit calls `clearOffRouteRecovery()`
+/// (re-arm), and a committed reroute calls `startNavigation(...)` (restart, which
+/// also clears the latch). This suite drives the engine to the latched state and
+/// asserts that each re-arm primitive lets a subsequent deviation re-fire, and —
+/// crucially — that WITHOUT the re-arm the engine stays frozen (so a future path
+/// that forgets to clear is caught by an analogous test).
+@Suite("NavigationEngine off-route latch re-arm matrix")
+@MainActor
+struct NavigationEngineLatchReArmTests {
+
+    /// Straight route running north; ~111m per 0.001 deg of latitude.
+    private static func straightRoute(segments: Int) -> [CLLocationCoordinate2D] {
+        (0...segments).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+    }
+
+    private static func fix(lat: Double, lon: Double, t: TimeInterval) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: -1, courseAccuracy: -1, speed: 13, speedAccuracy: 1,
+            timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
+        )
+    }
+
+    /// Build an engine on a straight north route, drive past the grace period
+    /// on-route, then sustain a deviation until the latch fires exactly once.
+    /// Returns the engine, a live fire-count box, and the running clock so the
+    /// caller can keep feeding fixes.
+    private func latchedEngine() -> (engine: NavigationEngine, fireCount: () -> Int, nextT: () -> Double) {
+        let engine = NavigationEngine()
+        let polyline = Self.straightRoute(segments: 40)
+        let steps = [
+            NavStep(instruction: "", distance: 4400, coordinate: polyline[0], maneuverSymbol: "location.fill"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[40], maneuverSymbol: "flag.fill")
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        var fires = 0
+        engine.onOffRoute = { _ in fires += 1 }
+
+        var t = 0.0
+        // Clear the grace period on-route.
+        for i in 0..<12 {
+            engine.updateLocation(Self.fix(lat: 33.0 + Double(i) * 0.0005, lon: -117.0, t: t))
+            t += 1
+        }
+        // Sustained deviation far east (~280m): fires once, then latch holds.
+        for _ in 0..<10 {
+            engine.updateLocation(Self.fix(lat: 33.006, lon: -116.9970, t: t))
+            t += 1
+        }
+
+        return (engine, { fires }, { let cur = t; t += 1; return cur })
+    }
+
+    /// Drive a further sustained deviation and report whether a NEW off-route
+    /// event fired (fireCount moved from 1 to 2).
+    private func deviateAgainFires(
+        _ engine: NavigationEngine,
+        fireCount: () -> Int,
+        nextT: () -> Double
+    ) -> Bool {
+        let before = fireCount()
+        for _ in 0..<10 {
+            engine.updateLocation(Self.fix(lat: 33.007, lon: -116.9970, t: nextT()))
+        }
+        return fireCount() == before + 1
+    }
+
+    @Test("Latched + no re-arm stays frozen (regression guard for an uncleared path)")
+    func latchedWithoutClearStaysFrozen() {
+        let (engine, fireCount, nextT) = latchedEngine()
+        #expect(fireCount() == 1)
+        // No clearOffRouteRecovery(): this models a buggy early-return path that
+        // forgot to re-arm. The latch must stay set and suppress every further
+        // event — proving the re-arm in the other cases is load-bearing.
+        #expect(deviateAgainFires(engine, fireCount: fireCount, nextT: nextT) == false)
+        #expect(fireCount() == 1)
+        engine.stopNavigation()
+    }
+
+    /// The cooldown early-return (`handleOffRoute` 30s branch), the in-flight
+    /// early-return, the no-candidates bail, the abandon-to-destination decision,
+    /// the rejoin route-unavailable fallback, the splice geometry bail, and the
+    /// Apple-route no-routes / catch failures ALL re-arm via the same primitive:
+    /// `clearOffRouteRecovery()`. After it, a fresh deviation must fire again.
+    @Test("clearOffRouteRecovery re-arms after a latched deviation (all non-committed paths)")
+    func clearReArmsAfterLatch() {
+        let (engine, fireCount, nextT) = latchedEngine()
+        #expect(fireCount() == 1)
+        // This is the universal re-arm every non-committed HomeView path calls.
+        engine.clearOffRouteRecovery()
+        #expect(deviateAgainFires(engine, fireCount: fireCount, nextT: nextT) == true)
+        #expect(fireCount() == 2)
+        engine.stopNavigation()
+    }
+
+    @Test("Re-arm survives back-to-back deviation episodes (cooldown re-fire loop)")
+    func reArmSurvivesRepeatedEpisodes() {
+        let (engine, fireCount, nextT) = latchedEngine()
+        #expect(fireCount() == 1)
+        // Three more episodes, each preceded by the re-arm a non-committed path
+        // performs — models a driver who keeps missing the rejoin across several
+        // cooldown windows; guidance must keep re-detecting, never freeze.
+        var expected = 1
+        for _ in 0..<3 {
+            engine.clearOffRouteRecovery()
+            #expect(deviateAgainFires(engine, fireCount: fireCount, nextT: nextT) == true)
+            expected += 1
+            #expect(fireCount() == expected)
+        }
+        engine.stopNavigation()
+    }
+
+    /// A committed reroute restarts the engine instead of clearing the latch; the
+    /// restart itself re-arms detection (offRouteCount/latch reset in
+    /// startNavigation). This models the splice / Apple-route success paths.
+    @Test("A restart onto new geometry re-arms detection (committed reroute path)")
+    func restartReArms() {
+        let (engine, fireCount, nextT) = latchedEngine()
+        #expect(fireCount() == 1)
+        // Restart on a fresh corridor centered where the driver actually is, then
+        // a new deviation off THAT corridor must be able to fire again.
+        let recovered = (0...40).map {
+            CLLocationCoordinate2D(latitude: 33.006 + Double($0) * 0.001, longitude: -116.9970)
+        }
+        let steps = [
+            NavStep(instruction: "", distance: 4400, coordinate: recovered[0], maneuverSymbol: "location.fill"),
+            NavStep(instruction: "", distance: 0, coordinate: recovered[40], maneuverSymbol: "flag.fill")
+        ]
+        engine.startNavigation(polyline: recovered, steps: steps)
+        var fires2 = 0
+        engine.onOffRoute = { _ in fires2 += 1 }
+
+        var t = nextT()
+        // Grace period on the new corridor.
+        for i in 0..<12 {
+            engine.updateLocation(Self.fix(lat: 33.006 + Double(i) * 0.0005, lon: -116.9970, t: t)); t += 1
+        }
+        #expect(fires2 == 0)
+        // Now deviate far WEST of the new (north-running) corridor.
+        for _ in 0..<10 {
+            engine.updateLocation(Self.fix(lat: 33.012, lon: -116.9940, t: t)); t += 1
+        }
+        #expect(fires2 == 1)
+        engine.stopNavigation()
+    }
+}
+
+// MARK: - Alert Preservation Across In-Place Restart
+
+/// A recovery splice / Apple-route reroute restarts the engine mid-drive. That
+/// restart must NOT wipe the per-session camera/condition debounce sets, or a
+/// camera the driver already physically passed (and was warned about) that still
+/// falls inside the new corridor near the restart origin re-chimes. The
+/// `preservingAlerts` flag (and restoreAlertedSets for the stop()/start() path)
+/// carry the one-shot-per-session guarantee across an in-place restart.
+@Suite("NavigationEngine alert preservation across in-place restart")
+@MainActor
+struct NavigationEngineAlertPreservationTests {
+
+    /// West→east route so a camera ahead reads in the forward (~east, 90°) cone.
+    private static let route: [CLLocationCoordinate2D] = [
+        CLLocationCoordinate2D(latitude: 34.0, longitude: -118.50),
+        CLLocationCoordinate2D(latitude: 34.0, longitude: -118.40),
+        CLLocationCoordinate2D(latitude: 34.0, longitude: -118.30)
+    ]
+
+    private static func steps(_ polyline: [CLLocationCoordinate2D]) -> [NavStep] {
+        [
+            NavStep(instruction: "Depart", distance: 0, coordinate: polyline[0], maneuverSymbol: "location.fill"),
+            NavStep(instruction: "Arrive", distance: 0, coordinate: polyline[polyline.count - 1], maneuverSymbol: "flag.fill")
+        ]
+    }
+
+    private static func movingFix(_ coord: CLLocationCoordinate2D, course: Double, t: TimeInterval) -> CLLocation {
+        CLLocation(
+            coordinate: coord, altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: course, courseAccuracy: 5, speed: 13, speedAccuracy: 1,
+            timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
+        )
+    }
+
+    /// Wire a provider that always reports the same single camera ahead, count
+    /// how many times the one-shot fires, and drive one fix to trigger it once.
+    private func engineWithFiredCamera() -> (engine: NavigationEngine, fireCount: () -> Int) {
+        let engine = NavigationEngine()
+        engine.startNavigation(polyline: Self.route, steps: Self.steps(Self.route))
+
+        let camera = SpeedCameraAlert(
+            alertID: "cam-A", kind: .speedCamera,
+            coordinate: CLLocationCoordinate2D(latitude: 34.0, longitude: -118.45),
+            distanceMeters: 120
+        )
+        engine.speedCameraProvider = { _, _ in camera }
+        var fires = 0
+        engine.onSpeedCameraApproaching = { _ in fires += 1 }
+
+        // Two moving fixes heading east establish a forward bearing and fire once.
+        engine.updateLocation(Self.movingFix(Self.route[0], course: 90, t: 0))
+        engine.updateLocation(Self.movingFix(CLLocationCoordinate2D(latitude: 34.0, longitude: -118.49), course: 90, t: 1))
+        return (engine, { fires })
+    }
+
+    @Test("preservingAlerts: true carries the camera debounce across a polyline restart")
+    func polylineRestartPreservesCameraDebounce() {
+        let (engine, fireCount) = engineWithFiredCamera()
+        #expect(fireCount() == 1)
+
+        // Splice-style in-place restart onto continued geometry: the same camera
+        // still sits ahead, but it must NOT re-chime.
+        engine.startNavigation(polyline: Self.route, steps: Self.steps(Self.route), preservingAlerts: true)
+        engine.updateLocation(Self.movingFix(Self.route[0], course: 90, t: 2))
+        engine.updateLocation(Self.movingFix(CLLocationCoordinate2D(latitude: 34.0, longitude: -118.49), course: 90, t: 3))
+        #expect(fireCount() == 1)
+        engine.stopNavigation()
+    }
+
+    @Test("Default (brand-new drive) clears the debounce so the camera re-arms")
+    func freshDriveResetsCameraDebounce() {
+        let (engine, fireCount) = engineWithFiredCamera()
+        #expect(fireCount() == 1)
+
+        // A brand-new drive (no preservingAlerts) resets the one-shot guarantee.
+        engine.startNavigation(polyline: Self.route, steps: Self.steps(Self.route))
+        engine.updateLocation(Self.movingFix(Self.route[0], course: 90, t: 2))
+        engine.updateLocation(Self.movingFix(CLLocationCoordinate2D(latitude: 34.0, longitude: -118.49), course: 90, t: 3))
+        #expect(fireCount() == 2)
+        engine.stopNavigation()
+    }
+
+    @Test("Snapshot + restore carries the debounce across a stop()/start() reroute")
+    func stopStartRerouteRestoresDebounce() {
+        let (engine, fireCount) = engineWithFiredCamera()
+        #expect(fireCount() == 1)
+
+        // Apple-route reroute pattern: snapshot, stop (wipes sets), start, restore.
+        let snapshot = engine.alertedSetsSnapshot
+        #expect(snapshot.cameraIDs.contains("cam-A"))
+        engine.stopNavigation()
+        engine.startNavigation(polyline: Self.route, steps: Self.steps(Self.route), preservingAlerts: true)
+        engine.restoreAlertedSets(cameraIDs: snapshot.cameraIDs, conditionIDs: snapshot.conditionIDs)
+        // Re-wire the provider/handler (stopNavigation left them, but be explicit).
+        let camera = SpeedCameraAlert(
+            alertID: "cam-A", kind: .speedCamera,
+            coordinate: CLLocationCoordinate2D(latitude: 34.0, longitude: -118.45),
+            distanceMeters: 120
+        )
+        engine.speedCameraProvider = { _, _ in camera }
+        var fires2 = 0
+        engine.onSpeedCameraApproaching = { _ in fires2 += 1 }
+        engine.updateLocation(Self.movingFix(Self.route[0], course: 90, t: 2))
+        engine.updateLocation(Self.movingFix(CLLocationCoordinate2D(latitude: 34.0, longitude: -118.49), course: 90, t: 3))
+        // The carried-over "cam-A" suppresses the re-chime.
+        #expect(fires2 == 0)
+        engine.stopNavigation()
+    }
+}
+
 // MARK: - Pose & Bearing Tests
 
 @Suite("NavigationEngine pose & bearing")
