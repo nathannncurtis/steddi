@@ -358,7 +358,7 @@ struct SettingsView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This will permanently delete all commutes, routes, pinned locations, drive records, no-go zones, and commute trips. This action cannot be undone.")
+                Text("This will permanently delete all commutes, routes, trips, pinned locations, drive records, no-go zones, reports, road conditions, speed cameras, and analytics. This action cannot be undone.")
             }
             .preferredColorScheme(resolvedColorScheme)
         }
@@ -375,6 +375,8 @@ struct SettingsView: View {
     }
 
     private func deleteAllData() {
+        // Every persisted @Model must be cleared — an omission silently leaves
+        // user data on disk after "Erase all data". Keep this list exhaustive.
         do {
             try modelContext.delete(model: PinnedLocation.self)
             try modelContext.delete(model: Commute.self)
@@ -382,6 +384,12 @@ struct SettingsView: View {
             try modelContext.delete(model: DriveRecord.self)
             try modelContext.delete(model: NoGoZone.self)
             try modelContext.delete(model: CommuteTrip.self)
+            try modelContext.delete(model: Trip.self)
+            try modelContext.delete(model: TripStop.self)
+            try modelContext.delete(model: Report.self)
+            try modelContext.delete(model: RoadCondition.self)
+            try modelContext.delete(model: CameraReport.self)
+            try modelContext.delete(model: CommuteAnalyticsAggregate.self)
         } catch {
             print("Failed to delete all data: \(error)")
         }
