@@ -15,7 +15,9 @@ final class LocationService {
     private let delegate: LocationDelegate
     private let locationManager = CLLocationManager()
     private var recordedPoints: [GPSPoint] = []
-    private var orientationObserver: NSObjectProtocol?
+    // nonisolated so the (nonisolated) deinit can remove it; written once on the
+    // main actor during init, read only in deinit — no concurrent access.
+    nonisolated(unsafe) private var orientationObserver: NSObjectProtocol?
 
     init() {
         delegate = LocationDelegate()
@@ -63,10 +65,12 @@ final class LocationService {
     }
 
     deinit {
+        // NotificationCenter.removeObserver is thread-safe; safe from the
+        // nonisolated deinit. (UIDevice orientation generation is left as-is —
+        // this service is app-lifetime, so this is belt-and-suspenders.)
         if let orientationObserver {
             NotificationCenter.default.removeObserver(orientationObserver)
         }
-        UIDevice.current.endGeneratingDeviceOrientationNotifications()
     }
 
     func requestPermission() {
