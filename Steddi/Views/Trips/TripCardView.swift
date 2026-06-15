@@ -72,7 +72,7 @@ struct TripCardView: View {
                         if let distanceToNextStop {
                             Text(distanceToNextStop)
                                 .font(SteddiTheme.mono(13))
-                                .foregroundStyle(SteddiTheme.sage)
+                                .foregroundStyle(SteddiTheme.sageText)
                         }
                     }
                     .padding(.horizontal, 14)
