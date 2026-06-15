@@ -845,7 +845,11 @@ struct HomeView: View {
                             Button { withAnimation(TransitionKit.quickFade) { sheetTab = tab } } label: {
                                 Text(tab.rawValue)
                                     .font(SteddiTheme.heading(12))
-                                    .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textMuted)
+                                    // Inactive tabs are primary nav, not decoration:
+                                    // textSecondary keeps them readable (textMuted
+                                    // fails contrast on the sheet) while still
+                                    // reading as inactive next to the accent label.
+                                    .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textSecondary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 6)
                             }
@@ -915,8 +919,9 @@ struct HomeView: View {
                                 // Active label rides on the accent-glass pill, so it
                                 // needs an on-accent foreground (not the accent itself,
                                 // which washes out against the tinted pill). Inactive
-                                // labels stay muted on the neutral glass bar.
-                                .foregroundStyle(sheetTab == tab ? SteddiTheme.textPrimary : SteddiTheme.textMuted)
+                                // labels use textSecondary — these are primary nav
+                                // controls and textMuted fails contrast on the bar.
+                                .foregroundStyle(sheetTab == tab ? SteddiTheme.textPrimary : SteddiTheme.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
                                 .background {
