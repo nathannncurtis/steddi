@@ -874,6 +874,10 @@ struct HomeView: View {
                                     // fails contrast on the sheet) while still
                                     // reading as inactive next to the accent label.
                                     .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textSecondary)
+                                    // Shrink-to-fit on one line so large Dynamic Type
+                                    // doesn't wrap/clip in the 280pt sidebar.
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 6)
                             }
@@ -946,6 +950,12 @@ struct HomeView: View {
                                 // not the surface-adaptive text-safe accent. Inactive
                                 // labels use textSecondary (textMuted fails on the bar).
                                 .foregroundStyle(sheetTab == tab ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
+                                // At large Dynamic Type the heading scales past the
+                                // ~1/3-width budget; shrink-to-fit on one line keeps
+                                // the single-row pill and the matched-geometry active
+                                // pill aligned instead of wrapping/clipping.
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
                                 .background {
