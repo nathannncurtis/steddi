@@ -18,10 +18,6 @@ struct CommuteDetailView: View {
     // Schedule UI state
     @State private var useSchedule = false
 
-    private static let dayAbbreviations = ["S", "M", "T", "W", "T", "F", "S"]
-    // weekday components: Sun=1..Sat=7
-    private static let weekdayValues = [1, 2, 3, 4, 5, 6, 7]
-
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
         Form {
@@ -170,8 +166,8 @@ struct CommuteDetailView: View {
                         Text("Go to \(commute.destination?.name ?? "Destination")")
                             .font(.subheadline.weight(.semibold))
 
-                        dayPicker(
-                            selectedDays: Binding(
+                        DaysOfWeekPicker(
+                            selected: Binding(
                                 get: { parseDays(commute.scheduleToDestDays) },
                                 set: { commute.scheduleToDestDays = encodeDays($0) }
                             )
@@ -210,8 +206,8 @@ struct CommuteDetailView: View {
                         Text("Go to \(commute.origin?.name ?? "Origin")")
                             .font(.subheadline.weight(.semibold))
 
-                        dayPicker(
-                            selectedDays: Binding(
+                        DaysOfWeekPicker(
+                            selected: Binding(
                                 get: { parseDays(commute.scheduleToOriginDays) },
                                 set: { commute.scheduleToOriginDays = encodeDays($0) }
                             )
@@ -367,33 +363,6 @@ struct CommuteDetailView: View {
     }
 
     // MARK: - Schedule Helpers
-
-    private func dayPicker(selectedDays: Binding<Set<Int>>) -> some View {
-        HStack(spacing: 6) {
-            ForEach(Array(zip(Self.weekdayValues, Self.dayAbbreviations)), id: \.0) { weekday, abbr in
-                Text(abbr)
-                    .font(.caption.weight(.semibold))
-                    .frame(width: 32, height: 32)
-                    .background(
-                        selectedDays.wrappedValue.contains(weekday)
-                            ? SteddiTheme.accentBrand
-                            : Color(.systemGray5)
-                    )
-                    // On-fill label: brand-hue fill + onAccent clears AA on
-                    // every accent in every theme; the text-safe accent fill +
-                    // white failed in grey (~1.1:1) and dark.
-                    .foregroundStyle(selectedDays.wrappedValue.contains(weekday) ? SteddiTheme.onAccent : .primary)
-                    .clipShape(Circle())
-                    .onTapGesture {
-                        if selectedDays.wrappedValue.contains(weekday) {
-                            selectedDays.wrappedValue.remove(weekday)
-                        } else {
-                            selectedDays.wrappedValue.insert(weekday)
-                        }
-                    }
-            }
-        }
-    }
 
     private func parseDays(_ str: String?) -> Set<Int> {
         guard let str else { return [] }

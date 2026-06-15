@@ -43,7 +43,9 @@ struct SearchResultActionCard: View {
                 if let distanceText {
                     Text(distanceText)
                         .font(SteddiTheme.mono(13))
-                        .foregroundStyle(SteddiTheme.sage)
+                        // Surface-adaptive legible green — raw sage as 13pt text
+                        // on the near-white card fails AA in light/dynamic-day.
+                        .foregroundStyle(SteddiTheme.sageText)
                 }
             }
 

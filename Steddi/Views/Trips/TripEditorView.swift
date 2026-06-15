@@ -102,15 +102,18 @@ struct TripEditorView: View {
         return HStack(spacing: 10) {
             Text("\(stop.order + 1)")
                 .font(.caption.weight(.bold).monospaced())
-                // Contrast with whichever fill: accent for the current stop,
-                // textMuted otherwise. White-on-textMuted is invisible in the
-                // light grey theme and weak elsewhere, so pick per-fill.
+                // Contrast with whichever fill: the current stop pairs onAccent
+                // with the raw brand hue (accentBrand) — the AA-clearing on-fill
+                // pairing. Filling with the text-safe `accent` was a dark-on-
+                // darkened ~3:1 mispairing in light. The non-current branch picks
+                // black/white per the textMuted fill (white-on-textMuted is
+                // invisible in the light grey theme and weak elsewhere).
                 .foregroundStyle(isCurrent
                     ? SteddiTheme.onAccent
                     : SteddiTheme.contrastingForeground(on: ThemeEngine.snapshot.textMuted))
                 .frame(width: 22, height: 22)
                 .background(
-                    isCurrent ? SteddiTheme.accent : SteddiTheme.textMuted,
+                    isCurrent ? SteddiTheme.accentBrand : SteddiTheme.textMuted,
                     in: Circle()
                 )
 

@@ -88,7 +88,12 @@ struct OnboardingHeroView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 12)
-                    .steddiGlass(in: Capsule(), fallbackFill: SteddiTheme.surfaceSecondary)
+                    // Fixed-dark fallback so the white wordmark stays legible when
+                    // glass is unavailable (Reduce Transparency / high contrast).
+                    // surfaceSecondary is near-white in Light/dynamic-day, which made
+                    // white-on-near-white vanish; the hero backdrop is always dark, so
+                    // a dark plate is correct in BOTH themes (matches the showpiece card).
+                    .steddiGlass(in: Capsule(), fallbackFill: SteddiTheme.onboardingCardFallbackFill)
                     .glassEffectID("onboarding.wordmark", in: wordmarkNamespace)
                     .glassEffectTransition(.materialize)
             }

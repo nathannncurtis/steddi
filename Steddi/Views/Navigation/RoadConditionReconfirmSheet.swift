@@ -90,15 +90,16 @@ struct RoadConditionReconfirmSheet: View {
             Spacer()
 
             HStack(spacing: 10) {
-                actionChip("Yes", systemImage: "checkmark", tint: SteddiTheme.sage) {
+                actionChip("Yes", systemImage: "checkmark", fill: SteddiTheme.sageRGB) {
                     service.updateConfirmation(condition)
                     advance()
                 }
-                actionChip("Gone", systemImage: "xmark", tint: SteddiTheme.warmRed) {
+                actionChip("Gone", systemImage: "xmark", fill: SteddiTheme.warmRedRGB) {
                     service.expireCondition(condition)
                     advance()
                 }
-                actionChip("Skip", systemImage: "arrow.right", tint: SteddiTheme.surfaceSecondary, mutedLabel: true) {
+                // Muted "no opinion" chip — neutral surface fill, secondary label.
+                actionChip("Skip", systemImage: "arrow.right", fill: nil) {
                     advance()
                 }
             }
@@ -107,11 +108,12 @@ struct RoadConditionReconfirmSheet: View {
         }
     }
 
+    /// One reconfirm chip. `fill` is the semantic fill RGB for the affirmative/
+    /// negative chips; `nil` renders the muted "Skip" chip on the neutral surface.
     private func actionChip(
         _ title: String,
         systemImage: String,
-        tint: Color,
-        mutedLabel: Bool = false,
+        fill: RGBColor?,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -123,8 +125,12 @@ struct RoadConditionReconfirmSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .foregroundStyle(mutedLabel ? SteddiTheme.textSecondary : .white)
-            .background(tint, in: RoundedRectangle(cornerRadius: 14))
+            // On-fill label: the AA-correct contrasting foreground for the fill
+            // (never hardcoded white — white-on-sage 2.45:1, white-on-warmRed
+            // 3.78:1, both fail AA). The muted Skip chip uses textSecondary on the
+            // neutral surface, which already clears AA.
+            .foregroundStyle(fill.map { SteddiTheme.contrastingForeground(on: $0) } ?? SteddiTheme.textSecondary)
+            .background(fill?.color ?? SteddiTheme.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
         }
     }
 

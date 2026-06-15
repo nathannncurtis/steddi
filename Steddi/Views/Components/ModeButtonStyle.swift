@@ -8,13 +8,17 @@ struct ModeButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(SteddiTheme.body(12).weight(.semibold))
+            // On-fill label: pair the brand-hue fill with `onAccent` (the
+            // documented on-fill foreground). Filling with the text-safe `accent`
+            // collapsed onAccent-on-fill to ~3:1 in light mode (dark-on-darkened);
+            // accentBrand + onAccent clears AA on every accent in every theme.
             .foregroundStyle(isSelected ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? SteddiTheme.accent : SteddiTheme.surfaceElevated)
+                    .fill(isSelected ? SteddiTheme.accentBrand : SteddiTheme.surfaceElevated)
             )
             .opacity(configuration.isPressed ? 0.7 : 1)
     }

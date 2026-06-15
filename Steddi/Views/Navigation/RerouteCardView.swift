@@ -63,7 +63,10 @@ struct RerouteCardView: View {
                 HStack(spacing: 6) {
                     Text("Save ~\(timeSavingsMinutes) min")
                         .font(SteddiTheme.heading(22 * textScale))
-                        .foregroundStyle(SteddiTheme.sage)
+                        // Surface-adaptive legible green — the raw sage hue is
+                        // ~2.30:1 on the light/dynamic-day accent glass and fails
+                        // even the 3:1 large-text floor for this glanceable value.
+                        .foregroundStyle(SteddiTheme.sageText)
 
                     Text("(\(percentageSavings)%)")
                         .font(SteddiTheme.mono(14 * textScale))
