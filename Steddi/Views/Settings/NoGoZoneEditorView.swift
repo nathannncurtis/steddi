@@ -16,6 +16,7 @@ struct NoGoZoneEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LocationService.self) private var locationService
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
 
     @State private var selectedMode: ZoneEditorMode = .circlePin
     @State private var name = ""
@@ -74,6 +75,11 @@ struct NoGoZoneEditorView: View {
                 bottomControlCard
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
+    }
+
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
     }
 
     // MARK: - Top bar
@@ -207,7 +213,7 @@ struct NoGoZoneEditorView: View {
             } label: {
                 Text(isSnapping ? "Finding road…" : "Find road")
                     .font(SteddiTheme.body(15).weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SteddiTheme.onAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 10))
@@ -252,7 +258,7 @@ struct NoGoZoneEditorView: View {
                 } label: {
                     Text("Close shape")
                         .font(SteddiTheme.body(15).weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(SteddiTheme.onAccent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 10))
