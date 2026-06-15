@@ -213,11 +213,10 @@ struct NoGoZoneEditorView: View {
             } label: {
                 Text(isSnapping ? "Finding road…" : "Find road")
                     .font(SteddiTheme.body(15).weight(.semibold))
-                    .foregroundStyle(SteddiTheme.onAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 10))
             }
+            .buttonStyle(.steddiPrimary)
             .disabled(roadName.isEmpty || roadStart.isEmpty || roadEnd.isEmpty || isSnapping)
         }
     }
@@ -258,11 +257,10 @@ struct NoGoZoneEditorView: View {
                 } label: {
                     Text("Close shape")
                         .font(SteddiTheme.body(15).weight(.semibold))
-                        .foregroundStyle(SteddiTheme.onAccent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 10))
                 }
+                .buttonStyle(.steddiPrimary)
                 .disabled(polygonTaps.count < 3)
             }
         }

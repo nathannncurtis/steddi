@@ -107,15 +107,14 @@ struct EmergencyView: View {
         } label: {
             Label("Share My Location", systemImage: "square.and.arrow.up")
                 .font(.body.weight(.semibold))
-                .foregroundStyle(SteddiTheme.onAccent)
                 .frame(maxWidth: .infinity, minHeight: 28)
                 .padding(.vertical, 16)
-                .background(
-                    hasLocation ? SteddiTheme.accent : SteddiTheme.accent.opacity(0.4),
-                    in: RoundedRectangle(cornerRadius: 14)
-                )
         }
-        .buttonStyle(.steddiPress)
+        // Canonical accent CTA — fill + AA-legible on-fill label from the style.
+        // Dim the whole control (fill included) when no fix is available yet,
+        // preserving the prior disabled treatment.
+        .buttonStyle(.steddiPrimary)
+        .opacity(hasLocation ? 1 : 0.4)
         .disabled(!hasLocation)
         .accessibilityHint("Opens the share sheet with a help message and a map link to your exact location.")
     }
