@@ -580,6 +580,28 @@ struct AStarSearchTests {
         #expect(result == nil)
     }
 
+    @Test("a negative .node index fails clean instead of trapping (origin and destination)")
+    func negativeNodeIndexFailsClean() {
+        // NodeIndex is Int32, so `.node(-1)` is representable. Both endpoint
+        // resolvers must bounds-check the low end and return nil rather than trap
+        // on the negative `graph.nodes` subscript.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.001),
+            way(100, [1, 2], tags: ["highway": "residential"])
+        )
+        let valid = NodeIndex(Int(graph.osmToIndex[1]!))
+
+        // Negative origin.
+        #expect(search.search(from: .node(-1), to: .node(valid), in: graph, cost: cost) == nil)
+        // Negative destination.
+        #expect(search.search(from: .node(valid), to: .node(-1), in: graph, cost: cost) == nil)
+        // Both negative.
+        #expect(search.search(from: .node(-5), to: .node(-3), in: graph, cost: cost) == nil)
+        // Sanity: the valid pair still routes (guard didn't over-reject).
+        #expect(search.search(from: .node(valid), to: .node(NodeIndex(Int(graph.osmToIndex[2]!))), in: graph, cost: cost) != nil)
+    }
+
     // MARK: - Turn-aware optimality (edge-keyed state regression)
 
     /// A cost where the turn penalty into one specific edge depends on which edge
