@@ -91,6 +91,46 @@ enum SteddiTheme {
     static var accentSubtle: Color { accentBrand.opacity(0.15) }
     static var accentUIColor: UIColor { currentAccentOption.uiColor }
 
+    // MARK: - On-Accent / Contrasting Foreground
+
+    /// Foreground (text/glyph) color to use *on an accent FILL* — e.g. a primary
+    /// button filled with `accentBrand`, a selected-state capsule, a badge whose
+    /// background is the accent. Use this **instead of hardcoded `.white`**: the
+    /// brand accents are mid-tone/light hues (lavender, gold, sage, coral, …), so
+    /// white-on-fill fails WCAG AA in light/grey/dynamic-day (white lands
+    /// 2.41–3.47:1 on the current swatches). `onAccent` returns a dark glyph color
+    /// when the accent fill is light and white when it's dark — picked from the
+    /// live accent's luminance — so on-fill text clears AA on every accent
+    /// (current swatches: 5.03–7.24:1).
+    ///
+    /// Dynamic so it re-resolves on every theme-revision bump, matching `accent`.
+    /// (The accent itself is theme-independent, but staying dynamic keeps it
+    /// consistent should a future accent become surface-derived.)
+    static var onAccent: Color {
+        Color(UIColor { traitCollection in
+            _ = traitCollection.themeRevision
+            return ContrastRatio.contrastingForeground(on: currentAccentOption.rgb).uiColor
+        })
+    }
+
+    /// `onAccent` as an `RGBColor`, for UIKit map glyphs and snapshot rendering
+    /// that resolve a concrete value rather than a dynamic SwiftUI `Color`.
+    static var onAccentRGB: RGBColor { ContrastRatio.contrastingForeground(on: currentAccentOption.rgb) }
+
+    /// Legible foreground for an arbitrary solid FILL — black/near-black when the
+    /// fill is light, white/near-white when it's dark, per WCAG luminance. Use on
+    /// semantic fills whose color isn't the accent: traffic-status badges, the
+    /// category chip glyph when the chip is filled with its category color, a
+    /// `warmRed`/`sage`/`amber` pill. Clears AA (≥4.5:1) on every Steddi fill as
+    /// normal text and comfortably ≥3:1 for large/badge text.
+    ///
+    /// For text drawn *on a surface* in a semantic color (not on a fill), use the
+    /// surface-adaptive text tokens (`sageText`, `amberText`, `legibleText(_:)`)
+    /// instead — those preserve the semantic hue; this picks black or white.
+    static func contrastingForeground(on color: RGBColor) -> Color {
+        ContrastRatio.contrastingForeground(on: color).color
+    }
+
     /// Per-surface luminance-shifted accent that meets WCAG AA as foreground
     /// text. Dynamic so it re-resolves on every theme-revision bump exactly like
     /// the surface tokens; reads the live `ThemeEngine.snapshot.surfacePrimary`.
@@ -114,30 +154,70 @@ enum SteddiTheme {
     /// surface). The minimal shift that reaches `accentTextTarget` is found by
     /// bisection and clamped to `accentShiftCap`; hue is preserved throughout.
     static func textSafeAccent(_ base: RGBColor, onSurface surface: RGBColor) -> RGBColor {
-        let towardWhite = ContrastRatio.relativeLuminance(surface) < 0.5
-        let shift: (Double) -> RGBColor = { f in
-            towardWhite ? ContrastRatio.lighten(base, by: f) : ContrastRatio.darken(base, by: f)
-        }
-        // If even the cap can't reach the target (mid-tone surface), take the cap.
-        guard ContrastRatio.ratio(shift(accentShiftCap), surface) >= accentTextTarget else {
-            return shift(accentShiftCap)
-        }
-        var lo = 0.0, hi = accentShiftCap
-        for _ in 0..<24 {
-            let mid = (lo + hi) / 2
-            if ContrastRatio.ratio(shift(mid), surface) >= accentTextTarget { hi = mid } else { lo = mid }
-        }
-        return shift(hi)
+        ContrastRatio.legible(base, onSurface: surface, target: accentTextTarget, cap: accentShiftCap)
     }
 
     /// Sage green — "all clear" / "good to go" states.
-    static let sage = Color(red: 0.13, green: 0.74, blue: 0.45)         // #22BD73
-    static let sageSubtle = Color(red: 0.13, green: 0.74, blue: 0.45).opacity(0.15)
+    /// Single source of truth is `sageRGB`; `sage` is the fill/dark-surface hue.
+    static let sageRGB = RGBColor(0.13, 0.74, 0.45)                     // #22BD73
+    static let sage = sageRGB.color
+    static let sageSubtle = sageRGB.color.opacity(0.15)
 
     /// Soft red — warnings, delays, problems. Not alarming.
-    static let warmRed = Color(red: 0.91, green: 0.30, blue: 0.24)      // #E84D3D
-    static let warmRedSubtle = Color(red: 0.91, green: 0.30, blue: 0.24).opacity(0.15)
-    static let warningAmber = Color(red: 0.95, green: 0.65, blue: 0.15)   // #F2A626 — over-limit warning, independent of accent
+    static let warmRedRGB = RGBColor(0.91, 0.30, 0.24)                  // #E84D3D
+    static let warmRed = warmRedRGB.color
+    static let warmRedSubtle = warmRedRGB.color.opacity(0.15)
+    /// Over-limit warning amber, independent of accent.
+    static let warningAmberRGB = RGBColor(0.95, 0.65, 0.15)             // #F2A626
+    static let warningAmber = warningAmberRGB.color
+
+    // MARK: - Semantic colors AS TEXT (surface-adaptive, hue-preserving)
+
+    /// The semantic hues above are sized as *fills* and dark-surface text. As
+    /// foreground TEXT on the app surfaces they fail WCAG AA in light/grey
+    /// (sage 2.30:1, amber 1.92:1, warmRed 1.77:1 on the worst-case surface) —
+    /// they're saturated mid/high-luminance colors that vanish on a near-white or
+    /// grey background. `legibleText(_:)` shifts a semantic color toward the side
+    /// the live surface has headroom in (darken on light, lighten on dark/grey) by
+    /// the minimal amount that clears AA, preserving hue so the meaning survives
+    /// (amber still reads as warning, sage as go). Dynamic, so it re-resolves on
+    /// every theme-revision bump just like `accent`/the surfaces.
+    ///
+    /// USAGE RULE — text vs fill:
+    ///   • Drawing a VALUE/label in a semantic color (distance in sage,
+    ///     over-limit speed in amber, a status word in warmRed) ON a surface:
+    ///     use `sageText` / `amberText` / `warmRedText` (or `legibleText(c)`).
+    ///   • Drawing on a semantic/accent FILL (white-on-color badge/button):
+    ///     use `onAccent` (accent fill) or `contrastingForeground(on:)` (other).
+    ///   • Pure decoration / large glyphs / gauge arcs where contrast is carried
+    ///     by size or fill, not legibility of small text: the raw `sage`/`warmRed`
+    ///     /`warningAmber` hues are fine.
+    static var sageText: Color { legibleText(sageRGB) }
+    static var amberText: Color { legibleText(warningAmberRGB) }
+    static var warmRedText: Color { legibleText(warmRedRGB) }
+
+    /// AA target for semantic text, measured on `surfacePrimary`. Matches the
+    /// accent text target (5.7) so a shift sized on primary also clears AA on
+    /// secondary and the 3:1 floor on elevated, across light/dark; grey lands at
+    /// the palette ceiling (≥4.5 on primary, ≥3:1 on secondary).
+    private static let semanticTextTarget: Double = 5.7
+
+    /// Make an arbitrary semantic hue legible as foreground text on the live
+    /// surface, preserving its hue. Dynamic; pairs with `contrastingForeground`
+    /// for the on-fill case.
+    static func legibleText(_ base: RGBColor) -> Color {
+        Color(UIColor { traitCollection in
+            _ = traitCollection.themeRevision
+            return Self.legibleText(base, onSurface: ThemeEngine.snapshot.surfacePrimary).uiColor
+        })
+    }
+
+    /// Pure, testable mapping behind `legibleText` / `sageText` / `amberText`.
+    /// Delegates to the shared `ContrastRatio.legible` shifter against the given
+    /// surface; same machinery as `textSafeAccent`, sized for semantic text.
+    static func legibleText(_ base: RGBColor, onSurface surface: RGBColor) -> RGBColor {
+        ContrastRatio.legible(base, onSurface: surface, target: semanticTextTarget, cap: accentShiftCap)
+    }
 
     /// Surface colors — resolved by ThemeEngine. The dark/light endpoints are
     /// pixel-identical to the old trait-adaptive values (see ThemePalette);
@@ -287,11 +367,26 @@ enum SteddiTheme {
     enum TrafficStatus {
         case clear, moderate, heavy, unknown
 
+        /// FILL / dot / arc color — the raw semantic hue. Use behind a
+        /// `contrastingForeground(on:)` glyph for filled badges.
         var color: Color {
             switch self {
             case .clear: return SteddiTheme.sage
-            case .moderate: return SteddiTheme.accent
+            case .moderate: return SteddiTheme.accentBrand
             case .heavy: return SteddiTheme.warmRed
+            case .unknown: return SteddiTheme.textMuted
+            }
+        }
+
+        /// TEXT color — the surface-adaptive, AA-legible variant of `color` for
+        /// status words/values drawn directly on a surface (not on a fill).
+        /// `clear`/`moderate`/`heavy` use the legible semantic/accent text
+        /// tokens; `unknown` is already a surface-adaptive muted token.
+        var textColor: Color {
+            switch self {
+            case .clear: return SteddiTheme.sageText
+            case .moderate: return SteddiTheme.accent
+            case .heavy: return SteddiTheme.warmRedText
             case .unknown: return SteddiTheme.textMuted
             }
         }
