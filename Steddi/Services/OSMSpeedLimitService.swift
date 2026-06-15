@@ -266,8 +266,10 @@ final class OSMSpeedLimitService {
             resetChallenger()
         }
 
-        lastWayIndex = chosen
+        // Bounds-check before caching: never store an index we won't read, so a
+        // bad `chosen` can't poison `lastWayIndex` for the next lookup's hysteresis.
         guard chosen < wayLimits.count else { return nil }
+        lastWayIndex = chosen
         let limit = wayLimits[chosen]
         return (limit.mph, limit.isEstimated)
     }
