@@ -561,6 +561,63 @@ struct StepSynthesizerTests {
         let legDistance = synth.steps.map(\.distance).reduce(0, +)
         #expect(abs(legDistance - expected) < 1)
     }
+
+    @Test("repeated edge index: leading/trailing trim is applied by POSITION, not by value")
+    func repeatedEdgeIndexTrimsByPosition() {
+        // A path whose FIRST and LAST positions share the same edge index — the
+        // block-loop / same-edge case where the start edge seeds the path and the
+        // same physical edge is also the trailing edge. The leading copy is trimmed
+        // to [startFraction, 1.0]; the trailing copy to [0, endFraction]. With the
+        // old value-based test both isFirst and isLast matched the FIRST occurrence,
+        // so it was charged the full (untrimmed) length and the summed step distance
+        // diverged from the polyline actually drawn.
+        let graph = lShapedGraph()
+        // Edge indices for ways 100 (1->2) and 101 (2->3), both ~111 m primaries.
+        guard let e0 = graph.edges.firstIndex(where: { $0.osmWayID == 100 }).map({ EdgeIndex($0) }),
+              let e1 = graph.edges.firstIndex(where: { $0.osmWayID == 101 }).map({ EdgeIndex($0) }) else {
+            Issue.record("missing fixture edges"); return
+        }
+        let startFraction = 0.6   // leading copy of e0 trimmed to [0.6, 1.0]
+        let endFraction = 0.4     // trailing copy of e0 trimmed to [0.0, 0.4]
+
+        // edgePath = [e0, e1, e0]: e0 appears at position 0 (leading) AND the last
+        // position (trailing). nodePath has count == edgePath.count + 1.
+        let n0 = graph.edges[Int(e0)].from
+        let n1 = graph.edges[Int(e0)].to
+        let n2 = graph.edges[Int(e1)].to
+        let result = SearchResult(
+            nodePath: [n0, n1, n2, graph.edges[Int(e0)].to],
+            edgePath: [e0, e1, e0],
+            totalCost: 0,
+            startFraction: startFraction,
+            endFraction: endFraction
+        )
+
+        guard let synth = StepSynthesizer.synthesize(result, in: graph) else {
+            Issue.record("no synthesis"); return
+        }
+        let stepSum = synth.steps.map(\.distance).reduce(0, +)
+
+        // The summed step distance must charge each POSITION its own trimmed length:
+        //   position 0 (leading e0)  -> [0.6, 1.0] ≈ 0.4 * e0
+        //   position 1 (interior e1) -> full e1
+        //   position 2 (trailing e0) -> [0.0, 0.4] ≈ 0.4 * e0
+        // The trim fractions are arc-length, so derive the exact expected leg
+        // lengths from the same trimmed geometry the synthesizer measures.
+        let fullE0 = Double(graph.edges[Int(e0)].lengthMeters)
+        let middle = Double(graph.edges[Int(e1)].lengthMeters)
+        let leadingLen = (1 - startFraction) * fullE0   // ~0.4 * e0
+        let trailingLen = endFraction * fullE0          // ~0.4 * e0
+        let expectedTotal = leadingLen + middle + trailingLen
+        #expect(abs(stepSum - expectedTotal) < 2.0)
+
+        // Guard against the old value-based bug: BOTH e0 occurrences matched
+        // `edgeIndex == first` AND `== last`, so each ran trimSubSegment(from: 0.6,
+        // to: 0.4); with from > to its `from < to` guard failed and the FULL
+        // untrimmed length was charged for both, overstating the total.
+        let buggyTotal = fullE0 + middle + fullE0
+        #expect(abs(stepSum - buggyTotal) > 2.0)
+    }
 }
 
 /// A single straight primary edge (node 1 → node 2) with an interior geometry
