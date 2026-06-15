@@ -7,9 +7,20 @@ struct TripListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Trip.createdAt, order: .reverse) private var trips: [Trip]
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx = ThemeModeEx.dynamic.rawValue
 
     @State private var showPlanner = false
     @State private var showArchived = false
+
+    /// Pin system chrome (List background, segmented picker, ContentUnavailable
+    /// empty state) to the active Steddi theme. This sheet is presented from
+    /// HomeView, which does not re-pin across the .sheet boundary, so without
+    /// this the List can render in the device appearance while the rest of the
+    /// app tracks the Steddi theme — a visible wrong-polarity seam under any
+    /// theme/device mismatch. Mirrors CommuteListView.resolvedColorScheme.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     /// Trips a swipe-delete targeted that are mid-navigation — held until the
     /// confirmation alert resolves so deleting them can't orphan nav state.
@@ -79,6 +90,7 @@ struct TripListView: View {
         } message: {
             Text("This trip is being navigated. Deleting it will end the active trip session.")
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     private func tripRow(_ trip: Trip) -> some View {
