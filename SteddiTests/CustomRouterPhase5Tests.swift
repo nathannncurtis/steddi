@@ -508,6 +508,81 @@ struct CustomRouterEndToEndTests {
         #expect(measured > 0)
         #expect(abs(duration - measured / 13.4) < 0.001)
     }
+
+    @Test("freeFlowDuration prefers the edge-speed sum over the flat baseline")
+    func freeFlowDurationPrefersEdgeSpeeds() {
+        // When the search supplied an edge-speed-based duration, use it verbatim;
+        // the flat 13.4 m/s baseline (which here would report ~1000 s for 13.4 km)
+        // is only a last resort.
+        let coords = [
+            CLLocationCoordinate2D(latitude: 34.0, longitude: -118.0),
+            CLLocationCoordinate2D(latitude: 34.1, longitude: -118.0),
+        ]
+        let distance = RouteGeometry.cumulativeDistances(coords).last ?? 0
+        #expect(distance > 5000)   // a long leg the flat baseline would over-time
+        let duration = CustomRouter.freeFlowDuration(
+            edgeFreeFlowSeconds: 200,
+            fallbackCoords: coords,
+            fallbackDistance: distance
+        )
+        #expect(duration == 200)
+    }
+
+    @Test("freeFlowDuration falls back to the flat baseline when no edge speeds")
+    func freeFlowDurationFallsBackWithoutEdgeSpeeds() {
+        // edgeFreeFlowSeconds == 0 (no edge carried a usable speed) → flat baseline.
+        let duration = CustomRouter.freeFlowDuration(
+            edgeFreeFlowSeconds: 0,
+            fallbackCoords: [],
+            fallbackDistance: 1340
+        )
+        #expect(abs(duration - 100) < 0.001)   // 1340 m / 13.4 m/s
+    }
+
+    @Test("a high-speed edge yields a shorter free-flow duration than a residential one of equal length")
+    func edgeSpeedDrivesDuration() {
+        // Two single-way graphs over the IDENTICAL geometry (same nodes, so same
+        // edge length): one motorway-fast, one residential-slow. The synthesized
+        // free-flow duration must scale by the edge's real speed — the motorway
+        // leg is faster — rather than collapsing to one flat urban baseline.
+        func straightGraph(maxspeed: String, highway: String) -> RoadGraph {
+            p5graph(
+                p5node(1, 34.0, -118.0),
+                p5node(2, 34.0, -118.02),   // ~1.8 km east, same for both graphs
+                p5way(100, [1, 2], tags: ["highway": highway, "maxspeed": maxspeed])
+            )
+        }
+        let fast = straightGraph(maxspeed: "65 mph", highway: "motorway")
+        let slow = straightGraph(maxspeed: "25 mph", highway: "residential")
+
+        let origin = CLLocationCoordinate2D(latitude: 34.0, longitude: -118.0)
+        let destination = CLLocationCoordinate2D(latitude: 34.0, longitude: -118.02)
+
+        let fastSyn = CustomRouter.searchAndSynthesize(
+            stops: [origin, destination], graph: fast, search: AStarSearch(), cost: DefaultCostModel()
+        )
+        let slowSyn = CustomRouter.searchAndSynthesize(
+            stops: [origin, destination], graph: slow, search: AStarSearch(), cost: DefaultCostModel()
+        )
+        guard let fastSyn, let slowSyn else { Issue.record("no synthesis"); return }
+
+        // Same geometry length both ways.
+        let fastLen = RouteGeometry.cumulativeDistances(fastSyn.coordinates).last ?? 0
+        let slowLen = RouteGeometry.cumulativeDistances(slowSyn.coordinates).last ?? 0
+        #expect(abs(fastLen - slowLen) < 1.0)
+
+        // Both edge-speed durations are populated and the fast one is strictly
+        // shorter — roughly the 65:25 speed ratio (2.6x), not equal.
+        #expect(fastSyn.freeFlowSeconds > 0)
+        #expect(slowSyn.freeFlowSeconds > 0)
+        #expect(fastSyn.freeFlowSeconds < slowSyn.freeFlowSeconds)
+        #expect(slowSyn.freeFlowSeconds / fastSyn.freeFlowSeconds > 2.0)
+
+        // And the duration tracks the real edge speed, not the flat 13.4 m/s
+        // baseline: a 65 mph (~29 m/s) leg is far quicker than distance / 13.4.
+        let flatBaseline = fastLen / 13.4
+        #expect(fastSyn.freeFlowSeconds < flatBaseline)
+    }
 }
 
 // MARK: - StepSynthesizer phrasing

@@ -105,10 +105,17 @@ final class CustomRouter: RouteProvider {
 
         // 5. ETA from the cost model's accumulated edge time would mix penalties
         //    into the displayed duration; instead report pure free-flow travel
-        //    time over the produced geometry (honest, traffic-free — §6). The
+        //    time built from each edge's real speed (honest, traffic-free — §6),
+        //    so a motorway route reads ~highway-fast and a residential one
+        //    ~residential-slow rather than a single flat urban baseline. The flat
+        //    baseline only kicks in when no edge carried a usable speed. The
         //    distance is the stitched polyline length.
         let distance = RouteGeometry.cumulativeDistances(synthesis.coordinates).last ?? 0
-        let duration = Self.freeFlowDuration(of: synthesis.coordinates, fallbackDistance: distance)
+        let duration = Self.freeFlowDuration(
+            edgeFreeFlowSeconds: synthesis.freeFlowSeconds,
+            fallbackCoords: synthesis.coordinates,
+            fallbackDistance: distance
+        )
 
         return GeneratedRoute(
             coordinates: synthesis.coordinates,
@@ -134,6 +141,7 @@ final class CustomRouter: RouteProvider {
 
         var stitchedCoords: [CLLocationCoordinate2D] = []
         var stitchedSteps: [NavStep] = []
+        var freeFlowSeconds: TimeInterval = 0
 
         for i in 0..<(stops.count - 1) {
             let result = search.search(
@@ -146,6 +154,7 @@ final class CustomRouter: RouteProvider {
                   let synthesis = StepSynthesizer.synthesize(result, in: graph) else {
                 return nil
             }
+            freeFlowSeconds += synthesis.freeFlowSeconds
 
             // Stitch geometry, deduping the shared junction vertex between legs.
             if let last = stitchedCoords.last, let first = synthesis.coordinates.first,
@@ -182,7 +191,11 @@ final class CustomRouter: RouteProvider {
         }
 
         guard stitchedCoords.count >= 2 else { return nil }
-        return StepSynthesizer.Synthesis(coordinates: stitchedCoords, steps: stitchedSteps)
+        return StepSynthesizer.Synthesis(
+            coordinates: stitchedCoords,
+            steps: stitchedSteps,
+            freeFlowSeconds: freeFlowSeconds
+        )
     }
 
     private nonisolated static func isArrival(_ step: NavStep) -> Bool {
@@ -276,9 +289,25 @@ final class CustomRouter: RouteProvider {
         return out
     }
 
-    /// Pure free-flow duration estimate over a polyline at a default urban speed.
-    /// The custom router does NOT own traffic (§6); the displayed/reroute ETA
-    /// stays on MKDirections, so this is just an honest baseline travel time.
+    /// Honest, traffic-free route duration. The custom router does NOT own traffic
+    /// (§6); the displayed/reroute ETA stays on MKDirections, so this is a baseline
+    /// travel time. It prefers the edge-speed sum the search produced
+    /// (`StepSynthesizer.freeFlowSeconds`, accumulated per leg) — that respects
+    /// each road's real free-flow speed, so a 70-mile freeway leg reads ~70 min,
+    /// not ~2h17m at a flat urban speed. The flat-baseline path is the last resort
+    /// for a degenerate graph where no edge carried a usable speed.
+    nonisolated static func freeFlowDuration(
+        edgeFreeFlowSeconds: TimeInterval,
+        fallbackCoords: [CLLocationCoordinate2D],
+        fallbackDistance: Double
+    ) -> TimeInterval {
+        if edgeFreeFlowSeconds > 0 { return edgeFreeFlowSeconds }
+        return freeFlowDuration(of: fallbackCoords, fallbackDistance: fallbackDistance)
+    }
+
+    /// Last-resort flat free-flow estimate over a polyline at a default urban
+    /// speed, used only when the edge-speed sum is unavailable (no edge carried a
+    /// usable `freeFlowSpeedMPS`).
     private static let defaultFreeFlowMPS: Double = 13.4   // ~30 mph mixed urban
 
     nonisolated static func freeFlowDuration(of coords: [CLLocationCoordinate2D], fallbackDistance: Double) -> TimeInterval {

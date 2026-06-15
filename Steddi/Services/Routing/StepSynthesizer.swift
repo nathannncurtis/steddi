@@ -20,10 +20,19 @@ import CoreLocation
 /// polyline, the guaranteed geometric baseline.
 enum StepSynthesizer {
 
-    /// Stitched output: the full route polyline and the synthesized steps.
+    /// Stitched output: the full route polyline, the synthesized steps, and the
+    /// edge-derived free-flow travel time. `freeFlowSeconds` sums each traversed
+    /// edge's `lengthMeters / freeFlowSpeedMPS` (prorating the partial
+    /// leading/trailing edges by their fractions), so a motorway leg reports a
+    /// realistic duration instead of a flat urban baseline — see
+    /// `CustomRouter.freeFlowDuration`.
     struct Synthesis: Sendable, Equatable {
         let coordinates: [CLLocationCoordinate2D]
         let steps: [NavStep]
+        /// Edge-speed-based free-flow travel time in seconds for this synthesis.
+        /// 0 when no edge carried a usable speed (the caller falls back to a flat
+        /// baseline over the geometry distance).
+        var freeFlowSeconds: TimeInterval = 0
 
         static func == (lhs: Synthesis, rhs: Synthesis) -> Bool {
             lhs.coordinates.count == rhs.coordinates.count
@@ -45,15 +54,35 @@ enum StepSynthesizer {
         let coordinates = stitchedPolyline(result, in: graph)
         guard coordinates.count >= 2 else { return nil }
 
+        let freeFlow = freeFlowSeconds(result, in: graph)
         let steps = buildSteps(result, polyline: coordinates, in: graph)
         // Degrade guard: a multi-edge route that produced fewer than 2 steps lost
         // its maneuvers; let the caller fall back to the geometric builder.
         if steps.count < 2 && result.edgePath.count > 1 {
             let geometric = CustomRouteBuilder.buildSteps(from: coordinates)
             guard geometric.count >= 2 else { return nil }
-            return Synthesis(coordinates: coordinates, steps: geometric)
+            return Synthesis(coordinates: coordinates, steps: geometric, freeFlowSeconds: freeFlow)
         }
-        return Synthesis(coordinates: coordinates, steps: steps)
+        return Synthesis(coordinates: coordinates, steps: steps, freeFlowSeconds: freeFlow)
+    }
+
+    /// Edge-speed free-flow travel time over the whole edge path: the sum of each
+    /// traversed edge's travelled length (the SAME partial-aware length
+    /// `edgeLength(at:)` reports for steps) divided by that edge's
+    /// `freeFlowSpeedMPS`. This is the honest, traffic-free duration the custom
+    /// router reports — a motorway edge contributes far less time per meter than a
+    /// residential one of equal length, so a highway route is no longer flattened
+    /// to a single urban baseline. Edges with a non-positive speed are skipped
+    /// (they contribute no time rather than an infinite one).
+    static func freeFlowSeconds(_ result: SearchResult, in graph: RoadGraph) -> TimeInterval {
+        guard !result.edgePath.isEmpty else { return 0 }
+        var seconds: TimeInterval = 0
+        for i in result.edgePath.indices {
+            let speed = Double(graph.edges[Int(result.edgePath[i])].freeFlowSpeedMPS)
+            guard speed > 0 else { continue }
+            seconds += edgeLength(at: i, result: result, in: graph) / speed
+        }
+        return seconds
     }
 
     /// Concatenate every edge's geometry into one polyline, trimming the leading
