@@ -25,9 +25,21 @@ struct OnboardingView: View {
     @State private var coordinator = OnboardingCoordinator()
     @State private var showDonation = false
 
+    // MARK: - Autoplay (showcase reel)
+
+    /// The cancellable per-beat autoplay timer. Keyed to `currentBeat`: tapping
+    /// Next or Skip cancels it and advances immediately; it's never armed under
+    /// Reduce Motion or VoiceOver (the user advances manually). Lives in the view,
+    /// not the coordinator, so the coordinator stays a pure, timer-free model.
+    @State private var autoplayTask: Task<Void, Never>?
+    /// 0→1 dwell progress for the card's autoplay hairline.
+    @State private var autoplayProgress: Double = 0
+    /// True while an autoplay dwell is running for the current beat.
+    @State private var autoplayActive = false
+
     var body: some View {
-        // Force a re-render when the in-flight accent changes so the footer and
-        // chrome recolor live during beat 3.
+        // Force a re-render when the in-flight accent changes so the footer,
+        // chrome, and the glass card's live tint recolor during the delight beat.
         let _ = coordinator.selectedAccent
         VStack(spacing: 0) {
             beatContent
@@ -35,10 +47,22 @@ struct OnboardingView: View {
 
             footer
         }
-        .background(SteddiTheme.surfacePrimary.ignoresSafeArea())
+        .background(beatBackground.ignoresSafeArea())
+        .overlay(alignment: .topTrailing) { skipIntroButton }
         .sheet(isPresented: $showDonation, onDismiss: completeOnboarding) {
             DonationView()
         }
+        .onChange(of: coordinator.currentBeat) { _, _ in
+            armAutoplayIfNeeded()
+        }
+        .onDisappear { cancelAutoplay() }
+    }
+
+    /// The hero owns its own full-bleed map; the showcase/ask beats float over
+    /// the showpiece card's dark cinematic backdrop, so the root only needs the
+    /// neutral surface beneath the hero (and as a base for the backdrop).
+    private var beatBackground: Color {
+        coordinator.currentBeat == .hero ? SteddiTheme.surfacePrimary : .black
     }
 
     // MARK: - Beats
@@ -53,32 +77,58 @@ struct OnboardingView: View {
                 }
                 .transition(beatTransition)
 
-            case .routeRules:
-                // Phase A placeholder; real showcase content lands in Phase D.
-                Color.clear
-                    .transition(beatTransition)
-
-            case .turnByTurn:
-                // Phase A placeholder; real showcase content lands in Phase D.
-                Color.clear
-                    .transition(beatTransition)
-
-            case .permissions:
-                OnboardingPermissionsView(
-                    onContinue: requestLocation,
-                    onNotNow: { advance() }
-                )
-                .transition(beatTransition)
-
-            case .theme:
-                OnboardingThemeView(coordinator: coordinator)
-                    .transition(beatTransition)
-
-            case .emergency:
-                OnboardingEmergencyView(coordinator: coordinator)
-                    .transition(beatTransition)
+            default:
+                // Every non-hero beat lives inside the single morphing Liquid
+                // Glass card. The shell persists across beats (shared
+                // glassEffectID) and morphs its geometry while the inner copy
+                // cross-fades.
+                OnboardingShowpieceCard(
+                    beat: coordinator.currentBeat,
+                    accent: coordinator.selectedAccent.color,
+                    autoplayProgress: autoplayHairlineProgress
+                ) {
+                    innerBeatContent
+                        .id(coordinator.currentBeat)
+                        .transition(beatTransition)
+                }
             }
         }
+    }
+
+    /// The copy/controls inside the morphing card for the current beat. These
+    /// cross-fade (via `beatTransition`) while the glass shell morphs around them.
+    @ViewBuilder
+    private var innerBeatContent: some View {
+        switch coordinator.currentBeat {
+        case .hero:
+            EmptyView() // hero never renders inside the card
+
+        case .routeRules:
+            OnboardingRouteRulesView(accent: coordinator.selectedAccent.color)
+
+        case .turnByTurn:
+            OnboardingTurnByTurnView(accent: coordinator.selectedAccent.color)
+
+        case .theme:
+            OnboardingThemeView(coordinator: coordinator)
+
+        case .permissions:
+            OnboardingPermissionsView(
+                onContinue: requestLocation,
+                onNotNow: { advance() },
+                accent: coordinator.selectedAccent.color
+            )
+
+        case .emergency:
+            OnboardingEmergencyView(coordinator: coordinator)
+        }
+    }
+
+    /// Progress 0→1 for the card's autoplay hairline, or `nil` when autoplay is
+    /// not armed for this beat (so the hairline is hidden). Driven by the per-beat
+    /// autoplay `Task` below.
+    private var autoplayHairlineProgress: Double? {
+        autoplayActive ? autoplayProgress : nil
     }
 
     /// Asymmetric beat transition: gentle fade-in, scale-and-fade out. Collapses
@@ -105,12 +155,14 @@ struct OnboardingView: View {
                 } label: {
                     Text(coordinator.currentBeat.primaryLabel)
                         .font(.headline)
-                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(coordinator.selectedAccent.color, in: RoundedRectangle(cornerRadius: 14))
+                        .padding(.vertical, 6)
                 }
-                .buttonStyle(.steddiPress)
+                // The footer CTA is a genuine system primary — Apple's
+                // `.glassProminent`, tinted live to the chosen accent so it glows
+                // the user's color from the delight beat onward.
+                .buttonStyle(.glassProminent)
+                .tint(coordinator.selectedAccent.color)
                 .disabled(coordinator.isTransitioning)
                 .transition(.opacity)
             }
@@ -118,7 +170,7 @@ struct OnboardingView: View {
             if coordinator.currentBeat.allowsSkip {
                 Button("Skip") { skip() }
                     .font(.subheadline)
-                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .foregroundStyle(coordinator.currentBeat == .hero ? .white.opacity(0.85) : SteddiTheme.textSecondary)
                     .disabled(coordinator.isTransitioning)
             }
         }
@@ -137,16 +189,78 @@ struct OnboardingView: View {
         }
     }
 
+    /// A small "Skip intro" affordance for the autoplaying showcase beats so an
+    /// impatient first-timer can bail straight to done. Hidden on the hero
+    /// (which has its own footer Skip) and on `permissions` (no skip there).
+    @ViewBuilder
+    private var skipIntroButton: some View {
+        if coordinator.currentBeat.autoAdvances {
+            Button("Skip intro") { skip() }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .padding(.top, 8)
+                .padding(.trailing, 12)
+                .disabled(coordinator.isTransitioning)
+                .transition(.opacity)
+                .accessibilityLabel("Skip intro")
+        }
+    }
+
+    // MARK: - Autoplay control
+
+    /// Arm the per-beat autoplay dwell if this beat auto-advances and motion is
+    /// allowed. Cancels any prior dwell first. The dwell drives `autoplayProgress`
+    /// 0→1 over `TransitionKit.onboardingBeatDwell`, then advances. Disabled
+    /// entirely under Reduce Motion or VoiceOver — the user advances manually.
+    private func armAutoplayIfNeeded() {
+        cancelAutoplay()
+        guard coordinator.currentBeat.autoAdvances,
+              SteddiMotion.shouldAnimate,
+              !UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        autoplayActive = true
+        autoplayProgress = 0
+        let dwell = TransitionKit.onboardingBeatDwell
+        let start = Date()
+        autoplayTask = Task { @MainActor in
+            // Tick the hairline at ~60fps until the dwell elapses, then advance.
+            while !Task.isCancelled {
+                let elapsed = Date().timeIntervalSince(start)
+                autoplayProgress = min(1, elapsed / dwell)
+                if elapsed >= dwell { break }
+                try? await Task.sleep(nanoseconds: 16_000_000)
+            }
+            guard !Task.isCancelled else { return }
+            autoplayActive = false
+            advance()
+        }
+    }
+
+    /// Cancel the current autoplay dwell (on tap-through, skip, or teardown).
+    private func cancelAutoplay() {
+        autoplayTask?.cancel()
+        autoplayTask = nil
+        autoplayActive = false
+        autoplayProgress = 0
+    }
+
     // MARK: - Flow control
 
-    /// Advance one beat, or finish the flow when there's no next beat.
+    /// Advance one beat, or finish the flow when there's no next beat. A user tap
+    /// (or the autoplay timer firing) cancels any in-flight dwell first.
     private func advance() {
         guard !coordinator.isTransitioning else { return }
+        cancelAutoplay()
         guard coordinator.hasNextBeat else {
             finishFlow()
             return
         }
         coordinator.isTransitioning = true
+        // The card's glass morph rides this same withAnimation, so it's
+        // Reduce-Motion-gated automatically (resolves to nil → instant).
         withAnimation(SteddiMotion.resolve(.easeInOut(duration: 0.35))) {
             _ = coordinator.advance()
         }
@@ -161,6 +275,7 @@ struct OnboardingView: View {
     /// Skip the rest of onboarding from any skippable beat.
     private func skip() {
         guard !coordinator.isTransitioning else { return }
+        cancelAutoplay()
         finishFlow()
     }
 

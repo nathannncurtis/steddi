@@ -65,6 +65,7 @@
 		516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */; };
 		51F52614D8D7DF5D5058304E /* OnboardingContactPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2EA338482C352BF2C39164B /* OnboardingContactPicker.swift */; };
 		534D40A3F52FDDA9AE84C20C /* TripStop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B99A3381CC68B028C99DD0E /* TripStop.swift */; };
+		539BDE109E2630ED89763592 /* OnboardingTurnByTurnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD30DCA859D3FE532421B24D /* OnboardingTurnByTurnView.swift */; };
 		571AC2376F6A641B5D6451E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7111C46770386A928275F35 /* SettingsView.swift */; };
 		57A52B32B7DAEEACBC644389 /* NoGoZoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3EB0D10C9B799469E41160 /* NoGoZoneEditorView.swift */; };
 		5822FFAEECCEC7E5E31C3D1C /* NavPoseInterpolator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8DB2DA143DB96AB8EF88AC /* NavPoseInterpolator.swift */; };
@@ -72,12 +73,14 @@
 		59451CAF3B36B885AB85F921 /* ZoneBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E319751B2B97D0465371DA38 /* ZoneBadgeView.swift */; };
 		5950C1B577E6BD5476A0FBB9 /* NowPlayingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38C089A52E68514BB12E0C0 /* NowPlayingServiceTests.swift */; };
 		5B2584D9782B38D9637E350A /* TrendInsightCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADE05CCCE2E6BA708ED405BF /* TrendInsightCard.swift */; };
+		5B788433CEC960EFABBA35CF /* OnboardingShowpieceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECBFDD8D303FEA07FE7338F7 /* OnboardingShowpieceCard.swift */; };
 		5D8C6D53390B98A19A081299 /* AudioDuckingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */; };
 		5E03CB54EA3CBDE1C6AB2C78 /* TripArrivalPromptSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 816FF4F6A26EA4AE4AECA534 /* TripArrivalPromptSheet.swift */; };
 		5E824FC4DFBAD777E796CB8B /* RoadConditionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33742A2E837A5F87965C89FA /* RoadConditionServiceTests.swift */; };
 		5FF7589B635F105A507DE8A6 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94C0D76787187AFA4D836876 /* SwiftUI.framework */; };
 		60BF92DAD8D34C88604E226D /* CarPlayMapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C917C02BE66D0CE374287FF2 /* CarPlayMapController.swift */; };
 		61EDBB67DD27445DF1471AC7 /* CustomRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77FDA01EA3986E1BFD4347DE /* CustomRouter.swift */; };
+		6263098698361BE030E96C52 /* OnboardingRouteRulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5C0B5293CE33FFE6AE8B65F /* OnboardingRouteRulesView.swift */; };
 		62D4331190157A289A0BEA6B /* VoiceGuidanceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 262E8BA9B6349890EAE98525 /* VoiceGuidanceService.swift */; };
 		62F76345C827AE0B9E53CD23 /* DisplayModeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F1A30250323ADAE79B65516 /* DisplayModeService.swift */; };
 		6403E0888CD891BDBC0939E3 /* RouteDrawAnimationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC186A20EADF968F64AF5C3B /* RouteDrawAnimationTests.swift */; };
@@ -378,6 +381,7 @@
 		A8A4CD412D4D91D502CF8B32 /* NavigationStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateManager.swift; sourceTree = "<group>"; };
 		AA176B5A95BA7920890A50C5 /* ModeButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeButtonStyle.swift; sourceTree = "<group>"; };
 		AA904694CE91F625D8EBE294 /* PreferenceLearnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceLearnerTests.swift; sourceTree = "<group>"; };
+		AD30DCA859D3FE532421B24D /* OnboardingTurnByTurnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingTurnByTurnView.swift; sourceTree = "<group>"; };
 		AD8704B61414025699515828 /* TripPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlannerView.swift; sourceTree = "<group>"; };
 		ADE05CCCE2E6BA708ED405BF /* TrendInsightCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendInsightCard.swift; sourceTree = "<group>"; };
 		AED0FBA1FCDBC0BC828A748B /* MapMatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapMatchingService.swift; sourceTree = "<group>"; };
@@ -435,12 +439,14 @@
 		EAA8B2837951D77986E1E11A /* Steddi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Steddi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EBD2CEE6BF282A7424D54D6E /* SearchResultActionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultActionCard.swift; sourceTree = "<group>"; };
 		EBD3684A653CCA35C0F4BAC7 /* SteddiNavigationActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiNavigationActivity.swift; sourceTree = "<group>"; };
+		ECBFDD8D303FEA07FE7338F7 /* OnboardingShowpieceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingShowpieceCard.swift; sourceTree = "<group>"; };
 		EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCacheServiceTests.swift; sourceTree = "<group>"; };
 		EF4892145CE55DFF9FF13FC7 /* DonationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DonationView.swift; sourceTree = "<group>"; };
 		F2113E7A877B78A7BF8CF75C /* Route.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Route.swift; sourceTree = "<group>"; };
 		F2DB3701FF7B88E5802F2F2B /* SteddiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiApp.swift; sourceTree = "<group>"; };
 		F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeModeEx.swift; sourceTree = "<group>"; };
 		F3DB2867732B7B04A13ECC99 /* ZoneValidationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneValidationEngine.swift; sourceTree = "<group>"; };
+		F5C0B5293CE33FFE6AE8B65F /* OnboardingRouteRulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingRouteRulesView.swift; sourceTree = "<group>"; };
 		F5D8840D2CEA7D2113A027BC /* StartCommuteIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartCommuteIntent.swift; sourceTree = "<group>"; };
 		F62156E1FDD078D989A2441A /* OfflineCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCacheService.swift; sourceTree = "<group>"; };
 		F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteCardView.swift; sourceTree = "<group>"; };
@@ -722,7 +728,10 @@
 				71155E230D450D007980A661 /* OnboardingEmergencyView.swift */,
 				9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */,
 				0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */,
+				F5C0B5293CE33FFE6AE8B65F /* OnboardingRouteRulesView.swift */,
+				ECBFDD8D303FEA07FE7338F7 /* OnboardingShowpieceCard.swift */,
 				30D7349058BD69D002F9FBF1 /* OnboardingThemeView.swift */,
+				AD30DCA859D3FE532421B24D /* OnboardingTurnByTurnView.swift */,
 				72B30E4B89C4DD76A173DDE2 /* OnboardingView.swift */,
 			);
 			path = Onboarding;
@@ -1117,7 +1126,10 @@
 				4786241496BB09CF9AD53A97 /* OnboardingEmergencyView.swift in Sources */,
 				9E6E05AF740C80220B638E58 /* OnboardingHeroView.swift in Sources */,
 				2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */,
+				6263098698361BE030E96C52 /* OnboardingRouteRulesView.swift in Sources */,
+				5B788433CEC960EFABBA35CF /* OnboardingShowpieceCard.swift in Sources */,
 				7503DC7D7F5D917A2B5FE289 /* OnboardingThemeView.swift in Sources */,
+				539BDE109E2630ED89763592 /* OnboardingTurnByTurnView.swift in Sources */,
 				87B914B38C60A5A3033ED008 /* OnboardingView.swift in Sources */,
 				588009FBBE1A06D28500B657 /* PhoneCompanionView.swift in Sources */,
 				E3285616CD07ED86E4F46D27 /* PhoneSceneDelegate.swift in Sources */,

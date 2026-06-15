@@ -19,14 +19,7 @@ struct OnboardingEmergencyView: View {
     private var hasContact: Bool { coordinator.emergencyContact != nil }
 
     var body: some View {
-        VStack {
-            Spacer()
-            card
-                .padding(.horizontal, 24)
-                .frame(maxWidth: 350)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+        card
         .sheet(isPresented: $showPicker) {
             OnboardingContactPicker { phone in
                 showPicker = false
@@ -70,12 +63,11 @@ struct OnboardingEmergencyView: View {
                 } label: {
                     Label("Add Contact", systemImage: "person.crop.circle.badge.plus")
                         .font(.headline)
-                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(SteddiTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                        .padding(.vertical, 4)
                 }
-                .buttonStyle(.steddiPress)
+                .buttonStyle(.glassProminent)
+                .tint(coordinator.selectedAccent.color)
             } else {
                 Button {
                     HapticService.shared.fire(.uiToggle)
@@ -84,14 +76,10 @@ struct OnboardingEmergencyView: View {
                 } label: {
                     Text("Choose a different contact")
                         .font(.subheadline)
-                        .foregroundStyle(SteddiTheme.accent)
+                        .foregroundStyle(coordinator.selectedAccent.color)
                 }
             }
         }
         .padding(28)
-        .background(
-            RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge)
-                .fill(SteddiTheme.surfaceSecondary)
-        )
     }
 }
