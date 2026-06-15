@@ -45,7 +45,22 @@ struct CheckCommuteETAIntent: AppIntent {
         guard let commute = commutes.first else {
             return respond("You haven't set up any commutes yet.")
         }
-        guard let origin = commute.origin, let destination = commute.destination else {
+        guard commute.origin != nil, commute.destination != nil else {
+            return respond("Your commute isn't fully set up yet. Open Steddi to add its locations.")
+        }
+
+        // Extract everything the async ETA work needs from the `@Model Commute`
+        // (and its routes/locations) into a `Sendable` snapshot NOW, while we are
+        // still synchronously on the `ModelContext`'s executor. `@Model` objects
+        // and their lazily-faulted relationships are bound to that executor and
+        // are NOT `Sendable`; after the `await`s below the function can resume on
+        // a different cooperative-pool thread, so any post-`await` access to the
+        // model (coordinates, names, the `routes` relationship via
+        // `preferredRoute`) would be a SwiftData thread-confinement violation.
+        // This mirrors `CommuteNotificationService.CommuteSnapshot`. Direction
+        // depends on the post-`await` location fix, so we capture BOTH directions'
+        // endpoint + typical-duration data up front and select after resolving.
+        guard let snapshot = CommuteETASnapshot(commute: commute) else {
             return respond("Your commute isn't fully set up yet. Open Steddi to add its locations.")
         }
 
@@ -57,28 +72,25 @@ struct CheckCommuteETAIntent: AppIntent {
         // intents run without the app's running location service, so the
         // property was never populated. Request a proper one-shot fix instead,
         // failing gracefully (nil) on denial/timeout so direction falls back to
-        // the schedule.
+        // the schedule. After this await we only touch the value snapshot.
         let currentLocation = await OneShotLocation.current()
-        let direction = resolveDirection(commute: commute, currentLocation: currentLocation)
+        let direction = Self.resolveDirection(snapshot: snapshot, currentLocation: currentLocation)
 
-        let destinationPin = direction == .originToDestination ? destination : origin
-        let startCoordinate = currentLocation?.coordinate
-            ?? (direction == .originToDestination ? origin.coordinate : destination.coordinate)
-        let destinationName = destinationPin.name
+        let endpoints = snapshot.endpoints(for: direction)
+        let startCoordinate = currentLocation?.coordinate ?? endpoints.startCoordinate
 
         do {
             let eta = try await DirectionsService().fetchDirectETA(
                 from: startCoordinate,
-                to: destinationPin.coordinate
+                to: endpoints.destinationCoordinate
             )
             let minutes = max(1, Int((eta / 60).rounded()))
-            return respond("Your drive to \(destinationName) is about \(minutes) minutes right now.")
+            return respond("Your drive to \(endpoints.destinationName) is about \(minutes) minutes right now.")
         } catch {
             // Live traffic unavailable — fall back to the route's typical time.
-            if let typical = commute.preferredRoute(for: direction)?.typicalDurationSeconds,
-               typical > 0 {
+            if let typical = endpoints.typicalDurationSeconds, typical > 0 {
                 let minutes = max(1, Int((typical / 60).rounded()))
-                return respond("I couldn't get live traffic, but your drive to \(destinationName) is typically about \(minutes) minutes.")
+                return respond("I couldn't get live traffic, but your drive to \(endpoints.destinationName) is typically about \(minutes) minutes.")
             }
             return respond("I couldn't calculate your commute ETA right now. Open Steddi for details.")
         }
@@ -90,23 +102,193 @@ struct CheckCommuteETAIntent: AppIntent {
         .result(value: message, dialog: IntentDialog("\(message)"))
     }
 
-    private func resolveDirection(
-        commute: Commute,
-        currentLocation: CLLocation?
+    /// Resolve the commute direction from the `Sendable` snapshot and an optional
+    /// post-`await` location fix. Pure value logic (no `@Model` access) so it is
+    /// safe to call after a suspension point and is unit-testable in isolation.
+    /// Mirrors `resolveDirection(commute:currentLocation:)`'s old precedence:
+    /// proximity → active schedule window → next scheduled window → to-destination.
+    static func resolveDirection(
+        snapshot: CommuteETASnapshot,
+        currentLocation: CLLocation?,
+        now: Date = Date()
     ) -> CommuteDirection {
         if let currentLocation,
-           case .confident(let direction, _) = CommuteDirectionResolver.resolve(
-               commute: commute,
-               currentLocation: currentLocation
-           ) {
-            return direction
+           let proximity = snapshot.proximityDirection(currentLocation: currentLocation) {
+            return proximity
         }
-        if let scheduled = CommuteDirectionResolver.scheduledDirection(commute: commute) {
+        if let scheduled = snapshot.schedule.scheduledDirection(now: now) {
             return scheduled
         }
-        if let next = CommuteDirectionResolver.nextScheduledDirection(commute: commute) {
+        if let next = snapshot.schedule.nextScheduledDirection(now: now) {
             return next
         }
         return .originToDestination
+    }
+}
+
+/// A plain, `Sendable` snapshot of everything `CheckCommuteETAIntent` needs from
+/// a `@Model Commute` (its endpoints, schedule, and both directions' preferred
+/// route durations). Built synchronously on the `ModelContext`'s executor before
+/// any `await`, so the async ETA work never re-touches the non-`Sendable` model
+/// or its lazily-faulted relationships off a resumed cooperative-pool thread.
+/// Mirrors `CommuteNotificationService.CommuteSnapshot`.
+struct CommuteETASnapshot: Sendable {
+    /// Captured schedule rules (proximity-independent direction resolution).
+    let schedule: CommuteScheduleSnapshot
+    let originCoordinate: CLLocationCoordinate2D
+    let destinationCoordinate: CLLocationCoordinate2D
+    let originName: String
+    let destinationName: String
+    /// Preferred-route typical duration (seconds) heading origin → destination.
+    let toDestinationTypicalSeconds: TimeInterval?
+    /// Preferred-route typical duration (seconds) heading destination → origin.
+    let toOriginTypicalSeconds: TimeInterval?
+
+    /// The resolved start/destination endpoints for a given travel direction.
+    struct DirectionEndpoints {
+        let startCoordinate: CLLocationCoordinate2D
+        let destinationCoordinate: CLLocationCoordinate2D
+        let destinationName: String
+        let typicalDurationSeconds: TimeInterval?
+    }
+
+    /// Build the snapshot by reading every needed `@Model` property while still
+    /// pinned to the context's executor. Returns nil if the commute has no
+    /// origin/destination. MUST be called before any `await`.
+    init?(commute: Commute) {
+        guard let origin = commute.origin, let destination = commute.destination else {
+            return nil
+        }
+        self.schedule = CommuteScheduleSnapshot(commute: commute)
+        self.originCoordinate = origin.coordinate
+        self.destinationCoordinate = destination.coordinate
+        self.originName = origin.name
+        self.destinationName = destination.name
+        self.toDestinationTypicalSeconds = commute.preferredRoute(for: .originToDestination)?.typicalDurationSeconds
+        self.toOriginTypicalSeconds = commute.preferredRoute(for: .destinationToOrigin)?.typicalDurationSeconds
+    }
+
+    /// Resolve direction by proximity to an endpoint, returning nil when the
+    /// fix isn't clearly at exactly one endpoint. Mirrors
+    /// `CommuteDirectionResolver.resolve`'s proximity branch over value copies.
+    func proximityDirection(currentLocation: CLLocation) -> CommuteDirection? {
+        let proximityRadius: Double = 152
+        let originLoc = CLLocation(latitude: originCoordinate.latitude, longitude: originCoordinate.longitude)
+        let destLoc = CLLocation(latitude: destinationCoordinate.latitude, longitude: destinationCoordinate.longitude)
+        let distToOrigin = currentLocation.distance(from: originLoc)
+        let distToDest = currentLocation.distance(from: destLoc)
+        if distToOrigin < proximityRadius && distToDest >= proximityRadius {
+            return .originToDestination
+        }
+        if distToDest < proximityRadius && distToOrigin >= proximityRadius {
+            return .destinationToOrigin
+        }
+        return nil
+    }
+
+    /// Endpoints (start, destination, name, typical duration) for a direction.
+    func endpoints(for direction: CommuteDirection) -> DirectionEndpoints {
+        switch direction {
+        case .originToDestination:
+            return DirectionEndpoints(
+                startCoordinate: originCoordinate,
+                destinationCoordinate: destinationCoordinate,
+                destinationName: destinationName,
+                typicalDurationSeconds: toDestinationTypicalSeconds
+            )
+        case .destinationToOrigin:
+            return DirectionEndpoints(
+                startCoordinate: destinationCoordinate,
+                destinationCoordinate: originCoordinate,
+                destinationName: originName,
+                typicalDurationSeconds: toOriginTypicalSeconds
+            )
+        }
+    }
+}
+
+/// `Sendable` copy of a commute's schedule rules. Direction resolution by
+/// schedule is pure logic over these captured strings/hours, so it runs safely
+/// after an `await`. Mirrors `CommuteDirectionResolver.scheduledDirection` /
+/// `nextScheduledDirection`, which read these same fields off the `@Model`.
+struct CommuteScheduleSnapshot: Sendable {
+    let toDestDays: String?
+    let toDestStartHour: Int?
+    let toDestEndHour: Int?
+    let toOriginDays: String?
+    let toOriginStartHour: Int?
+    let toOriginEndHour: Int?
+
+    init(commute: Commute) {
+        self.toDestDays = commute.scheduleToDestDays
+        self.toDestStartHour = commute.scheduleToDestStartHour
+        self.toDestEndHour = commute.scheduleToDestEndHour
+        self.toOriginDays = commute.scheduleToOriginDays
+        self.toOriginStartHour = commute.scheduleToOriginStartHour
+        self.toOriginEndHour = commute.scheduleToOriginEndHour
+    }
+
+    /// Direction whose schedule window is active at `now`, else nil.
+    /// Value-copy mirror of `CommuteDirectionResolver.scheduledDirection`.
+    func scheduledDirection(now: Date = Date()) -> CommuteDirection? {
+        let cal = Calendar.current
+        let currentDay = cal.component(.weekday, from: now)
+        let currentHour = cal.component(.hour, from: now)
+
+        if let daysStr = toDestDays, let startHour = toDestStartHour, let endHour = toDestEndHour {
+            let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
+            if days.contains(currentDay) && Self.hourInWindow(currentHour, start: startHour, end: endHour) {
+                return .originToDestination
+            }
+        }
+        if let daysStr = toOriginDays, let startHour = toOriginStartHour, let endHour = toOriginEndHour {
+            let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
+            if days.contains(currentDay) && Self.hourInWindow(currentHour, start: startHour, end: endHour) {
+                return .destinationToOrigin
+            }
+        }
+        return nil
+    }
+
+    /// Direction of the next upcoming schedule window after `now`, else nil.
+    /// Value-copy mirror of `CommuteDirectionResolver.nextScheduledDirection`.
+    func nextScheduledDirection(now: Date = Date()) -> CommuteDirection? {
+        let cal = Calendar.current
+        let rules: [(days: String?, startHour: Int?, direction: CommuteDirection)] = [
+            (toDestDays, toDestStartHour, .originToDestination),
+            (toOriginDays, toOriginStartHour, .destinationToOrigin)
+        ]
+
+        var best: (start: Date, direction: CommuteDirection)?
+
+        for rule in rules {
+            guard let daysStr = rule.days, let startHour = rule.startHour else { continue }
+            let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
+            guard !days.isEmpty else { continue }
+
+            for dayOffset in 0...7 {
+                guard let day = cal.date(byAdding: .day, value: dayOffset, to: now),
+                      days.contains(cal.component(.weekday, from: day)),
+                      let start = cal.date(bySettingHour: startHour, minute: 0, second: 0, of: day),
+                      start > now else { continue }
+                if let current = best {
+                    if start < current.start { best = (start, rule.direction) }
+                } else {
+                    best = (start, rule.direction)
+                }
+                break
+            }
+        }
+        return best?.direction
+    }
+
+    /// Whether `hour` is in the `[start, end)` window, handling midnight wrap.
+    /// Mirrors `CommuteDirectionResolver.hourInWindow`.
+    private static func hourInWindow(_ hour: Int, start: Int, end: Int) -> Bool {
+        if start <= end {
+            return hour >= start && hour < end
+        } else {
+            return hour >= start || hour < end
+        }
     }
 }
