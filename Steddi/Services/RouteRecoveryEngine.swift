@@ -42,6 +42,29 @@ enum RecoveryDecision: Equatable {
 /// the opportunistic time-savings threshold.
 enum RouteRecoveryEngine {
 
+    /// Whether off-route recovery may still mutate the navigation engine after
+    /// an in-flight directions fetch resolves. The recovery awaits MKDirections
+    /// (or an OSRM round-trip) for seconds, freeing the main actor; during that
+    /// window the user can End the drive, switch routes, or have the active trip
+    /// deleted, any of which stops the engine and may swap in a brand-new
+    /// instance. Resuming would either resurrect a torn-down engine (a zombie
+    /// with no GPS feed) or corrupt a fresh live session's shared route state.
+    ///
+    /// Returns true only when the recovery's captured engine is STILL the live
+    /// engine (same identity — `engineIsCurrent`), the view still considers
+    /// itself navigating (`viewIsNavigating`), the engine is still running
+    /// (`engineIsNavigating`), and it hasn't arrived (`engineHasArrived` false).
+    /// Mirrors the `liveEngine === engine && isNavigating && !hasArrived` guard
+    /// the reroute loop uses in NavigationStateManager.startObserving.
+    static func canResumeRecovery(
+        engineIsCurrent: Bool,
+        viewIsNavigating: Bool,
+        engineIsNavigating: Bool,
+        engineHasArrived: Bool
+    ) -> Bool {
+        engineIsCurrent && viewIsNavigating && engineIsNavigating && !engineHasArrived
+    }
+
     /// Base forward offset for rejoin candidates; grows with speed so a
     /// freeway deviation aims further ahead.
     static func minForwardOffset(speedMPS: Double) -> Double {

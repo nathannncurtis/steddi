@@ -2005,6 +2005,24 @@ struct HomeView: View {
         }
     }
 
+    /// Whether off-route recovery may still mutate `engine` after an await.
+    /// True only when `engine` is STILL the view's active navigation engine
+    /// (same identity — a switchToRoute/begin* during the await swaps in a new
+    /// instance), it's still navigating, hasn't arrived, and the view itself is
+    /// still in the navigating state. Any false means the session was ended or
+    /// superseded while a directions fetch was in flight, so restarting `engine`
+    /// would resurrect a torn-down engine or corrupt the fresh live session.
+    /// Mirrors the `liveEngine === engine && isNavigating && !hasArrived` guard
+    /// the reroute loop already uses in NavigationStateManager.startObserving.
+    private func isNavigationLive(_ engine: NavigationEngine) -> Bool {
+        RouteRecoveryEngine.canResumeRecovery(
+            engineIsCurrent: navigationEngine === engine,
+            viewIsNavigating: isNavigating,
+            engineIsNavigating: engine.isNavigating,
+            engineHasArrived: engine.hasArrived
+        )
+    }
+
     /// Forward-momentum recovery onto a predefined route: weight macro legs
     /// (the freeway, the right direction) over micro waypoints, take the most
     /// direct path from the divergence to that target, then fall back onto
@@ -2067,6 +2085,17 @@ struct HomeView: View {
             for await scored in group { if let scored { collected.append(scored) } }
             return collected
         }
+
+        // The MKDirections/withTaskGroup fetch above freed the main actor for
+        // seconds. During that window the user may have ended the drive (End),
+        // switched routes, or had the active trip deleted — any of which stops
+        // `engine` and may swap `navigationEngine` to a brand-new instance.
+        // Restarting the captured `engine` now would resurrect a torn-down
+        // session (a zombie with no GPS feed) or clobber a fresh live session's
+        // shared route state. Bail unless this is still the live, navigating
+        // engine. Mirrors the same liveness guard the reroute loop uses in
+        // NavigationStateManager.startObserving.
+        guard isNavigationLive(engine) else { return }
 
         let options = scored.map(\.2)
         let routesByCandidate = Dictionary(uniqueKeysWithValues: scored.map { ($0.0, $0.1) })
@@ -2164,6 +2193,14 @@ struct HomeView: View {
             expectedTravelTime: engine.originalExpectedTravelTime
         )
 
+        // Final liveness gate at the actual mutation site: never restart the
+        // engine (and never repopulate the shared activeSavedPolyline /
+        // activeRouteCoords) unless `engine` is still the live, navigating
+        // session. The caller already re-checks after its await, but guarding
+        // here too keeps the restart from ever resurrecting a torn-down or
+        // superseded engine regardless of how splice is reached.
+        guard isNavigationLive(engine) else { return false }
+
         engine.startNavigation(
             polyline: combined,
             steps: combinedSteps,
@@ -2211,6 +2248,12 @@ struct HomeView: View {
             let response = try await MKDirections(request: request).calculate()
             guard !response.routes.isEmpty else { return }
 
+            // The MKDirections fetch freed the main actor; the user may have
+            // ended the drive or switched routes while it was in flight. Bail
+            // unless navigation is still live so we don't stop+restart a
+            // torn-down engine (or one that's been superseded) after teardown.
+            guard let engine = navigationEngine, isNavigationLive(engine) else { return }
+
             let bestRoute = response.routes
                 .sorted { a, b in
                     let aHasUTurn = a.steps.prefix(2).contains { $0.instructions.lowercased().contains("u-turn") }
@@ -2220,11 +2263,11 @@ struct HomeView: View {
                 }
                 .first ?? response.routes[0]
 
-            navigationEngine?.stopNavigation()
-            navigationEngine?.startNavigation(route: bestRoute)
+            engine.stopNavigation()
+            engine.startNavigation(route: bestRoute)
             navigationRoute = bestRoute
 
-            navigationEngine?.onOffRoute = { event in
+            engine.onOffRoute = { event in
                 Task { @MainActor [self] in
                     await self.handleOffRoute(event)
                 }

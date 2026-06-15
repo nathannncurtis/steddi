@@ -295,3 +295,90 @@ struct RecoveryBudgetTests {
         #expect(decide() != .abandonToDestination)
     }
 }
+
+// MARK: - Post-await Liveness Re-check
+//
+// Off-route recovery awaits a directions fetch (MKDirections / OSRM) for
+// seconds, freeing the main actor. If the drive ends, switches route, or the
+// active trip is deleted during that await, resuming the splice would
+// resurrect a torn-down engine (no GPS feed) or clobber a fresh live session.
+// canResumeRecovery is the guard the recovery rechecks after every await.
+
+@Suite("RouteRecoveryEngine liveness re-check")
+struct RouteRecoveryLivenessTests {
+
+    @Test("Resumes only when the captured engine is still the live navigating session")
+    func resumesWhenFullyLive() {
+        #expect(RouteRecoveryEngine.canResumeRecovery(
+            engineIsCurrent: true,
+            viewIsNavigating: true,
+            engineIsNavigating: true,
+            engineHasArrived: false
+        ))
+    }
+
+    @Test("Bails when the user ended the drive during the await (engine stopped)")
+    func bailsWhenEngineStopped() {
+        // End tapped mid-await: engine.stopNavigation() flips isNavigating false.
+        #expect(!RouteRecoveryEngine.canResumeRecovery(
+            engineIsCurrent: true,
+            viewIsNavigating: false,
+            engineIsNavigating: false,
+            engineHasArrived: false
+        ))
+    }
+
+    @Test("Bails when a switchToRoute/begin* swapped in a new engine instance")
+    func bailsWhenEngineSuperseded() {
+        // The captured engine is no longer === the view's current engine, even
+        // though that OLD instance may still report isNavigating from before it
+        // was discarded. Restarting it would corrupt the new live session.
+        #expect(!RouteRecoveryEngine.canResumeRecovery(
+            engineIsCurrent: false,
+            viewIsNavigating: true,
+            engineIsNavigating: true,
+            engineHasArrived: false
+        ))
+    }
+
+    @Test("Bails when the engine arrived during the await")
+    func bailsWhenArrived() {
+        #expect(!RouteRecoveryEngine.canResumeRecovery(
+            engineIsCurrent: true,
+            viewIsNavigating: true,
+            engineIsNavigating: true,
+            engineHasArrived: true
+        ))
+    }
+
+    @Test("Bails when the view left the navigating state (e.g. trip deleted)")
+    func bailsWhenViewNotNavigating() {
+        // Trip-delete teardown flips the view's isNavigating false even if a
+        // stale engine reference still claims to be navigating.
+        #expect(!RouteRecoveryEngine.canResumeRecovery(
+            engineIsCurrent: true,
+            viewIsNavigating: false,
+            engineIsNavigating: true,
+            engineHasArrived: false
+        ))
+    }
+
+    @Test("Every non-live combination bails; only all-true resumes")
+    func onlyAllTrueResumes() {
+        for current in [true, false] {
+            for viewNav in [true, false] {
+                for engineNav in [true, false] {
+                    for arrived in [true, false] {
+                        let expected = current && viewNav && engineNav && !arrived
+                        #expect(RouteRecoveryEngine.canResumeRecovery(
+                            engineIsCurrent: current,
+                            viewIsNavigating: viewNav,
+                            engineIsNavigating: engineNav,
+                            engineHasArrived: arrived
+                        ) == expected)
+                    }
+                }
+            }
+        }
+    }
+}
