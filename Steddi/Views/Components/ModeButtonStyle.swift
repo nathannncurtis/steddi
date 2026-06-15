@@ -8,7 +8,7 @@ struct ModeButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(SteddiTheme.body(12).weight(.semibold))
-            .foregroundStyle(isSelected ? Color.white : SteddiTheme.textSecondary)
+            .foregroundStyle(isSelected ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .frame(maxWidth: .infinity)
