@@ -13,11 +13,6 @@ struct CommuteAnalyticsView: View {
     @State private var service = AnalyticsService()
     @State private var window: AnalyticsTimeWindow = .fourWeeks
 
-    /// Fixed on-accent label color. Every accent option is a mid-tone, so a
-    /// near-black label clears AA on the accent pill in all themes (unlike
-    /// surfacePrimary, which flips to near-white in light/grey modes).
-    private static let onAccent = Color(red: 0.07, green: 0.07, blue: 0.08)
-
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -62,15 +57,19 @@ struct CommuteAnalyticsView: View {
                 } label: {
                     Text(option.displayName)
                         .font(SteddiTheme.mono(13))
-                        // On-accent label: a fixed near-black reads clearly on
-                        // every accent pill (4.97–7.15:1). surfacePrimary would
-                        // invert to near-white in light/grey themes and fail.
-                        .foregroundStyle(window == option ? Self.onAccent : SteddiTheme.textSecondary)
+                        // On-fill label: the active pill is filled with the
+                        // brand hue, so `onAccent` (the documented on-fill
+                        // foreground) picks black/white per the accent's
+                        // luminance and clears AA on every accent in every
+                        // theme. Pairing onAccent with the *text-safe* `accent`
+                        // fill instead would put near-black on a darkened fill
+                        // and collapse to ~3.1:1 in light mode.
+                        .foregroundStyle(window == option ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background {
                             if window == option {
-                                Capsule().fill(SteddiTheme.accent)
+                                Capsule().fill(SteddiTheme.accentBrand)
                             }
                         }
                 }
