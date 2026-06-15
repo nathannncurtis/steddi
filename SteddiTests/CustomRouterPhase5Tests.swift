@@ -510,6 +510,68 @@ struct StepSynthesizerTests {
             #expect(RouteGeometry.haversineDistance(from: poly[i], to: poly[i + 1]) < 500)
         }
     }
+
+    @Test("single-edge route trims the sub-segment [startFraction, endFraction] in one pass")
+    func singleEdgeTrimComposesCorrectly() {
+        // One straight primary edge from node 1 to node 2. A same-edge route (both
+        // endpoints mid-edge) must trim to exactly [startFraction, endFraction] of
+        // the FULL edge — NOT compose leading-then-trailing on the shortened length.
+        let graph = singleEdgeGraph()
+        let edge = graph.osmToIndex[1].flatMap { _ in graph.edges.first }
+        guard edge != nil, let edgeIdx = graph.edges.indices.first.map({ EdgeIndex($0) }) else {
+            Issue.record("no edge"); return
+        }
+        let fullLen = Double(graph.edges[Int(edgeIdx)].lengthMeters)
+        #expect(fullLen > 50)   // sanity: a measurable edge
+
+        let startFraction = 0.2
+        let endFraction = 0.6
+        let result = SearchResult(
+            nodePath: [graph.edges[Int(edgeIdx)].from, graph.edges[Int(edgeIdx)].to],
+            edgePath: [edgeIdx],
+            totalCost: 0,
+            startFraction: startFraction,
+            endFraction: endFraction
+        )
+
+        let poly = StepSynthesizer.stitchedPolyline(result, in: graph)
+        #expect(poly.count >= 2)
+        let polyLen = RouteGeometry.cumulativeDistances(poly).last ?? 0
+        // Correct sub-segment length is (end - start) * full = 0.4 * full. The old
+        // compose-on-trimmed bug yielded (end - start*end) * full = 0.48 * full.
+        let expected = (endFraction - startFraction) * fullLen
+        #expect(abs(polyLen - expected) < 0.5)
+        #expect(abs(polyLen - 0.48 * fullLen) > 1)   // guard against the old bug
+
+        // The destination must land at endFraction along the FULL edge, not beyond.
+        let fullGeom = Array(graph.geometry(of: edgeIdx))
+        let fullCumulative = RouteGeometry.cumulativeDistances(fullGeom)
+        let expectedEnd = RouteGeometry.coordinate(
+            atDistance: endFraction * fullLen, polyline: fullGeom, cumulative: fullCumulative)!
+        #expect(RouteGeometry.haversineDistance(from: poly.last!, to: expectedEnd) < 0.5)
+
+        // The start must land at startFraction along the FULL edge.
+        let expectedStart = RouteGeometry.coordinate(
+            atDistance: startFraction * fullLen, polyline: fullGeom, cumulative: fullCumulative)!
+        #expect(RouteGeometry.haversineDistance(from: poly.first!, to: expectedStart) < 0.5)
+
+        // The synthesized departure leg distance must equal the sub-segment length.
+        let synth = StepSynthesizer.synthesize(result, in: graph)
+        guard let synth else { Issue.record("no synthesis"); return }
+        let legDistance = synth.steps.map(\.distance).reduce(0, +)
+        #expect(abs(legDistance - expected) < 1)
+    }
+}
+
+/// A single straight primary edge (node 1 → node 2) with an interior geometry
+/// node so the edge carries real intermediate geometry to trim against.
+private func singleEdgeGraph() -> RoadGraph {
+    p5graph(
+        p5node(1, 0.0, 0.0),
+        p5node(2, 0.0, 0.0005),   // interior geometry node (referenced once)
+        p5node(3, 0.0, 0.0010),
+        p5way(100, [1, 2, 3], tags: ["highway": "primary", "maxspeed": "35 mph"])
+    )
 }
 
 // MARK: - Selector: feature flag + automatic fallback

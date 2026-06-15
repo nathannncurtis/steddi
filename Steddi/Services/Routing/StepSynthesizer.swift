@@ -68,15 +68,26 @@ enum StepSynthesizer {
             var coords = Array(graph.geometry(of: edgeIndex))
             guard coords.count >= 2 else { continue }
 
-            // Trim leading partial edge: travel begins at startFraction along it.
-            // If trimming can't resolve a cut point, keep the FULL edge geometry
-            // rather than silently truncating it to a single point or dropping it.
-            if i == 0 && result.startFraction > 0 {
-                coords = trimLeading(coords, fraction: result.startFraction) ?? coords
-            }
-            // Trim trailing partial edge: travel ends at endFraction along it.
-            if i == result.edgePath.count - 1 && result.endFraction < 1 {
-                coords = trimTrailing(coords, fraction: result.endFraction) ?? coords
+            let isFirst = i == 0 && result.startFraction > 0
+            let isLast = i == result.edgePath.count - 1 && result.endFraction < 1
+            // Single-edge route (start == end edge): BOTH trims apply to this one
+            // edge. Cut the sub-segment [startFraction, endFraction] in ONE pass
+            // against the ORIGINAL geometry — composing trimLeading then
+            // trimTrailing would apply endFraction to the already-shortened length
+            // and misplace the destination.
+            if isFirst && isLast {
+                coords = trimSubSegment(coords, from: result.startFraction, to: result.endFraction) ?? coords
+            } else {
+                // Trim leading partial edge: travel begins at startFraction along it.
+                // If trimming can't resolve a cut point, keep the FULL edge geometry
+                // rather than silently truncating it to a single point or dropping it.
+                if isFirst {
+                    coords = trimLeading(coords, fraction: result.startFraction) ?? coords
+                }
+                // Trim trailing partial edge: travel ends at endFraction along it.
+                if isLast {
+                    coords = trimTrailing(coords, fraction: result.endFraction) ?? coords
+                }
             }
             guard coords.count >= 1 else { continue }
 
@@ -197,12 +208,22 @@ enum StepSynthesizer {
         guard coords.count >= 2 else {
             // No geometry to measure — fall back to the linear estimate.
             var len = full
-            if isFirst { len *= (1 - result.startFraction) }
-            if isLast { len *= result.endFraction }
+            if isFirst && isLast {
+                len *= (result.endFraction - result.startFraction)
+            } else {
+                if isFirst { len *= (1 - result.startFraction) }
+                if isLast { len *= result.endFraction }
+            }
             return len
         }
-        if isFirst { coords = trimLeading(coords, fraction: result.startFraction) ?? coords }
-        if isLast { coords = trimTrailing(coords, fraction: result.endFraction) ?? coords }
+        // Single-edge route: cut the sub-segment in one pass against the ORIGINAL
+        // geometry (mirrors stitchedPolyline) rather than composing the two trims.
+        if isFirst && isLast {
+            coords = trimSubSegment(coords, from: result.startFraction, to: result.endFraction) ?? coords
+        } else {
+            if isFirst { coords = trimLeading(coords, fraction: result.startFraction) ?? coords }
+            if isLast { coords = trimTrailing(coords, fraction: result.endFraction) ?? coords }
+        }
         return RouteGeometry.cumulativeDistances(coords).last ?? full
     }
 
@@ -250,6 +271,63 @@ enum StepSynthesizer {
             return Array(coords[0...i]) + [point]
         }
         return nil
+    }
+
+    /// Keep the sub-segment between `from` and `to` (both arc-length fractions of
+    /// the FULL edge), inserting interpolated endpoints. Used for a single-edge
+    /// route where the start and end snap onto the same edge: both cuts are taken
+    /// from the ORIGINAL geometry in one pass, so the trailing cut isn't applied
+    /// to an already-shortened length. Returns `coords` unchanged when no trim is
+    /// needed, and `nil` if a cut point can't be located so the caller can fall
+    /// back to the full geometry.
+    private static func trimSubSegment(_ coords: [CLLocationCoordinate2D], from: Double, to: Double) -> [CLLocationCoordinate2D]? {
+        guard coords.count >= 2, from >= 0, to <= 1, from < to else { return coords }
+        let cumulative = RouteGeometry.cumulativeDistances(coords)
+        guard let total = cumulative.last, total > 0 else { return coords }
+
+        // The interpolated point at `target` arc-length and the index `i` of the
+        // segment [i, i+1] it falls on, resolved against the ORIGINAL cumulative.
+        func cut(_ target: Double) -> (point: CLLocationCoordinate2D, seg: Int)? {
+            for i in 0..<(coords.count - 1) where cumulative[i + 1] >= target {
+                let segLen = cumulative[i + 1] - cumulative[i]
+                let t = segLen > 0 ? (target - cumulative[i]) / segLen : 0
+                return (interpolate(coords[i], coords[i + 1], t), i)
+            }
+            return nil
+        }
+
+        // Start cut: interpolated point and the first ORIGINAL vertex kept after it.
+        let startPoint: CLLocationCoordinate2D
+        let startSegEnd: Int
+        if from <= 0 {
+            startPoint = coords[0]
+            startSegEnd = 0
+        } else {
+            guard let s = cut(total * from) else { return nil }
+            startPoint = s.point
+            startSegEnd = s.seg + 1
+        }
+
+        // End cut: interpolated point and the last ORIGINAL vertex kept before it.
+        let endPoint: CLLocationCoordinate2D
+        let endSegStart: Int
+        if to >= 1 {
+            endPoint = coords[coords.count - 1]
+            endSegStart = coords.count - 1
+        } else {
+            guard let e = cut(total * to) else { return nil }
+            endPoint = e.point
+            endSegStart = e.seg
+        }
+
+        // Stitch: start cut point, the interior original vertices strictly between
+        // the two cuts, then the end cut point.
+        var out: [CLLocationCoordinate2D] = [startPoint]
+        if startSegEnd <= endSegStart {
+            out.append(contentsOf: coords[startSegEnd...endSegStart])
+        }
+        out.append(endPoint)
+        return out
     }
 
     private static func interpolate(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D, _ t: Double) -> CLLocationCoordinate2D {
