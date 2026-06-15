@@ -158,12 +158,22 @@ enum RoadGraphBuilder {
             ) ?? 0)
             let attrs = edgeAttributes(tags: tags, direction: direction, roadClass: roadClass)
             // Oncoming-lane count a driver crossing this way faces on an
-            // unprotected left, precomputed once per way (§5.1). Capped to a byte.
-            let oncoming = UInt8(min(255, OSMTagParsing.oncomingLaneCount(
-                lanes: tags["lanes"],
-                lanesForward: tags["lanes:forward"],
-                oneway: direction
-            )))
+            // unprotected left (§5.1). Resolved PER DIRECTION: the forward edge
+            // faces the backward lanes and the reverse edge faces the forward
+            // lanes, so an asymmetric `lanes:forward`/`lanes:backward` split gets
+            // the right count on each edge rather than one shared value. Capped to
+            // a byte.
+            func oncomingFor(_ traveling: OSMTagParsing.TravelDirection) -> UInt8 {
+                UInt8(min(255, OSMTagParsing.oncomingLaneCount(
+                    lanes: tags["lanes"],
+                    lanesForward: tags["lanes:forward"],
+                    lanesBackward: tags["lanes:backward"],
+                    oneway: direction,
+                    traveling: traveling
+                )))
+            }
+            let oncomingForward = oncomingFor(.forward)
+            let oncomingReverse = oncomingFor(.reverse)
 
             // Walk the node list, accumulating geometry between graph nodes.
             var segmentCoords: [CLLocationCoordinate2D] = []
@@ -189,7 +199,7 @@ enum RoadGraphBuilder {
                                 from: fromIdx, to: toIdx, coords: segmentCoords,
                                 lengthMeters: length, freeFlowSpeedMPS: speedMPS,
                                 osmWayID: way.id, roadClass: roadClass, attrs: attrs,
-                                oncomingLanes: oncoming
+                                oncomingLanes: oncomingForward
                             ))
                         }
                         if direction.allowsReverse {
@@ -197,7 +207,7 @@ enum RoadGraphBuilder {
                                 from: toIdx, to: fromIdx, coords: Array(segmentCoords.reversed()),
                                 lengthMeters: length, freeFlowSpeedMPS: speedMPS,
                                 osmWayID: way.id, roadClass: roadClass, attrs: attrs,
-                                oncomingLanes: oncoming
+                                oncomingLanes: oncomingReverse
                             ))
                         }
                     }
