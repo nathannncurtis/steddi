@@ -564,6 +564,8 @@ struct SteddiNavOverlay: View {
             )
         }
         .buttonStyle(.steddiPress)
+        .accessibilityLabel("Voice guidance")
+        .accessibilityValue(isVoiceOn ? "On" : "Off")
     }
 
     private var viewToggleButton: some View {
@@ -578,6 +580,9 @@ struct SteddiNavOverlay: View {
             )
         }
         .buttonStyle(.steddiPress)
+        .accessibilityLabel("Map perspective")
+        .accessibilityValue(is3DView ? "3D" : "2D")
+        .accessibilityHint("Switches between a 3D and overhead 2D map")
     }
 
     private var reportButton: some View {
@@ -590,6 +595,8 @@ struct SteddiNavOverlay: View {
             )
         }
         .buttonStyle(.steddiPress)
+        .accessibilityLabel("Report")
+        .accessibilityHint("Report a hazard, police, camera, or closure ahead")
     }
 
     private var landscapeCompassIndicator: some View {
