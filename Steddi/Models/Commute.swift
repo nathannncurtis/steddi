@@ -34,6 +34,13 @@ final class Commute {
     @Relationship(deleteRule: .cascade)
     var routes: [Route]?
 
+    /// Pattern-learning trip history for this commute. Cascade-deletes with the
+    /// commute (mirroring `routes`) so deleting a commute never leaves orphan
+    /// CommuteTrip rows behind to accumulate forever. The explicit inverse pins
+    /// `CommuteTrip.commute` as the back-reference so SwiftData applies the rule.
+    @Relationship(deleteRule: .cascade, inverse: \CommuteTrip.commute)
+    var trips: [CommuteTrip]?
+
     /// All routes sorted by rank
     var orderedRoutes: [Route] {
         (routes ?? []).sorted { $0.rank < $1.rank }
