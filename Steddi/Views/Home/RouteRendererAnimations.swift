@@ -1,6 +1,55 @@
 import MapKit
 import UIKit
 
+/// Shared route-casing constants + helpers. A route line stroked in the raw
+/// brand accent (a mid/light hue for several swatches) can wash out over light
+/// cartography, park-green fills, and bright traffic overlays. A wider
+/// contrasting outline ("casing") under the colored line guarantees a legible
+/// edge over any tile — the same technique Apple/Google use, and the same reason
+/// the custom puck carries a white border.
+enum RouteCasing {
+    /// How much wider the casing is than the colored line, in points. Half on
+    /// each side, so a 6pt line + 3 → a ~9pt casing showing ~1.5pt of edge.
+    static let extraWidth: CGFloat = 3
+
+    /// Casing color for the given map interface style: white under the light
+    /// basemap, near-black under the dark one — whichever maximizes the edge
+    /// against the accent line and the tiles beneath it.
+    static func color(for style: UIUserInterfaceStyle) -> UIColor {
+        style == .dark
+            ? UIColor(white: 0.0, alpha: 0.55)
+            : UIColor(white: 1.0, alpha: 0.9)
+    }
+
+    /// Casing color resolved against the current Steddi map interface style.
+    static var current: UIColor {
+        color(for: SteddiTheme.currentThemeMode.mapInterfaceStyle)
+    }
+}
+
+/// `MKPolylineRenderer` that draws a contrasting casing under its stroke. Use in
+/// place of a plain `MKPolylineRenderer` for any route line that must stay
+/// legible over varied map tiles (remaining/active/preview lines). The colored
+/// `strokeColor`/`lineWidth` are set by the caller as usual; this just adds the
+/// wider outline pass beneath.
+final class CasedPolylineRenderer: MKPolylineRenderer {
+    /// Casing color. Defaults to the current map style's contrast color; the
+    /// caller can override (e.g. to match a per-overlay alpha).
+    var casingColor: UIColor = RouteCasing.current
+
+    override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
+        // Casing pass: a wider outline in the contrast color, under the line.
+        let saved = (color: strokeColor, width: lineWidth)
+        strokeColor = casingColor
+        lineWidth = saved.width + RouteCasing.extraWidth
+        super.draw(mapRect, zoomScale: zoomScale, in: context)
+        // Colored pass: the original stroke on top.
+        strokeColor = saved.color
+        lineWidth = saved.width
+        super.draw(mapRect, zoomScale: zoomScale, in: context)
+    }
+}
+
 /// Pure geometry for the route draw-on animation, factored out of the renderer
 /// so the partial-path math is unit-testable without a live MapKit context.
 ///
@@ -122,9 +171,20 @@ final class RouteDrawRenderer: MKPolylineRenderer {
         self.lineJoin = .round
     }
 
+    /// Contrasting outline drawn under the colored line so the route stays
+    /// legible over varied map tiles. Resolved against the live map style.
+    var casingColor: UIColor = RouteCasing.current
+
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
-        // Full line: defer to MKPolylineRenderer's optimized clipping path.
+        // Full line: defer to MKPolylineRenderer's optimized clipping path, but
+        // add the casing pass underneath first (wider outline, then the color).
         guard animationProgress < 1 else {
+            let saved = (color: strokeColor, width: lineWidth)
+            strokeColor = casingColor
+            lineWidth = saved.width + RouteCasing.extraWidth
+            super.draw(mapRect, zoomScale: zoomScale, in: context)
+            strokeColor = saved.color
+            lineWidth = saved.width
             super.draw(mapRect, zoomScale: zoomScale, in: context)
             return
         }
@@ -143,11 +203,17 @@ final class RouteDrawRenderer: MKPolylineRenderer {
             if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
         }
 
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        // Casing pass: wider contrast outline under the traced colored line.
+        context.addPath(path)
+        context.setStrokeColor(casingColor.cgColor)
+        context.setLineWidth((lineWidth + RouteCasing.extraWidth) / zoomScale)
+        context.strokePath()
+        // Colored pass on top.
         context.addPath(path)
         context.setStrokeColor((strokeColor ?? SteddiTheme.accentUIColor).cgColor)
         context.setLineWidth(lineWidth / zoomScale)
-        context.setLineCap(.round)
-        context.setLineJoin(.round)
         context.strokePath()
     }
 }

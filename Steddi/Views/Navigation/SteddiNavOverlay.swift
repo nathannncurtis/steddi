@@ -228,10 +228,39 @@ struct SteddiNavOverlay: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .padding(.trailing, 16)
-            .padding(.top, 270)
+            // Anchor the cluster below the (scaling) banner column rather than a
+            // fixed offset, so it never overlaps the banners under large Dynamic
+            // Type / accessibility icon scale.
+            .padding(.top, floatingClusterTopOffset)
             .scaleEffect(floatingButtonsAppeared ? 1.0 : 0.6)
             .opacity(floatingButtonsAppeared ? 1.0 : 0.0)
         }
+    }
+
+    /// Top offset for the portrait floating-control cluster, derived from the
+    /// banner column's actual scaled height so the controls always start below
+    /// the tallest banner stack. The banners scale with iconScale/textScale; a
+    /// fixed offset (the old hardcoded 270) overlapped them once the type grew.
+    /// Mirrors the banner geometry: top inset (60) + top banner (72*iconScale
+    /// icon + 40 padding) + the optional trip-leg and follow-on banners that are
+    /// actually present, plus a small gap.
+    private var floatingClusterTopOffset: CGFloat {
+        let topInset: CGFloat = 60
+        // Top banner: 72*iconScale icon framed inside 20pt padding all round.
+        let topBannerHeight = max(72 * iconScale, 34 * textScale * 2) + 40
+        var height = topInset + topBannerHeight
+        if tripContext != nil {
+            // Leg banner: ~13pt label in 9pt vertical padding, +6 spacing above.
+            height += 6 + (13 * textScale + 18)
+        }
+        if !engine.followOnInstruction.isEmpty {
+            // Follow-on banner: 28*iconScale icon frame in 10pt vertical padding,
+            // +6 spacing above.
+            height += 6 + (28 * iconScale + 20)
+        }
+        // Small gap below the banner column before the controls begin. Never sit
+        // higher than the original hand-tuned 270 in the unscaled default state.
+        return max(270, height + 12)
     }
 
     // MARK: - Landscape Nav Layout
@@ -711,16 +740,22 @@ struct SteddiNavOverlay: View {
             return SteddiTheme.textPrimary
         }()
 
-        // The digit needs to stay legible *on the neutral glass housing*, where a
-        // raw warningAmber goes near-invisible in light/dynamic-day — exactly when
-        // the over-limit readout matters. Use the surface-adaptive amberText for
-        // the amber state; the >8mph warmRed state has its own solid housing, so
-        // it keeps warmRed. Arc/ring hue (speedColor) is unchanged.
-        let speedTextColor: Color = overLimit > 0 && overLimit <= 8 ? SteddiTheme.amberText : speedColor
+        // The digit needs to stay legible *on its housing*, where a raw
+        // warningAmber/warmRed goes near-invisible in light/dynamic-day — exactly
+        // when the over-limit readout matters. Use the surface-adaptive text
+        // tokens for both over-limit states (amberText for 0–8 over, warmRedText
+        // for >8 over) so the digit clears AA on every theme. Arc/ring hue
+        // (speedColor) keeps the raw saturated gauge color.
+        let speedTextColor: Color = {
+            if overLimit > 8 { return SteddiTheme.warmRedText }
+            if overLimit > 0 { return SteddiTheme.amberText }
+            return SteddiTheme.textPrimary
+        }()
 
-        // Over-limit warning stays a SOLID warmRedSubtle fill — a safety readout
-        // must never lose contrast to translucency. Otherwise the housing is
-        // neutral glass.
+        // Over-limit warning housing must be a genuinely SOLID fill — a safety
+        // readout can't lose contrast to translucency. warmRedSubtle is a 15%
+        // wash, so composite it over surfacePrimary to get an opaque warm-red
+        // tint. Otherwise the housing is neutral glass.
         let isWarning = overLimit > 8
 
         let scale = size / 64.0
@@ -730,7 +765,11 @@ struct SteddiNavOverlay: View {
                 // Background housing: solid in the warning state, glass otherwise.
                 Group {
                     if isWarning {
-                        Circle().fill(SteddiTheme.warmRedSubtle)
+                        // Opaque warm-red tint: surfacePrimary base + the 15%
+                        // warmRed wash on top, so the digit sits on a solid fill
+                        // (not a translucent wash that lets the map bleed through).
+                        Circle().fill(SteddiTheme.surfacePrimary)
+                            .overlay(Circle().fill(SteddiTheme.warmRedSubtle))
                     } else {
                         Circle().fill(.clear).steddiGlass(tint: nil, interactive: false, in: .circle)
                     }
@@ -759,7 +798,7 @@ struct SteddiNavOverlay: View {
                         // an unfloored 9*scale renders ~6pt — unreadable on glass
                         // in a moving vehicle. Keep it scaling above the floor.
                         .font(SteddiTheme.body(max(11, 9 * scale)))
-                        .foregroundStyle(SteddiTheme.textMuted)
+                        .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
                 }
             }
             .frame(width: size, height: size)
@@ -768,15 +807,19 @@ struct SteddiNavOverlay: View {
             if let limit = speedLimitMph {
                 Text("\(Int(limit))")
                     .font(SteddiTheme.mono(10 * scale))
-                    .foregroundStyle(overLimit > 0 ? SteddiTheme.warmRed
-                                     : engine.speedLimitIsEstimated ? SteddiTheme.textMuted
+                    // Small 10pt value on a solid surfacePrimary fill — raw warmRed
+                    // fails AA here (1.77:1 grey, 3.56:1 light), so use the
+                    // surface-adaptive warmRedText when over the limit. The muted
+                    // branch picks up the high-contrast promotion like its siblings.
+                    .foregroundStyle(overLimit > 0 ? SteddiTheme.warmRedText
+                                     : engine.speedLimitIsEstimated ? SteddiTheme.textMuted(highContrast: highContrast)
                                      : SteddiTheme.textPrimary)
                     .frame(width: 22 * scale, height: 22 * scale)
                     .background(
                         Circle()
                             .fill(SteddiTheme.surfacePrimary)
                             .overlay(Circle().stroke(
-                                overLimit > 0 ? SteddiTheme.warmRed : SteddiTheme.textMuted.opacity(0.5),
+                                overLimit > 0 ? SteddiTheme.warmRedText : SteddiTheme.textMuted(highContrast: highContrast).opacity(0.5),
                                 lineWidth: 1.5))
                     )
                     .offset(x: 4 * scale, y: -4 * scale)
