@@ -14,8 +14,18 @@ final class Trip {
     @Relationship(deleteRule: .cascade, inverse: \TripStop.trip)
     var stops: [TripStop]?
 
-    /// Navigation behavior between legs.
-    var flowMode: TripFlowMode
+    /// Navigation behavior between legs. Persisted as the enum's raw value
+    /// (mirrors `RoadCondition.kindRaw`) so SwiftData stores a plain string and
+    /// an unknown future value degrades to `.continuous` instead of failing the
+    /// whole row's decode.
+    var flowModeRaw: String
+
+    /// Typed accessor over `flowModeRaw`. Unknown raw values resolve to
+    /// `.continuous` — the default flow — rather than failing to decode.
+    var flowMode: TripFlowMode {
+        get { TripFlowMode(rawValue: flowModeRaw) ?? .continuous }
+        set { flowModeRaw = newValue.rawValue }
+    }
 
     // Per-trip route preferences (nil = use global Settings defaults)
     var avoidsTolls: Bool?
@@ -37,7 +47,7 @@ final class Trip {
         self.id = UUID()
         self.name = name
         self.createdAt = Date()
-        self.flowMode = flowMode
+        self.flowModeRaw = flowMode.rawValue
         self.isArchived = false
     }
 

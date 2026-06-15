@@ -11,8 +11,28 @@ final class Route {
     var distanceMeters: Double?
     var typicalDurationSeconds: Double?
     var createdAt: Date
-    var source: RouteSource          // How this route was created
-    var direction: CommuteDirection   // Which way this route goes
+    /// How this route was created. Persisted as the enum's raw value (mirrors
+    /// `RoadCondition.kindRaw`) so SwiftData stores a plain string and an unknown
+    /// future value degrades to `.recorded` instead of failing the whole row's
+    /// decode — `RouteSource.suggested` is explicitly a future case, so this
+    /// guards the enum most likely to evolve.
+    var sourceRaw: String
+    /// Which way this route goes. Raw-valued for the same forward-compat reason
+    /// as `sourceRaw`; unknown values degrade to `.originToDestination`.
+    var directionRaw: String
+
+    /// Typed accessor over `sourceRaw`. Unknown raw values resolve to `.recorded`.
+    var source: RouteSource {
+        get { RouteSource(rawValue: sourceRaw) ?? .recorded }
+        set { sourceRaw = newValue.rawValue }
+    }
+
+    /// Typed accessor over `directionRaw`. Unknown raw values resolve to
+    /// `.originToDestination`.
+    var direction: CommuteDirection {
+        get { CommuteDirection(rawValue: directionRaw) ?? .originToDestination }
+        set { directionRaw = newValue.rawValue }
+    }
 
     var commute: Commute?
 
@@ -43,8 +63,8 @@ final class Route {
         self.distanceMeters = distanceMeters
         self.typicalDurationSeconds = typicalDurationSeconds
         self.createdAt = Date()
-        self.source = source
-        self.direction = direction
+        self.sourceRaw = source.rawValue
+        self.directionRaw = direction.rawValue
         self.overridesGlobalNoGoZones = false
     }
 }
