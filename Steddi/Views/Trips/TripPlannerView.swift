@@ -185,11 +185,15 @@ struct TripPlannerView: View {
         List {
             ForEach($draftStops) { $stop in
                 HStack(spacing: 10) {
+                    // Numbered stop badge — on-fill digit pairs onAccent with the
+                    // raw brand hue (accentBrand), the AA-clearing on-fill pairing.
+                    // White on the surface-adaptive text-safe accent was a
+                    // dark-on-darkened ~3:1 mispairing in the light theme.
                     Text("\((draftStops.firstIndex(of: stop) ?? 0) + 1)")
                         .font(SteddiTheme.mono(12))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(SteddiTheme.onAccent)
                         .frame(width: 22, height: 22)
-                        .background(SteddiTheme.accent, in: Circle())
+                        .background(SteddiTheme.accentBrand, in: Circle())
 
                     TextField("Stop name", text: $stop.name)
                         .font(SteddiTheme.body(14))
