@@ -332,6 +332,22 @@ struct HomeView: View {
         .onChange(of: pendingCommuteStart.version) { _, _ in
             consumePendingCommuteStart()
         }
+        // External teardown sync. The shared manager can end the session out
+        // from under this view — the only such path today is deleting the
+        // actively-navigating trip from the Trips list/editor, which calls
+        // NavigationStateManager.endActiveTripSession() (stops the engine +
+        // stopObserving) but can't touch this view's @State. If the manager
+        // goes idle while we still think we're navigating, the overlay would
+        // linger over a stopped engine pointing at a deleted trip and the GPS
+        // would stay pinned in high-accuracy background mode. Drive the local
+        // teardown to match. The in-view End/pause/endTrip paths flip local
+        // `isNavigating` false in the same turn they stop the manager, so this
+        // only fires for the genuinely-external case.
+        .onChange(of: navStateManager.isNavigating) { _, managerNavigating in
+            if !managerNavigating && isNavigating {
+                handleExternalSessionTeardown()
+            }
+        }
         // Distance is calculated locally — ETAs fetched async in background
         .fullScreenCover(isPresented: $showRoutePreview) {
             if let route = previewRoute {
@@ -1755,6 +1771,45 @@ struct HomeView: View {
         showTripArrivalPrompt = false
         try? modelContext.save()
         activeTrip = nil
+    }
+
+    /// Tear down this view's navigation @State after the SHARED manager already
+    /// ended the session externally (today: the active trip was deleted from the
+    /// Trips list/editor via NavigationStateManager.endActiveTripSession). The
+    /// manager has already stopped the engine and called stopObserving(); here
+    /// we only sync the local view so the overlay dismisses, the GPS leaves
+    /// navigation mode, and the Live Activity ends. We do NOT call
+    /// stopObserving() again (idempotent but redundant), do NOT touch the model
+    /// (the trip is being deleted by the caller), and do NOT run the
+    /// commute-route-save / drive-record machinery (this is a forced teardown,
+    /// not a real arrival or a user-initiated End).
+    private func handleExternalSessionTeardown() {
+        tripAutoAdvanceTask?.cancel()
+        tripAutoAdvanceTask = nil
+        _ = locationService.stopRecording()
+        locationService.disableNavigationMode()
+        locationFeedTask?.cancel()
+        locationFeedTask = nil
+        // The shared engine is already stopped by the manager; sever our
+        // reference so nothing keeps feeding or rendering it.
+        navigationEngine?.onOffRoute = nil
+        navigationEngine?.stopNavigation()
+        navigationEngine = nil
+        LiveActivityService.shared.endActivity()
+        is3DNav = true
+        withAnimation(TransitionKit.standardEntrance) {
+            isNavigating = false
+        }
+        navigationRoute = nil
+        activeSavedPolyline = nil
+        activeRoadConditions = []
+        // Drop trip/commute context — the trip model is being deleted, so
+        // leaving these set would dangle at a freed object.
+        activeTrip = nil
+        tripArrivalStop = nil
+        showTripArrivalPrompt = false
+        activeCommute = nil
+        activeDirection = nil
     }
 
     /// Continuous-mode arrival card tapped: cancel the auto-advance and take

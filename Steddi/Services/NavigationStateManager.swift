@@ -330,9 +330,18 @@ final class NavigationStateManager {
     /// trip is deleted out from under navigation. Stops the engine first so no
     /// further ticks fire, then clears all observation state (including
     /// `activeTrip`) so nothing is left pointing at a deleted model.
+    ///
+    /// `stopObserving()` flips `isNavigating` false; HomeView observes that edge
+    /// (`.onChange(of: navStateManager.isNavigating)`) and runs its own local
+    /// teardown — dismissing the overlay, leaving GPS navigation mode, and
+    /// ending the Live Activity. We also end the Live Activity here so the
+    /// teardown is self-sufficient even when HomeView isn't mounted (e.g. a
+    /// CarPlay-only session with the phone UI torn down), where no view observer
+    /// would otherwise reap the lingering activity.
     func endActiveTripSession() {
         activeEngine?.stopNavigation()
         stopObserving()
+        LiveActivityService.shared.endActivity()
     }
 
     /// The driver tapped "Stay" (or the card auto-dismissed). Clear the visible
