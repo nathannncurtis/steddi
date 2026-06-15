@@ -273,6 +273,56 @@ struct CameraGridIndexTests {
         #expect(ids.contains("report-\(report.id.uuidString)"))
         #expect(ids.count == 2)
     }
+
+    @Test("A camera within the alert radius due east is found at a high latitude")
+    func findsHighLatitudeEastCamera() {
+        // Anchorage (~61°N): the 0.005° cell is only ~270m wide E/W, so a fixed
+        // 3×3 scan guarantees coverage to just ~270m — under the 350m alert
+        // radius. A camera ~330m due east near a longitudinal cell boundary must
+        // still be a candidate via the latitude-robust ring.
+        let anchorage = CLLocationCoordinate2D(latitude: 61.2181, longitude: -149.9003)
+        let cam = east(of: anchorage, meters: 330)
+        // Sanity: the camera really is inside the alert radius.
+        #expect(RouteGeometry.haversineDistance(from: anchorage, to: cam) <= SpeedCameraTuning.alertRadiusMeters)
+        let index = SpeedCameraGridIndex(osmCameras: [node(1, .speedCamera, at: cam)], reports: [])
+        let found = index.candidates(near: anchorage)
+        #expect(found.contains { $0.alertID == "osm-1" })
+    }
+
+    @Test("High-latitude camera near a cell boundary surfaces from the worst-case offset")
+    func findsHighLatitudeBoundaryCamera() {
+        // Place the query point hard against the eastern edge of its cell so the
+        // worst-case (point on the near boundary) is exercised, then a camera
+        // ~340m further east must still be reachable.
+        let baseLat = 61.0
+        let cellWidthLon = SpeedCameraGridIndex.cellSizeDegrees
+        let cellLon = floor(-150.0 / cellWidthLon)
+        // ~1m inside the eastern boundary of the cell.
+        let query = CLLocationCoordinate2D(
+            latitude: baseLat,
+            longitude: (cellLon + 1) * cellWidthLon - 0.0000001
+        )
+        let cam = east(of: query, meters: 340)
+        #expect(RouteGeometry.haversineDistance(from: query, to: cam) <= SpeedCameraTuning.alertRadiusMeters)
+        let index = SpeedCameraGridIndex(osmCameras: [node(7, .speedCamera, at: cam)], reports: [])
+        let found = index.candidates(near: query)
+        #expect(found.contains { $0.alertID == "osm-7" })
+    }
+
+    @Test("cellSearchRadius grows with latitude to keep the alert radius covered")
+    func cellSearchRadiusLatitudeRobust() {
+        let r = SpeedCameraTuning.alertRadiusMeters
+        let socal = SpeedCameraGridIndex.cellSearchRadius(forMaxDistanceMeters: r, atLatitude: 34.0)
+        let anchorage = SpeedCameraGridIndex.cellSearchRadius(forMaxDistanceMeters: r, atLatitude: 61.0)
+        // Always at least the original 3×3 behavior, and never shrinking as the
+        // cell narrows toward the pole.
+        #expect(socal >= 1)
+        #expect(anchorage >= socal)
+        // The guaranteed-covered distance (ring cells × E/W meters-per-cell) must
+        // reach the alert radius at the high latitude.
+        let metersPerCellAnchorage = SpeedCameraGridIndex.cellSizeDegrees * 111_320.0 * cos(61.0 * .pi / 180)
+        #expect(Double(anchorage) * metersPerCellAnchorage >= r)
+    }
 }
 
 // MARK: - Proximity selection (closestAlert)

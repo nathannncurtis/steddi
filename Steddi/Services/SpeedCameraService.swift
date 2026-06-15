@@ -284,7 +284,7 @@ final class SpeedCameraService {
         proximityThresholdMeters: CLLocationDistance = SpeedCameraTuning.alertRadiusMeters
     ) -> SpeedCameraAlert? {
         guard let index else { return nil }
-        let candidates = index.candidates(near: currentCoord)
+        let candidates = index.candidates(near: currentCoord, radiusMeters: proximityThresholdMeters)
         return Self.closestAlert(
             currentCoord: currentCoord,
             heading: heading,
@@ -558,19 +558,48 @@ struct SpeedCameraGridIndex {
         self.grid = grid
     }
 
-    /// Cameras in the cell containing `coordinate` and its 8 neighbors.
-    func candidates(near coordinate: CLLocationCoordinate2D) -> [SpeedCameraAlert] {
+    /// Cameras in the cell containing `coordinate` plus a square ring of neighbors
+    /// sized to cover `radiusMeters`. A query point can sit anywhere in its cell,
+    /// so a fixed 3×3 block only guarantees coverage to ONE cell width — and the
+    /// cell is narrowest in longitude (`cos(lat)` shrinks east-west spacing), so a
+    /// camera within the alert radius could be dropped at high latitudes. The ring
+    /// radius is therefore derived from `radiusMeters` against the conservative
+    /// longitude axis (mirrors `GraphSpatialIndex.cellSearchRadius`).
+    func candidates(
+        near coordinate: CLLocationCoordinate2D,
+        radiusMeters: Double = SpeedCameraTuning.alertRadiusMeters
+    ) -> [SpeedCameraAlert] {
         let centerLat = Self.cellIndex(coordinate.latitude)
         let centerLon = Self.cellIndex(coordinate.longitude)
+        let ring = Self.cellSearchRadius(forMaxDistanceMeters: radiusMeters, atLatitude: coordinate.latitude)
         var result: [SpeedCameraAlert] = []
-        for dLat in -1...1 {
-            for dLon in -1...1 {
+        for dLat in -ring...ring {
+            for dLon in -ring...ring {
                 if let indices = grid[GridKey(lat: centerLat + dLat, lon: centerLon + dLon)] {
                     for i in indices { result.append(cameras[i]) }
                 }
             }
         }
         return result
+    }
+
+    /// The neighbor-cell ring radius needed for `candidates` to cover
+    /// `maxDistanceMeters` at `latitude`. A query point can sit anywhere in its
+    /// cell, so the guaranteed distance from the point to the outer edge of a
+    /// radius-`r` ring is `r` whole cells (worst case: the point sits on the near
+    /// boundary). The ring must therefore span at least
+    /// `ceil(maxDistanceMeters / metersPerCell)` cells. Cells are narrowest in
+    /// longitude (`cos(lat)`), so size against that conservative axis. Always ≥ 1
+    /// to preserve the original 3×3 behavior.
+    static func cellSearchRadius(forMaxDistanceMeters maxDistanceMeters: Double, atLatitude latitude: Double) -> Int {
+        guard maxDistanceMeters > 0 else { return 1 }
+        let metersPerDegreeLat = 111_320.0
+        // Clamp the cosine to a small floor so an extreme/garbage latitude can't
+        // blow the radius up.
+        let cosLat = max(0.1, cos(latitude * .pi / 180))
+        let metersPerCell = cellSizeDegrees * metersPerDegreeLat * cosLat
+        guard metersPerCell > 0 else { return 1 }
+        return max(1, Int(ceil(maxDistanceMeters / metersPerCell)))
     }
 
     /// Number of occupied cells — exposed for tests asserting index shape.
