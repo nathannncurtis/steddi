@@ -84,8 +84,8 @@ struct RoutedZone: Sendable, Equatable {
     }
 
     /// Whether any part of an edge's geometry falls inside the zone. Checks
-    /// vertices and, for circles/corridors, perpendicular distance to segments so
-    /// an edge that passes through without a vertex landing inside is still caught.
+    /// vertices and, for every shape, the segments between them so an edge that
+    /// passes through without a vertex landing inside is still caught.
     func intersects(_ coords: ArraySlice<CLLocationCoordinate2D>) -> Bool {
         let pts = Array(coords)
         guard !pts.isEmpty else { return false }
@@ -100,7 +100,33 @@ struct RoutedZone: Sendable, Equatable {
             }
             return false
         case let .polygon(vertices):
-            return pts.contains { RoutedZone.polygonContains(vertices, $0) }
+            // A route VERTEX inside the polygon (covers a route that starts/ends
+            // or turns inside the zone).
+            if pts.contains(where: { RoutedZone.polygonContains(vertices, $0) }) { return true }
+            guard vertices.count >= 3 else { return false }
+            // A route SEGMENT that crosses a polygon boundary edge — catches the
+            // straight 2-vertex road that runs through a zone smaller than the
+            // block, with neither endpoint inside.
+            for i in 0..<(pts.count - 1) {
+                let a = pts[i], b = pts[i + 1]
+                var k = vertices.count - 1
+                for j in 0..<vertices.count {
+                    if RoutedZone.segmentsIntersect(a, b, vertices[k], vertices[j]) { return true }
+                    k = j
+                }
+            }
+            // A polygon entirely contained within a single route segment crosses
+            // no boundary edge and contains no route vertex, so also test whether
+            // any polygon vertex lies on/near a route segment.
+            if pts.count >= 2 {
+                for v in vertices {
+                    for i in 0..<(pts.count - 1) {
+                        let proj = RouteGeometry.projectOntoSegment(point: v, segStart: pts[i], segEnd: pts[i + 1])
+                        if proj.distance <= RoutedZone.containedVertexToleranceMeters { return true }
+                    }
+                }
+            }
+            return false
         case let .corridor(polyline, width):
             guard polyline.count >= 2 else { return false }
             for p in pts {
@@ -129,6 +155,52 @@ struct RoutedZone: Sendable, Equatable {
             j = i
         }
         return inside
+    }
+
+    /// A polygon wholly inside one route segment crosses no boundary edge; we
+    /// catch it by polygon-vertex-to-route-segment distance. Sized small (~1 m)
+    /// so it only fires when a polygon vertex genuinely sits on the road, not for
+    /// a polygon merely near a parallel road.
+    static let containedVertexToleranceMeters: Double = 1.0
+
+    /// Whether segment p1-p2 intersects segment p3-p4 (proper or improper, i.e.
+    /// including touching/collinear-overlap), using the standard orientation
+    /// (signed-area) predicate in planar lon/lat space — fine at street scale.
+    static func segmentsIntersect(
+        _ p1: CLLocationCoordinate2D, _ p2: CLLocationCoordinate2D,
+        _ p3: CLLocationCoordinate2D, _ p4: CLLocationCoordinate2D
+    ) -> Bool {
+        let d1 = orientation(p3, p4, p1)
+        let d2 = orientation(p3, p4, p2)
+        let d3 = orientation(p1, p2, p3)
+        let d4 = orientation(p1, p2, p4)
+        if ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+           ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)) {
+            return true
+        }
+        // Collinear / touching endpoints: the third point lies on the segment.
+        if d1 == 0 && onSegment(p3, p4, p1) { return true }
+        if d2 == 0 && onSegment(p3, p4, p2) { return true }
+        if d3 == 0 && onSegment(p1, p2, p3) { return true }
+        if d4 == 0 && onSegment(p1, p2, p4) { return true }
+        return false
+    }
+
+    /// Signed area of triangle (a, b, c): >0 counter-clockwise, <0 clockwise,
+    /// 0 collinear. Uses lon as x, lat as y.
+    private static func orientation(
+        _ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D, _ c: CLLocationCoordinate2D
+    ) -> Double {
+        (b.longitude - a.longitude) * (c.latitude - a.latitude)
+            - (b.latitude - a.latitude) * (c.longitude - a.longitude)
+    }
+
+    /// Whether point `p`, known collinear with segment a-b, lies within its bounds.
+    private static func onSegment(
+        _ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D, _ p: CLLocationCoordinate2D
+    ) -> Bool {
+        p.longitude >= min(a.longitude, b.longitude) && p.longitude <= max(a.longitude, b.longitude)
+            && p.latitude >= min(a.latitude, b.latitude) && p.latitude <= max(a.latitude, b.latitude)
     }
 }
 

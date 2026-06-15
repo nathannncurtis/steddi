@@ -111,9 +111,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
-        // Nav is active and the process is dying — end the Live Activity now
-        // or it lingers on the Lock Screen as a zombie until iOS reaps it.
-        guard NavigationStateManager.shared.isNavigating else { return }
+        // The process is dying — end any Live Activity now or it lingers on the
+        // Lock Screen as a zombie until iOS reaps it. We do NOT gate on
+        // isNavigating: after a normal arrival/stop nav is no longer "navigating"
+        // but the activity is still presented under its 30s dismissal policy, so
+        // gating would skip reaping that pending-dismissal activity.
+        // endActivityImmediately() self-guards (no-op when nothing is live).
         LiveActivityService.shared.endActivityImmediately()
     }
 

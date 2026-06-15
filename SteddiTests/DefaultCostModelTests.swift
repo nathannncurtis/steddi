@@ -244,6 +244,67 @@ struct ZoneCostTests {
         #expect(RoutedZone.polygonContains(square, CLLocationCoordinate2D(latitude: 1, longitude: 1)))
         #expect(!RoutedZone.polygonContains(square, CLLocationCoordinate2D(latitude: 3, longitude: 1)))
     }
+
+    // A small square zone straddling the middle of a single straight edge: both
+    // edge endpoints are OUTSIDE the polygon, but the road runs straight through
+    // it. The vertex-only test would miss this; the segment-crossing test must
+    // catch it.
+    private func crossSquare() -> [CLLocationCoordinate2D] {
+        [
+            CLLocationCoordinate2D(latitude: 34.0024, longitude: -117.0001),
+            CLLocationCoordinate2D(latitude: 34.0024, longitude: -116.9999),
+            CLLocationCoordinate2D(latitude: 34.0026, longitude: -116.9999),
+            CLLocationCoordinate2D(latitude: 34.0026, longitude: -117.0001),
+        ]
+    }
+
+    @Test("Polygon zone catches an edge crossing it with neither endpoint inside")
+    func polygonCrossingEdgeExcluded() {
+        // lineGraph: a straight S->N edge from (34.0000,-117) to (34.0050,-117).
+        // Both endpoints are far outside the tiny mid-edge square.
+        let g = lineGraph()
+        let e = edge(in: g, from: 1, to: 2)!
+        let square = crossSquare()
+        #expect(!RoutedZone.polygonContains(square, CLLocationCoordinate2D(latitude: 34.0000, longitude: -117.0000)))
+        #expect(!RoutedZone.polygonContains(square, CLLocationCoordinate2D(latitude: 34.0050, longitude: -117.0000)))
+        let zone = RoutedZone(shape: .polygon(vertices: square))
+        let cost = DefaultCostModel(context: RoutingContext(hardZones: [zone])).edgeCost(e, in: g)
+        #expect(cost == .infinity)
+    }
+
+    @Test("Polygon zone leaves an edge that does not cross it passable")
+    func polygonNonCrossingEdgePassable() {
+        // A square well to the east of the S->N edge (which sits at lon -117):
+        // no crossing, no vertex inside, no polygon vertex on the road.
+        let g = lineGraph()
+        let e = edge(in: g, from: 1, to: 2)!
+        let away = [
+            CLLocationCoordinate2D(latitude: 34.0024, longitude: -116.9000),
+            CLLocationCoordinate2D(latitude: 34.0024, longitude: -116.8998),
+            CLLocationCoordinate2D(latitude: 34.0026, longitude: -116.8998),
+            CLLocationCoordinate2D(latitude: 34.0026, longitude: -116.9000),
+        ]
+        let zone = RoutedZone(shape: .polygon(vertices: away))
+        let cost = DefaultCostModel(context: RoutingContext(hardZones: [zone])).edgeCost(e, in: g)
+        #expect(cost < .infinity)
+    }
+
+    @Test("segmentsIntersect predicate: crossing, touching, parallel, collinear")
+    func segmentIntersectionPredicate() {
+        func c(_ lat: Double, _ lon: Double) -> CLLocationCoordinate2D {
+            CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        }
+        // Proper crossing (an X).
+        #expect(RoutedZone.segmentsIntersect(c(0, 0), c(2, 2), c(0, 2), c(2, 0)))
+        // Disjoint, no crossing.
+        #expect(!RoutedZone.segmentsIntersect(c(0, 0), c(0, 1), c(1, 0), c(1, 1)))
+        // Parallel, offset.
+        #expect(!RoutedZone.segmentsIntersect(c(0, 0), c(2, 0), c(0, 1), c(2, 1)))
+        // T-junction: endpoint of one lies on the other.
+        #expect(RoutedZone.segmentsIntersect(c(0, 0), c(2, 0), c(1, 0), c(1, 2)))
+        // Collinear overlap.
+        #expect(RoutedZone.segmentsIntersect(c(0, 0), c(2, 0), c(1, 0), c(3, 0)))
+    }
 }
 
 // MARK: - UPS scenario (end-to-end through A*)
