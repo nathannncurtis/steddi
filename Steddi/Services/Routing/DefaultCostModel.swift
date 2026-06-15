@@ -28,9 +28,10 @@ struct CostWeights: Sendable, Equatable {
     var trafficSignalPenalty: Double = 8
 
     // Edge multipliers (>= 1) and additive edge costs.
-    /// Per-RoadClass comfort multiplier, indexed by RoadClass.rawValue (0...9),
-    /// with `unknown` (255) handled separately. Residential/service cost a little
-    /// more per second so the router prefers through-roads when time is equal.
+    /// Per-RoadClass comfort multiplier, indexed by RoadClass.rawValue (0...9).
+    /// Unknown roads are filtered at graph-build time, so only classes 0-9 ever
+    /// reach the cost model. Residential/service cost a little more per second so
+    /// the router prefers through-roads when time is equal.
     var roadClassMultiplier: [Double] = [
         1.0,  // 0 motorway
         1.0,  // 1 trunk
