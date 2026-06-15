@@ -290,7 +290,21 @@ struct HomeView: View {
             locationService.startUpdating()
             migrateExistingPinsToCategories()
             checkMilestoneDonation()
-            LiveActivityService.shared.cleanupOrphanedActivities()
+            // Only reap orphaned Live Activities when NO navigation session is in
+            // flight. onAppear fires on EVERY forced subtree rebuild — e.g. when
+            // SteddiRootView bumps its `.id(glassRevision)` because Reduce
+            // Transparency toggled mid-drive — and cleanupOrphanedActivities() ends
+            // EVERY NavigationAttributes activity globally and nils the live handle.
+            // Calling it unconditionally would silently kill the ACTIVE nav Live
+            // Activity (Lock Screen / Dynamic Island guidance) for the rest of the
+            // drive with no recovery. `navStateManager.isNavigating` is the
+            // singleton's source of truth and survives the rebuild (unlike this
+            // struct's @State), so gating on it skips the reap during a live
+            // session. True cold-launch orphans from a prior process are still
+            // backstopped by the sweep in AppDelegate.didFinishLaunching.
+            if !navStateManager.isNavigating {
+                LiveActivityService.shared.cleanupOrphanedActivities()
+            }
             // Drain any start request that landed before this view attached
             // (cold launch from Siri / CarPlay / a notification deep link).
             consumePendingCommuteStart()
@@ -538,7 +552,7 @@ struct HomeView: View {
 
     // MARK: - Navigation
 
-    private func navigateTo(name: String, coordinate: CLLocationCoordinate2D, address: String? = nil, skipPreview: Bool = false, preferences: RoutePreferences? = nil) {
+    private func navigateTo(name: String, coordinate: CLLocationCoordinate2D, address: String? = nil, skipPreview: Bool = false, preferences: RoutePreferences? = nil, onRouteFetchFailed: (() -> Void)? = nil) {
         let dest = PinnedLocation(
             name: name,
             latitude: coordinate.latitude,
@@ -561,6 +575,7 @@ struct HomeView: View {
 
             guard let currentLocation else {
                 isCalculatingRoute = false
+                onRouteFetchFailed?()
                 return
             }
 
@@ -577,6 +592,7 @@ struct HomeView: View {
                 let response = try await directions.calculate()
                 guard let route = response.routes.first else {
                     isCalculatingRoute = false
+                    onRouteFetchFailed?()
                     return
                 }
 
@@ -597,6 +613,7 @@ struct HomeView: View {
                 }
             } catch {
                 isCalculatingRoute = false
+                onRouteFetchFailed?()
             }
         }
     }
@@ -975,7 +992,16 @@ struct HomeView: View {
                                     if sheetTab == tab {
                                         Capsule()
                                             .fill(.clear)
-                                            .steddiGlass(tint: SteddiTheme.accentBrand, interactive: false, in: Capsule())
+                                            // fallbackFill: accentBrand so the selected pill keeps a
+                                            // SOLID accent fill when glass is off (Reduce Transparency
+                                            // / high contrast). Without it the default surfacePrimary
+                                            // fallback drops the lavender tint: the active-vs-inactive
+                                            // cue flattens, and in dark mode near-black onAccent text
+                                            // on a near-black surfacePrimary pill is an AA failure. The
+                                            // accent fill also keeps onAccent (computed against
+                                            // accentBrand) legible on any background. Mirrors
+                                            // SteddiPrimaryButtonStyle, which passes fallbackFill: tint.
+                                            .steddiGlass(tint: SteddiTheme.accentBrand, interactive: false, in: Capsule(), fallbackFill: SteddiTheme.accentBrand)
                                             .glassEffectID("sheet.tab.active", in: sheetTabNamespace)
                                             .glassEffectTransition(.matchedGeometry)
                                     }
@@ -1221,7 +1247,7 @@ struct HomeView: View {
 
     /// Navigate using a saved route's polyline with custom turn-by-turn logic.
     /// Bypasses Apple Maps routing entirely — generates steps from the polyline geometry.
-    private func navigateWithSavedRoute(_ savedRoute: Route, to target: PinnedLocation) {
+    private func navigateWithSavedRoute(_ savedRoute: Route, to target: PinnedLocation, onRouteFetchFailed: (() -> Void)? = nil) {
         navigationDestination = target
         isCalculatingRoute = true
 
@@ -1233,7 +1259,7 @@ struct HomeView: View {
             guard savedCoords.count >= 2 else {
                 print("[STEDDI-NAV] ERROR: polyline has < 2 coords, falling back to Apple Maps")
                 isCalculatingRoute = false
-                navigateTo(name: target.name, coordinate: target.coordinate, address: target.address)
+                navigateTo(name: target.name, coordinate: target.coordinate, address: target.address, onRouteFetchFailed: onRouteFetchFailed)
                 return
             }
 
@@ -1676,8 +1702,11 @@ struct HomeView: View {
 
     /// Navigate one leg: saved per-leg route when the stop has one, otherwise
     /// live routing with trip/stop preferences. Both paths flow through the
-    /// existing engine.startNavigation machinery.
-    private func beginTripLeg(to stop: TripStop, trip: Trip) {
+    /// existing engine.startNavigation machinery. `onRouteFetchFailed` (set only
+    /// for a continuous-mode auto-advance, where the prior leg's engine was
+    /// already stood down) recovers a failed/empty live route fetch instead of
+    /// stranding the user — see handleAutoAdvanceFailure.
+    private func beginTripLeg(to stop: TripStop, trip: Trip, onRouteFetchFailed: (() -> Void)? = nil) {
         if let savedRoute = stop.savedRoute {
             let dest = PinnedLocation(
                 name: stop.name,
@@ -1685,14 +1714,15 @@ struct HomeView: View {
                 longitude: stop.longitude,
                 address: stop.address
             )
-            navigateWithSavedRoute(savedRoute, to: dest)
+            navigateWithSavedRoute(savedRoute, to: dest, onRouteFetchFailed: onRouteFetchFailed)
         } else {
             navigateTo(
                 name: stop.name,
                 coordinate: stop.coordinate,
                 address: stop.address,
                 skipPreview: true,
-                preferences: trip.routePreferences(for: stop)
+                preferences: trip.routePreferences(for: stop),
+                onRouteFetchFailed: onRouteFetchFailed
             )
         }
     }
@@ -1747,13 +1777,47 @@ struct HomeView: View {
         tripAutoAdvanceTask = nil
         tripArrivalStop = nil
         showTripArrivalPrompt = false
+        // Quiesce the FINISHED leg's engine before starting the next one. During
+        // the 3s auto-advance window the arrived engine was harmless — the
+        // locationFeedTask breaks on hasArrived (startLocationFeed), so no GPS
+        // reaches it and it can't spuriously re-process off-route/arrival. But the
+        // next-leg fetch (beginTripLeg → navigateTo) can be slow or fail (no
+        // location fix, no route, network error), and those paths just clear
+        // isCalculatingRoute and return WITHOUT replacing the engine — leaving the
+        // stale engine latched hasArrived/isNavigating, so CarPlay's dismissal
+        // guard (`hasArrived && !isNavigating`) stays false and it renders a frozen
+        // "You have arrived" pose indefinitely. Stopping the engine here means a
+        // failed fetch falls back to the manual next-leg prompt (handled in
+        // navigateTo) instead of an unrecoverable frozen overlay; a successful
+        // fetch creates a fresh engine in the same turn so there's no UI flicker
+        // (isCalculatingRoute is set synchronously at the top of begin*).
+        navigationEngine?.stopNavigation()
+        navStateManager.stopObserving()
         // Leg handoff: the next leg's Live Activity starts almost immediately, so
         // end the finished leg's at once (.immediate) — the default 30s linger
         // would leave two nav activities stacked on the Lock Screen / Dynamic
         // Island for ~30s. The lingering dismissal is reserved for true final
         // arrivals (endTripNavigation / commute end), where nothing replaces it.
         LiveActivityService.shared.endActivity(immediate: true)
-        beginTripLeg(to: stop, trip: trip)
+        beginTripLeg(to: stop, trip: trip, onRouteFetchFailed: { handleAutoAdvanceFailure() })
+    }
+
+    /// A next-leg auto-advance fetch failed (no location fix, no route, or a
+    /// thrown routing error). The finished leg's engine was already stood down in
+    /// `advanceTripLeg`, so rather than leave the user on a frozen/blank state with
+    /// no guidance, fall back to the manual next-leg prompt — the same recovery
+    /// path a continuous-mode user gets by tapping the arrival card. The trip
+    /// position is already persisted, so this is fully recoverable.
+    private func handleAutoAdvanceFailure() {
+        guard let trip = activeTrip, let stop = trip.currentStop else {
+            // Nothing left to navigate to — treat as trip end so we don't strand
+            // the user on the calculating overlay.
+            endTripNavigation(completed: false)
+            return
+        }
+        isCalculatingRoute = false
+        tripArrivalStop = stop
+        showTripArrivalPrompt = true
     }
 
     /// Manual mode pause between legs: engine and overlay stand down, the
