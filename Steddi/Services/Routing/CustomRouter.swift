@@ -160,7 +160,20 @@ final class CustomRouter: RouteProvider {
             // DirectionsService.stitchTrimmedLegs / viaSteps).
             var legSteps = synthesis.steps
             if i > 0 {
-                while let first = legSteps.first, isDeparture(first) { legSteps.removeFirst() }
+                // The departure "Head …" step carries the leg's LEAD-IN distance
+                // (waypoint → first maneuver; StepSynthesizer writes that onto the
+                // departure step). Removing it would drop that distance, so fold it
+                // forward onto the first surviving step — preserving the per-step
+                // distance totals and the distance-to-next-maneuver shown right
+                // after the stop.
+                var carriedDistance: Double = 0
+                while let first = legSteps.first, isDeparture(first) {
+                    carriedDistance += first.distance
+                    legSteps.removeFirst()
+                }
+                if carriedDistance > 0, let first = legSteps.first {
+                    legSteps[0] = withDistance(first, first.distance + carriedDistance)
+                }
             }
             if i < stops.count - 2 {
                 while let last = legSteps.last, isArrival(last) { legSteps.removeLast() }
@@ -180,6 +193,17 @@ final class CustomRouter: RouteProvider {
     private nonisolated static func isDeparture(_ step: NavStep) -> Bool {
         step.maneuverSymbol == "location.fill"
             || step.instruction.lowercased().hasPrefix("head ")
+    }
+
+    /// A copy of `step` with its distance replaced — used to fold a stripped
+    /// departure step's lead-in distance onto the first surviving step.
+    private nonisolated static func withDistance(_ step: NavStep, _ distance: Double) -> NavStep {
+        NavStep(
+            instruction: step.instruction,
+            distance: distance,
+            coordinate: step.coordinate,
+            maneuverSymbol: step.maneuverSymbol
+        )
     }
 
     // MARK: - Context mapping

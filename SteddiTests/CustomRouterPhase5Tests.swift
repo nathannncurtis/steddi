@@ -387,6 +387,36 @@ struct CustomRouterEndToEndTests {
         #expect(departures.count == 1)
     }
 
+    @Test("stripping a non-first leg's departure step preserves its lead-in distance")
+    func waypointStitchingPreservesLeadInDistance() {
+        // Same endpoints, with and without a pass-through waypoint at node 3. The
+        // geometry is identical either way, so the SUM of per-step distances must
+        // match: when leg 2's "Head" departure step is stripped, its lead-in
+        // distance (waypoint → first maneuver, here the whole straight leg to the
+        // destination) must be folded forward, not dropped.
+        let graph = lShapedGraph()
+        let origin = graph.nodes[Int(graph.osmToIndex[1]!)].coordinate
+        let waypoint = graph.nodes[Int(graph.osmToIndex[3]!)].coordinate
+        let destination = graph.nodes[Int(graph.osmToIndex[4]!)].coordinate
+
+        let direct = CustomRouter.searchAndSynthesize(
+            stops: [origin, destination], graph: graph, search: AStarSearch(), cost: DefaultCostModel()
+        )
+        let viaWaypoint = CustomRouter.searchAndSynthesize(
+            stops: [origin, waypoint, destination], graph: graph, search: AStarSearch(), cost: DefaultCostModel()
+        )
+        guard let direct, let viaWaypoint else { Issue.record("no synthesis"); return }
+
+        let directStepSum = direct.steps.reduce(0) { $0 + $1.distance }
+        let viaStepSum = viaWaypoint.steps.reduce(0) { $0 + $1.distance }
+        // Both should also match the actual geometry length (steps account for the
+        // whole route, no segment unrepresented).
+        let geometryLength = RouteGeometry.cumulativeDistances(viaWaypoint.coordinates).last ?? 0
+        #expect(abs(viaStepSum - directStepSum) < 1.0)
+        #expect(abs(viaStepSum - geometryLength) < 1.0)
+        #expect(viaStepSum > 0)
+    }
+
     @Test("no path through a disconnected graph yields nil (fallback signal)")
     func noPathYieldsNil() {
         // Two disconnected ways: origin near one, destination near the other.
