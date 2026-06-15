@@ -71,6 +71,14 @@ final class NavigationStateManager {
     @ObservationIgnored
     private let widgetDefaults = UserDefaults(suiteName: NavigationStateManager.widgetSuiteName)
 
+    /// Last ETA (minutes) pushed to the widget timeline, so per-tick syncs only
+    /// reload the widget when the displayed minute actually changes. The polling
+    /// task ticks twice a second; the widget shows whole minutes, so reloading
+    /// on every tick would be ~120x wasted timeline reloads with no visible
+    /// change. Reset to nil at session start/end.
+    @ObservationIgnored
+    private var lastWidgetETAMinutes: Int?
+
     // MARK: - Observation
 
     func startObserving(
@@ -218,9 +226,17 @@ final class NavigationStateManager {
         // Build upcoming steps from engine
         upcomingSteps = Self.buildUpcomingSteps(from: engine)
 
-        // Write to shared App Group for widget
+        // Write to shared App Group for widget and refresh its timeline when the
+        // displayed minute changes. Without the reload the widget keeps showing
+        // the ETA captured at session start; writing the defaults alone doesn't
+        // re-render the extension. Throttled to minute changes so the 2 Hz sync
+        // doesn't spam WidgetKit with no-op reloads.
         widgetDefaults?.set(engine.etaMinutes, forKey: "widget.etaMinutes")
         widgetDefaults?.set(engine.isNavigating, forKey: "widget.isNavigating")
+        if engine.etaMinutes != lastWidgetETAMinutes {
+            lastWidgetETAMinutes = engine.etaMinutes
+            WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
+        }
     }
 
     /// Tear down an in-progress trip session cleanly — used when the active
@@ -277,6 +293,8 @@ final class NavigationStateManager {
     /// Write the session identity (commute + destination names) the widget
     /// renders alongside the per-tick ETA, then refresh its timeline.
     private func writeWidgetSession(commute: Commute?, direction: CommuteDirection?, destinationName: String?) {
+        // New session — force the next sync to push a fresh ETA to the widget.
+        lastWidgetETAMinutes = nil
         let resolvedDestination = destinationName ?? Self.commuteEndpointName(commute: commute, direction: direction)
 
         if let commuteName = commute?.name {
@@ -299,6 +317,7 @@ final class NavigationStateManager {
     /// Navigation ended — the live ETA is meaningless now, but the names stay
     /// so the widget keeps its commute context until the next session.
     private func clearWidgetSession() {
+        lastWidgetETAMinutes = nil
         widgetDefaults?.set(false, forKey: "widget.isNavigating")
         widgetDefaults?.set(0, forKey: "widget.etaMinutes")
         WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)

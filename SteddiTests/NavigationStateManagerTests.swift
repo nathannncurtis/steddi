@@ -368,3 +368,40 @@ struct NavigationStateManagerPoseCopyTests {
         engine.stopNavigation()
     }
 }
+
+// MARK: - Widget ETA Sync Tests
+
+@Suite("NavigationStateManager widget ETA sync")
+@MainActor
+struct NavigationStateManagerWidgetSyncTests {
+
+    private static let widgetSuite = "group.to.nathancurtis.steddi"
+
+    private func startedEngine(etaMinutes: Int) -> NavigationEngine {
+        let engine = NavigationEngine()
+        let polyline = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        let steps = [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline[0], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[10], maneuverSymbol: "flag.fill"),
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+        return engine
+    }
+
+    /// The widget read its ETA from a value written once at session start and
+    /// never refreshed thereafter, so it froze. Each sync must now push the
+    /// engine's current ETA into the shared App Group defaults the widget reads.
+    @Test("syncFromEngine writes the current ETA to shared widget defaults")
+    func syncWritesWidgetETA() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        let engine = startedEngine(etaMinutes: 0)
+        let manager = NavigationStateManager()
+
+        manager.syncFromEngine(engine)
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == engine.etaMinutes)
+        #expect(defaults.bool(forKey: "widget.isNavigating") == engine.isNavigating)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+}
