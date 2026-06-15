@@ -921,19 +921,21 @@ struct HomeView: View {
                         } label: {
                             Text(tab.rawValue)
                                 .font(SteddiTheme.heading(14))
-                                // Active label rides on the accent-glass pill, so it
-                                // needs an on-accent foreground (not the accent itself,
-                                // which washes out against the tinted pill). Inactive
-                                // labels use textSecondary — these are primary nav
-                                // controls and textMuted fails contrast on the bar.
-                                .foregroundStyle(sheetTab == tab ? SteddiTheme.textPrimary : SteddiTheme.textSecondary)
+                                // Active label rides on the accent pill, so it needs
+                                // the on-accent foreground (textPrimary is ~white and
+                                // washed out on the light accent fill). The pill is
+                                // tinted with accentBrand (the unshifted brand hue) —
+                                // onAccent is computed to clear AA against accentBrand,
+                                // not the surface-adaptive text-safe accent. Inactive
+                                // labels use textSecondary (textMuted fails on the bar).
+                                .foregroundStyle(sheetTab == tab ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
                                 .background {
                                     if sheetTab == tab {
                                         Capsule()
                                             .fill(.clear)
-                                            .steddiGlass(tint: SteddiTheme.accent, interactive: false, in: Capsule())
+                                            .steddiGlass(tint: SteddiTheme.accentBrand, interactive: false, in: Capsule())
                                             .glassEffectID("sheet.tab.active", in: sheetTabNamespace)
                                             .glassEffectTransition(.matchedGeometry)
                                     }
