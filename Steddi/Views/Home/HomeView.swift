@@ -271,9 +271,12 @@ struct HomeView: View {
                 }
             }
 
-            // Loading overlay
+            // Loading overlay — centered in the ZStack rather than pinned to the
+            // bottom alignment guide. Wrapping just the overlay keeps the rest of
+            // the bottom-aligned content (sheet, controls) in place.
             if isCalculatingRoute {
                 routeLoadingOverlay
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
         }
         .ignoresSafeArea()
