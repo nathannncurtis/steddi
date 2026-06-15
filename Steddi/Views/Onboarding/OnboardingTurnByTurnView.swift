@@ -18,7 +18,11 @@ struct OnboardingTurnByTurnView: View {
     var body: some View {
         VStack(spacing: 22) {
             hudMock
-                .frame(height: 120)
+                // Decorative mock: let it grow under large Dynamic Type rather
+                // than locking a fixed height that the scaling chip text would
+                // overflow/misalign against the speedometer. minHeight keeps the
+                // default layout; the inner labels also cap their own scale.
+                .frame(minHeight: 120)
                 .accessibilityHidden(true)
 
             VStack(spacing: 10) {
@@ -71,6 +75,10 @@ struct OnboardingTurnByTurnView: View {
                     .font(.caption)
                     .foregroundStyle(SteddiTheme.onboardingTextSecondary)
             }
+            // Decorative mock — keep the chip text scaling bounded so it can't
+            // overflow the HUD region or overrun the speedometer at AX sizes.
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -103,6 +111,9 @@ struct OnboardingTurnByTurnView: View {
                     .font(.caption2)
                     .foregroundStyle(SteddiTheme.onboardingTextSecondary)
             }
+            // Keep the centered speed label within the fixed gauge housing.
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
         }
         .frame(width: 84, height: 84)
     }
