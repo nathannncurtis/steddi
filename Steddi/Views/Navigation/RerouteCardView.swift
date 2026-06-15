@@ -82,7 +82,8 @@ struct RerouteCardView: View {
                     .padding(.vertical, 14 * controlScale)
                     .buttonStyle(.glass)
 
-                    // Primary CTA: prominent accent glass.
+                    // Primary CTA: canonical accent glass — fill + AA-legible
+                    // on-fill label supplied by the style (no .tint/.glassProminent).
                     Button("Switch") {
                         hide()
                         onSwitch()
@@ -90,8 +91,7 @@ struct RerouteCardView: View {
                     .font(.system(size: 17 * textScale, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14 * controlScale)
-                    .buttonStyle(.glassProminent)
-                    .tint(SteddiTheme.accent)
+                    .buttonStyle(.steddiPrimary)
                 }
             }
             .padding(20)

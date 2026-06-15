@@ -95,15 +95,15 @@ struct RoutePreviewView: View {
                             .padding(.vertical, 16)
                             .buttonStyle(.glass)
 
-                        // Primary CTA: prominent accent glass.
+                        // Primary CTA: canonical accent glass — fill + AA-legible
+                        // on-fill label supplied by the style (no .tint/.glassProminent).
                         Button("Start") {
                             onStart(activeRoute)
                         }
                         .font(.body.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .buttonStyle(.glassProminent)
-                        .tint(SteddiTheme.accent)
+                        .buttonStyle(.steddiPrimary)
                     }
                 }
                 .padding(24)
