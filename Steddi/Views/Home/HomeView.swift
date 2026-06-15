@@ -658,6 +658,10 @@ struct HomeView: View {
         self.activeSavedPolyline = nil
         self.activeRoadConditions = []
         self.navigationRoute = route
+        // New trip: the off-route recovery cap is PER-TRIP, so reset it here.
+        // Without this it accumulates across every drive and permanently
+        // disables recovery after a few lifetime deviations.
+        recoveriesThisTrip = 0
         let engine = NavigationEngine()
         engine.startNavigation(route: route)
         self.navigationEngine = engine
@@ -1160,6 +1164,8 @@ struct HomeView: View {
 
         self.activeSavedPolyline = polyline
         self.navigationRoute = nil
+        // New trip: reset the per-trip off-route recovery cap (see beginNavigation).
+        recoveriesThisTrip = 0
 
         let engine = NavigationEngine()
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
