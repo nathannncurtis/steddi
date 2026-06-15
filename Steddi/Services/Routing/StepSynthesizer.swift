@@ -69,12 +69,14 @@ enum StepSynthesizer {
             guard coords.count >= 2 else { continue }
 
             // Trim leading partial edge: travel begins at startFraction along it.
+            // If trimming can't resolve a cut point, keep the FULL edge geometry
+            // rather than silently truncating it to a single point or dropping it.
             if i == 0 && result.startFraction > 0 {
-                coords = trimLeading(coords, fraction: result.startFraction)
+                coords = trimLeading(coords, fraction: result.startFraction) ?? coords
             }
             // Trim trailing partial edge: travel ends at endFraction along it.
             if i == result.edgePath.count - 1 && result.endFraction < 1 {
-                coords = trimTrailing(coords, fraction: result.endFraction)
+                coords = trimTrailing(coords, fraction: result.endFraction) ?? coords
             }
             guard coords.count >= 1 else { continue }
 
@@ -199,8 +201,11 @@ enum StepSynthesizer {
     }
 
     /// Keep the portion of an edge's geometry from `fraction` (arc-length) to the
-    /// end, inserting the interpolated start point.
-    private static func trimLeading(_ coords: [CLLocationCoordinate2D], fraction: Double) -> [CLLocationCoordinate2D] {
+    /// end, inserting the interpolated start point. Returns `coords` unchanged
+    /// when no trim is needed, and `nil` if the loop exhausts without locating a
+    /// cut point so the caller can fall back to the full geometry instead of a
+    /// silently truncated single point.
+    private static func trimLeading(_ coords: [CLLocationCoordinate2D], fraction: Double) -> [CLLocationCoordinate2D]? {
         guard coords.count >= 2, fraction > 0, fraction < 1 else { return coords }
         let cumulative = RouteGeometry.cumulativeDistances(coords)
         guard let total = cumulative.last, total > 0 else { return coords }
@@ -211,12 +216,14 @@ enum StepSynthesizer {
             let point = interpolate(coords[i], coords[i + 1], t)
             return [point] + Array(coords[(i + 1)...])
         }
-        return [coords[coords.count - 1]]
+        return nil
     }
 
     /// Keep the portion of an edge's geometry from the start to `fraction`
-    /// (arc-length), inserting the interpolated end point.
-    private static func trimTrailing(_ coords: [CLLocationCoordinate2D], fraction: Double) -> [CLLocationCoordinate2D] {
+    /// (arc-length), inserting the interpolated end point. Returns `coords`
+    /// unchanged when no trim is needed, and `nil` if the loop exhausts without
+    /// locating a cut point so the caller can fall back to the full geometry.
+    private static func trimTrailing(_ coords: [CLLocationCoordinate2D], fraction: Double) -> [CLLocationCoordinate2D]? {
         guard coords.count >= 2, fraction > 0, fraction < 1 else { return coords }
         let cumulative = RouteGeometry.cumulativeDistances(coords)
         guard let total = cumulative.last, total > 0 else { return coords }
@@ -227,7 +234,7 @@ enum StepSynthesizer {
             let point = interpolate(coords[i], coords[i + 1], t)
             return Array(coords[0...i]) + [point]
         }
-        return [coords[0]]
+        return nil
     }
 
     private static func interpolate(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D, _ t: Double) -> CLLocationCoordinate2D {
