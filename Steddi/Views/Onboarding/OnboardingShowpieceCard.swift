@@ -37,13 +37,17 @@ struct OnboardingShowpieceCard<Content: View>: View {
     /// for this beat (no hairline shown).
     let autoplayProgress: Double?
 
+    /// The shared namespace for the morphing glass id. Hoisted from
+    /// `OnboardingView` so the final fall-into-Home settle can morph this same
+    /// card into the "Where to?" pill (one namespace, one id → real
+    /// matchedGeometry tween). One id, one namespace, so the glass treats every
+    /// beat's card *and* the settle pill as the same element and tweens between
+    /// their geometries.
+    let beatCardNamespace: Namespace.ID
+
     /// The inner copy/controls for the current beat. Cross-fades on beat change
     /// (the caller applies the per-beat `.transition`); the shell morphs around it.
     @ViewBuilder let content: () -> Content
-
-    /// The shared namespace for the morphing glass id. One namespace, one id, so
-    /// the glass treats every beat's card as the *same* element and tweens it.
-    @Namespace private var beatCardNamespace
 
     /// Index of the current beat, used to drive the small per-beat parallax nudge.
     private var beatIndex: Int {

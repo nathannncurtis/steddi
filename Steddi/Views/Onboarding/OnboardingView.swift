@@ -37,6 +37,16 @@ struct OnboardingView: View {
     /// True while an autoplay dwell is running for the current beat.
     @State private var autoplayActive = false
 
+    // MARK: - Fall-into-Home settle
+
+    /// True during the final settle: the beat card collapses into the
+    /// "Where to?" search-pill silhouette before the root swaps to Home.
+    @State private var settling = false
+    /// Shared namespace for the morphing glass id — hoisted here so the same
+    /// `glassEffectID("onboarding.beatCard")` can morph from the beat card into
+    /// the settle pill (a real matchedGeometry tween in one tree).
+    @Namespace private var beatCardNamespace
+
     var body: some View {
         // Force a re-render when the in-flight accent changes so the footer,
         // chrome, and the glass card's live tint recolor during the delight beat.
@@ -45,17 +55,51 @@ struct OnboardingView: View {
             beatContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            footer
+            if !settling { footer }
         }
         .background(beatBackground.ignoresSafeArea())
-        .overlay(alignment: .topTrailing) { skipIntroButton }
-        .sheet(isPresented: $showDonation, onDismiss: completeOnboarding) {
+        .overlay(alignment: .topTrailing) { if !settling { skipIntroButton } }
+        .overlay(alignment: .top) { settlePill }
+        .sheet(isPresented: $showDonation, onDismiss: beginSettle) {
             DonationView()
         }
         .onChange(of: coordinator.currentBeat) { _, _ in
             armAutoplayIfNeeded()
         }
         .onDisappear { cancelAutoplay() }
+    }
+
+    /// The fall-into-Home settle (Option A — visual continuity): the beat card
+    /// morphs into a glass "Where to?" pill at the top-bar position, then the root
+    /// swaps to Home whose search pill is already glass at the same spot — so the
+    /// eye reads the onboarding card as having *become* the search bar. Shares the
+    /// beat card's `glassEffectID`/namespace, so it's a true matchedGeometry morph
+    /// from card-rect to pill-rect. Skipped under Reduce Motion (instant swap).
+    @ViewBuilder
+    private var settlePill: some View {
+        if settling {
+            GlassEffectContainer(spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(coordinator.selectedAccent.color)
+                    Text("Where to?")
+                        .font(SteddiTheme.heading(17))
+                        .foregroundStyle(SteddiTheme.textPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .steddiGlass(tint: nil, interactive: true, in: Capsule(),
+                             fallbackFill: SteddiTheme.surfaceSecondary)
+                .glassEffectID("onboarding.beatCard", in: beatCardNamespace)
+                .glassEffectTransition(.matchedGeometry)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 62) // align with Home's top bar (status-bar inset + 8)
+            .transition(.opacity)
+            .accessibilityHidden(true)
+        }
     }
 
     /// The hero owns its own full-bleed map; the showcase/ask beats float over
@@ -81,15 +125,19 @@ struct OnboardingView: View {
                 // Every non-hero beat lives inside the single morphing Liquid
                 // Glass card. The shell persists across beats (shared
                 // glassEffectID) and morphs its geometry while the inner copy
-                // cross-fades.
-                OnboardingShowpieceCard(
-                    beat: coordinator.currentBeat,
-                    accent: coordinator.selectedAccent.color,
-                    autoplayProgress: autoplayHairlineProgress
-                ) {
-                    innerBeatContent
-                        .id(coordinator.currentBeat)
-                        .transition(beatTransition)
+                // cross-fades. During the settle the card is removed so the same
+                // glass id migrates to the "Where to?" pill (matchedGeometry).
+                if !settling {
+                    OnboardingShowpieceCard(
+                        beat: coordinator.currentBeat,
+                        accent: coordinator.selectedAccent.color,
+                        autoplayProgress: autoplayHairlineProgress,
+                        beatCardNamespace: beatCardNamespace
+                    ) {
+                        innerBeatContent
+                            .id(coordinator.currentBeat)
+                            .transition(beatTransition)
+                    }
                 }
             }
         }
@@ -305,6 +353,25 @@ struct OnboardingView: View {
 
         if let phone = coordinator.emergencyContact {
             UserDefaults.standard.set(phone, forKey: "steddi.emergencyContact")
+        }
+    }
+
+    /// After the donation sheet dismisses, play the fall-into-Home settle (the
+    /// beat card morphs into the "Where to?" pill) and *then* flip the gate so the
+    /// root swaps to Home — whose search pill is already glass at the same spot —
+    /// reading as one continuous move. Under Reduce Motion the morph is skipped and
+    /// the gate flips on the next runloop (an instant cross-dissolve to Home).
+    private func beginSettle() {
+        guard SteddiMotion.shouldAnimate else {
+            completeOnboarding()
+            return
+        }
+        withAnimation(TransitionKit.onboardingMorph) {
+            settling = true
+        }
+        // Hold the morph briefly, then hand off to Home.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            completeOnboarding()
         }
     }
 
