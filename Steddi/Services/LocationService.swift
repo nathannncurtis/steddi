@@ -15,6 +15,7 @@ final class LocationService {
     private let delegate: LocationDelegate
     private let locationManager = CLLocationManager()
     private var recordedPoints: [GPSPoint] = []
+    private var orientationObserver: NSObjectProtocol?
 
     init() {
         delegate = LocationDelegate()
@@ -50,7 +51,7 @@ final class LocationService {
         // Keep the magnetometer reference frame in sync with how the phone is
         // actually held — a portrait frame in a landscape mount skews headings.
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-        NotificationCenter.default.addObserver(
+        orientationObserver = NotificationCenter.default.addObserver(
             forName: UIDevice.orientationDidChangeNotification,
             object: nil,
             queue: .main
@@ -59,6 +60,13 @@ final class LocationService {
                 self?.updateHeadingOrientation()
             }
         }
+    }
+
+    deinit {
+        if let orientationObserver {
+            NotificationCenter.default.removeObserver(orientationObserver)
+        }
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
     }
 
     func requestPermission() {

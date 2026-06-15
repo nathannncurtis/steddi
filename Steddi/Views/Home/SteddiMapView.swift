@@ -108,6 +108,15 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
     private var lastPoseTimestamp: Date?
     private var lastFrameTimestamp: TimeInterval = 0
     private var hasSmoothedBearing = false
+
+    deinit {
+        // Both display links retain their proxy target on the run loop; the
+        // observers retain self. Tear them all down so a deallocated container
+        // doesn't leave links firing or stale observers registered.
+        displayLink?.invalidate()
+        drawOnLink?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+    }
     private var lastDisplayCoordinate: CLLocationCoordinate2D?
     /// Per-frame camera writes are suppressed until this time while a one-shot
     /// camera animation (recenter, 2D/3D toggle, nav start) is in flight.
