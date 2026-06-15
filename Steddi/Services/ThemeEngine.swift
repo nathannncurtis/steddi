@@ -334,7 +334,7 @@ final class ThemeEngine {
         timestamp: Date
     ) -> Double {
         var utcCal = Calendar(identifier: .gregorian)
-        utcCal.timeZone = TimeZone(identifier: "UTC")!
+        utcCal.timeZone = TimeZone(identifier: "UTC") ?? TimeZone(secondsFromGMT: 0) ?? .gmt
 
         let dayOfYear = Double(utcCal.ordinality(of: .day, in: .year, for: timestamp) ?? 1)
         let declination = -23.44 * cos(2.0 * .pi / 365.0 * (dayOfYear + 10))
