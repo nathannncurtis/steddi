@@ -2,13 +2,21 @@ import ActivityKit
 import WidgetKit
 import SwiftUI
 
+/// Deep link that returns the driver to the live turn-by-turn UI when they tap
+/// the navigation Live Activity. The bare `navigate` host (no params) just
+/// foregrounds the app — HomeView already shows the nav overlay while a session
+/// is active — and is routed by `PhoneSceneDelegate.handleURL`, matching the
+/// CarPlay dashboard's `DashboardLink.showNavigation`.
+private let navReentryURL = URL(string: "steddi://navigate")
+
 /// The Live Activity widget for active navigation.
 /// Shows on the Lock Screen and Dynamic Island.
 struct SteddiNavigationActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: NavigationAttributes.self) { context in
-            // Lock Screen presentation
+            // Lock Screen presentation — tap returns to the live nav UI.
             LockScreenView(state: context.state, attributes: context.attributes)
+                .widgetURL(navReentryURL)
         } dynamicIsland: { context in
             DynamicIsland {
                 // Expanded view
@@ -37,6 +45,8 @@ struct SteddiNavigationActivity: Widget {
                             .foregroundStyle(.white.opacity(0.8))
                             .lineLimit(1)
                     }
+                    // Tapping the expanded island returns to the live nav UI.
+                    .widgetURL(navReentryURL)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
@@ -61,6 +71,7 @@ struct SteddiNavigationActivity: Widget {
                 Image(systemName: context.state.maneuverSymbol)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769)) // lavender
+                    .widgetURL(navReentryURL)
             } compactTrailing: {
                 Text("\(context.state.etaMinutes)m")
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
@@ -69,6 +80,7 @@ struct SteddiNavigationActivity: Widget {
                 Image(systemName: context.state.maneuverSymbol)
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769))
+                    .widgetURL(navReentryURL)
             }
         }
     }
