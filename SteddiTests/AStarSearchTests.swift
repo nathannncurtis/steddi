@@ -312,7 +312,8 @@ struct AStarSearchTests {
 
     @Test("mid-edge start and end on the SAME edge")
     func midEdgeSameEdge() {
-        // One long primary edge; start at 0.25 and end at 0.75 along it.
+        // One long primary edge (bidirectional, so a forward AND reverse edge
+        // both exist over the same geometry). Start at ~0.25 and end at ~0.75.
         let graph = buildGraph(
             node(1, 0.0, 0.0),
             node(2, 0.0, 0.004),
@@ -321,11 +322,22 @@ struct AStarSearchTests {
         let start = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.001)
         let end = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.003)
         let result = search.search(from: .coordinate(start), to: .coordinate(end), in: graph, cost: cost)
-        // Same forward edge: start snaps to fraction ~0.25 on edge 1->2, end ~0.75.
-        // The search must reach node 2 then traverse the trailing partial — but
-        // since both snap to the same forward edge, the path is valid and cost > 0.
+        // Both snap to the same directed edge. The journey lives entirely inside
+        // that one edge: the path must be a single edge with the two endpoint
+        // nodes, NOT a round-trip [A,B,A,B] over the bidirectional pair.
         guard let result else { Issue.record("no same-edge path"); return }
+        #expect(result.edgePath.count == 1)
+        #expect(result.nodePath.count == 2)
+        // No node may repeat — a round-trip reconstruction would duplicate one.
+        #expect(Set(result.nodePath).count == result.nodePath.count)
+        #expect(result.startFraction < result.endFraction)
         #expect(result.totalCost > 0)
+        // Sub-edge cost is the fraction of the full edge actually travelled, well
+        // under the full single-edge traversal cost.
+        let full = cost.edgeCost(graph.edges[Int(result.edgePath[0])], in: graph)
+        #expect(result.totalCost < full)
+        let expected = full * (result.endFraction - result.startFraction)
+        #expect(abs(result.totalCost - expected) < 1e-6)
     }
 
     @Test("node-to-same-node degenerate path has zero cost")

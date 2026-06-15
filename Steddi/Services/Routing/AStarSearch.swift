@@ -145,6 +145,26 @@ struct AStarSearch: PathSearch {
         // the (possibly partial) start edge alone, handled below in `reconstruct`.
         let target = goal.targetCoordinate
 
+        // Same-edge degenerate: start and end snap to the SAME directed edge with
+        // the start at/behind the end. The whole journey lives inside that one
+        // edge, so A* must not run — reaching `goal.node` (= the edge's upstream
+        // node) only via the reverse edge would synthesize a topologically invalid
+        // round-trip like [A,B,A,B]. Return the direct sub-edge path instead.
+        if start.leadingEdge >= 0,
+           start.leadingEdge == goal.trailingEdge,
+           start.startFraction <= goal.endFraction {
+            let edge = graph.edges[Int(start.leadingEdge)]
+            let full = cost.edgeCost(edge, in: graph)
+            let subCost = full.isFinite ? full * (goal.endFraction - start.startFraction) : .infinity
+            return SearchResult(
+                nodePath: [edge.from, edge.to],
+                edgePath: [start.leadingEdge],
+                totalCost: subCost,
+                startFraction: start.startFraction,
+                endFraction: goal.endFraction
+            )
+        }
+
         let nodeCount = graph.nodes.count
         var gScore = [Double](repeating: .infinity, count: nodeCount)
         var cameFromEdge = [Int32](repeating: -1, count: nodeCount)   // edge index into graph.edges
