@@ -442,15 +442,24 @@ final class NavigationStateManager {
         WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
     }
 
-    /// Navigation ended. Keep the last live ETA + its timestamp so the widget
-    /// shows the most recent known commute ETA when idle (the whole point of a
-    /// commute-ETA widget) — flagged as not-live and with a freshness stamp so
-    /// the widget can present it as "last known" rather than a live number.
+    /// Navigation ended. The last value synced to the widget was the just-ended
+    /// drive's REMAINING ETA (near-arrival, ~1-2 min) — that's the time left on
+    /// a finished drive, NOT the next commute's duration, so carrying it forward
+    /// as the idle "Next Commute" ETA is wrong (and the fresh kETAUpdatedAt
+    /// stamp keeps isStale false for 30 min, so it's presented as live). Clear
+    /// the live ETA on drive end so the widget shows "No ETA yet" until the idle
+    /// path (updateIdleCommuteETA / refreshIdleCommuteETA on next foreground or
+    /// the background commute-check) repopulates a real pre-drive ETA for the
+    /// NEXT commute. The destination/commute name are left in place as harmless
+    /// labels that the next idle update overwrites.
     private func clearWidgetSession() {
         lastWidgetETAMinutes = nil
         widgetDefaults?.set(false, forKey: Self.kIsNavigating)
-        // Intentionally NOT clearing kETAMinutes/kDestinationName/kCommuteName:
-        // the last-known commute ETA is exactly what the idle widget should show.
+        // Drop the terminal live ETA + its stamp (widget renders 0 as "No ETA
+        // yet"); do NOT leave the finished drive's remaining minutes posing as
+        // the upcoming commute's ETA.
+        widgetDefaults?.set(0, forKey: Self.kETAMinutes)
+        widgetDefaults?.removeObject(forKey: Self.kETAUpdatedAt)
         WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
     }
 

@@ -468,6 +468,98 @@ struct NavigationStateManagerWidgetSyncTests {
 
         #expect(defaults.integer(forKey: "widget.etaMinutes") == 42)
     }
+
+    /// Bug: after a drive, the last live sync wrote the near-arrival remaining
+    /// ETA (~1-2 min) plus a fresh timestamp. clearWidgetSession kept both, so
+    /// the idle "Next Commute" widget showed the finished drive's terminal
+    /// minutes as the upcoming commute's ETA — and the fresh stamp kept isStale
+    /// false for 30 min, presenting it as live. On end the live ETA must be
+    /// cleared (0 -> widget renders "No ETA yet") and its stamp dropped, so the
+    /// idle path can repopulate a real pre-drive ETA.
+    @Test("Ending navigation clears the terminal live ETA so it isn't shown as the next commute")
+    func endClearsTerminalLiveETA() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        let engine = startedEngine(etaMinutes: 0)
+        let manager = NavigationStateManager()
+
+        // Begin a session, then sync a near-arrival "remaining" ETA as the last
+        // live write before the drive ends.
+        manager.startObserving(engine: engine, destinationName: "Office")
+        defaults.set(2, forKey: "widget.etaMinutes")
+        defaults.set(Date().timeIntervalSince1970, forKey: "widget.etaUpdatedAt")
+
+        // Drive ends.
+        manager.stopObserving()
+
+        // The terminal remaining-ETA must NOT survive as the idle value.
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 0)
+        // And no recent timestamp should be left to defeat the freshness guard.
+        #expect(defaults.double(forKey: "widget.etaUpdatedAt") == 0)
+        // Session flagged idle.
+        #expect(defaults.bool(forKey: "widget.isNavigating") == false)
+
+        engine.stopNavigation()
+    }
+}
+
+// MARK: - Active Trip Teardown Tests
+
+@Suite("NavigationStateManager active trip teardown")
+@MainActor
+struct NavigationStateManagerTripTeardownTests {
+
+    private func startedEngine() -> NavigationEngine {
+        let engine = NavigationEngine()
+        let polyline = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        let steps = [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline[0], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[10], maneuverSymbol: "flag.fill"),
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+        return engine
+    }
+
+    /// Deleting the actively-navigated trip routes through endActiveTripSession.
+    /// It must stop the engine, end the session (isNavigating -> false, the edge
+    /// HomeView observes to tear down its own overlay/@State), and clear
+    /// activeTrip so nothing is left pointing at the deleted model.
+    @Test("endActiveTripSession stops the engine and clears the session")
+    func endActiveTripSessionTearsDown() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        let trip = Trip(name: "Errands")
+
+        manager.startObserving(engine: engine, trip: trip)
+        #expect(manager.isNavigating == true)
+        #expect(manager.activeTrip != nil)
+        #expect(engine.isNavigating == true)
+
+        manager.endActiveTripSession()
+
+        // Engine stopped so no further ticks fire on the deleted trip.
+        #expect(engine.isNavigating == false)
+        // isNavigating flipped false — the edge HomeView's onChange observes to
+        // drive its own teardown (overlay dismissal, GPS mode, Live Activity).
+        #expect(manager.isNavigating == false)
+        // Nothing left pointing at the model that's about to be deleted.
+        #expect(manager.activeTrip == nil)
+        #expect(manager.activeEngine == nil)
+    }
+
+    /// endActiveTripSession is the teardown HomeView keys off, so it must be
+    /// safe to call when no session is active (e.g. a stale call) without
+    /// crashing or leaving partial state.
+    @Test("endActiveTripSession is safe with no active session")
+    func endActiveTripSessionIdempotent() {
+        let manager = NavigationStateManager()
+
+        manager.endActiveTripSession()
+        manager.endActiveTripSession()
+
+        #expect(manager.isNavigating == false)
+        #expect(manager.activeTrip == nil)
+        #expect(manager.activeEngine == nil)
+    }
 }
 
 // MARK: - Session Generation Tests
