@@ -18,12 +18,25 @@ struct OnboardingHeroView: View {
     var onAnimationComplete: () -> Void
 
     @State private var copyVisible = false
+    /// Flips when the route finishes drawing, materializing the wordmark plate.
+    @State private var wordmarkVisible = false
+    /// Namespace for the wordmark plate's `.materialize` glass transition.
+    @Namespace private var wordmarkNamespace
 
     var body: some View {
         ZStack {
+            // VIDEO-DROP-IN: this `OnboardingHeroMap` is the single seam for a
+            // future looping film. To swap the MapKit draw-on for a real film,
+            // replace `OnboardingHeroMap` with an `AVPlayerLayer`-backed
+            // `UIViewRepresentable` (looping muted `AVPlayer`,
+            // `videoGravity = .resizeAspectFill`, `actionAtItemEnd = .none` + a
+            // loop observer) behind the same dark scrim and glass wordmark plate.
+            // Keep firing `onAnimationComplete` (e.g. on first frame / after a
+            // beat) so the footer + wordmark reveal still cue. Nothing else in the
+            // flow changes.
             OnboardingHeroMap(
                 reduceMotion: reduceMotion,
-                onAnimationComplete: onAnimationComplete
+                onAnimationComplete: handleDrawComplete
             )
             .ignoresSafeArea()
             .accessibilityElement()
@@ -38,11 +51,17 @@ struct OnboardingHeroView: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
 
+            // The wordmark plate materializes out of the finished route line: a
+            // glass capsule carrying the "Steddi" wordmark, springing in with a
+            // small upward settle (parallax against the static map).
             VStack {
                 Spacer()
+                wordmarkPlate
+                    .padding(.bottom, 18)
+
                 VStack(spacing: 8) {
                     Text("Your route, your rules")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
                     Text("Let's get started")
@@ -55,10 +74,41 @@ struct OnboardingHeroView: View {
                 .offset(y: copyVisible ? 0 : 12)
             }
         }
-        .onAppear {
-            guard !reduceMotion else { copyVisible = true; return }
-            withAnimation(.easeOut(duration: 0.6)) { copyVisible = true }
+    }
+
+    /// The glass wordmark plate — only present once the route draw completes, so
+    /// Liquid Glass can `.materialize` it in. Under Reduce Motion it appears
+    /// statically (the driving `withAnimation` resolves to nil).
+    @ViewBuilder
+    private var wordmarkPlate: some View {
+        if wordmarkVisible {
+            GlassEffectContainer(spacing: 12) {
+                Text("Steddi")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 12)
+                    .steddiGlass(in: Capsule(), fallbackFill: SteddiTheme.surfaceSecondary)
+                    .glassEffectID("onboarding.wordmark", in: wordmarkNamespace)
+                    .glassEffectTransition(.materialize)
+            }
+            .offset(y: wordmarkVisible ? 0 : 8)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityLabel("Steddi")
         }
+    }
+
+    /// Route draw finished: materialize the wordmark + fade the copy up, then
+    /// notify the parent so the footer's primary can pop in.
+    private func handleDrawComplete() {
+        withAnimation(TransitionKit.onboardingWordmark) {
+            wordmarkVisible = true
+        }
+        // The supporting copy fades up just behind the wordmark.
+        withAnimation(SteddiMotion.resolve(.easeOut(duration: 0.6).delay(0.15))) {
+            copyVisible = true
+        }
+        onAnimationComplete()
     }
 }
 
