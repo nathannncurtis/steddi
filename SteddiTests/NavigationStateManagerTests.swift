@@ -404,4 +404,108 @@ struct NavigationStateManagerWidgetSyncTests {
         manager.stopObserving()
         engine.stopNavigation()
     }
+
+    /// The widget showed an ETA only while actively navigating. Each live sync
+    /// now also stamps when the ETA was computed so the widget can present an
+    /// idle value as "last known" rather than a frozen live number.
+    @Test("syncFromEngine stamps the ETA update time")
+    func syncStampsUpdateTime() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        defaults.removeObject(forKey: "widget.etaUpdatedAt")
+        let engine = startedEngine(etaMinutes: 0)
+        let manager = NavigationStateManager()
+
+        let before = Date().timeIntervalSince1970
+        manager.syncFromEngine(engine)
+        let stamped = defaults.double(forKey: "widget.etaUpdatedAt")
+        #expect(stamped >= before)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// Idle widget usefulness: pushing a next-commute ETA while not navigating
+    /// writes the value the home-screen widget reads pre-drive.
+    @Test("updateIdleCommuteETA writes a glanceable ETA when not navigating")
+    func idleETAWritesWhenIdle() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        let manager = NavigationStateManager()
+        #expect(manager.isNavigating == false)
+
+        manager.updateIdleCommuteETA(commuteName: "Work", destinationName: "Office", etaMinutes: 27)
+
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 27)
+        #expect(defaults.string(forKey: "widget.commuteName") == "Work")
+        #expect(defaults.string(forKey: "widget.destinationName") == "Office")
+        #expect(defaults.bool(forKey: "widget.isNavigating") == false)
+        #expect(defaults.double(forKey: "widget.etaUpdatedAt") > 0)
+    }
+
+    /// The idle push must never clobber a live ETA mid-drive.
+    @Test("updateIdleCommuteETA is a no-op while navigating")
+    func idleETANoOpWhileNavigating() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        defaults.set(99, forKey: "widget.etaMinutes")
+        let manager = NavigationStateManager()
+        manager.isNavigating = true
+
+        manager.updateIdleCommuteETA(commuteName: "X", destinationName: "Y", etaMinutes: 5)
+
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 99)
+
+        manager.isNavigating = false
+    }
+
+    /// A non-positive idle ETA carries no information and must be ignored so the
+    /// widget keeps a previously known good value rather than going blank.
+    @Test("updateIdleCommuteETA ignores non-positive ETA")
+    func idleETAIgnoresNonPositive() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        defaults.set(42, forKey: "widget.etaMinutes")
+        let manager = NavigationStateManager()
+
+        manager.updateIdleCommuteETA(commuteName: "X", destinationName: "Y", etaMinutes: 0)
+
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 42)
+    }
+}
+
+// MARK: - Session Generation Tests
+
+@Suite("NavigationStateManager session generation")
+@MainActor
+struct NavigationStateManagerSessionGenerationTests {
+
+    private func startedEngine() -> NavigationEngine {
+        let engine = NavigationEngine()
+        let polyline = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        let steps = [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline[0], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[10], maneuverSymbol: "flag.fill"),
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+        return engine
+    }
+
+    /// CarPlay re-presents nav for each continuous trip leg by watching this
+    /// counter, since isNavigating never observably dips to false between legs.
+    @Test("startObserving bumps sessionGeneration each session")
+    func generationBumpsPerSession() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+
+        let g0 = manager.sessionGeneration
+        manager.startObserving(engine: engine)
+        let g1 = manager.sessionGeneration
+        #expect(g1 == g0 + 1)
+
+        // Simulate the inter-leg restart: startObserving again without an
+        // intervening observable isNavigating=false to the CarPlay sampler.
+        manager.startObserving(engine: engine)
+        let g2 = manager.sessionGeneration
+        #expect(g2 == g1 + 1)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
 }

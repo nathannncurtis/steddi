@@ -101,7 +101,12 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         recenterTask?.cancel()
         recenterTask = nil
         dismissNavigation()
-        NowPlayingService.shared.unregisterCommands()
+        // Do NOT unregister remote commands here. MPRemoteCommandCenter is a
+        // single process-wide singleton; the phone still needs pass-through
+        // media controls (steering-wheel/Lock Screen/Control Center) for
+        // phone-only navigation after CarPlay leaves. Tearing them down on
+        // disconnect would disable media controls for the rest of the app
+        // session. Commands were armed at launch and stay armed.
         mapController = nil
         mapTemplate = nil
         self.interfaceController = nil
@@ -274,17 +279,28 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         phoneNavWatchTask = Task { @MainActor [weak self] in
             guard let self else { return }
             var wasNavigating = self.stateManager.isNavigating
+            var lastGeneration = self.stateManager.sessionGeneration
             while !Task.isCancelled, self.interfaceController != nil {
                 try? await Task.sleep(for: .seconds(1))
                 let isNav = self.stateManager.isNavigating
+                let generation = self.stateManager.sessionGeneration
 
-                if isNav && !wasNavigating {
-                    self.showNavigationUI()
+                if isNav {
+                    if !wasNavigating {
+                        // Phone started navigating — present CarPlay nav.
+                        self.showNavigationUI()
+                    } else if generation != lastGeneration {
+                        // A new session began (e.g. the next leg of a continuous
+                        // trip) without isNavigating observably dipping to false.
+                        // Re-target the CPTrip + route overlay to the new leg.
+                        self.restartNavigationSession()
+                    }
                 } else if !isNav && wasNavigating {
                     self.dismissNavigation()
                 }
 
                 wasNavigating = isNav
+                lastGeneration = generation
             }
         }
     }
@@ -336,6 +352,49 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         subscribeLiveUpdates()
     }
 
+    /// Re-target the live CarPlay nav UI to a new session (e.g. the next leg of
+    /// a continuous trip) without tearing down the map chase-cam. Keeps the
+    /// overlay up, swaps the route overlay + CPTrip destination to the new leg,
+    /// and lets the running live-update loop rebuild maneuvers on the next tick.
+    @MainActor
+    private func restartNavigationSession() {
+        // If nav isn't currently shown (e.g. dismissed at final arrival of the
+        // prior session and never re-shown), fall back to a full presentation.
+        guard isShowingNavigation, let mapTemplate else {
+            showNavigationUI()
+            return
+        }
+        carplayLog.info("CarPlay: restartNavigationSession for new leg")
+
+        let routeCoords = stateManager.activeRouteCoords
+        if !routeCoords.isEmpty {
+            mapController?.startNavigation(routeCoords: routeCoords)
+        }
+
+        // Replace the CPTrip so the destination marker/estimates track the new
+        // leg. End the old trip before starting the new one.
+        navigationSession?.finishTrip()
+
+        let origin = MKMapItem.forCurrentLocation()
+        let destination: MKMapItem
+        if let destCoord = routeCoords.last {
+            destination = MKMapItem(location: CLLocation(latitude: destCoord.latitude, longitude: destCoord.longitude), address: nil)
+        } else {
+            destination = MKMapItem.forCurrentLocation()
+        }
+        let routeChoice = CPRouteChoice(
+            summaryVariants: ["Steddi Route"],
+            additionalInformationVariants: [],
+            selectionSummaryVariants: ["Steddi Route"]
+        )
+        let trip = CPTrip(origin: origin, destination: destination, routeChoices: [routeChoice])
+        navigationSession = mapTemplate.startNavigationSession(for: trip)
+
+        // Force the next live tick to rebuild maneuvers for the new leg.
+        lastInstruction = ""
+        lastFollowOn = ""
+    }
+
     // MARK: - Live Updates
 
     private var lastInstruction: String = ""
@@ -375,8 +434,17 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 // Update travel estimates
                 self.updateTravelEstimates()
 
-                // Check for arrival
-                if self.stateManager.hasArrived {
+                // Arrival handling: only tear CarPlay nav down on *final*
+                // arrival. For a continuous-mode trip, an intermediate leg
+                // latches hasArrived while isNavigating stays true (the next leg
+                // restarts the session in the same main-actor turn). Dismissing
+                // here would leave CarPlay on the idle map for every subsequent
+                // leg, since the 1 Hz phone-nav watcher never sees the transient
+                // isNavigating false. Keep the overlay live across legs; the
+                // watcher re-targets the CPTrip on the new sessionGeneration.
+                // The final leg ends the session (isNavigating -> false), and the
+                // watcher dismisses then.
+                if self.stateManager.hasArrived && !self.stateManager.isNavigating {
                     self.dismissNavigation()
                     break
                 }

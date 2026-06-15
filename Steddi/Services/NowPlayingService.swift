@@ -120,7 +120,15 @@ final class NowPlayingService {
         commandCenter.skipBackwardCommand.preferredIntervals = [NSNumber(value: seekIncrement)]
     }
 
-    /// Unregister when CarPlay disconnects.
+    /// Disable all remote commands.
+    ///
+    /// NOTE: deliberately NOT called on CarPlay disconnect. MPRemoteCommandCenter
+    /// is a single process-wide singleton shared by phone and CarPlay; disabling
+    /// it when CarPlay leaves would kill pass-through media controls for the rest
+    /// of the app session (including phone-only navigation, which wants them per
+    /// the music-ducking spec). Commands are armed once at launch and stay armed.
+    /// This remains only for an explicit full media-control shutdown, if ever
+    /// needed; today it has no callers.
     func unregisterCommands() {
         guard isRegistered else { return }
         isRegistered = false
