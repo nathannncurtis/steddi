@@ -141,21 +141,28 @@ struct SteddiNavOverlay: View {
     private var portraitNavLayout: some View {
         ZStack {
             VStack(spacing: 0) {
-                topBanner
-                    .padding(.horizontal, 16)
-                    .padding(.top, 60)
+                // The stacked instruction banners read as one cohesive glass
+                // column rather than separate slabs.
+                GlassEffectContainer(spacing: 6) {
+                    VStack(spacing: 0) {
+                        topBanner
+                            .glassEffectID("banner.top", in: bannerGlassNamespace)
+                            .padding(.top, 60)
 
-                if let tripContext {
-                    tripLegBanner(tripContext)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 6)
-                }
+                        if let tripContext {
+                            tripLegBanner(tripContext)
+                                .glassEffectID("banner.tripLeg", in: bannerGlassNamespace)
+                                .padding(.top, 6)
+                        }
 
-                if !engine.followOnInstruction.isEmpty {
-                    followOnBanner
-                        .padding(.horizontal, 16)
-                        .padding(.top, 6)
+                        if !engine.followOnInstruction.isEmpty {
+                            followOnBanner
+                                .glassEffectID("banner.followOn", in: bannerGlassNamespace)
+                                .padding(.top, 6)
+                        }
+                    }
                 }
+                .padding(.horizontal, 16)
 
                 if !engine.roadName.isEmpty {
                     streetNameCapsule
@@ -404,19 +411,9 @@ struct SteddiNavOverlay: View {
             Spacer()
         }
         .padding(20)
-        .background {
-            RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                        .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.82, highContrast: highContrast)))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                        .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.15, highContrast: highContrast)), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
-        }
+        // Single neutral glass layer replaces the old material+surface double
+        // background — legibility over the map matters more than tint here.
+        .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.cardShape)
     }
 
     // MARK: - Trip Leg Banner
@@ -444,14 +441,7 @@ struct SteddiNavOverlay: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .background {
-            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.8, highContrast: highContrast)))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                        .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.12, highContrast: highContrast)), lineWidth: 1)
-                )
-        }
+        .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.mediumShape)
     }
 
     // MARK: - Follow-On Banner
@@ -472,14 +462,7 @@ struct SteddiNavOverlay: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background {
-            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.75, highContrast: highContrast)))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                        .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.08, highContrast: highContrast)), lineWidth: 1)
-                )
-        }
+        .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.mediumShape, fallbackStrokeOpacity: 0.08)
     }
 
     // MARK: - Street Name Capsule
@@ -490,14 +473,7 @@ struct SteddiNavOverlay: View {
             .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
             .padding(.horizontal, 16)
             .padding(.vertical, 7)
-            .background {
-                Capsule()
-                    .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.85, highContrast: highContrast)))
-                    .overlay(
-                        Capsule()
-                            .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.25, highContrast: highContrast)), lineWidth: 1)
-                    )
-            }
+            .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.25)
     }
 
     // MARK: - Speed Camera Banner
@@ -527,19 +503,9 @@ struct SteddiNavOverlay: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
-        .background {
-            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                        .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.85, highContrast: highContrast)))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
-                        .stroke(camera.kind.color.opacity(SteddiTheme.navStrokeOpacity(0.35, highContrast: highContrast)), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
-        }
+        // Single glass layer tinted with the camera's semantic color, keeping
+        // the kind's color identity that the old stroke carried.
+        .steddiGlass(tint: camera.kind.color, interactive: false, in: SteddiGlass.mediumShape, fallbackStrokeOpacity: 0.35)
     }
 
     // MARK: - Floating Buttons
@@ -718,19 +684,13 @@ struct SteddiNavOverlay: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background {
-            UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                        .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.82, highContrast: highContrast)))
-                )
-                .overlay(
-                    UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
-                        .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.08, highContrast: highContrast)), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.35), radius: 20, y: -5)
-        }
+        // Single neutral glass layer replaces the material+surface double bg.
+        .steddiGlass(
+            tint: nil,
+            interactive: false,
+            in: UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge),
+            fallbackStrokeOpacity: 0.08
+        )
     }
 
     // MARK: - Speedometer
@@ -922,12 +882,8 @@ struct SteddiNavOverlay: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background {
-            Capsule()
-                .fill(SteddiTheme.surfacePrimary.opacity(0.95))
-                .overlay(Capsule().stroke(SteddiTheme.sage.opacity(0.3), lineWidth: 1))
-                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
-        }
+        // Neutral glass capsule; the sage checkmark icon carries the meaning.
+        .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.3)
     }
 
     // MARK: - Reroute Loop

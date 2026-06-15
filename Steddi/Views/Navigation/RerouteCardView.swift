@@ -94,15 +94,8 @@ struct RerouteCardView: View {
                 }
             }
             .padding(20)
-            .background {
-                RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                    .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.95, highContrast: highContrast)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SteddiTheme.radiusCard)
-                            .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.12, highContrast: highContrast)), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.4), radius: 16, y: 4)
-            }
+            // Accent-tinted glass — this is a delight/suggestion moment.
+            .steddiGlass(tint: SteddiTheme.accent, interactive: false, in: SteddiGlass.cardShape)
             .padding(.horizontal, 16)
             // Slight Y overshoot on entrance for delight (gated by Reduce Motion).
             .scaleEffect(didSpringIn ? 1.0 : 0.92)
