@@ -251,6 +251,17 @@ final class NavigationEngine {
         locationUpdateCount = 0
         alertedConditionIDs.removeAll()
         alertedCameraIDs.removeAll()
+
+        // Release the off-route closure. It is set in HomeView and captures a
+        // copy of the SwiftUI view, whose `@State` box strongly holds this
+        // engine — a retain cycle (engine → closure → view → State box → engine)
+        // that would otherwise keep every finished engine and its captured view
+        // alive. Clearing it at the authoritative teardown point breaks the
+        // cycle; HomeView re-wires it when it starts the next session. The other
+        // wired closures (speed-limit/camera/road-condition providers) capture
+        // only singletons and value data, form no cycle, and are deliberately
+        // left intact so a stop()/start() reroute on the same engine keeps them.
+        onOffRoute = nil
     }
 
     // MARK: - Location Updates
