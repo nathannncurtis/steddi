@@ -287,14 +287,25 @@ struct NavigationEngineSpeedLimitTests {
         #expect(NavigationEngine.estimateSpeedLimit(from: "Bear left onto Country Club Dr") == 35)
     }
 
-    @Test("Lane abbreviation is 35")
+    @Test("Lane abbreviation is residential 25")
     func laneAbbreviation() {
-        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn onto Maple Ln") == 35)
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn onto Maple Ln") == 25)
     }
 
-    @Test("Court abbreviation is 35")
+    @Test("Court abbreviation is residential 25")
     func courtAbbreviation() {
-        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn left onto Oak Ct") == 35)
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn left onto Oak Ct") == 25)
+    }
+
+    @Test("Way is residential 25")
+    func wayIsResidential() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn left onto Bronson Way") == 25)
+    }
+
+    @Test("Place and Circle are residential 25")
+    func placeAndCircleAreResidential() {
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn right onto Sunset Pl") == 25)
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Continue onto Harbor Circle") == 25)
     }
 
     @Test("Full street word is 35")
@@ -309,12 +320,20 @@ struct NavigationEngineSpeedLimitTests {
 
     @Test("st inside a word is not a street")
     func stInsideWord() {
-        #expect(NavigationEngine.estimateSpeedLimit(from: "Head west") == 45)
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Head west") == 30)
     }
 
-    @Test("Word starting with st is not a street")
+    @Test("Standish Way: leading st not a street, Way makes it residential")
     func wordStartingWithSt() {
-        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn onto Standish Way") == 45)
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Turn onto Standish Way") == 25)
+    }
+
+    @Test("way inside a word is not residential (Broadway/Parkway)")
+    func wayInsideWord() {
+        // No word boundary before "way" in Broadway -> not residential (default).
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Continue on Broadway") == 30)
+        // Parkway is an arterial tier, caught before the residential check.
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Continue on Chino Hills Parkway") == 45)
     }
 
     @Test("Bare ramp is 40")
@@ -327,9 +346,9 @@ struct NavigationEngineSpeedLimitTests {
         #expect(NavigationEngine.estimateSpeedLimit(from: "Merge left") == 40)
     }
 
-    @Test("Unknown instruction defaults to 45")
+    @Test("Unknown instruction defaults to urban 30")
     func unknownDefault() {
-        #expect(NavigationEngine.estimateSpeedLimit(from: "Make a U-turn") == 45)
+        #expect(NavigationEngine.estimateSpeedLimit(from: "Make a U-turn") == 30)
     }
 
     @Test("Turn right onto Main St is 35")

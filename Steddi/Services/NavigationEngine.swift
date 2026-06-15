@@ -643,9 +643,15 @@ final class NavigationEngine {
         // classifies by the road, not the merge.
         if lower.contains("i-") || lower.contains("interstate") || lower.contains("freeway") || lower.contains("motorway") || lower.contains("us-") || lower.contains("ca-") || lower.contains("sr-") || lower.contains("highway") { return 65 }
         if lower.contains("state route") || lower.contains("expressway") || lower.contains("pkwy") || lower.contains("parkway") || lower.contains("blvd") || lower.contains("boulevard") { return 45 }
-        if lower.contains("ave") || lower.contains("avenue") || lower.contains("street") || lower.contains("road") || lower.contains("drive") || lower.contains("lane") || lower.contains("court") || lower.range(of: #"\b(st|rd|dr|ln|ct)\b"#, options: .regularExpression) != nil { return 35 }
+        // Residential street types — small, low-speed roads (matches OSM's
+        // `residential` default of 25). Word-boundary matched so "Way" lands
+        // here while "Parkway"/"Broadway" do not (and parkway is caught above).
+        if lower.range(of: #"\b(way|pl|place|ter|terrace|cir|circle|cove|loop|trail|ln|lane|ct|court)\b"#, options: .regularExpression) != nil { return 25 }
+        if lower.contains("ave") || lower.contains("avenue") || lower.contains("street") || lower.contains("road") || lower.contains("drive") || lower.range(of: #"\b(st|rd|dr)\b"#, options: .regularExpression) != nil { return 35 }
         if lower.contains("ramp") || lower.contains("merge") { return 40 }
-        return 45
+        // Unclassifiable instruction (no road type, e.g. "Head west"): a sane
+        // urban surface-street default, never above the named-street tiers.
+        return 30
     }
 
     nonisolated static func extractRoadName(from instruction: String) -> String {
