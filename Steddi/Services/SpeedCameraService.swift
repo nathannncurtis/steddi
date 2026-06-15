@@ -518,9 +518,14 @@ final class SpeedCameraService {
 /// Same shape as `RoadConditionGridIndex`, but unifies two source types into one
 /// list of `SpeedCameraAlert` so the proximity check is source-agnostic.
 struct SpeedCameraGridIndex {
-    /// Degrees per cell. ~0.0025° ≈ 278m N/S, comfortably above the alert
-    /// threshold so the center-plus-neighbors search can't miss a hit.
-    static let cellSizeDegrees = 0.0025
+    /// Degrees per cell. The center-plus-8-neighbors search only guarantees a
+    /// hit out to ONE cell width (worst case: the query sits at its cell edge),
+    /// and that width is smallest in longitude at high latitudes. To never miss
+    /// a camera inside the ~350m alert radius, the cell must exceed 350m on its
+    /// smallest axis across US latitudes: 0.005° ≈ 556m N/S, and ≈365m E/W even
+    /// at ~49°N (cos·111.32km·0.005). The old 0.0025° (~230m E/W in SoCal) could
+    /// drop a camera 230–350m away that sat near a cell boundary.
+    static let cellSizeDegrees = 0.005
 
     private let cameras: [SpeedCameraAlert]
     private let grid: [GridKey: [Int]]
