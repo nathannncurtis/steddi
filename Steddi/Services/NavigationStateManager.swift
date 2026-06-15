@@ -538,6 +538,23 @@ final class NavigationStateManager {
         WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
     }
 
+    /// Stale-session guard for launch. If the app was killed mid-drive (OOM /
+    /// watchdog), the teardown paths that clear `kIsNavigating` never ran, so the
+    /// App Group keeps `kIsNavigating == true` plus a near-arrival ETA with a
+    /// recent stamp — and the widget then renders a phantom "Navigating" card
+    /// with a finished drive's ~1-2 min remaining presented as a live ETA
+    /// indefinitely (the idle refresh only runs when a commute departure is
+    /// pending). At launch we are by definition not yet in a live session, so if
+    /// `isNavigating` is false reconcile the widget to a known-idle baseline.
+    /// Mirrors the Live Activity orphan sweep already run at launch. Safe no-op
+    /// when actually navigating (a CarPlay-first relaunch into an active drive),
+    /// since the next sync immediately repopulates the live values.
+    func reconcileWidgetSessionAtLaunch() {
+        guard !isNavigating else { return }
+        guard widgetDefaults?.bool(forKey: Self.kIsNavigating) == true else { return }
+        clearWidgetSession()
+    }
+
     // MARK: - Idle Commute ETA (widget pre-drive)
 
     /// Push a fresh "next commute" ETA snapshot to the widget while NOT
