@@ -332,7 +332,28 @@ struct AStarSearch: PathSearch {
             }
             guard snap.edge >= 0, Int(snap.edge) < graph.edges.count else { return nil }
             let edge = graph.edges[Int(snap.edge)]
-            guard Int(edge.to) >= 0, Int(edge.to) < graph.nodes.count else { return nil }
+            guard Int(edge.to) >= 0, Int(edge.to) < graph.nodes.count,
+                  Int(edge.from) >= 0, Int(edge.from) < graph.nodes.count else { return nil }
+            // Boundary snap: the projected foot landed exactly on a vertex, so the
+            // origin IS a graph node, not a mid-edge point. Resolve it as a node
+            // start (no leading partial edge) — otherwise the leading edge is drawn
+            // in full from `edge.from`, overshooting the real origin by a block.
+            //  - fraction >= 1 ⇒ snapped to the edge's TO node: stand at `edge.to`.
+            //  - fraction <= 0 ⇒ snapped to the edge's FROM node: stand at `edge.from`.
+            if snap.fraction >= 1 {
+                return ResolvedOrigin(
+                    entries: [.init(node: edge.to, g: 0, viaEdge: -1)],
+                    startFraction: 0,
+                    leadingEdge: -1
+                )
+            }
+            if snap.fraction <= 0 {
+                return ResolvedOrigin(
+                    entries: [.init(node: edge.from, g: 0, viaEdge: -1)],
+                    startFraction: 0,
+                    leadingEdge: -1
+                )
+            }
             // Mid-edge start: travel runs from the snapped point to the edge's
             // downstream node (`edge.to`). Its partial cost is the edge cost
             // scaled by the remaining fraction (1 - snap.fraction).
@@ -365,7 +386,37 @@ struct AStarSearch: PathSearch {
             }
             guard snap.edge >= 0, Int(snap.edge) < graph.edges.count else { return nil }
             let edge = graph.edges[Int(snap.edge)]
-            guard Int(edge.from) >= 0, Int(edge.from) < graph.nodes.count else { return nil }
+            guard Int(edge.from) >= 0, Int(edge.from) < graph.nodes.count,
+                  Int(edge.to) >= 0, Int(edge.to) < graph.nodes.count else { return nil }
+            // Boundary snap: the projected foot landed exactly on a vertex, so the
+            // destination IS a graph node, not a mid-edge point. Resolve it as a
+            // node end (no trailing partial edge) — otherwise the trailing edge is
+            // drawn/charged in full and the route overshoots the real destination
+            // by a block, terminating at the wrong vertex.
+            //  - fraction <= 0 ⇒ snapped to the edge's FROM node: terminate AT
+            //    `edge.from` (the overshoot bug: previously appended the whole edge
+            //    to `edge.to`).
+            //  - fraction >= 1 ⇒ snapped to the edge's TO node: terminate AT
+            //    `edge.to` directly rather than reaching `edge.from` and crossing
+            //    the full phantom edge.
+            if snap.fraction <= 0 {
+                return ResolvedGoal(
+                    node: edge.from,
+                    trailingEdge: -1,
+                    endFraction: 1,
+                    trailingCost: 0,
+                    targetCoordinate: graph.nodes[Int(edge.from)].coordinate
+                )
+            }
+            if snap.fraction >= 1 {
+                return ResolvedGoal(
+                    node: edge.to,
+                    trailingEdge: -1,
+                    endFraction: 1,
+                    trailingCost: 0,
+                    targetCoordinate: graph.nodes[Int(edge.to)].coordinate
+                )
+            }
             // Mid-edge end: A* must reach the edge's upstream node (`edge.from`),
             // then travel the partial edge cost to the snapped end. The heuristic
             // aims at `edge.from`'s coordinate so it stays a lower bound on
