@@ -18,23 +18,17 @@ enum ModelStoreLocator {
     static let storeFilename = "Steddi.store"
     static let legacyStoreFilename = "default.store"
 
-    /// Full schema for the app's model graph.
+    /// Full schema for the app's model graph. Built from the current
+    /// `VersionedSchema` so the schema and the migration plan can never drift —
+    /// every container opens the exact set of models the plan migrates.
     static var schema: Schema {
-        Schema([
-            PinnedLocation.self,
-            Commute.self,
-            Route.self,
-            DriveRecord.self,
-            NoGoZone.self,
-            CommuteTrip.self,
-            Report.self,
-            CommuteAnalyticsAggregate.self,
-            Trip.self,
-            TripStop.self,
-            RoadCondition.self,
-            CameraReport.self
-        ])
+        Schema(versionedSchema: SteddiMigrationPlan.currentSchema)
     }
+
+    /// Migration plan passed to every container so additive schema changes are
+    /// deterministic and reviewable rather than relying on implicit lightweight
+    /// migration. See `SteddiMigrationPlan`.
+    static var migrationPlan: SchemaMigrationPlan.Type { SteddiMigrationPlan.self }
 
     // MARK: - Store URLs
 
@@ -194,6 +188,7 @@ enum ModelStoreLocator {
             do {
                 let container = try ModelContainer(
                     for: schema,
+                    migrationPlan: migrationPlan,
                     configurations: [ModelConfiguration(url: url)]
                 )
                 storeLog.info("Opened SwiftData store in app group container: \(url.path)")
@@ -214,6 +209,7 @@ enum ModelStoreLocator {
         do {
             let container = try ModelContainer(
                 for: schema,
+                migrationPlan: migrationPlan,
                 configurations: [ModelConfiguration(url: legacyURL)]
             )
             storeLog.info("Opened SwiftData store at legacy location: \(legacyURL.path)")
@@ -255,6 +251,16 @@ enum ModelStoreLocator {
     /// Open a read-only container on the shared store for intents and
     /// extensions, falling back to the legacy store until the app has run
     /// its migration. Throws if no store exists on disk at all.
+    ///
+    /// The migration plan is passed for parity with the app container so the
+    /// declared current schema is the single source of truth. It does NOT let a
+    /// read-only store run a migration — an in-place migration must write the
+    /// store, which `allowsSave: false` forbids. So when the on-disk store is
+    /// behind this build's schema (the post-update window before the user has
+    /// cold-launched the app, which migrates the group store), `ModelContainer`
+    /// throws here; the caller (the commute-ETA intent) catches it and steers the
+    /// user to open the app once to finish updating. Once the app has migrated,
+    /// this open succeeds against the now-current store.
     static func makeReadOnlySharedContainer(fileManager: FileManager = .default) throws -> ModelContainer {
         guard let url = readOnlyStoreURL(
             groupURL: groupStoreURL(fileManager: fileManager),
@@ -264,7 +270,7 @@ enum ModelStoreLocator {
             throw StoreError.sharedStoreUnavailable
         }
         let config = ModelConfiguration(url: url, allowsSave: false)
-        return try ModelContainer(for: schema, configurations: [config])
+        return try ModelContainer(for: schema, migrationPlan: migrationPlan, configurations: [config])
     }
 
     enum StoreError: Error {
