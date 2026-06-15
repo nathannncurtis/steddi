@@ -39,7 +39,7 @@ struct LocationCardView<Menu: View>: View {
                         if let category, category != .other {
                             Text(category.displayName)
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(category.themeColor)
+                                .foregroundStyle(category.labelColor)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(category.themeColor.opacity(0.15), in: Capsule())
