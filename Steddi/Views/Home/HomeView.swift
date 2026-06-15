@@ -2025,8 +2025,16 @@ struct HomeView: View {
             totalDistance: total, expectedTravelTime: engine.originalExpectedTravelTime,
             recoveriesThisTrip: recoveriesThisTrip
         )
-        recoveriesThisTrip += 1
 
+        // The per-trip recovery budget (cap of 3 in RouteRecoveryEngine.choose)
+        // is meant to detect a driver who's clearly improvising, so only a
+        // recovery that actually *commits* a rejoin splice should consume it.
+        // Outcomes that produced nothing — no candidates (early return above),
+        // no usable options/abandon, or a splice bail-out — leave the budget
+        // intact so transient failures (e.g. a brief mid-drive network loss
+        // failing every fetch) don't permanently disable saved-route recovery
+        // for the rest of the trip. We increment below, only on a successful
+        // splice, keeping the accounting uniform across every non-committed path.
         switch decision {
         case .rejoin(let index):
             guard index < candidates.count, let route = routesByCandidate[index] else {
@@ -2042,7 +2050,11 @@ struct HomeView: View {
                                  at: candidates[index], steps: steps, alongs: alongs, engine: engine)
             // splice() restarts the engine on success (which clears the latch);
             // on a geometry bail-out it does not, so re-arm here to avoid a freeze.
-            if !spliced { engine.clearOffRouteRecovery() }
+            if spliced {
+                recoveriesThisTrip += 1
+            } else {
+                engine.clearOffRouteRecovery()
+            }
         case .abandonToDestination:
             // Deliberate abandon (no usable options, recovery budget spent, or
             // direct beats rejoining): no splice happens, so clear the latch to
