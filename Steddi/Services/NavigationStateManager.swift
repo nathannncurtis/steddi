@@ -16,6 +16,15 @@ final class NavigationStateManager {
     var isNavigating: Bool = false
     var isCarPlayActive: Bool = false
 
+    /// Monotonic counter bumped on every `startObserving` call. CarPlay watches
+    /// this to detect a *new* navigation session even when `isNavigating` never
+    /// dips to false between sessions — e.g. a continuous-mode trip where one
+    /// leg arrives and the next starts in the same main-actor turn, so the
+    /// 1 Hz CarPlay sampler can never observe the transient false. Without this,
+    /// CarPlay would only re-present nav on a false->true `isNavigating` edge and
+    /// would stay on the idle map for every leg after the first.
+    private(set) var sessionGeneration: Int = 0
+
     var instruction: String = ""
     var stepDistance: String = ""
     var stepDistanceRaw: Double = 0
@@ -68,6 +77,16 @@ final class NavigationStateManager {
     private static let widgetSuiteName = "group.to.nathancurtis.steddi"
     private static let widgetKind = "CommuteETAWidget"
 
+    // App Group keys the widget extension reads. Kept in sync with
+    // SteddiWidget/CommuteETAWidget.swift (WidgetKeys).
+    static let kCommuteName = "widget.commuteName"
+    static let kDestinationName = "widget.destinationName"
+    static let kIsNavigating = "widget.isNavigating"
+    static let kETAMinutes = "widget.etaMinutes"
+    /// Epoch seconds when `widget.etaMinutes` was last computed — lets the widget
+    /// show how fresh an idle ETA is instead of presenting a stale number as live.
+    static let kETAUpdatedAt = "widget.etaUpdatedAt"
+
     @ObservationIgnored
     private let widgetDefaults = UserDefaults(suiteName: NavigationStateManager.widgetSuiteName)
 
@@ -91,6 +110,9 @@ final class NavigationStateManager {
         stopObserving()
 
         isNavigating = true
+        // New session — bump the generation so CarPlay re-presents nav even when
+        // isNavigating didn't observably dip to false (continuous trip legs).
+        sessionGeneration &+= 1
         activeEngine = engine
         activeCommute = commute
         activeDirection = direction
@@ -231,8 +253,13 @@ final class NavigationStateManager {
         // the ETA captured at session start; writing the defaults alone doesn't
         // re-render the extension. Throttled to minute changes so the 2 Hz sync
         // doesn't spam WidgetKit with no-op reloads.
-        widgetDefaults?.set(engine.etaMinutes, forKey: "widget.etaMinutes")
-        widgetDefaults?.set(engine.isNavigating, forKey: "widget.isNavigating")
+        //
+        // The live ETA is also the freshest real commute ETA the app computes,
+        // so persist it (with a timestamp) as the "last known" value the widget
+        // shows when idle — that's the whole point of a commute-ETA widget.
+        widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
+        widgetDefaults?.set(Date().timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
+        widgetDefaults?.set(engine.isNavigating, forKey: Self.kIsNavigating)
         if engine.etaMinutes != lastWidgetETAMinutes {
             lastWidgetETAMinutes = engine.etaMinutes
             WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
@@ -298,28 +325,59 @@ final class NavigationStateManager {
         let resolvedDestination = destinationName ?? Self.commuteEndpointName(commute: commute, direction: direction)
 
         if let commuteName = commute?.name {
-            widgetDefaults?.set(commuteName, forKey: "widget.commuteName")
+            widgetDefaults?.set(commuteName, forKey: Self.kCommuteName)
         } else {
             // No commute (search nav) — fall back to the widget's default label
-            widgetDefaults?.removeObject(forKey: "widget.commuteName")
+            widgetDefaults?.removeObject(forKey: Self.kCommuteName)
         }
 
         if let resolvedDestination {
-            widgetDefaults?.set(resolvedDestination, forKey: "widget.destinationName")
+            widgetDefaults?.set(resolvedDestination, forKey: Self.kDestinationName)
         } else {
-            widgetDefaults?.removeObject(forKey: "widget.destinationName")
+            widgetDefaults?.removeObject(forKey: Self.kDestinationName)
         }
 
-        widgetDefaults?.set(true, forKey: "widget.isNavigating")
+        widgetDefaults?.set(true, forKey: Self.kIsNavigating)
         WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
     }
 
-    /// Navigation ended — the live ETA is meaningless now, but the names stay
-    /// so the widget keeps its commute context until the next session.
+    /// Navigation ended. Keep the last live ETA + its timestamp so the widget
+    /// shows the most recent known commute ETA when idle (the whole point of a
+    /// commute-ETA widget) — flagged as not-live and with a freshness stamp so
+    /// the widget can present it as "last known" rather than a live number.
     private func clearWidgetSession() {
         lastWidgetETAMinutes = nil
-        widgetDefaults?.set(false, forKey: "widget.isNavigating")
-        widgetDefaults?.set(0, forKey: "widget.etaMinutes")
+        widgetDefaults?.set(false, forKey: Self.kIsNavigating)
+        // Intentionally NOT clearing kETAMinutes/kDestinationName/kCommuteName:
+        // the last-known commute ETA is exactly what the idle widget should show.
+        WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
+    }
+
+    // MARK: - Idle Commute ETA (widget pre-drive)
+
+    /// Push a fresh "next commute" ETA snapshot to the widget while NOT
+    /// navigating, so the home-screen widget shows a glanceable ETA before the
+    /// drive. Callers compute the ETA with the existing commute-ETA path
+    /// (e.g. `DirectionsService.fetchDirectETA` as `CheckCommuteETAIntent` and
+    /// the background commute-check already do) and hand the result here; this
+    /// type doesn't fetch routes itself. No-op while a live session is active so
+    /// it can't clobber the live ETA.
+    ///
+    /// Intended call sites (in files owned by other areas): app foreground, the
+    /// background commute-check pass, and schedule (re)computation.
+    func updateIdleCommuteETA(commuteName: String?, destinationName: String?, etaMinutes: Int) {
+        guard !isNavigating else { return }
+        guard etaMinutes > 0 else { return }
+
+        if let commuteName {
+            widgetDefaults?.set(commuteName, forKey: Self.kCommuteName)
+        }
+        if let destinationName {
+            widgetDefaults?.set(destinationName, forKey: Self.kDestinationName)
+        }
+        widgetDefaults?.set(etaMinutes, forKey: Self.kETAMinutes)
+        widgetDefaults?.set(Date().timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
+        widgetDefaults?.set(false, forKey: Self.kIsNavigating)
         WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
     }
 
