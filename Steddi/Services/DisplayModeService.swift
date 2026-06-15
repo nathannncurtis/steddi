@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Display mode settings — Passenger and Accessibility are independent toggles.
 final class DisplayModeService {
@@ -37,9 +38,12 @@ final class DisplayModeService {
         isAccessibilityMode
     }
 
-    /// Whether to show extra contrast
+    /// Whether to show extra contrast — the app's own Accessibility mode OR the
+    /// system "Increase Contrast" (Darker Colors) setting. Drives both the glass
+    /// solid-fallback (`SteddiGlass.isAvailable`) and the high-contrast color
+    /// promotion, so an Increase-Contrast user gets opaque, legible chrome.
     var useHighContrast: Bool {
-        isAccessibilityMode
+        isAccessibilityMode || UIAccessibility.isDarkerSystemColorsEnabled
     }
 
     // MARK: - Instruction Simplifier
