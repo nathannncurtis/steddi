@@ -372,6 +372,62 @@ struct AStarSearchTests {
         #expect(abs(result.totalCost - expected) < 1e-6)
     }
 
+    @Test("destination behind the origin on a two-way street: short reverse, not overshoot + U-turn")
+    func midEdgeSameEdgeReverse() {
+        // One long two-way primary edge (forward AND reverse directed edges over
+        // the same geometry). The ORIGIN snaps AHEAD of the DESTINATION on that
+        // street: origin at arc-fraction ~0.8, destination at ~0.3. Both snap to
+        // the lower-indexed FORWARD edge, so the same-edge forward fast path is
+        // skipped (0.8 > 0.3). Pre-fix, A* could only reach the destination by
+        // driving to the block end, U-turning onto the reverse edge, and driving
+        // all the way back — a ~1.5x-block overshoot with a spurious "Make a
+        // U-turn". The fix terminates on the co-located reverse edge: a short
+        // reverse from the origin straight back to the destination.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.004),
+            way(100, [1, 2], tags: ["highway": "primary", "maxspeed": "45 mph"])
+        )
+        let origin = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0032)   // ~fraction 0.8
+        let dest = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0012)     // ~fraction 0.3
+
+        // Both endpoints snap to the SAME (forward) directed edge — the trigger.
+        guard let originSnap = graph.snap(origin, maxDistanceMeters: 200),
+              let destSnap = graph.snap(dest, maxDistanceMeters: 200) else {
+            Issue.record("snap failed"); return
+        }
+        #expect(originSnap.edge == destSnap.edge)
+        #expect(originSnap.fraction > destSnap.fraction)   // origin AHEAD of destination
+
+        guard let result = search.search(from: .coordinate(origin), to: .coordinate(dest), in: graph, cost: cost) else {
+            Issue.record("no path"); return
+        }
+        // A single short sub-segment on the reverse edge — NOT a 3-edge
+        // overshoot+U-turn round trip.
+        #expect(result.edgePath.count == 1)
+        #expect(result.nodePath.count == 2)
+        #expect(Set(result.nodePath).count == result.nodePath.count)   // no repeated node
+        #expect(result.startFraction < result.endFraction)            // travel runs the reverse way
+
+        // Cost is the short reverse (~0.5 of the block), well under both a full
+        // block traversal and the overshoot+U-turn the bug produced (~1.5 blocks).
+        let edge = graph.edges[Int(result.edgePath[0])]
+        let full = cost.edgeCost(edge, in: graph)
+        let expected = full * (result.endFraction - result.startFraction)
+        #expect(abs(result.totalCost - expected) < 1e-6)
+        #expect(result.totalCost < full)                  // less than one full block
+        #expect(result.totalCost < 0.7 * full)            // and far below the ~1.5-block overshoot
+
+        // The drawn route must start at the origin and END at the destination, with
+        // no U-turn maneuver anywhere in the synthesized steps.
+        guard let synth = StepSynthesizer.synthesize(result, in: graph) else {
+            Issue.record("synthesis failed"); return
+        }
+        #expect(RouteGeometry.haversineDistance(from: synth.coordinates.first!, to: originSnap.snapped) < 2.0)
+        #expect(RouteGeometry.haversineDistance(from: synth.coordinates.last!, to: destSnap.snapped) < 2.0)
+        #expect(!synth.steps.contains { $0.instruction.lowercased().contains("u-turn") })
+    }
+
     // MARK: - Boundary snap (endpoint projects exactly onto a graph node)
 
     /// A straight 3-edge chain 1-2-3-4 along the equator, each ~111 m primary —
