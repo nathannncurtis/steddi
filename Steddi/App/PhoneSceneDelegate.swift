@@ -215,10 +215,14 @@ private struct SteddiRootView: View {
             if let storageWarning {
                 Label(storageWarning, systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white)
+                    // White-on-red fails WCAG AA body (~3.3–4:1). Use the
+                    // AA-correct on-fill token (near-black, ~5.5:1) over the
+                    // brand warmRed fill — matching the destructive-CTA and
+                    // traffic-badge treatment.
+                    .foregroundStyle(SteddiTheme.contrastingForeground(on: SteddiTheme.warmRedRGB))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(.red.opacity(0.92), in: Capsule())
+                    .background(SteddiTheme.warmRed, in: Capsule())
                     .padding(.top, 4)
             }
         }
