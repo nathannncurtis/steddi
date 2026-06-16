@@ -499,4 +499,133 @@ struct ThemeContrastTests {
             }
         }
     }
+
+    // MARK: - Onboarding THEME beat (accent-tinted card, NO dark scrim)
+
+    /// The theme beat is the one showcase beat that keeps its glass ACCENT-TINTED
+    /// (the delight peak), so it's exempt from the dark scrim the other beats use.
+    /// Its copy/labels/descriptions/chip therefore can't assume a dark card: each
+    /// resolves its color from `contrastingForeground` against the ACTUAL surface
+    /// it sits on (`ThemeBeatSurface`), so it reads near-black on light accents and
+    /// near-white on dark. These tests measure that contrast for EVERY accent —
+    /// the seam that the prior fix forgot (it scrimmed every beat but this one),
+    /// pinned to the same surface model the view delegates to.
+
+    @Test("theme-beat shell copy clears AA on the accent-tinted card for every accent")
+    func onboardingThemeShellCopyAA() {
+        // Header glyph + title + both section titles/subtitles sit directly on the
+        // accent-tinted card shell. With `contrastingForeground` they read near-
+        // black on the light accents (was fixed white: gold subtitle 2.26:1).
+        for option in SteddiTheme.AccentOption.allCases {
+            let surface = ThemeBeatSurface.cardShell(accent: option.rgb)
+            let fg = ContrastRatio.contrastingForeground(on: surface)
+            let r = ContrastRatio.ratio(fg, surface)
+            #expect(r >= ContrastRatio.aaBody,
+                    "theme shell copy(\(option.rawValue)) = \(r), want >= 4.5")
+        }
+    }
+
+    @Test("theme-card label + description clear AA on every card's own surface, selected and deselected")
+    func onboardingThemeCardCopyAA() {
+        // Each theme-selection row draws a white wash over the accent shell, which
+        // LIGHTENS the surface. The label/description must contrast with THAT
+        // composite. The worst pre-fix case was the SELECTED 'Light' description at
+        // 1.92:1; with `contrastingForeground` on the row's own surface every
+        // accent, selected and deselected, clears the 4.5 body floor.
+        for option in SteddiTheme.AccentOption.allCases {
+            for selected in [true, false] {
+                let surface = ThemeBeatSurface.themeCard(accent: option.rgb, selected: selected)
+                let fg = ContrastRatio.contrastingForeground(on: surface)
+                let r = ContrastRatio.ratio(fg, surface)
+                #expect(r >= ContrastRatio.aaBody,
+                        "theme card copy(\(option.rawValue), selected=\(selected)) = \(r), want >= 4.5")
+            }
+        }
+    }
+
+    @Test("theme-card deselected icon (rowForeground @0.7) clears the 3:1 glyph floor for every accent")
+    func onboardingThemeDeselectedIconFloor() {
+        // The deselected card icon is the row foreground at 0.7 opacity (a glyph →
+        // 3:1 floor). Composite it over the deselected card surface and assert.
+        for option in SteddiTheme.AccentOption.allCases {
+            let surface = ThemeBeatSurface.themeCard(accent: option.rgb, selected: false)
+            let fg = ContrastRatio.contrastingForeground(on: surface)
+            let a = 0.7
+            let icon = RGBColor(fg.r * a + surface.r * (1 - a),
+                                fg.g * a + surface.g * (1 - a),
+                                fg.b * a + surface.b * (1 - a))
+            let r = ContrastRatio.ratio(icon, surface)
+            #expect(r >= ContrastRatio.aaLarge,
+                    "theme deselected icon(\(option.rawValue)) = \(r), want >= 3.0")
+        }
+    }
+
+    @Test("theme-card selected border (rowForeground @0.8) clears the 3:1 floor for every accent")
+    func onboardingThemeSelectedBorderFloor() {
+        // The selected card border is the row foreground at 0.8 opacity (a non-text
+        // affordance → 3:1 floor) over the selected card surface.
+        for option in SteddiTheme.AccentOption.allCases {
+            let surface = ThemeBeatSurface.themeCard(accent: option.rgb, selected: true)
+            let fg = ContrastRatio.contrastingForeground(on: surface)
+            let a = 0.8
+            let border = RGBColor(fg.r * a + surface.r * (1 - a),
+                                  fg.g * a + surface.g * (1 - a),
+                                  fg.b * a + surface.b * (1 - a))
+            let r = ContrastRatio.ratio(border, surface)
+            #expect(r >= ContrastRatio.aaLarge,
+                    "theme selected border(\(option.rawValue)) = \(r), want >= 3.0")
+        }
+    }
+
+    @Test("'Recommended' chip clears AA on a self-contained contrasting capsule for every accent")
+    func onboardingRecommendedChipAA() {
+        // The chip's capsule is filled with the contrasting tone for the card
+        // surface, and its text with the contrasting tone for THAT fill — a fixed
+        // black/white pairing, accent-independent. Mirrors the view: the chip lives
+        // on the SELECTED card (the recommended 'Dynamic' default). The prior
+        // `black.opacity(0.35)` capsule was translucent and fell to ~2.95:1 over a
+        // bright accent; this is ~17:1 on every accent.
+        for option in SteddiTheme.AccentOption.allCases {
+            let surface = ThemeBeatSurface.themeCard(accent: option.rgb, selected: true)
+            let capsuleFill = ContrastRatio.contrastingForeground(on: surface)
+            let text = ContrastRatio.contrastingForeground(on: capsuleFill)
+            let r = ContrastRatio.ratio(text, capsuleFill)
+            #expect(r >= ContrastRatio.aaBody,
+                    "Recommended chip(\(option.rawValue)) = \(r), want >= 4.5")
+        }
+    }
+
+    @Test("the worst pre-fix theme strings (gold subtitle, selected 'Light' description) failed AA")
+    func onboardingThemeRegression() {
+        // Document the bug the fix closes: fixed white-on-accent on the theme beat.
+        // GOLD subtitle (white .92 on the bare gold shell) and the SELECTED 'Light'
+        // description (white .92 on the white-0.18 wash over gold) both fail AA;
+        // the on-surface foreground fixes both, strictly better.
+        func whiteTier(_ opacity: Double, over surface: RGBColor) -> RGBColor {
+            RGBColor(1 * opacity + surface.r * (1 - opacity),
+                     1 * opacity + surface.g * (1 - opacity),
+                     1 * opacity + surface.b * (1 - opacity))
+        }
+        let gold = SteddiTheme.AccentOption.gold.rgb
+
+        // Subtitle: old fixed white .92 on the bare gold shell.
+        let shell = ThemeBeatSurface.cardShell(accent: gold)
+        let oldSubtitle = ContrastRatio.ratio(whiteTier(0.92, over: shell), shell)
+        #expect(oldSubtitle < ContrastRatio.aaBody,
+                "old gold subtitle was \(oldSubtitle), expected sub-AA (documents the bug)")
+        let newSubtitle = ContrastRatio.ratio(
+            ContrastRatio.contrastingForeground(on: shell), shell)
+        #expect(newSubtitle >= ContrastRatio.aaBody)
+        #expect(newSubtitle > oldSubtitle)
+
+        // Selected 'Light' description: old fixed white .92 on the selected wash.
+        let selSurface = ThemeBeatSurface.themeCard(accent: gold, selected: true)
+        let oldSelDescr = ContrastRatio.ratio(whiteTier(0.92, over: selSurface), selSurface)
+        #expect(oldSelDescr < ContrastRatio.aaLarge,
+                "old selected 'Light' description was \(oldSelDescr), expected sub-3:1 (the worst string)")
+        let newSelDescr = ContrastRatio.ratio(
+            ContrastRatio.contrastingForeground(on: selSurface), selSurface)
+        #expect(newSelDescr >= ContrastRatio.aaBody)
+        #expect(newSelDescr > oldSelDescr)
+    }
 }
