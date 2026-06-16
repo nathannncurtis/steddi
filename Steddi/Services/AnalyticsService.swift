@@ -272,6 +272,14 @@ final class AnalyticsService {
             await MainActor.run {
                 self.backfillInFlight = false
                 guard backfilled > 0, let last = self.lastLoad else { return }
+                // The background context finalized these records in the store,
+                // but the view's (main) context still holds them registered with
+                // their pre-backfill cached values (totalDurationSeconds == nil),
+                // so a plain re-fetch would hand back the SAME stale objects and
+                // the freshly-written durations wouldn't appear until next launch.
+                // Drop the stale registered state first so the re-aggregate reads
+                // the just-persisted rows from the store.
+                Self.refreshFromStore(last.context)
                 // Newly-finalized records now qualify for aggregation. Re-aggregate
                 // into the SAME context the view passed to `loadAnalytics` (stashed
                 // in `lastLoad`), so `recentDrives` stays bound to the view's
@@ -311,6 +319,13 @@ final class AnalyticsService {
             await MainActor.run {
                 self.rebuildInFlight = false
                 guard let last = self.lastLoad else { return }
+                // The background context wrote/deleted weekly buckets in the
+                // store, but the view's (main) context still holds the old
+                // bucket objects registered with their pre-rebuild driveCount /
+                // totals, so a plain re-fetch would merge stale values. Drop the
+                // stale registered state first so cache-first read sees the
+                // freshly-persisted buckets.
+                Self.refreshFromStore(last.context)
                 // Re-aggregate into the SAME context the view passed to
                 // loadAnalytics (stashed in lastLoad), which now sees the buckets
                 // persisted by the background context. Safe to reuse the
@@ -319,6 +334,27 @@ final class AnalyticsService {
                 self.aggregate(window: last.window, context: last.context, now: last.now)
             }
         }
+    }
+
+    /// Drops the view context's in-memory registered/cached object state so the
+    /// next fetch reloads fresh rows from the store. Needed because a background
+    /// context's writes (backfill / aggregate rebuild) are persisted to the
+    /// store but NOT merged into the long-lived main context, which would
+    /// otherwise keep handing back already-materialized objects with their
+    /// stale pre-write property values until the app relaunches.
+    ///
+    /// `rollback()` is the only public primitive that faults registered objects
+    /// (SwiftData on this SDK exposes no `refresh(_:)`/`refreshAllObjects()`).
+    /// It also discards any UNSAVED changes, so we first flush legitimate
+    /// pending edits the main context may hold — a save loses nothing, and
+    /// leaves only clean registered objects for rollback to fault. MainActor-
+    /// isolated: only ever called on the actor that owns the view context.
+    @MainActor
+    static func refreshFromStore(_ context: ModelContext) {
+        if context.hasChanges {
+            try? context.save()
+        }
+        context.rollback()
     }
 
     private func applyTrends(_ result: (insights: [TrendInsight], gateMessage: String?)) {
