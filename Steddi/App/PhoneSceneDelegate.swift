@@ -180,12 +180,19 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
                     PendingUIRouteStore.shared.request(.search(query: query))
                 }
             }
+#if DEBUG
+        // Developer/QA-only affordances. The "steddi" URL scheme ships in the
+        // release Info.plist, so any web page, QR code, or other app could
+        // otherwise invoke these to reset a shipping user's onboarding or fake
+        // an arrival. Compile them out of release builds — release falls through
+        // to the default no-op. Keep the user-facing routes above unguarded.
         case "arrive":
             NotificationCenter.default.post(name: .steddiTestArrival, object: nil)
         case "reset-onboarding":
             UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
             // Force restart by posting notification
             NotificationCenter.default.post(name: .steddiResetOnboarding, object: nil)
+#endif
         default:
             break
         }

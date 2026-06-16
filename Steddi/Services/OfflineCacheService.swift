@@ -53,9 +53,22 @@ final class OfflineCacheService {
         cleanupTask = nil
     }
 
-    /// Delete all cached navigation data.
+    /// Delete this service's cached navigation data.
+    ///
+    /// Removes only the route-cache files this service writes into its own
+    /// `cacheDirectory`, rather than `removeItem(at: cacheDirectory)` on the
+    /// whole directory. The previous wipe assumed exclusive ownership of the
+    /// directory; scoping to our own files means clearing the offline-route
+    /// cache can never delete a sibling component's cache that happens to share
+    /// the directory, and leaves the directory itself intact.
     func clearCache() {
-        try? fileManager.removeItem(at: cacheDirectory)
+        let contents = (try? fileManager.contentsOfDirectory(
+            at: cacheDirectory,
+            includingPropertiesForKeys: nil
+        )) ?? []
+        for fileURL in contents where fileURL.pathExtension == "json" {
+            try? fileManager.removeItem(at: fileURL)
+        }
         ensureDirectoryExists(cacheDirectory)
     }
 
