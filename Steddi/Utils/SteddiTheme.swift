@@ -334,6 +334,53 @@ enum SteddiTheme {
     /// composite, which the real adaptive-glass render then beats.
     static let mapGlassDarkScrimSurface = RGBColor(0.118, 0.118, 0.128)
 
+    // MARK: - Reroute card surface (accent-tinted glass legibility)
+
+    /// The effective surface the reroute card's text/value/digit sit on, so every
+    /// readout can pick an AA-correct foreground via `contrastingForeground(on:)`.
+    ///
+    /// THE LIGHT-THEME WASHOUT FIX. The reroute card is the app's one mid-drive
+    /// "delight" panel: in LIGHT theme it keeps its glass ACCENT-tinted
+    /// (`accentBrand`), exempt from the dark scrim the rest of the HUD uses. But
+    /// the surface-adaptive *text* tokens (`sageText`, `textSecondary`) are sized
+    /// against the near-white `surfacePrimary`, NOT this brighter saturated tint:
+    /// the green "Save ~N min" value lands ~2.1–3.1:1 and the grey subtitles
+    /// ~1.7–2.6:1 on the lavender frost — sub-AA, the recurring bug. Hue-preserving
+    /// shifts can't rescue it either (sage on lavender tops out ~2.1–3.0:1 — both
+    /// are mid-tone, no luminance headroom). So the card's text must contrast the
+    /// ACTUAL tinted surface and pick black/white, exactly like the onboarding
+    /// theme beat (`ThemeBeatSurface`).
+    ///
+    /// The model BRANCHES on glass + theme, all conservative (worst-case) bounds:
+    ///   • glass ON, LIGHT theme: the RAW `accentBrand` hue — the DARKEST plausible
+    ///     surface (the OS frost only LIGHTENS the live glass, which only raises the
+    ///     near-black foreground's contrast). All brand accents are light/mid-tone,
+    ///     so `contrastingForeground` → near-black at 5.3–7.6:1 (≥4.5 everywhere).
+    ///   • glass ON, DARK theme: the card drops the tint (neutral glass) over the
+    ///     near-opaque dark scrim → `mapGlassDarkScrimSurface`, so the foreground is
+    ///     near-WHITE (15.6:1) — preserving the prior dark-theme fix exactly.
+    ///   • glass OFF (Reduce Transparency / high contrast): `steddiGlass` discards
+    ///     the tint and paints the solid `surfacePrimary` fallback (near-white in
+    ///     light, near-dark in dark), so contrasting that flips the foreground the
+    ///     right way in both themes.
+    static func rerouteCardSurface(glassAvailable: Bool) -> RGBColor {
+        guard glassAvailable else { return ThemeEngine.snapshot.surfacePrimary }
+        return prefersDarkChrome ? mapGlassDarkScrimSurface : currentAccentOption.rgb
+    }
+
+    /// AA-correct foreground (text/value/digit) for the reroute card, contrasted
+    /// against `rerouteCardSurface`. Near-black on the light accent-tinted glass,
+    /// near-white on the dark-theme scrim — guaranteeing ≥4.5:1 body in both
+    /// themes on every accent. Dynamic so it re-resolves on accent / theme bumps.
+    static func rerouteCardForeground(glassAvailable: Bool) -> Color {
+        Color(UIColor { traitCollection in
+            _ = traitCollection.themeRevision
+            return ContrastRatio.contrastingForeground(
+                on: rerouteCardSurface(glassAvailable: glassAvailable)
+            ).uiColor
+        })
+    }
+
     /// Build a dynamic SwiftUI color whose UIKit provider (a) reads the live
     /// `ThemeEngine.snapshot` so the value is always current, and (b) touches
     /// `traitCollection.themeRevision` so the provider registers a dependency on
