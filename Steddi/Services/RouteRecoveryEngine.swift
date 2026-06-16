@@ -176,11 +176,21 @@ enum RouteRecoveryEngine {
         // bad upstream data) can slip through the nearEnd scoring filter and
         // become artificially attractive. The destination is exempt — it's the
         // give-up fallback and sits at totalDistance by definition.
+        // At most four candidates are ever appended (one per kind), so the cap is
+        // never binding here and the destination — appended last — is always kept.
         var seen: [Double] = []
         return candidates
             .filter { $0.kind == .destination || ($0.alongDistance >= floorAlong && $0.alongDistance < totalDistance) }
             .filter { candidate in
-                if seen.contains(where: { abs($0 - candidate.alongDistance) < 100 }) { return false }
+                // The destination is the give-up fallback and must ALWAYS survive —
+                // exempt it from dedupe (it's the LAST candidate, so a near-end
+                // lookAhead landing within 100m of totalDistance would otherwise
+                // evict it and silently disable the abandon-to-destination heuristic
+                // in `choose`). Still record its along so nothing after it dups it.
+                if candidate.kind != .destination,
+                   seen.contains(where: { abs($0 - candidate.alongDistance) < 100 }) {
+                    return false
+                }
                 seen.append(candidate.alongDistance)
                 return true
             }
