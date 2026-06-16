@@ -3018,10 +3018,19 @@ private struct AddLocationSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
     @State private var name = ""
     @State private var selectedIcon = "mappin.circle.fill"
     @State private var selectedCategory: PlaceCategory = .other
     @State private var didSeed = false
+
+    /// A presented sheet gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin the app theme here
+    /// too — otherwise this sheet renders in the device appearance and mismatches
+    /// the rest of Steddi when the chosen theme differs from the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     var body: some View {
         NavigationStack {
@@ -3062,6 +3071,7 @@ private struct AddLocationSheet: View {
                 selectedIcon = initialCategory.symbol
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     private var categoryPicker: some View {
