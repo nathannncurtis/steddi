@@ -88,4 +88,28 @@ enum MeasurementUnit: String, CaseIterable, Identifiable {
         // understatement of the distance).
         return "\(Int(whole)) \(abbreviation)"
     }
+
+    /// Turn-by-turn distance string with a short-range sub-unit (feet for miles,
+    /// meters for kilometers): "350 ft" / "0.3 mi" / "11 mi" — or "150 m" /
+    /// "0.3 km" / "11 km". The single source for the nav HUD / Live Activity /
+    /// route-preview distance readouts, which previously hardcoded imperial.
+    /// Rounding bands match the prior imperial behavior exactly.
+    func formatNavDistance(meters: Double) -> String {
+        // Short range: feet (miles) or whole meters (km). 160 m is the imperial
+        // ~500 ft hand-off the readout has always used; keep it for both so the
+        // band boundary doesn't shift for existing (mile) users.
+        if meters < 160 {
+            switch self {
+            case .miles: return "\(Int(meters * 3.281)) ft"
+            case .kilometers: return "\(Int(meters.rounded())) m"
+            }
+        }
+        let value = meters / metersPerUnit
+        if value < 10 {
+            return String(format: "%.1f %@", value, abbreviation)
+        }
+        // Round, don't truncate: 10.95 mi -> "11 mi" (an up-to-1-unit
+        // understatement of the distance remaining otherwise).
+        return "\(Int(value.rounded())) \(abbreviation)"
+    }
 }

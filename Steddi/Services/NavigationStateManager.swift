@@ -1081,17 +1081,15 @@ final class NavigationStateManager {
 
     // MARK: - Formatting
 
-    nonisolated static func formatDistance(_ meters: Double) -> String {
-        if meters < 160 { // ~500 ft
-            return "\(Int(meters * 3.281)) ft"
-        }
-        let miles = meters / 1609.34
-        if miles < 10 {
-            return String(format: "%.1f mi", miles)
-        }
-        // Round, don't truncate: 10.95 mi -> "11 mi", not "10 mi" (an up-to-1-mi
-        // understatement of the distance remaining).
-        return "\(Int(miles.rounded())) mi"
+    /// Turn-by-turn distance string in the user's unit (miles+feet or
+    /// kilometers+meters). Delegates to the single unit-aware formatter; the
+    /// `unit` defaults to the persisted preference so existing call sites pick it
+    /// up, and tests can pin a unit explicitly.
+    nonisolated static func formatDistance(
+        _ meters: Double,
+        unit: MeasurementUnit = .current
+    ) -> String {
+        unit.formatNavDistance(meters: meters)
     }
 
     nonisolated static func formatArrivalTime(
