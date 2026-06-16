@@ -618,17 +618,25 @@ struct SteddiNavOverlay: View {
                 Text("\(camera.kind.displayName) ahead")
                     .font(SteddiTheme.body(15 * textScale, highContrast: highContrast))
                     .foregroundStyle(SteddiTheme.textPrimary)
+                    .legibleOverMap()
                 Text(formatDistance(camera.distanceMeters))
                     .font(SteddiTheme.mono(13 * textScale))
                     .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                    .legibleOverMap()
             }
 
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
-        // Single glass layer tinted with the camera's semantic color, keeping
-        // the kind's color identity that the old stroke carried.
+        // Faint scrim under the glass, like the top banner / bottom bar, so this
+        // safety heads-up holds against bright/varied cartography — the camera
+        // tint alone is a semantic-identity overlay, not the contrast backing the
+        // rest of the nav glass relies on (textSecondary's AA is only proven on
+        // solid surfaces, not Liquid Glass over a moving map).
+        .mapGlassScrim(in: SteddiGlass.mediumShape)
+        // Glass layer tinted with the camera's semantic color, keeping the
+        // kind's color identity that the old stroke carried.
         .steddiGlass(tint: camera.kind.color, interactive: false, in: SteddiGlass.mediumShape, fallbackStrokeOpacity: 0.35)
     }
 

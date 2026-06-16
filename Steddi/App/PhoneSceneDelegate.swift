@@ -280,6 +280,19 @@ private struct SteddiRootView: View {
         guard mode == .dynamic else { return mode.colorScheme }
         // Observation-tracked read: the body re-evaluates whenever the engine
         // publishes a new state, so chrome follows the continuous solar curve.
-        return ThemeEngine.shared.currentState.prefersDarkChrome ? .dark : .light
+        let prefersDarkChrome = ThemeEngine.shared.currentState.prefersDarkChrome
+        // Reconcile the status-bar glyph polarity with the ACTUAL map darkness.
+        // Chrome follows the engine's continuous smoothstep (surface luminance),
+        // while the map cartography follows the BINARY `isDaytime` threshold
+        // (SteddiMapView.applyThemeStyle → currentThemeMode.mapInterfaceStyle).
+        // Around the day/night transition these two thresholds disagree, so the
+        // light-mode (dark) clock/wifi/battery glyphs could sit over a still-dark
+        // map at ~1.5:1 — and the system status bar has no scrim to back them.
+        // The map is the larger surface the glyphs actually overlay, so never let
+        // chrome render lighter than the map: when the map is dark, force `.dark`
+        // chrome (LIGHT glyphs) so the status bar always contrasts.
+        let mapIsDark = SteddiTheme.currentThemeMode.mapInterfaceStyle == .dark
+        if mapIsDark { return .dark }
+        return prefersDarkChrome ? .dark : .light
     }
 }
