@@ -21,7 +21,10 @@ struct OnboardingThemeView: View {
     @Bindable var coordinator: OnboardingCoordinator
 
     /// Swatch diameter scales with Dynamic Type but stays bounded so the row
-    /// never balloons off-card. The selected ring is drawn 10pt larger.
+    /// never balloons off-card. `@ScaledMetric` has no ceiling of its own; the
+    /// `.dynamicTypeSize(...accessibility3)` cap on this view's root (matching
+    /// `SteddiTheme.dynamicTypeCeiling`) is what bounds it — past AX3 the swatch
+    /// stops growing. The selected ring is drawn 10pt larger.
     @ScaledMetric(relativeTo: .body) private var swatchSize: CGFloat = 40
 
     private let accents = SteddiTheme.AccentOption.allCases
@@ -123,6 +126,15 @@ struct OnboardingThemeView: View {
         .padding(.horizontal, 24)
         .padding(.top, 32)
         .padding(.bottom, 24)
+        // Cap the beat copy AND the @ScaledMetric swatch at the app's Dynamic Type
+        // ceiling (.accessibility3 == SteddiTheme.dynamicTypeCeiling/
+        // .accessibilityExtraLarge), the same bound the hero's SteddiTheme.heading()
+        // applies via UIFontMetrics. The raw .title/.headline/.subheadline/.caption
+        // styles — and @ScaledMetric(relativeTo: .body) swatchSize, which has no
+        // ceiling of its own — would otherwise scale unbounded to AX5; this is the
+        // bound that makes swatchSize genuinely "capped" as documented below. Copy
+        // and swatches still scale up to the cap.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
     private var header: some View {
@@ -163,8 +175,9 @@ struct OnboardingThemeView: View {
     /// Wrapping, Dynamic-Type-aware accent grid. A fixed six-wide HStack of 40pt
     /// swatches needs ~310pt and overflowed the centered glass card on standard
     /// iPhones (and worse at large text). An adaptive grid wraps to a second row
-    /// instead of spilling off-card, and the swatch size is @ScaledMetric-capped
-    /// so it grows with text without unbounded growth.
+    /// instead of spilling off-card, and the swatch size grows with text but is
+    /// bounded by the view-root `.dynamicTypeSize(...accessibility3)` cap, so it
+    /// scales without unbounded growth.
     private var accentPicker: some View {
         LazyVGrid(
             columns: [GridItem(.adaptive(minimum: swatchSize + 16), spacing: 14)],

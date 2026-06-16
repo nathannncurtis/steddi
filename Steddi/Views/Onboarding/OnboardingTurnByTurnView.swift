@@ -92,6 +92,12 @@ struct OnboardingTurnByTurnView: View {
             }
         }
         .padding(28)
+        // Cap the beat copy at the app's Dynamic Type ceiling (.accessibility3 ==
+        // SteddiTheme.dynamicTypeCeiling/.accessibilityExtraLarge), the same bound
+        // the hero's SteddiTheme.heading() applies via UIFontMetrics, so the raw
+        // .title2/.body/.headline/.caption styles here don't scale unbounded to
+        // AX5 while the hero stays capped. Copy still scales up to the cap.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Turn-by-turn, done Steddi's way. Steddi runs its own navigation — clear maneuvers, your speed, no hand-off to another app.")
         .onAppear {
