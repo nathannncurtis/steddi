@@ -178,15 +178,23 @@ struct RerouteCardView: View {
         }
     }
 
-    /// Circular countdown — sage ring depletes clockwise, count in the center.
+    /// Circular countdown — the depleting ring draws clockwise, count in the
+    /// center. The arc uses the same contrast-adaptive on-card foreground as every
+    /// other card readout (NOT `SteddiTheme.sage`): sage is a mid-tone green that
+    /// washes to ~2–3:1 on the lavender/gold accent tint and can't be hue-shifted
+    /// to AA there, so the arc was low-contrast on the tinted glass. `onCard`
+    /// (`rerouteCardForeground`) contrasts the ACTUAL tinted surface — near-black
+    /// on the light accent in LIGHT theme, near-white on the dark scrim in DARK —
+    /// so the ring reads against every accent and both themes. The countdown
+    /// semantics (trim from 1 → 0) are unchanged.
     private var countdownRing: some View {
         ZStack {
             Circle()
-                .stroke(SteddiTheme.textMuted.opacity(0.2), lineWidth: 3)
+                .stroke(onCard.opacity(0.2), lineWidth: 3)
 
             Circle()
                 .trim(from: 0, to: countdownFraction)
-                .stroke(SteddiTheme.sage, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(onCard, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
 
             Text("\(secondsRemaining)")
