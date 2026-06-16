@@ -508,6 +508,32 @@ struct RoadGraphSnapTests {
         #expect(graph.snap(kCLLocationCoordinate2DInvalid) == nil)
     }
 
+    /// A FINITE but out-of-WGS-84-range coordinate (a corrupted GPS fix, a
+    /// mis-computed waypoint, or migrated bad persisted pin data — e.g. latitude
+    /// 9999 / longitude 1e6 / a large-but-finite Double) must also fail clean to
+    /// nil. `isFinite` alone passes such a value into `cellIndex`, where
+    /// `Int(floor(1e30 / 0.001))` overflows `Int.max` and fatal-errors. Returning
+    /// nil lets the caller fall back to MapKit instead of crashing the drive.
+    @Test("Out-of-range (but finite) coordinate snaps to nil instead of trapping")
+    func snapOutOfRangeCoordinate() {
+        let graph = buildGraph(
+            nodeJSON(1, 33.0, -117.0),
+            nodeJSON(2, 33.0, -116.999),
+            wayElementJSON(100, nodes: [1, 2], tags: ["highway": "residential"])
+        )
+        let bigLat = CLLocationCoordinate2D(latitude: 9999, longitude: -116.9995)
+        let bigLon = CLLocationCoordinate2D(latitude: 33.00009, longitude: 1e6)
+        let hugeFinite = CLLocationCoordinate2D(latitude: 1e30, longitude: 1e30)
+        let negOutOfRange = CLLocationCoordinate2D(latitude: -91, longitude: -181)
+        #expect(graph.snap(bigLat) == nil)
+        #expect(graph.snap(bigLon) == nil)
+        #expect(graph.snap(hugeFinite) == nil)
+        #expect(graph.snap(negOutOfRange) == nil)
+        // A just-in-range coordinate near the edge still snaps (no over-rejection).
+        let inRange = CLLocationCoordinate2D(latitude: 33.00009, longitude: -116.9995)
+        #expect(graph.snap(inRange) != nil)
+    }
+
     /// A way whose first and last node are the same OSM id (a closed loop, e.g. a
     /// cul-de-sac or roundabout drawn as a ring) must not emit a degenerate
     /// self-edge from a node to itself; the `fromIdx != toIdx` guard drops it.
@@ -523,6 +549,62 @@ struct RoadGraphSnapTests {
         )
         // No edge may start and end at the same node.
         #expect(graph.edges.allSatisfy { $0.from != $0.to })
+    }
+
+    /// A malformed Overpass node with a non-finite OR out-of-WGS-84-range
+    /// coordinate must be DROPPED at ingest, not flowed into `buildSnapIndex`
+    /// where `cellRange`/`cellIndex`'s `Int(floor(...))` conversion would trap
+    /// (an uncatchable crash defeating the graceful-degradation-to-MapKit
+    /// contract). The build must complete; the bad node simply isn't a graph
+    /// node, and no edge geometry references its garbage coordinate.
+    ///
+    /// Non-finite (`NaN`/`±∞`) coordinates cannot be expressed in valid JSON, so
+    /// the response is constructed directly through the decoder's value type
+    /// rather than the JSON fixture helper — exactly the corruption a hand-built
+    /// or bit-rotted decode could yield.
+    @Test("Out-of-range / NaN OSM node coordinate is skipped; build does not trap")
+    func outOfRangeNodeSkippedDuringBuild() {
+        // Way 1-2-3-4: node 2 has a huge finite (out-of-range) lat, node 3 has a
+        // NaN lon, node 4 has a +∞ lat. All three must be dropped; the build must
+        // not trap. Only nodes 1 and 5 carry valid coordinates.
+        let response = OverpassGraphResponse(elements: [
+            .init(type: "node", id: 1, tags: nil, nodes: nil, lat: 33.0, lon: -117.0),
+            .init(type: "node", id: 2, tags: nil, nodes: nil, lat: 9_999_999.0, lon: -117.0),
+            .init(type: "node", id: 3, tags: nil, nodes: nil, lat: 33.0, lon: .nan),
+            .init(type: "node", id: 4, tags: nil, nodes: nil, lat: .infinity, lon: -117.0),
+            .init(type: "node", id: 5, tags: nil, nodes: nil, lat: 33.0, lon: -116.997),
+            .init(type: "way", id: 100, tags: ["highway": "residential"], nodes: [1, 2, 3, 4, 5], lat: nil, lon: nil)
+        ])
+        let graph = RoadGraphBuilder.buildGraph(from: response)
+        // The three bad nodes are not promoted graph nodes.
+        #expect(graph.osmToIndex[2] == nil)
+        #expect(graph.osmToIndex[3] == nil)
+        #expect(graph.osmToIndex[4] == nil)
+        // Nodes 1 and 5 survive as the way's endpoints, so an edge pair connects
+        // them and every coordinate in the graph geometry is finite & in range.
+        #expect(graph.osmToIndex[1] != nil)
+        #expect(graph.osmToIndex[5] != nil)
+        #expect(graph.geometry.allSatisfy {
+            $0.latitude.isFinite && $0.longitude.isFinite
+                && (-90...90).contains($0.latitude) && (-180...180).contains($0.longitude)
+        })
+        // A snap on the surviving edge still works (the snap index built cleanly).
+        let near = CLLocationCoordinate2D(latitude: 33.00005, longitude: -116.9985)
+        #expect(graph.snap(near, maxDistanceMeters: 200) != nil)
+    }
+
+    /// Even if a way's ONLY nodes are bad coordinates, the builder must drop the
+    /// way (it can't have >= 2 present nodes) and finish without trapping.
+    @Test("Way of entirely out-of-range nodes is dropped; build does not trap")
+    func wayOfEntirelyBadNodesDropped() {
+        let response = OverpassGraphResponse(elements: [
+            .init(type: "node", id: 1, tags: nil, nodes: nil, lat: .infinity, lon: -117.0),
+            .init(type: "node", id: 2, tags: nil, nodes: nil, lat: 33.0, lon: .infinity),
+            .init(type: "way", id: 100, tags: ["highway": "residential"], nodes: [1, 2], lat: nil, lon: nil)
+        ])
+        let graph = RoadGraphBuilder.buildGraph(from: response)
+        #expect(graph.nodes.isEmpty)
+        #expect(graph.edges.isEmpty)
     }
 }
 
