@@ -5,7 +5,15 @@ struct RerouteCardView: View {
     let timeSavingsMinutes: Int
     let percentageSavings: Int
     let onSwitch: () -> Void
+    /// The driver DELIBERATELY tapped "Stay" — a real decline. Records the
+    /// dismissal so the route is suppressed for the cooldown window.
     let onStay: () -> Void
+    /// The countdown elapsed with no driver input — NOT a decision. Just clears
+    /// the suggestion (no decline recorded, no suppression): a driver keeping
+    /// eyes on the road for 30s must not be treated as having rejected the route.
+    /// Optional; when nil the timeout falls back to `onStay` so an un-updated
+    /// call site keeps the old behavior rather than leaving the suggestion stuck.
+    var onAutoDismiss: (() -> Void)? = nil
 
     /// Seconds the suggestion lingers before auto-dismissing.
     private static let countdownSeconds = 30
@@ -111,7 +119,9 @@ struct RerouteCardView: View {
 
                 // Action buttons
                 HStack(spacing: 12) {
-                    // Secondary: neutral glass.
+                    // Secondary: Steddi's neutral interactive glass — keeps the
+                    // Reduce-Motion press-scale + over-map fallback the primary CTA
+                    // and the rest of the nav chrome use (stock `.glass` drops them).
                     Button("Stay") {
                         hide()
                         onStay()
@@ -119,7 +129,7 @@ struct RerouteCardView: View {
                     .font(.system(size: 17 * textScale, weight: .medium))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14 * controlScale)
-                    .buttonStyle(.glass)
+                    .buttonStyle(.steddiGlass)
 
                     // Primary CTA: canonical accent glass — fill + AA-legible
                     // on-fill label supplied by the style (no .tint/.glassProminent).
@@ -168,7 +178,10 @@ struct RerouteCardView: View {
                 guard isVisible else { return }
                 if secondsRemaining <= 1 {
                     hide()
-                    onStay()
+                    // Timeout is NOT a deliberate decline: take the auto-dismiss
+                    // path (clear-only, no suppression). Fall back to onStay only
+                    // when no auto-dismiss handler was supplied.
+                    (onAutoDismiss ?? onStay)()
                 } else {
                     withAnimation(SteddiMotion.resolve(.linear(duration: 1))) {
                         secondsRemaining -= 1

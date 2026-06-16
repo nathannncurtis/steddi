@@ -841,18 +841,29 @@ final class NavigationStateManager {
         LiveActivityService.shared.endActivity()
     }
 
-    /// The driver tapped "Stay" (or the card auto-dismissed). Clear the visible
-    /// suggestion AND remember the declined route + its rejected savings so the
-    /// reroute loop won't re-surface the same route on the next cycle within the
-    /// cooldown window unless it becomes materially better. UI should call this
-    /// instead of setting `rerouteSuggestion = nil` directly, so the decline is
-    /// actually recorded.
+    /// The driver DELIBERATELY tapped "Stay". Clear the visible suggestion AND
+    /// remember the declined route + its rejected savings so the reroute loop
+    /// won't re-surface the same route on the next cycle within the cooldown
+    /// window unless it becomes materially better. UI should call this instead of
+    /// setting `rerouteSuggestion = nil` directly, so the decline is recorded.
     func dismissRerouteSuggestion() {
         if let suggestion = rerouteSuggestion {
             dismissedRouteID = suggestion.route.id
             dismissedAt = Date()
             dismissedSavingsSeconds = suggestion.savingsMinutes * 60.0
         }
+        rerouteSuggestion = nil
+    }
+
+    /// The reroute card's countdown elapsed with no driver input. This is NOT a
+    /// decision — a driver keeping eyes on the road for 30s hasn't rejected the
+    /// route — so clear ONLY the visible suggestion WITHOUT recording a decline.
+    /// No suppression cooldown is armed, so a genuinely-faster alternate isn't
+    /// hidden for 10 minutes after one unattended timeout; the loop is free to
+    /// re-surface it next cycle (still gated by the per-cycle re-suggest cadence).
+    /// Clearing the suggestion is required so the loop's `rerouteSuggestion == nil`
+    /// guard re-opens — otherwise a locally-hidden card would wedge it shut.
+    func expireRerouteSuggestion() {
         rerouteSuggestion = nil
     }
 
@@ -1081,17 +1092,15 @@ final class NavigationStateManager {
 
     // MARK: - Formatting
 
-    nonisolated static func formatDistance(_ meters: Double) -> String {
-        if meters < 160 { // ~500 ft
-            return "\(Int(meters * 3.281)) ft"
-        }
-        let miles = meters / 1609.34
-        if miles < 10 {
-            return String(format: "%.1f mi", miles)
-        }
-        // Round, don't truncate: 10.95 mi -> "11 mi", not "10 mi" (an up-to-1-mi
-        // understatement of the distance remaining).
-        return "\(Int(miles.rounded())) mi"
+    /// Turn-by-turn distance string in the user's unit (miles+feet or
+    /// kilometers+meters). Delegates to the single unit-aware formatter; the
+    /// `unit` defaults to the persisted preference so existing call sites pick it
+    /// up, and tests can pin a unit explicitly.
+    nonisolated static func formatDistance(
+        _ meters: Double,
+        unit: MeasurementUnit = .current
+    ) -> String {
+        unit.formatNavDistance(meters: meters)
     }
 
     nonisolated static func formatArrivalTime(

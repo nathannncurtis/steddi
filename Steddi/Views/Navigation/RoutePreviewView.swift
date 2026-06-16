@@ -117,12 +117,14 @@ struct RoutePreviewView: View {
 
                     // Action buttons
                     HStack(spacing: 12) {
-                        // Secondary: neutral glass.
+                        // Secondary: Steddi's neutral interactive glass — keeps the
+                        // Reduce-Motion press-scale + fallback path the primary CTA
+                        // beside it uses (stock `.glass` drops them).
                         Button("Cancel", action: onCancel)
                             .font(.body.weight(.medium))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .buttonStyle(.glass)
+                            .buttonStyle(.steddiGlass)
 
                         // Primary CTA: canonical accent glass — fill + AA-legible
                         // on-fill label supplied by the style (no .tint/.glassProminent).

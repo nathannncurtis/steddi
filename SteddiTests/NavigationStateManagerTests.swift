@@ -126,6 +126,87 @@ struct FormatDistanceTests {
     }
 }
 
+// MARK: - Unit-Aware Distance Tests
+
+/// The turn distance formatter must honor the user's MeasurementUnit: a miles
+/// user sees feet/mi, a kilometers user sees meters/km — same rounding bands.
+@Suite("formatDistance is unit-aware")
+struct FormatDistanceUnitTests {
+
+    // Miles user (the prior hardcoded behavior, now via the unit parameter).
+    @Test("Miles: short range is feet")
+    func milesShort() {
+        #expect(NavigationStateManager.formatDistance(100, unit: .miles) == "328 ft")
+    }
+
+    @Test("Miles: sub-10 shows one decimal mile")
+    func milesDecimal() {
+        #expect(NavigationStateManager.formatDistance(1609.34, unit: .miles) == "1.0 mi")
+    }
+
+    @Test("Miles: 10.95 mi rounds up to 11 mi")
+    func milesWhole() {
+        #expect(NavigationStateManager.formatDistance(10.95 * 1609.34, unit: .miles) == "11 mi")
+    }
+
+    // Kilometers user — same bands, metric sub-unit + label.
+    @Test("Kilometers: short range is whole meters")
+    func kmShort() {
+        #expect(NavigationStateManager.formatDistance(100, unit: .kilometers) == "100 m")
+    }
+
+    @Test("Kilometers: sub-10 shows one decimal km")
+    func kmDecimal() {
+        // 1.5 km -> "1.5 km"
+        #expect(NavigationStateManager.formatDistance(1500, unit: .kilometers) == "1.5 km")
+    }
+
+    @Test("Kilometers: 10.95 km rounds up to 11 km")
+    func kmWhole() {
+        #expect(NavigationStateManager.formatDistance(10.95 * 1000, unit: .kilometers) == "11 km")
+    }
+
+    @Test("Both unit nav formatters agree (NavigationEngine == NavigationStateManager)")
+    func bothFormattersAgree() {
+        for meters in [50.0, 100, 1500, 10.95 * 1000, 25 * 1609.34] {
+            for unit in MeasurementUnit.allCases {
+                #expect(
+                    NavigationEngine.formatDistance(meters, unit: unit)
+                        == NavigationStateManager.formatDistance(meters, unit: unit)
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Unit-Aware Speed Tests
+
+/// Speed stays internally in mph; the user-facing readout converts per unit.
+@Suite("MeasurementUnit speed formatting")
+struct MeasurementUnitSpeedTests {
+
+    @Test("Miles user: 65 mph reads 65 mph")
+    func milesSpeed() {
+        #expect(MeasurementUnit.miles.speedValue(mph: 65) == 65)
+        #expect(MeasurementUnit.miles.speedAbbreviation == "mph")
+        #expect(MeasurementUnit.miles.formatSpeed(mph: 65) == "65 mph")
+    }
+
+    @Test("Kilometers user: 65 mph converts to ~105 km/h")
+    func kmSpeed() {
+        // 65 mph * 1.60934 ≈ 104.6 -> rounds to 105
+        #expect(MeasurementUnit.kilometers.speedValue(mph: 65) == 105)
+        #expect(MeasurementUnit.kilometers.speedAbbreviation == "km/h")
+        #expect(MeasurementUnit.kilometers.formatSpeed(mph: 65) == "105 km/h")
+    }
+
+    @Test("Zero speed reads zero in both units")
+    func zeroSpeed() {
+        #expect(MeasurementUnit.miles.speedValue(mph: 0) == 0)
+        #expect(MeasurementUnit.kilometers.speedValue(mph: 0) == 0)
+    }
+}
+
 // MARK: - Format Arrival Time Tests
 
 @Suite("formatArrivalTime")
@@ -1150,6 +1231,76 @@ struct NavigationStateManagerRerouteCadenceTests {
 
         manager.stopObserving()
         engine.stopNavigation()
+    }
+}
+
+// MARK: - Reroute Dismiss vs Auto-Dismiss Tests
+
+/// A countdown TIMEOUT is not a driver decision: it must clear the suggestion
+/// WITHOUT arming the 10-minute "Stay" suppression. A deliberate "Stay" tap
+/// must still arm it. These exercise the two distinct state-manager paths the
+/// reroute card now routes to (`expireRerouteSuggestion` vs `dismissRerouteSuggestion`).
+@Suite("NavigationStateManager reroute auto-dismiss")
+@MainActor
+struct NavigationStateManagerRerouteDismissTests {
+
+    private func makeContext() throws -> ModelContext {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ModelStoreLocator.schema, configurations: config)
+        return ModelContext(container)
+    }
+
+    private func makeRoute(in context: ModelContext) -> Route {
+        let route = Route(rank: 1, encodedPolyline: "abc", name: "Faster")
+        context.insert(route)
+        return route
+    }
+
+    @Test("Auto-dismiss (timeout) clears the suggestion WITHOUT arming suppression")
+    func autoDismissDoesNotSuppress() throws {
+        let context = try makeContext()
+        let route = makeRoute(in: context)
+        let manager = NavigationStateManager()
+        manager.rerouteSuggestion = (route: route, savingsMinutes: 5, savingsPercentage: 0.2)
+
+        manager.expireRerouteSuggestion()
+
+        // The visible suggestion is cleared so the loop's `== nil` guard reopens.
+        #expect(manager.rerouteSuggestion == nil)
+        // ...but the route is NOT suppressed: a timeout is not a decline, so the
+        // same savings would be re-suggestable immediately.
+        #expect(manager.isRerouteSuppressed(routeID: route.id, savingsSeconds: 5 * 60) == false)
+    }
+
+    @Test("Deliberate Stay clears the suggestion AND arms the 10-minute suppression")
+    func deliberateStaySuppresses() throws {
+        let context = try makeContext()
+        let route = makeRoute(in: context)
+        let manager = NavigationStateManager()
+        manager.rerouteSuggestion = (route: route, savingsMinutes: 5, savingsPercentage: 0.2)
+
+        manager.dismissRerouteSuggestion()
+
+        #expect(manager.rerouteSuggestion == nil)
+        // The same route at the same savings is suppressed inside the cooldown.
+        #expect(manager.isRerouteSuppressed(routeID: route.id, savingsSeconds: 5 * 60) == true)
+    }
+
+    @Test("After auto-dismiss, a deliberate Stay on a fresh suggestion still suppresses")
+    func autoDismissThenStaySuppresses() throws {
+        let context = try makeContext()
+        let route = makeRoute(in: context)
+        let manager = NavigationStateManager()
+
+        // Timeout once — no suppression armed.
+        manager.rerouteSuggestion = (route: route, savingsMinutes: 5, savingsPercentage: 0.2)
+        manager.expireRerouteSuggestion()
+        #expect(manager.isRerouteSuppressed(routeID: route.id, savingsSeconds: 5 * 60) == false)
+
+        // The loop re-surfaces it; the driver now deliberately declines — suppress.
+        manager.rerouteSuggestion = (route: route, savingsMinutes: 5, savingsPercentage: 0.2)
+        manager.dismissRerouteSuggestion()
+        #expect(manager.isRerouteSuppressed(routeID: route.id, savingsSeconds: 5 * 60) == true)
     }
 }
 
