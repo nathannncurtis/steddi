@@ -298,6 +298,57 @@ struct RoadGraphSerializerTests {
         }
     }
 
+    /// Byte offset of edge `index`'s geometry-range fields within the serialized
+    /// blob. Layout after the node section: edgeCount(4) + edges. Each edge record
+    /// is a fixed 40 bytes: from(4) + to(4) + lower(4) + upper(4) + length(8) +
+    /// speed(4) + wayID(8) + class(1) + attrs(2) + oncoming(1). So `lower` sits 8
+    /// bytes into the record and `upper` 12 bytes in.
+    private func edgeGeometryRangeOffsets(in data: Data, nodeCount: Int, edgeIndex: Int) -> (lower: Int, upper: Int) {
+        var reader = ByteReaderProbe(data)
+        reader.skip(5)                          // magic + version
+        let geomCount = reader.readU32LE()
+        for _ in 0..<geomCount {                // two signed varints per coord
+            reader.skipVarint()
+            reader.skipVarint()
+        }
+        reader.skip(4)                          // nodeCount
+        reader.skip(nodeCount * 25)             // node records (fixed 25 bytes each)
+        reader.skip(4)                          // edgeCount
+        let edgesStart = reader.offset
+        let recordStart = edgesStart + edgeIndex * 40
+        return (lower: recordStart + 8, upper: recordStart + 12)
+    }
+
+    /// A blob whose edge geometry range is IN BOUNDS but DEGENERATE
+    /// (`upper == lower`, i.e. zero coords — or a single coord) must be rejected.
+    /// The builder always emits a slice with both endpoints (`geometryRange.count
+    /// >= 2`, RoadGraph.swift:83); a corrupt/bit-rotted blob that collapses one
+    /// edge's range slips a <2-coord slice into `graph.geometry(of:)`, which
+    /// `StepSynthesizer.stitchedPolyline` would silently drop — teleporting the
+    /// drawn route across the missing step while A* already charged its cost. The
+    /// loader must reject it so the corrupt blob never enters the search.
+    @Test("Degenerate (zero-coord) edge geometry range is rejected on load")
+    func degenerateEdgeGeometryRejected() throws {
+        let graph = buildSampleGraph()
+        #expect(graph.edges.count > 0)
+        let nodeCount = graph.nodes.count
+
+        var data = RoadGraphSerializer.serialize(graph)
+        // Sanity: the untampered blob deserializes (valid round-trip).
+        #expect(RoadGraphSerializer.deserialize(data) != nil)
+
+        // Collapse edge 0's range to empty by writing `upper = lower`. This stays
+        // in-bounds (lower is a valid geometry index) so only the new geometry-
+        // length check — not the existing bounds check — can reject it.
+        let offsets = edgeGeometryRangeOffsets(in: data, nodeCount: nodeCount, edgeIndex: 0)
+        var probe = ByteReaderProbe(data)
+        probe.skip(offsets.lower)
+        let lower = Int32(probe.readU32LE())
+        writeI32LE(&data, at: offsets.upper, lower)   // upper := lower -> empty range
+
+        #expect(RoadGraphSerializer.deserialize(data) == nil)
+    }
+
     /// A blob whose CSR offsets stay IN BOUNDS but no longer describe a real CSR
     /// layout (a node's `firstEdge` shifted off the running offset) must be
     /// rejected — otherwise the forward expansion in A* would trust the window
