@@ -1703,6 +1703,47 @@ struct NavigationEngineETATests {
         engine.stopNavigation()
     }
 
+    @Test("Sustained stop-and-go crawl keeps the slow observed pace, not free-flow")
+    func stopAndGoCrawlKeepsSlowPace() {
+        let engine = NavigationEngine()
+        let polyline = longRoute()
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        // Stay near the route start so distance-remaining barely moves and the
+        // ETA is driven by the speed estimate, not by progress along the route.
+        // startNavigation seeds originalExpectedTravelTime = totalRouteDistance /
+        // 13.4, so the optimistic free-flow fraction implies ~13.4 m/s.
+        let freeFlowImpliedSpeed = 13.4
+
+        // Feed a sustained stop-and-go crawl: speed oscillating in the ~1-2 m/s
+        // band (the worst-traffic regime). This is the band where a >2 m/s ETA
+        // floor used to discard the (valid) crawl estimate and snap to the rosy
+        // free-flow fraction. Run long enough for the EWMA to settle.
+        var t = 0.0
+        let crawlSeries: [Double] = [1.0, 1.5, 2.0, 1.2, 1.8, 1.1, 1.9, 1.4]
+        for i in 0..<240 {
+            engine.updateLocation(fix(at: polyline[1], speed: crawlSeries[i % crawlSeries.count], t: t))
+            t += 1
+        }
+
+        let crawlETA = engine.etaSeconds
+        let remaining = engine.distanceRemainingMeters
+        #expect(crawlETA > 0)
+        #expect(remaining > 0)
+
+        // The ETA must reflect the slow crawl, not free-flow. Implied speed =
+        // remaining / eta should sit near the crawl band, well under free-flow.
+        let impliedSpeed = remaining / crawlETA
+        #expect(impliedSpeed < 3.0)               // nowhere near 13.4 m/s free-flow
+        #expect(impliedSpeed > 0.5)               // sane: a crawl, not a dead stop
+
+        // And it must be dramatically more pessimistic than the free-flow ETA
+        // (the old behavior). At ~1.5 m/s vs ~13.4 m/s that is several-fold.
+        let freeFlowETA = remaining / freeFlowImpliedSpeed
+        #expect(crawlETA > freeFlowETA * 3)
+        engine.stopNavigation()
+    }
+
     @Test("EWMA stays stable against single-fix speed jitter")
     func ewmaIgnoresSingleSpike() {
         let engine = NavigationEngine()
