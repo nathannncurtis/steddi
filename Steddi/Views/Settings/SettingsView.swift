@@ -332,7 +332,12 @@ struct SettingsView: View {
                         showDeleteAllConfirmation = true
                     } label: {
                         Label("Delete All Data", systemImage: "trash.fill")
-                            .foregroundStyle(SteddiTheme.warmRed)
+                            // Surface-adaptive legible red — raw warmRed as text
+                            // fails AA in light (≈3.56:1) and is near-invisible in
+                            // grey (1.77:1). warmRedText keeps the destructive
+                            // identity while clearing the body floor, matching the
+                            // "End Trip Here" treatment.
+                            .foregroundStyle(SteddiTheme.warmRedText)
                     }
                 } header: {
                     Text("Danger Zone")
