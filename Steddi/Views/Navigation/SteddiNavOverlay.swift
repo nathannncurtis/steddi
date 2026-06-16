@@ -717,7 +717,12 @@ struct SteddiNavOverlay: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 20 * controlScale, weight: .medium))
-                .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textMuted(highContrast: highContrast))
+                // Inactive glyph rides neutral glass over the moving map — use
+                // textSecondary (not raw textMuted, AA-proven only on solid
+                // surfaces) + the shared soft shadow so it stays above the 3:1
+                // non-text floor on any tile, while accent still marks active.
+                .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textSecondary(highContrast: highContrast))
+                .legibleOverMap()
                 .rotationEffect(.degrees(rotationDegrees))
                 .frame(width: 50 * controlScale, height: 50 * controlScale)
                 // Always-neutral glass so the glyph never sits accent-on-accent
@@ -735,7 +740,12 @@ struct SteddiNavOverlay: View {
     private func floatingButtonCircle(symbol: String, isActive: Bool) -> some View {
         Image(systemName: symbol)
             .font(.system(size: 17 * controlScale, weight: .medium))
-            .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textMuted(highContrast: highContrast))
+            // Inactive glyph rides neutral glass over the moving map — textSecondary
+            // (not raw textMuted, AA-proven only on solid surfaces) + the shared
+            // soft shadow so it holds above the 3:1 non-text floor on any tile,
+            // while accent still marks the active state.
+            .foregroundStyle(isActive ? SteddiTheme.accent : SteddiTheme.textSecondary(highContrast: highContrast))
+            .legibleOverMap()
             .frame(width: 44 * controlScale, height: 44 * controlScale)
             // Always-neutral glass so the glyph never sits accent-on-accent and
             // vanishes — the active state reads through the glyph color (accent)
