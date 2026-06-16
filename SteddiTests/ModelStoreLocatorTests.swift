@@ -412,6 +412,199 @@ struct ModelStoreLocatorMigrationTests {
     }
 }
 
+// MARK: - App Container Recovery Tests
+
+/// Covers the recovery seam in `makeAppContainer`: when the migration copy lands a
+/// group store that then CANNOT be opened (corruption, an interrupted prior copy, a
+/// schema-incompatible copy) and the group store was never established, the app must
+/// NOT strand the user on a dead in-memory store with their data invisible. Instead
+/// it quarantines the suspect group copy and opens the intact, never-deleted legacy
+/// store read-write so the user keeps their data.
+@Suite("ModelStoreLocator.makeAppContainer recovery")
+struct ModelStoreLocatorRecoveryTests {
+
+    private func makeTempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ModelStoreLocatorRecoveryTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func freshDefaults() throws -> UserDefaults {
+        let name = "ModelStoreLocatorRecoveryTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
+    /// A schema that omits entities the full app schema has, so SwiftData treats a
+    /// store written under it as "needs migration" when opened under the full
+    /// schema and the open throws — the reliable way to manufacture an
+    /// unopenable-under-`schema` store on disk.
+    private var mismatchedSchema: Schema {
+        Schema([
+            PinnedLocation.self,
+            Commute.self,
+            Route.self,
+            DriveRecord.self,
+            NoGoZone.self,
+            CommuteTrip.self
+        ])
+    }
+
+    @Test("Unopenable copied group store with intact legacy recovers to the legacy data")
+    func recoversToLegacyWhenCopiedGroupStoreFailsToOpen() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let groupURL = dir.appendingPathComponent("group/Steddi.store")
+        let legacyURL = dir.appendingPathComponent("legacy/default.store")
+        try FileManager.default.createDirectory(
+            at: groupURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+
+        // The user's INTACT data lives in the legacy store, written with the full
+        // app schema (this is what must survive and be recovered).
+        do {
+            let legacy = try ModelContainer(
+                for: ModelStoreLocator.schema,
+                configurations: [ModelConfiguration(url: legacyURL)]
+            )
+            let ctx = ModelContext(legacy)
+            ctx.insert(Commute(name: "Morning Commute"))
+            try ctx.save()
+        }
+
+        // A group store file is already present (a copy that landed on an earlier
+        // launch) but it is UNOPENABLE under the full app schema — written under a
+        // mismatched schema so opening it under `ModelStoreLocator.schema` throws.
+        do {
+            let suspect = try ModelContainer(
+                for: mismatchedSchema,
+                configurations: [ModelConfiguration(url: groupURL)]
+            )
+            let ctx = ModelContext(suspect)
+            ctx.insert(Commute(name: "should-not-survive-open"))
+            try ctx.save()
+        }
+
+        // The group store was never established (the app never opened/wrote it).
+        let defaults = try freshDefaults()
+        #expect(defaults.bool(forKey: ModelStoreLocator.groupStoreEstablishedKey) == false)
+
+        let result = ModelStoreLocator.makeAppContainer(
+            groupURL: groupURL,
+            legacyCandidates: [legacyURL],
+            defaults: defaults
+        )
+
+        // Recovered to a real on-disk store, NOT the in-memory "changes won't be
+        // saved" fallback.
+        #expect(result.warning == nil)
+
+        // The opened container serves the user's intact legacy data.
+        let commutes = try ModelContext(result.container).fetch(FetchDescriptor<Commute>())
+        #expect(commutes.count == 1)
+        #expect(commutes.first?.name == "Morning Commute")
+
+        // The suspect group copy was quarantined out of the way (so the next launch
+        // re-attempts migration) rather than left in place to fail forever.
+        #expect(!FileManager.default.fileExists(atPath: groupURL.path))
+        let quarantined = try FileManager.default
+            .contentsOfDirectory(atPath: groupURL.deletingLastPathComponent().path)
+            .contains { $0.hasPrefix("Steddi.store") && $0.contains(".quarantine-") }
+        #expect(quarantined)
+
+        // The legacy store is never deleted — it is the recovered source of truth.
+        #expect(FileManager.default.fileExists(atPath: legacyURL.path))
+
+        // The recovery must NOT have falsely marked the group store established.
+        #expect(defaults.bool(forKey: ModelStoreLocator.groupStoreEstablishedKey) == false)
+    }
+
+    @Test("Healthy group store opens normally and is marked established")
+    func healthyGroupStoreOpensAndMarksEstablished() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let groupURL = dir.appendingPathComponent("group/Steddi.store")
+        let legacyURL = dir.appendingPathComponent("legacy/default.store")
+
+        // Intact legacy store to migrate from.
+        do {
+            let legacy = try ModelContainer(
+                for: ModelStoreLocator.schema,
+                configurations: [ModelConfiguration(url: legacyURL)]
+            )
+            let ctx = ModelContext(legacy)
+            ctx.insert(Commute(name: "Work"))
+            try ctx.save()
+        }
+
+        let defaults = try freshDefaults()
+        let result = ModelStoreLocator.makeAppContainer(
+            groupURL: groupURL,
+            legacyCandidates: [legacyURL],
+            defaults: defaults
+        )
+
+        // Migration copy + open succeeded against the group store.
+        #expect(result.warning == nil)
+        #expect(FileManager.default.fileExists(atPath: groupURL.path))
+        #expect(defaults.bool(forKey: ModelStoreLocator.groupStoreEstablishedKey) == true)
+
+        let commutes = try ModelContext(result.container).fetch(FetchDescriptor<Commute>())
+        #expect(commutes.count == 1)
+        #expect(commutes.first?.name == "Work")
+    }
+
+    @Test("Established group store that fails to open warns instead of reverting to legacy")
+    func establishedGroupStoreFailsToInMemoryNotLegacy() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let groupURL = dir.appendingPathComponent("group/Steddi.store")
+        let legacyURL = dir.appendingPathComponent("legacy/default.store")
+        try FileManager.default.createDirectory(
+            at: groupURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+
+        // Intact (but stale) legacy store.
+        do {
+            let legacy = try ModelContainer(
+                for: ModelStoreLocator.schema,
+                configurations: [ModelConfiguration(url: legacyURL)]
+            )
+            let ctx = ModelContext(legacy)
+            ctx.insert(Commute(name: "Stale Legacy"))
+            try ctx.save()
+        }
+
+        // Group store present but unopenable, AND marked established (the app has
+        // written to it before): it is the source of truth, so reverting to legacy
+        // would lose newer writes. Recovery must warn (in-memory), not revert.
+        do {
+            let suspect = try ModelContainer(
+                for: mismatchedSchema,
+                configurations: [ModelConfiguration(url: groupURL)]
+            )
+            try ModelContext(suspect).save()
+        }
+        let defaults = try freshDefaults()
+        defaults.set(true, forKey: ModelStoreLocator.groupStoreEstablishedKey)
+
+        let result = ModelStoreLocator.makeAppContainer(
+            groupURL: groupURL,
+            legacyCandidates: [legacyURL],
+            defaults: defaults
+        )
+
+        // In-memory fallback with the user-visible warning — NOT a silent revert to
+        // the stale legacy store.
+        #expect(result.warning != nil)
+        // The established group store is left in place (not quarantined): it is the
+        // source of truth and may recover on a later (e.g. unlocked) launch.
+        #expect(FileManager.default.fileExists(atPath: groupURL.path))
+    }
+}
+
 // MARK: - Commute ↔ DriveRecord Relationship Tests
 
 @Suite("Commute ↔ DriveRecord inverse relationship")
