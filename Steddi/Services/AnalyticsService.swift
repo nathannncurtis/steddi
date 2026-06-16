@@ -66,7 +66,7 @@ struct TrendInsight: Identifiable, Equatable {
 }
 
 /// One point of a per-drive speed-vs-time chart.
-struct SpeedTrendPoint: Identifiable, Equatable {
+struct SpeedTrendPoint: Identifiable, Equatable, Sendable {
     let offsetSeconds: Double
     let speedMps: Double
 
@@ -117,10 +117,25 @@ struct WeekdayAverage: Identifiable, Equatable {
     var id: Int { weekdayIndex }
 }
 
+/// Sendable snapshot of one DriveRecord, captured on the MainActor before
+/// the heavy GPS-blob decode is handed to a detached, off-main task. Holds
+/// only value types (the GPS array is a Codable struct array), so it crosses
+/// the actor boundary without touching the non-Sendable @Model off-actor.
+struct DriveRecordSnapshot: Sendable {
+    let id: UUID
+    let title: String
+    let startedAt: Date
+    let durationSeconds: Double
+    let trafficSeconds: Double
+    let maxSpeedMps: Double?
+    let averageSpeedMps: Double?
+    let points: [GPSPoint]
+}
+
 /// Everything DriveDetailView needs, built once from a single record's GPS
 /// blob (the only place the blob is decoded) and discarded on dismissal.
-struct DriveDetail {
-    struct RouteSample {
+struct DriveDetail: Sendable {
+    struct RouteSample: Sendable {
         let coordinate: CLLocationCoordinate2D
         let speedMps: Double
     }
@@ -326,9 +341,27 @@ final class AnalyticsService {
             trafficSeconds: record.trafficDurationSeconds ?? 0,
             maxSpeedMps: record.maxSpeedMps,
             averageSpeedMps: record.averageSpeedMps,
+            points: record.rawGPSPoints
+        )
+    }
+
+    /// Builds the detail payload for one drive from a Sendable snapshot. The
+    /// only code path that decodes a GPS blob on behalf of the UI — heavy
+    /// (resamples the full trace twice), so callers run it OFF the MainActor
+    /// (see DriveDetailView.task) on the snapshot captured by `snapshot(of:)`.
+    nonisolated static func buildDriveDetail(from snapshot: DriveRecordSnapshot) -> DriveDetail {
+        let speedPoints = buildSpeedChart(points: snapshot.points)
+        return DriveDetail(
+            id: snapshot.id,
+            title: snapshot.title,
+            startedAt: snapshot.startedAt,
+            durationSeconds: snapshot.durationSeconds,
+            trafficSeconds: snapshot.trafficSeconds,
+            maxSpeedMps: snapshot.maxSpeedMps,
+            averageSpeedMps: snapshot.averageSpeedMps,
             speedPoints: speedPoints,
             trafficRanges: trafficRanges(in: speedPoints),
-            routeSamples: buildRouteSamples(points: points)
+            routeSamples: buildRouteSamples(points: snapshot.points)
         )
     }
 
