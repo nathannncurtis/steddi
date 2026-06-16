@@ -54,6 +54,31 @@ struct CommuteETAWidgetStalenessTests {
         #expect(entry.isLiveNavigating == false)
     }
 
+    /// THE STALE-BUT-SHOWN BAND: a navigating entry whose ETA write has aged past
+    /// the navigating-staleness window but is still inside the broader idle
+    /// freshness window (e.g. 10 min after an OOM/watchdog kill). The live pill is
+    /// already retired (`isLiveNavigating == false`), but without this guarantee the
+    /// frozen near-arrival ETA would render as a plain current number with NO
+    /// "as of …" qualifier for up to ~27 min. It must be flagged stale the moment it
+    /// stops being live so the qualifier shows and it's never presented as fresh.
+    @Test("Not-live navigating entry inside the idle freshness window is still stale (qualified)")
+    func staleNavigatingInsideFreshnessWindowIsStale() {
+        // Sweep the whole band: just past the live window through just inside the
+        // idle freshness window. Every point must be qualified as stale.
+        for ageSeconds in [3 * 60 + 1, 5 * 60, 10 * 60, 20 * 60, 29 * 60] {
+            let entry = CommuteETAEntry(
+                date: now,
+                commuteName: "Work",
+                etaMinutes: 2,                          // frozen near-arrival ETA
+                destinationName: "Office",
+                isNavigating: true,
+                etaUpdatedAt: now.addingTimeInterval(-Double(ageSeconds))
+            )
+            #expect(entry.isLiveNavigating == false, "age \(ageSeconds)s: pill must be retired")
+            #expect(entry.isStale == true, "age \(ageSeconds)s: stale-but-shown ETA must be qualified, not presented as fresh")
+        }
+    }
+
     /// A navigating flag whose last write is older than the broader freshness
     /// window is BOTH not-live AND stale — it falls through the live-nav guard to
     /// the normal staleness path and is labeled last-known rather than presented

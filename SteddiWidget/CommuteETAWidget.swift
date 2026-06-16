@@ -66,8 +66,13 @@ struct CommuteETAEntry: TimelineEntry {
     /// - Live-navigating (flag set AND ETA write recent): never stale (the live
     ///   ETA is authoritative).
     /// - A stuck navigating flag (set but the ETA write is old/missing) is a dead
-    ///   session — fall through to the timestamp checks below so it's labeled
-    ///   stale instead of presented as a live drive.
+    ///   session: stale *immediately* (the moment it stops being live). The live
+    ///   nav cadence is tight, so once the navigating write ages past
+    ///   `navigatingStalenessWindow` the value is a frozen, likely near-arrival ETA
+    ///   from a killed drive — bounding it by the much wider idle `etaFreshnessWindow`
+    ///   here would leave it shown as a plain current number (no pill, no "as of …"
+    ///   qualifier) for up to ~27 min after the live pill is retired. Treating it as
+    ///   stale right away qualifies it as last-known instead of implying it is fresh.
     /// - Not navigating with no timestamp: treat as stale — we can't prove the
     ///   value is a fresh pre-drive computation, so label it rather than imply it
     ///   is a live current ETA.
@@ -76,6 +81,10 @@ struct CommuteETAEntry: TimelineEntry {
     /// the stale path.
     var isStale: Bool {
         if isLiveNavigating { return false }
+        // A navigating flag that isn't live is a dead/stale session (OOM/watchdog
+        // kill before teardown): qualify it the instant the live window lapses
+        // rather than deferring to the wider idle freshness window.
+        if isNavigating { return true }
         guard let updated = etaUpdatedAt else { return true }
         return date.timeIntervalSince(updated) > etaFreshnessWindow
     }

@@ -61,7 +61,12 @@ struct OnboardingHeroView: View {
 
                 VStack(spacing: 8) {
                     Text("Your route, your rules")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        // SteddiTheme.heading scales the 30pt base through the
+                        // OS Dynamic Type setting (capped at accessibilityExtraLarge
+                        // like the rest of the app) so low-vision users get scaling
+                        // on the first screen — identical to .system(size: 30, .bold,
+                        // .rounded) at the default content size.
+                        .font(SteddiTheme.heading(30))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
                     Text("Let's get started")
@@ -84,7 +89,10 @@ struct OnboardingHeroView: View {
         if wordmarkVisible {
             GlassEffectContainer(spacing: 12) {
                 Text("Steddi")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    // Dynamic-Type-scaled (capped at accessibilityExtraLarge) so the
+                    // wordmark tracks Larger Text and stays matched to the headline;
+                    // the plate is padding-sized (no fixed frame) so it grows cleanly.
+                    .font(SteddiTheme.heading(30))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 12)
