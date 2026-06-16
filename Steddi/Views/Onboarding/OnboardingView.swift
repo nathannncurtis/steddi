@@ -95,7 +95,15 @@ struct OnboardingView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.body.weight(.medium))
-                        .foregroundStyle(coordinator.selectedAccent.color)
+                        // Match the real Home search pill's surface-aware glyph
+                        // (SteddiTheme.accent) rather than the raw accent: the raw
+                        // hue lands ~1.2-1.8:1 on the light frost this morph can
+                        // render as in Light theme. Route it through legibleText on
+                        // the showcase scrim — the same shift every other onboarding
+                        // accent glyph uses — so it clears the 3:1 glyph floor in
+                        // either theme/accent rather than relying on the shadow alone.
+                        .foregroundStyle(SteddiTheme.legibleText(coordinator.selectedAccent.rgb,
+                                                                 onSurface: OnboardingShowcaseFrost.surface).color)
                         .legibleOverMap()
                     Text("Where to?")
                         .font(SteddiTheme.heading(17))
