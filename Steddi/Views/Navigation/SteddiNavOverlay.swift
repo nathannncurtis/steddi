@@ -304,14 +304,24 @@ struct SteddiNavOverlay: View {
                         Text(engine.stepDistance)
                             .font(SteddiTheme.mono(26 * textScale))
                             .foregroundStyle(SteddiTheme.textPrimary)
+                            .legibleOverMap()
+                        // Safety-critical maneuver — must be as protected in
+                        // landscape as portrait. Match the portrait top banner:
+                        // textPrimary at semibold + the shared soft shadow, never
+                        // the mid-grey textSecondary that is only AA-proven on
+                        // solid surfaces, not glass over a moving map.
                         Text(displayInstruction)
-                            .font(SteddiTheme.body(15 * textScale, highContrast: highContrast))
-                            .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                            .font(SteddiTheme.body(15 * textScale, highContrast: highContrast).weight(.semibold))
+                            .foregroundStyle(SteddiTheme.textPrimary)
+                            .legibleOverMap()
                             .lineLimit(2)
                     }
                 }
                 .padding(14)
                 .frame(width: landscapeCardWidth, alignment: .leading)
+                // Faint scrim under the glass, exactly like the portrait top
+                // banner, so the maneuver holds against bright/varied cartography.
+                .mapGlassScrim(in: SteddiGlass.mediumShape)
                 .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.mediumShape)
 
                 // Trip leg context (compact, below instruction)
@@ -326,9 +336,14 @@ struct SteddiNavOverlay: View {
                         Image(systemName: engine.followOnManeuverSymbol)
                             .font(.system(size: 13 * iconScale, weight: .semibold))
                             .foregroundStyle(SteddiTheme.accent.opacity(0.7))
+                        // Follow-on is real driving info over the moving map —
+                        // promote to textSecondary (textMuted's AA holds only on
+                        // solid surfaces) + the shared soft shadow, matching the
+                        // portrait follow-on banner.
                         Text("Then: \(displayFollowOnInstruction)")
                             .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
-                            .foregroundStyle(SteddiTheme.textMuted(highContrast: highContrast))
+                            .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                            .legibleOverMap()
                             .lineLimit(1)
                     }
                     .padding(.horizontal, 12)
