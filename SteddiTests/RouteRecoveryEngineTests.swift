@@ -116,6 +116,28 @@ struct RejoinCandidatesTests {
         #expect(RouteRecoveryEngine.minForwardOffset(speedMPS: 5) == 250)
         #expect(RouteRecoveryEngine.minForwardOffset(speedMPS: 30) == 900)
     }
+
+    @Test("Destination survives a near-end look-ahead that lands within the dedupe window")
+    func destinationNotDedupedByNearEndLookAhead() {
+        // Deviation late on a 10km route: distanceAlong 9170, speed 13 →
+        //   floorAlong = 9170 + max(250, 13*30=390) = 9560
+        //   lookAhead  = 9170 + max(500, 13*60=780) = 9950  (passes the forward
+        //               filter and sits within 100m of totalDistance 10000).
+        // The lookAhead candidate is appended before the destination and recorded
+        // in `seen`; pre-fix the dedupe then dropped the destination because
+        // abs(9950 - 10000) = 50 < 100, silently disabling abandon-to-destination.
+        // The destination must remain present regardless.
+        let candidates = RouteRecoveryEngine.rejoinCandidates(
+            event: event(along: 9170, speed: 13), legs: [], steps: [], alongDistances: [],
+            polyline: straightPolyline, totalDistance: 10000
+        )
+        #expect(candidates.contains { $0.kind == .destination },
+                "destination give-up candidate must never be deduped away by a near-end look-ahead")
+        #expect(candidates.contains { $0.kind == .lookAhead },
+                "sanity: the near-end look-ahead that triggers the collision is present")
+        // The destination must anchor at totalDistance, not be replaced by lookAhead.
+        #expect(candidates.first { $0.kind == .destination }?.alongDistance == 10000)
+    }
 }
 
 // MARK: - Scoring & Choice

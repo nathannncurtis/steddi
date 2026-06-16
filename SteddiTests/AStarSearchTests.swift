@@ -428,6 +428,41 @@ struct AStarSearchTests {
         #expect(!synth.steps.contains { $0.instruction.lowercased().contains("u-turn") })
     }
 
+    @Test("origin == destination on the same edge (equal fraction): degenerate point route, no full-edge draw")
+    func sameEdgeEqualFractionIsDegenerate() {
+        // One long primary edge. Origin and destination snap to the EXACT same
+        // mid-edge point, so Case 1 fires with startFraction == endFraction (the
+        // `<=` admits equality) and totalCost 0. Pre-fix, StepSynthesizer's
+        // trimSubSegment guard `from < to` rejected the equal fractions and returned
+        // the FULL untrimmed edge — drawing the whole block and reporting a full-edge
+        // distance for a zero-length trip. The fix collapses the sub-segment to a
+        // single interpolated point, so synthesis yields no >=2-coord polyline and
+        // the leg falls back to MapKit rather than a phantom full-block drive.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),
+            node(2, 0.0, 0.004),
+            way(100, [1, 2], tags: ["highway": "primary", "maxspeed": "45 mph"])
+        )
+        let point = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.002)   // mid-edge
+        let result = search.search(from: .coordinate(point), to: .coordinate(point), in: graph, cost: cost)
+        guard let result else { Issue.record("no path for coincident endpoints"); return }
+        // The same-edge fast path returns a degenerate single-edge result with
+        // equal fractions and zero cost.
+        #expect(result.edgePath.count == 1)
+        #expect(result.startFraction == result.endFraction)
+        #expect(result.totalCost == 0)
+
+        // The travelled geometry is a single point, so synthesize collapses to a
+        // <2-coordinate polyline and returns nil (no full-block route is drawn).
+        let stitched = StepSynthesizer.stitchedPolyline(result, in: graph)
+        #expect(stitched.count <= 1, "zero-length route must not draw the full edge (\(stitched.count) coords)")
+        #expect(StepSynthesizer.synthesize(result, in: graph) == nil)
+        // And the per-step length of that edge is ~0, not the full block length.
+        let edgeFull = Double(graph.edges[Int(result.edgePath[0])].lengthMeters)
+        #expect(StepSynthesizer.freeFlowSeconds(result, in: graph) < edgeFull / 1000,
+                "zero-length route must report ~0 travel time, not a full-edge duration")
+    }
+
     // MARK: - Boundary snap (endpoint projects exactly onto a graph node)
 
     /// A straight 3-edge chain 1-2-3-4 along the equator, each ~111 m primary —
