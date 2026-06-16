@@ -52,12 +52,33 @@ struct DonationView: View {
     private var tipRowFill: Color {
         fromOnboarding ? Color.white.opacity(0.1) : SteddiTheme.surfaceSecondary
     }
-    /// Accent for icons/prices. On the fixed-dark onboarding sheet use the raw
-    /// brand hue (`accentBrand`) — `accent` is luminance-shifted for the *theme*
-    /// surface (which may be light), so it could darken against the dark sheet.
+    /// Accent for the large decorative icons (header cup, thank-you heart). On the
+    /// fixed-dark onboarding sheet use the raw brand hue (`accentBrand`) — `accent`
+    /// is luminance-shifted for the *theme* surface (which may be light), so it
+    /// could darken against the dark sheet. These are large glyphs where contrast
+    /// is carried by size, so the raw hue is fine (per the theme usage rule).
     /// Elsewhere use the surface-aware text-safe `accent`.
     private var sheetAccent: Color {
         fromOnboarding ? SteddiTheme.accentBrand : SteddiTheme.accent
+    }
+    /// Color for the tip PRICE — value text, not a large glyph. On the onboarding
+    /// sheet the tip row is `white.opacity(0.1)` composited over the fixed-dark
+    /// `onboardingCardFallbackFill`, a near-black (~L0.036) surface. The raw
+    /// `accentBrand` mid-tone hue lands sub-AA there (5 of 6 accents 3.5–4.2:1),
+    /// so size the price against the ROW it actually sits on: `legibleText`
+    /// lightens the brand accent toward white by the minimal amount that clears
+    /// the semantic text target, preserving the accent hue (the price still reads
+    /// as the brand color rather than flattening to white). Off onboarding the
+    /// adaptive `accent` already sits on the live theme surface, so reuse it.
+    private var sheetPriceColor: Color {
+        guard fromOnboarding else { return SteddiTheme.accent }
+        // Composite the row fill (0.1 white) over the dark sheet fill, source-over,
+        // matching `tipRowFill` + `sheetSurface` above. The base mirrors
+        // `SteddiTheme.onboardingCardFallbackFill` (0.12, 0.12, 0.13).
+        let f = 0.1
+        let base = RGBColor(0.12, 0.12, 0.13)
+        let row = RGBColor(f + (1 - f) * base.r, f + (1 - f) * base.g, f + (1 - f) * base.b)
+        return SteddiTheme.legibleText(SteddiTheme.currentAccentOption.rgb, onSurface: row).color
     }
 
     var body: some View {
@@ -151,11 +172,12 @@ struct DonationView: View {
                     .font(.body.weight(.medium))
                     .foregroundStyle(sheetTextPrimary)
                 Spacer()
-                // Price in the accent so the tappable amount reads as the action,
-                // not a link-blue default.
+                // Price in a surface-legible accent so the tappable amount reads
+                // as the action (not a link-blue default) AND clears AA on the
+                // dark tip row — see `sheetPriceColor`.
                 Text(price)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(sheetAccent)
+                    .foregroundStyle(sheetPriceColor)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
