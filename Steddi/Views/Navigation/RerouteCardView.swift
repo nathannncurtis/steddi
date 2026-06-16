@@ -119,7 +119,9 @@ struct RerouteCardView: View {
 
                 // Action buttons
                 HStack(spacing: 12) {
-                    // Secondary: neutral glass.
+                    // Secondary: Steddi's neutral interactive glass — keeps the
+                    // Reduce-Motion press-scale + over-map fallback the primary CTA
+                    // and the rest of the nav chrome use (stock `.glass` drops them).
                     Button("Stay") {
                         hide()
                         onStay()
@@ -127,7 +129,7 @@ struct RerouteCardView: View {
                     .font(.system(size: 17 * textScale, weight: .medium))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14 * controlScale)
-                    .buttonStyle(.glass)
+                    .buttonStyle(.steddiGlass)
 
                     // Primary CTA: canonical accent glass — fill + AA-legible
                     // on-fill label supplied by the style (no .tint/.glassProminent).
