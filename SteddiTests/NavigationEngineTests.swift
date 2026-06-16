@@ -1214,7 +1214,7 @@ struct NavigationEngineSpeedLimitStepTests {
 
         // Provider always returns a live (non-estimated) OSM value of 50,
         // regardless of position — simulating continuous OSM coverage.
-        engine.speedLimitProvider = { _, _ in (mph: 50, isEstimated: false) }
+        engine.speedLimitProvider = { _, _, _ in (mph: 50, isEstimated: false) }
         engine.startNavigation(polyline: polyline, steps: steps)
 
         // At the start, the live provider value wins over the step-0 estimate.
@@ -1245,7 +1245,7 @@ struct NavigationEngineSpeedLimitStepTests {
         // the stale 55 from step 0 would stick and the new road's 25 estimate
         // would never show.
         let boundaryLat = polyline[10].latitude
-        engine.speedLimitProvider = { coord, _ in
+        engine.speedLimitProvider = { coord, _, _ in
             coord.latitude < boundaryLat ? (mph: 55, isEstimated: false) : nil
         }
         engine.startNavigation(polyline: polyline, steps: steps)
@@ -1281,7 +1281,7 @@ struct NavigationEngineSpeedLimitStepTests {
         // bearing while on-route — so the bearing handed in must be non-nil.
         var headingsAtStep1: [Double?] = []
         let boundaryLat = polyline[10].latitude
-        engine.speedLimitProvider = { coord, heading in
+        engine.speedLimitProvider = { coord, heading, _ in
             if coord.latitude >= boundaryLat {
                 headingsAtStep1.append(heading)
             }

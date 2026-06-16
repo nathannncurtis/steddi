@@ -1000,6 +1000,71 @@ struct OSMSpeedLimitLookupTests {
         #expect(OSMSpeedLimitService.bearingDelta(90, 0) == 90)
     }
 
+    @Test("Signed bearing delta preserves direction (antiparallel is ~180)")
+    func signedBearingDeltaPreservesDirection() {
+        // Opposite carriageways differ by ~180 here, unlike the mod-180 fold.
+        #expect(OSMSpeedLimitService.signedBearingDelta(0, 180) == 180)
+        #expect(OSMSpeedLimitService.signedBearingDelta(90, 270) == 180)
+        // Same direction stays small, and the 360 wrap takes the short arc.
+        #expect(OSMSpeedLimitService.signedBearingDelta(0, 10) == 10)
+        #expect(OSMSpeedLimitService.signedBearingDelta(350, 10) == 20)
+        #expect(OSMSpeedLimitService.signedBearingDelta(10, 350) == 20)
+    }
+
+    // MARK: Direction-aware carriageway gate (hairpin / reversed step)
+
+    /// A divided road with two close, antiparallel carriageways that legitimately
+    /// carry DIFFERENT posted limits (e.g. a work-zone restriction on one side).
+    /// The driver has just advanced onto a hairpin step that reverses direction:
+    /// they now travel WEST. The probe coordinate sits nearer the EASTBOUND
+    /// carriageway, so the default mod-180 gate (which folds opposing bearings
+    /// together) lets the nearer-but-wrong eastbound way win — publishing the
+    /// opposite carriageway's limit. The direction-aware gate rejects the
+    /// antiparallel eastbound way outright and serves the correct westbound limit.
+    @Test("Hairpin/reversed step resolves the correct carriageway with the direction-aware gate")
+    func directionAwarePicksCorrectCarriageway() {
+        let service = makeOfflineService()
+        // Eastbound carriageway (bearing ~90) at the equator, limit 65.
+        // Westbound carriageway (bearing ~270) ~11m north, limit 45.
+        service.loadWays([
+            makeWay(id: 1, mph: 65, coords: [(0, 0), (0, 0.001)]),            // W->E
+            makeWay(id: 2, mph: 45, coords: [(0.0001, 0.001), (0.0001, 0)]),  // E->W
+        ], routeKey: "r")
+
+        // Sit nearer the eastbound carriageway (~2.2m from it, ~8.9m from the
+        // westbound one) while heading WEST onto the reversed step.
+        let probe = coord(0.00002, 0.0005)
+        let westbound = 270.0
+
+        // Default mod-180 gate: both carriageways pass the heading fold, so the
+        // nearer (wrong, eastbound) one wins — the bug.
+        #expect(service.speedLimit(at: probe, heading: westbound)?.mph == 65)
+
+        // Direction-aware gate: the antiparallel eastbound way is rejected, so
+        // the correct westbound limit surfaces despite being farther.
+        let fresh = makeOfflineService()
+        fresh.loadWays([
+            makeWay(id: 1, mph: 65, coords: [(0, 0), (0, 0.001)]),
+            makeWay(id: 2, mph: 45, coords: [(0.0001, 0.001), (0.0001, 0)]),
+        ], routeKey: "r")
+        #expect(fresh.speedLimit(at: probe, heading: westbound, directionAware: true)?.mph == 45)
+    }
+
+    @Test("Direction-aware gate still matches the same-direction carriageway")
+    func directionAwareKeepsSameDirection() {
+        let service = makeOfflineService()
+        // Single eastbound way (bearing ~90), limit 55.
+        service.loadWays([makeWay(id: 1, mph: 55, coords: [(0, 0), (0, 0.001)])], routeKey: "r")
+        let probe = coord(0, 0.0005)
+
+        // Traveling east (same direction) still matches under the signed gate.
+        #expect(service.speedLimit(at: probe, heading: 90, directionAware: true)?.mph == 55)
+        // A small curve within tolerance still matches.
+        #expect(service.speedLimit(at: probe, heading: 130, directionAware: true)?.mph == 55)
+        // Traveling the opposite direction (west) is rejected.
+        #expect(service.speedLimit(at: probe, heading: 270, directionAware: true) == nil)
+    }
+
     // MARK: Equidistant ties
 
     @Test("Equidistant point keeps the previously locked way")

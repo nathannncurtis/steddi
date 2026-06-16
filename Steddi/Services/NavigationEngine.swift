@@ -113,9 +113,14 @@ final class NavigationEngine {
     var approachingCamera: SpeedCameraAlert? = nil
 
     /// Injected position-based speed limit lookup (OSM-backed). Closure keeps
-    /// the engine free of service dependencies and unit-testable.
+    /// the engine free of service dependencies and unit-testable. The `Bool` is
+    /// `directionAware`: when true the lookup gates on a signed full-circle
+    /// heading match so an opposite-direction carriageway is rejected (used when
+    /// resolving the limit of a freshly-advanced step that may reverse direction
+    /// at a hairpin); when false it uses the mod-180 gate fine for the per-fix
+    /// live readout.
     @ObservationIgnored
-    var speedLimitProvider: ((CLLocationCoordinate2D, Double?) -> (mph: Double, isEstimated: Bool)?)? = nil
+    var speedLimitProvider: ((CLLocationCoordinate2D, Double?, Bool) -> (mph: Double, isEstimated: Bool)?)? = nil
 
     /// Injected road-condition proximity lookup. Given the current snapped
     /// position it returns the highest-priority active condition within the
@@ -605,7 +610,11 @@ final class NavigationEngine {
         // opposite carriageway's limit. Skip the update until a bearing exists so
         // the readout doesn't momentarily flip to the wrong side of the road.
         guard let bearing = directionalFilterBearing else { return }
-        guard let provided = speedLimitProvider?(location.coordinate, bearing) else { return }
+        // Per-fix live readout: mod-180 gate. The nearer carriageway already wins
+        // by distance, and the fold tolerates GPS bearing jitter; carriageway
+        // discrimination on a direction-reversing step is handled in
+        // resolveSpeedLimitForStep, which asks for the direction-aware gate.
+        guard let provided = speedLimitProvider?(location.coordinate, bearing, false) else { return }
         speedLimitMph = provided.mph
         speedLimitIsEstimated = provided.isEstimated
     }
@@ -635,12 +644,15 @@ final class NavigationEngine {
         let estimate = Self.estimateSpeedLimit(from: step.instruction)
         // Probe the provider at the new step's start so the limit matches the
         // road being entered, not the position one fix ago. Pass the route's
-        // travel bearing AT THIS STEP so the OSM lookup keeps its carriageway
-        // gate: a heading-less probe skips that gate and can publish the
-        // opposite carriageway's limit on a divided road (the bug this fixes),
-        // and the current pose's bearing (directionalFilterBearing) is the wrong
-        // direction for a step that turns. The route bearing at the step's
-        // along-distance is GPS-independent and always the correct entry
+        // travel bearing AT THIS STEP and ask for the DIRECTION-AWARE gate so the
+        // OSM lookup picks the correct carriageway: a heading-less probe skips the
+        // gate entirely (could publish the opposite carriageway's limit on a
+        // divided road), and the current pose's bearing is the wrong direction for
+        // a step that turns. Crucially the gate must be signed/full-circle here —
+        // a step can physically REVERSE direction (a hairpin/switchback), and the
+        // default mod-180 gate folds the oncoming carriageway onto this one, so it
+        // could still publish the opposite side's limit. The route bearing at the
+        // step's along-distance is GPS-independent and always the correct entry
         // direction. Only when that bearing is unknown (degenerate route / no
         // projector) do we fall back to the instruction estimate rather than
         // querying omni-directionally; the next fix's updateSpeedLimit then
@@ -649,7 +661,7 @@ final class NavigationEngine {
             ?? directionalFilterBearing
         if let provider = speedLimitProvider,
            let bearing = stepBearing,
-           let provided = provider(step.coordinate, bearing) {
+           let provided = provider(step.coordinate, bearing, true) {
             speedLimitMph = provided.mph
             speedLimitIsEstimated = provided.isEstimated
         } else {

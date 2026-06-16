@@ -718,8 +718,10 @@ struct HomeView: View {
     /// Hook the OSM speed limit service into a fresh engine: position-based
     /// lookups every fix, corridor prefetch warmed in the background.
     private func wireSpeedLimits(for engine: NavigationEngine) {
-        engine.speedLimitProvider = { coordinate, heading in
-            OSMSpeedLimitService.shared.speedLimit(at: coordinate, heading: heading)
+        engine.speedLimitProvider = { coordinate, heading, directionAware in
+            OSMSpeedLimitService.shared.speedLimit(
+                at: coordinate, heading: heading, directionAware: directionAware
+            )
         }
         let corridor = engine.routePolylineCoordinates
         guard corridor.count >= 2 else { return }

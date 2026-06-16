@@ -266,7 +266,21 @@ final class OSMSpeedLimitService {
     /// Synchronous in-memory speed limit lookup for the current position.
     /// Candidates come from the spatial grid (cell + 8 neighbors), gated to 30m
     /// perpendicular distance, heading-filtered, with way-switch hysteresis.
-    func speedLimit(at coordinate: CLLocationCoordinate2D, heading: Double?) -> (mph: Double, isEstimated: Bool)? {
+    ///
+    /// `directionAware` selects the heading gate. The default (false) folds
+    /// bearings mod 180, so a way and its antiparallel twin both pass — fine for
+    /// the per-fix live readout, where the nearer carriageway already wins by
+    /// distance and the small fold tolerates GPS bearing jitter. Set true to gate
+    /// on the SIGNED full-circle delta (~90deg tolerance) so a way running the
+    /// opposite direction is rejected outright: needed when resolving the limit
+    /// of a freshly-advanced step that physically reverses direction (a
+    /// hairpin/switchback), where a mod-180 gate would let the oncoming
+    /// carriageway's way match and publish the wrong limit.
+    func speedLimit(
+        at coordinate: CLLocationCoordinate2D,
+        heading: Double?,
+        directionAware: Bool = false
+    ) -> (mph: Double, isEstimated: Bool)? {
         guard !segments.isEmpty else { return nil }
 
         let centerLat = Self.cellIndex(coordinate.latitude)
@@ -284,8 +298,11 @@ final class OSMSpeedLimitService {
         var wayDistances: [Int: Double] = [:]
         for segmentIndex in candidates {
             let segment = segments[segmentIndex]
-            if let heading, Self.bearingDelta(segment.bearing, heading) > Tuning.headingToleranceDegrees {
-                continue
+            if let heading {
+                let withinHeading = directionAware
+                    ? Self.signedBearingDelta(segment.bearing, heading) <= Tuning.directionAwareToleranceDegrees
+                    : Self.bearingDelta(segment.bearing, heading) <= Tuning.headingToleranceDegrees
+                if !withinHeading { continue }
             }
             let distance = Self.distanceToSegment(coordinate, segment.start, segment.end)
             guard distance <= Tuning.matchRadiusMeters else { continue }
@@ -362,6 +379,16 @@ final class OSMSpeedLimitService {
     nonisolated static func bearingDelta(_ a: Double, _ b: Double) -> Double {
         var diff = abs(a - b).truncatingRemainder(dividingBy: 180)
         if diff > 90 { diff = 180 - diff }
+        return diff
+    }
+
+    /// Signed full-circle angular difference between two bearings (0...180),
+    /// preserving direction of travel: a way and its antiparallel twin differ by
+    /// ~180deg here (vs. 0 under `bearingDelta`). Used by the direction-aware
+    /// heading gate so an opposite-direction carriageway can be rejected.
+    nonisolated static func signedBearingDelta(_ a: Double, _ b: Double) -> Double {
+        var diff = abs(a - b).truncatingRemainder(dividingBy: 360)
+        if diff > 180 { diff = 360 - diff }
         return diff
     }
 
@@ -655,6 +682,10 @@ private enum Tuning {
     static let maxCellSpanPerSegment = 1000
     static let matchRadiusMeters: Double = 30
     static let headingToleranceDegrees: Double = 50
+    /// Heading tolerance for the direction-aware (signed, full-circle) gate. Wide
+    /// enough that a turning/curving step still matches its own carriageway, but
+    /// well under 180deg so the antiparallel oncoming carriageway is rejected.
+    static let directionAwareToleranceDegrees: Double = 90
     static let hysteresisMarginMeters: Double = 5
     static let hysteresisLookups = 3
     /// Age-out threshold for a challenger that stays strictly nearest but always
