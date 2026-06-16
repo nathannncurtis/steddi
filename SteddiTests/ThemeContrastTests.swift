@@ -334,6 +334,137 @@ struct ThemeContrastTests {
         }
     }
 
+    // MARK: - Onboarding showcase/ask card (dark-scrim surface)
+
+    /// The dark surface the showcase/ask beats' copy + glyphs sit on after the
+    /// dark-card fix. `OnboardingShowcaseFrost.surface` is the conservative
+    /// composite of the scrim painted in `OnboardingShowpieceCard`; every element
+    /// is asserted against it. Pulling it once keeps these tests pinned to the
+    /// same constant the views feed `legibleText`.
+    private var onboardingFrost: RGBColor { OnboardingShowcaseFrost.surface }
+
+    /// White at the opacity each onboarding copy tier uses, composited over a
+    /// surface (the tokens are `Color.white.opacity(x)`, so the effective color
+    /// drawn over the dark scrim is white blended toward the surface).
+    private func whiteTier(_ opacity: Double, over surface: RGBColor) -> RGBColor {
+        RGBColor(1 * opacity + surface.r * (1 - opacity),
+                 1 * opacity + surface.g * (1 - opacity),
+                 1 * opacity + surface.b * (1 - opacity))
+    }
+
+    @Test("onboarding frost surface is dark (white-on-dark, like the hero)")
+    func onboardingFrostIsDark() {
+        // The fix makes the card surface DARK so the fixed-white copy reads. The
+        // constant must be below the WCAG black/white flip luminance, else the
+        // whole premise (white copy + lightened glyphs) is wrong.
+        let lum = ContrastRatio.relativeLuminance(onboardingFrost)
+        #expect(lum < ContrastRatio.foregroundFlipLuminance,
+                "onboarding frost luminance \(lum), want a dark surface (< 0.179)")
+    }
+
+    @Test("onboarding copy tiers clear their floors on the dark card surface")
+    func onboardingCopyTiersAA() {
+        // primary (white) and secondary (white .92) are body/interactive copy →
+        // 4.5 floor; muted (white .66) is also used as body → 4.5 floor. All sit
+        // on the dark scrim.
+        let primary = ContrastRatio.ratio(whiteTier(1.0, over: onboardingFrost), onboardingFrost)
+        let secondary = ContrastRatio.ratio(whiteTier(0.92, over: onboardingFrost), onboardingFrost)
+        let muted = ContrastRatio.ratio(whiteTier(0.66, over: onboardingFrost), onboardingFrost)
+        #expect(primary >= ContrastRatio.aaBody, "onboarding primary = \(primary), want >= 4.5")
+        #expect(secondary >= ContrastRatio.aaBody, "onboarding secondary = \(secondary), want >= 4.5")
+        #expect(muted >= ContrastRatio.aaBody, "onboarding muted = \(muted), want >= 4.5")
+        // Tiers stay visually ranked.
+        #expect(primary > secondary && secondary > muted)
+    }
+
+    @Test("onboarding showcase glyphAccent clears the 3:1 floor for every accent")
+    func onboardingGlyphAccentFloor() {
+        // The showcase glyphs (turn arrow, speedo sweep, no-go ring/nosign,
+        // reroute line) and the permissions/emergency focal icons all draw in
+        // `legibleText(accent, onSurface: frost)`. On the dark surface the shift
+        // LIGHTENS the accent to the semantic target, clearing 3:1 with margin.
+        for option in SteddiTheme.AccentOption.allCases {
+            let glyph = SteddiTheme.legibleText(option.rgb, onSurface: onboardingFrost)
+            let r = ContrastRatio.ratio(glyph, onboardingFrost)
+            #expect(r >= ContrastRatio.aaLarge,
+                    "glyphAccent(\(option.rawValue))/frost = \(r), want >= 3.0")
+        }
+    }
+
+    @Test("onboarding focal-icon glyph clears the 3:1 floor (was raw accent ~1.1:1)")
+    func onboardingFocalIconFloor() {
+        // Permissions/Emergency 64pt focal icons now route through the same
+        // glyphAccent as the showcase beats. Document that the RAW accent failed
+        // on the old LIGHT frost, and that the lightened glyph clears 3:1 on the
+        // dark surface.
+        let oldLightFrost = RGBColor(0.73, 0.73, 0.75) // the measured ~0.73 frost
+        for option in SteddiTheme.AccentOption.allCases {
+            let rawOnOldFrost = ContrastRatio.ratio(option.rgb, oldLightFrost)
+            #expect(rawOnOldFrost < ContrastRatio.aaLarge,
+                    "raw \(option.rawValue) on old light frost was \(rawOnOldFrost), expected sub-3:1 (documents the bug)")
+            let glyph = SteddiTheme.legibleText(option.rgb, onSurface: onboardingFrost)
+            let fixed = ContrastRatio.ratio(glyph, onboardingFrost)
+            #expect(fixed >= ContrastRatio.aaLarge,
+                    "focal glyph(\(option.rawValue))/frost = \(fixed), want >= 3.0")
+        }
+    }
+
+    @Test("onboarding no-go ring (glyphAccent @0.85 opacity) clears the 3:1 floor")
+    func onboardingNoGoRingFloor() {
+        // RouteRules draws the no-go ring as `glyphAccent.opacity(0.85)` over the
+        // dark scrim. Composite the 0.85 glyph over the surface and assert 3:1.
+        for option in SteddiTheme.AccentOption.allCases {
+            let glyph = SteddiTheme.legibleText(option.rgb, onSurface: onboardingFrost)
+            let a = 0.85
+            let ring = RGBColor(glyph.r * a + onboardingFrost.r * (1 - a),
+                                glyph.g * a + onboardingFrost.g * (1 - a),
+                                glyph.b * a + onboardingFrost.b * (1 - a))
+            let r = ContrastRatio.ratio(ring, onboardingFrost)
+            #expect(r >= ContrastRatio.aaLarge,
+                    "no-go ring(\(option.rawValue))/frost = \(r), want >= 3.0")
+        }
+    }
+
+    @Test("onboarding decorative strokes (dashed reject, speedo track) clear the 3:1 floor")
+    func onboardingDecorativeStrokesFloor() {
+        // The route-rules dashed reject line is `onboardingTextMuted.opacity(0.6)`
+        // (= white .66 * .6) and the speedo track is `.opacity(0.6)` too — both
+        // meaning-light but should still clear the 3:1 graphical floor on the
+        // dark scrim.
+        let stroke = ContrastRatio.ratio(whiteTier(0.66 * 0.6, over: onboardingFrost), onboardingFrost)
+        #expect(stroke >= ContrastRatio.aaLarge, "decorative stroke = \(stroke), want >= 3.0")
+    }
+
+    @Test("the OLD light-frost surface made white copy + glyphs fail (documents the root bug)")
+    func onboardingLightFrostRegression() {
+        // Before the dark-card fix, the card surface was the neutral .regular
+        // glass the OS renders LIGHT (~0.73 sRGB), and the frost constant was a
+        // guessed 0.62. Assert white copy and the glyph shift BOTH failed there,
+        // and that the dark-card surface fixes both.
+        let oldGuess = RGBColor(0.62, 0.62, 0.64)      // the pre-fix constant
+        let oldRender = RGBColor(0.73, 0.73, 0.75)     // the measured real frost
+
+        // White primary copy failed the AA-large floor on the real light frost.
+        let whiteOnLight = ContrastRatio.ratio(RGBColor(1, 1, 1), oldRender)
+        #expect(whiteOnLight < ContrastRatio.aaLarge,
+                "white on the real light frost was \(whiteOnLight), expected sub-3:1")
+        // It clears AA on the dark surface.
+        let whiteOnDark = ContrastRatio.ratio(RGBColor(1, 1, 1), onboardingFrost)
+        #expect(whiteOnDark >= ContrastRatio.aaBody)
+
+        // The glyph shift against the old guessed surface failed 3:1 for the
+        // worst accent; on the dark surface it clears 3:1, strictly better.
+        for option in SteddiTheme.AccentOption.allCases {
+            let onOldGuess = ContrastRatio.ratio(
+                SteddiTheme.legibleText(option.rgb, onSurface: oldGuess), oldGuess)
+            let onDark = ContrastRatio.ratio(
+                SteddiTheme.legibleText(option.rgb, onSurface: onboardingFrost), onboardingFrost)
+            #expect(onDark >= ContrastRatio.aaLarge)
+            #expect(onDark > onOldGuess,
+                    "\(option.rawValue): dark \(onDark) should beat old-guess \(onOldGuess)")
+        }
+    }
+
     // MARK: - Trend insight magnitude badge (sage/warmRed text on 15% tint)
 
     @Test("trend magnitude badge text clears its floor on a 15%-tint-of-itself over the card")
