@@ -304,7 +304,11 @@ struct NoGoZoneEditorView: View {
                 .foregroundStyle(SteddiTheme.textPrimary)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(SteddiTheme.surfacePrimary.opacity(0.92), in: Capsule())
+        // Floats over the live map — shared glass treatment so it falls back to a
+        // SOLID surface under Reduce Transparency / Increase Contrast instead of the
+        // translucent fill the cartography bled through (matching topBar /
+        // modePickerBar / bottomControlCard).
+        .steddiGlass(in: Capsule())
         .padding(.bottom, 8)
     }
 
@@ -313,7 +317,9 @@ struct NoGoZoneEditorView: View {
             .font(SteddiTheme.body(13))
             .foregroundStyle(SteddiTheme.warmRedText)
             .padding(.horizontal, 16).padding(.vertical, 10)
-            .background(SteddiTheme.surfacePrimary.opacity(0.92), in: Capsule())
+            // Shared glass treatment so the banner goes opaque under Reduce
+            // Transparency / Increase Contrast (was a raw translucent surface).
+            .steddiGlass(in: Capsule())
             .padding(.bottom, 8)
     }
 
@@ -342,7 +348,10 @@ struct NoGoZoneEditorView: View {
                 }
             }
             .padding(12)
-            .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: 12))
+            // Shared glass treatment so the search field goes opaque under Reduce
+            // Transparency / Increase Contrast (was a raw translucent surface the
+            // map bled through), matching the other floating editor chrome.
+            .steddiGlass(in: RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal, 16)
             .padding(.top, 8)
 
@@ -373,7 +382,9 @@ struct NoGoZoneEditorView: View {
                     }
                 }
                 .frame(maxHeight: 200)
-                .background(SteddiTheme.surfacePrimary.opacity(0.95), in: RoundedRectangle(cornerRadius: 12))
+                // Same shared glass treatment for the results list, so it goes
+                // opaque under Reduce Transparency / Increase Contrast too.
+                .steddiGlass(in: RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
             }

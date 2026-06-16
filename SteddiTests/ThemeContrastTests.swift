@@ -521,37 +521,45 @@ struct ThemeContrastTests {
     ///     accent in BOTH states; the fallback state is the one that was broken,
     ///     so it is covered explicitly.
 
-    /// Both glass states, as the view's surface model sees them.
+    /// Both glass states, as the view's surface model sees them. The theme beat now
+    /// carries a partial dark scrim in BOTH (scrim-over-tinted-glass when glass is
+    /// on, the solid dark fallback when it's off), so the copy is near-white either
+    /// way and clears AA with margin.
     private let glassStates: [(name: String, available: Bool)] = [
-        ("glass-available (accent tint)", true),
+        ("glass-available (partial scrim over accent tint)", true),
         ("glass-unavailable (Reduce Transparency / dark fallback)", false),
     ]
 
-    @Test("theme-beat shell copy clears AA on the card for every accent, in BOTH glass states")
+    /// The theme-beat body-copy bar is the WCAG AA body floor (4.5) PLUS margin —
+    /// the recurring bug was copy landing AT/below 4.5 on the real (darker than
+    /// modelled) tinted glass, so we require headroom, not a floor-hugging pass.
+    private let aaBodyMargin: Double = 5.0
+
+    @Test("theme-beat shell copy clears AA WITH MARGIN on the card for every accent, in BOTH glass states")
     func onboardingThemeShellCopyAA() {
         // Header glyph + title + both section titles/subtitles sit directly on the
-        // card shell. With glass on it's the accent tint (near-black copy, was
-        // fixed white: gold subtitle 2.26:1); with glass off it's the dark
-        // fallback (near-white copy, was the invisible near-black-on-near-black).
+        // card shell — now the partial dark scrim over the tinted glass (glass on)
+        // or the solid dark fallback (glass off). Near-white copy on both; must
+        // clear the 5:1 margin bar, not just the 4.5 floor (the old bare-tint card
+        // sat AT/below 4.5 — the bug this ends).
         for (sName, glass) in glassStates {
             for option in SteddiTheme.AccentOption.allCases {
                 let surface = ThemeBeatSurface.cardShell(accent: option.rgb, glassAvailable: glass)
                 let fg = ContrastRatio.contrastingForeground(on: surface)
                 let r = ContrastRatio.ratio(fg, surface)
-                #expect(r >= ContrastRatio.aaBody,
-                        "theme shell copy(\(option.rawValue), \(sName)) = \(r), want >= 4.5")
+                #expect(r >= aaBodyMargin,
+                        "theme shell copy(\(option.rawValue), \(sName)) = \(r), want >= 5.0 (margin)")
             }
         }
     }
 
-    @Test("theme-card label + description clear AA on every card's own surface, selected/deselected, BOTH glass states")
+    @Test("theme-card label + description clear AA WITH MARGIN on every card's own surface, selected/deselected, BOTH glass states")
     func onboardingThemeCardCopyAA() {
-        // Each theme-selection row draws a white wash over the effective shell
-        // (accent when glass is on, the dark fallback when it's off). The
-        // label/description must contrast with THAT composite. Worst pre-fix:
-        // glass-on selected 'Light' description 1.92:1; glass-off ALL rows
-        // ~1.4–2.0:1 (near-black on near-black). Both states now clear the 4.5
-        // body floor for every accent.
+        // Each theme-selection row draws a small white wash over the effective
+        // (scrimmed, dark) shell. The label/description must contrast with THAT
+        // composite. The wash opacities (0.12 selected / 0.05 deselected) are tuned
+        // so even the lightened selected row stays dark enough for near-white copy
+        // to clear the 5:1 margin bar on every accent in both states.
         for (sName, glass) in glassStates {
             for option in SteddiTheme.AccentOption.allCases {
                 for selected in [true, false] {
@@ -559,8 +567,8 @@ struct ThemeContrastTests {
                         accent: option.rgb, selected: selected, glassAvailable: glass)
                     let fg = ContrastRatio.contrastingForeground(on: surface)
                     let r = ContrastRatio.ratio(fg, surface)
-                    #expect(r >= ContrastRatio.aaBody,
-                            "theme card copy(\(option.rawValue), selected=\(selected), \(sName)) = \(r), want >= 4.5")
+                    #expect(r >= aaBodyMargin,
+                            "theme card copy(\(option.rawValue), selected=\(selected), \(sName)) = \(r), want >= 5.0 (margin)")
                 }
             }
         }
@@ -668,39 +676,56 @@ struct ThemeContrastTests {
         }
     }
 
-    @Test("the worst pre-fix theme strings failed AA, in BOTH glass states (documents the bug)")
+    /// The REAL accent-tinted glass composite over the dark cinematic backdrop, as
+    /// measured on device (~accent at ~0.82 tint opacity over near-black) — DARKER
+    /// than the raw accent the old model assumed. This is the surface the old near-
+    /// black copy actually landed on.
+    private func realTintedGlass(_ accent: RGBColor) -> RGBColor {
+        let alpha = 0.82
+        return RGBColor(accent.r * alpha, accent.g * alpha, accent.b * alpha)
+    }
+
+    @Test("the OLD raw-accent model under-predicted real tinted-glass darkness — copy landed AT/below the AA floor (documents the bug)")
     func onboardingThemeRegression() {
-        // Document the bug the fix closes on BOTH surfaces.
-        func whiteTier(_ opacity: Double, over surface: RGBColor) -> RGBColor {
-            RGBColor(1 * opacity + surface.r * (1 - opacity),
-                     1 * opacity + surface.g * (1 - opacity),
-                     1 * opacity + surface.b * (1 - opacity))
+        // --- Glass-ON regression (THIS fix): the under-predicted tinted-glass darkness. ---
+        // The OLD model treated the glass-on surface as the RAW accent (L > flip for
+        // every accent), so `contrastingForeground` picked NEAR-BLACK copy. But the
+        // REAL tinted glass composites DARKER over the dark backdrop, so that near-
+        // black copy landed at only ~4.2–4.5:1 on the default lavender (AT/below the
+        // 4.5 AA floor) and below it on the darker accents — with NO 5:1 margin. The
+        // partial dark scrim flips the surface to reliably dark, the copy to near-
+        // white, and the contrast to ≥5:1 with margin.
+        // The darker-tinting accents — every accent EXCEPT gold (gold is the
+        // lightest swatch, the one that always read fine ~5–6:1). These are the
+        // accents whose real tinted glass falls into the worst luminance band.
+        let darkerAccents: [SteddiTheme.AccentOption] = [.lavender, .ocean, .sage, .coral, .slate]
+        for option in SteddiTheme.AccentOption.allCases {
+            // OLD: near-black copy (chosen against the raw accent) measured on the
+            // REAL (darker) tinted glass — for the darker accents this gave NO 5:1
+            // margin (the bug); only gold cleared it.
+            let oldFg = ContrastRatio.contrastingForeground(on: option.rgb) // near-black
+            let oldR = ContrastRatio.ratio(oldFg, realTintedGlass(option.rgb))
+            if darkerAccents.contains(option) {
+                #expect(oldR < aaBodyMargin,
+                        "old near-black copy(\(option.rawValue)) on the REAL tinted glass was \(oldR), expected < 5.0 (no margin — the bug)")
+            }
+            // NEW: near-white copy on the partial-scrim (dark) shell, with margin,
+            // for EVERY accent.
+            let newShell = ThemeBeatSurface.cardShell(accent: option.rgb, glassAvailable: true)
+            let newR = ContrastRatio.ratio(ContrastRatio.contrastingForeground(on: newShell), newShell)
+            #expect(newR >= aaBodyMargin,
+                    "new theme copy(\(option.rawValue)) on the scrimmed shell = \(newR), want >= 5.0 (margin)")
+            #expect(newR > oldR)
         }
-        let gold = SteddiTheme.AccentOption.gold.rgb
+        // The DEFAULT lavender is the canary — confirm the old near-black copy sat
+        // right at/under the bare AA floor on the real tinted glass.
+        let lavender = SteddiTheme.AccentOption.lavender.rgb
+        let lavOldR = ContrastRatio.ratio(
+            ContrastRatio.contrastingForeground(on: lavender), realTintedGlass(lavender))
+        #expect(lavOldR < ContrastRatio.aaBody + 0.3,
+                "default lavender old near-black copy on real tinted glass was \(lavOldR) — at/under the AA floor (the canary)")
 
-        // --- Glass-ON regression (the prior, already-fixed bug): fixed white-on-accent. ---
-        // GOLD subtitle (white .92 on the bare gold shell) and the SELECTED 'Light'
-        // description (white .92 on the white-0.18 wash over gold) both fail AA;
-        // the on-surface foreground fixes both, strictly better.
-        let shell = ThemeBeatSurface.cardShell(accent: gold, glassAvailable: true)
-        let oldSubtitle = ContrastRatio.ratio(whiteTier(0.92, over: shell), shell)
-        #expect(oldSubtitle < ContrastRatio.aaBody,
-                "old gold subtitle was \(oldSubtitle), expected sub-AA (documents the bug)")
-        let newSubtitle = ContrastRatio.ratio(
-            ContrastRatio.contrastingForeground(on: shell), shell)
-        #expect(newSubtitle >= ContrastRatio.aaBody)
-        #expect(newSubtitle > oldSubtitle)
-
-        let selSurface = ThemeBeatSurface.themeCard(accent: gold, selected: true, glassAvailable: true)
-        let oldSelDescr = ContrastRatio.ratio(whiteTier(0.92, over: selSurface), selSurface)
-        #expect(oldSelDescr < ContrastRatio.aaLarge,
-                "old selected 'Light' description was \(oldSelDescr), expected sub-3:1 (the worst string)")
-        let newSelDescr = ContrastRatio.ratio(
-            ContrastRatio.contrastingForeground(on: selSurface), selSurface)
-        #expect(newSelDescr >= ContrastRatio.aaBody)
-        #expect(newSelDescr > oldSelDescr)
-
-        // --- Glass-OFF regression (THIS fix): the Reduce-Transparency bug. ---
+        // --- Glass-OFF regression (the prior Reduce-Transparency fix, still guarded). ---
         // The prior fix contrasted ALL theme-beat copy against the ACCENT surface
         // even when glass was off; under Reduce Transparency the card is the dark
         // `onboardingCardFallbackFill`, so that near-black copy landed near-black-
@@ -719,18 +744,20 @@ struct ThemeContrastTests {
             // NEW: copy color resolved against the actual (dark fallback) surface.
             let newFg = ContrastRatio.contrastingForeground(on: darkShell)
             let newR = ContrastRatio.ratio(newFg, darkShell)
-            #expect(newR >= ContrastRatio.aaBody,
-                    "new theme copy(\(option.rawValue)) on dark fallback = \(newR), want >= 4.5")
+            #expect(newR >= aaBodyMargin,
+                    "new theme copy(\(option.rawValue)) on dark fallback = \(newR), want >= 5.0 (margin)")
             #expect(newR > oldR)
 
-            // Same for the worst row (selected 'Light' description).
+            // Same for the worst row (selected 'Light' description). The OLD bug
+            // resolved the row foreground against the RAW accent (near-black) and
+            // painted it on the dark fallback row — invisible.
             let darkRow = ThemeBeatSurface.themeCard(accent: option.rgb, selected: true, glassAvailable: false)
-            let oldRowFg = ContrastRatio.contrastingForeground(on: ThemeBeatSurface.themeCard(accent: option.rgb, selected: true, glassAvailable: true))
+            let oldRowFg = ContrastRatio.contrastingForeground(on: option.rgb) // near-black (raw accent)
             let oldRowR = ContrastRatio.ratio(oldRowFg, darkRow)
             #expect(oldRowR < ContrastRatio.aaLarge,
                     "old theme row(\(option.rawValue)) on dark fallback was \(oldRowR), expected sub-3:1")
             let newRowR = ContrastRatio.ratio(ContrastRatio.contrastingForeground(on: darkRow), darkRow)
-            #expect(newRowR >= ContrastRatio.aaBody)
+            #expect(newRowR >= aaBodyMargin)
             #expect(newRowR > oldRowR)
         }
     }

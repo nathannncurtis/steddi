@@ -65,20 +65,33 @@ struct OnboardingShowpieceCard<Content: View>: View {
     /// draw fixed-WHITE copy + glyphs, sized to read white-on-dark like the hero.
     /// But neutral `.regular` glass over the dark backdrop renders as a LIGHT
     /// frost (~0.73 sRGB), so white copy on it collapsed to ~1.9:1 and the accent
-    /// glyphs to ~1.65:1 — the recurring legibility bug. The theme beat is
-    /// exempt: its glass is accent-tinted and its inner controls carry their own
-    /// dark/white washes.
+    /// glyphs to ~1.65:1 — the recurring legibility bug.
     ///
-    /// Rather than chase the non-deterministic glass luminance, give the
-    /// non-theme beats a deterministic DARK interior scrim behind the content, so
-    /// the white copy + the surface-aware glyphs sit on a reliably dark surface
-    /// (`OnboardingShowcaseFrost.surface` is the conservative composite they're
-    /// sized against). The scrim is the same fixed dark tone as the
-    /// Reduce-Transparency fallback (`onboardingCardFallbackFill`) at high
-    /// opacity, so even over the lightest plausible glass it composites no lighter
-    /// than that constant — keeping the card unmistakably a dark glass panel while
-    /// every element clears AA (white primary 11.6:1, glyphs 5.7:1).
-    private var needsDarkScrim: Bool { beat != .theme }
+    /// Rather than chase the non-deterministic glass luminance, paint a
+    /// deterministic DARK interior scrim behind the content of EVERY beat, so the
+    /// copy + glyphs sit on a reliably dark surface (white-on-dark, like the hero)
+    /// and the contrast math is sized against a renderable composite, not the live
+    /// glass.
+    ///
+    /// THE THEME BEAT IS NO LONGER EXEMPT. It kept its glass accent-tinted with NO
+    /// scrim (the delight peak), and resolved its copy near-black on the assumed-
+    /// bright accent shell. But the REAL accent-tinted glass composites DARKER than
+    /// the raw accent over the dark cinematic backdrop (measured on device: the
+    /// default lavender card renders ~L0.19–0.21, not the modelled raw L0.31), so
+    /// the near-black copy landed at only ~4.2–4.5:1 — AT or below the AA floor —
+    /// and the darker accents (ocean/slate/coral/sage) fell further. The composited
+    /// tinted surface sits in the worst luminance band (~0.15–0.25) where NEITHER
+    /// near-black NOR near-white can reach a 5:1 margin, so no fixed copy color can
+    /// fix the bare tinted card. The definitive remedy is to give the theme beat a
+    /// scrim too — but a PARTIAL one (`themeScrimOpacity`) so the accent tint still
+    /// glows through (~35%), preserving the delight while pulling the surface
+    /// reliably dark. The copy then resolves near-WHITE on that dark surface in
+    /// BOTH glass states and clears AA with margin (≥7:1 on the bare shell, ≥5:1 on
+    /// the lightened selected row) for every accent — see `ThemeBeatSurface` and
+    /// `ThemeContrastTests.onboardingTheme*`.
+    private var scrimOpacity: Double {
+        beat == .theme ? ThemeBeatSurface.themeScrimOpacity : 0.94
+    }
 
     var body: some View {
         ZStack {
@@ -116,21 +129,22 @@ struct OnboardingShowpieceCard<Content: View>: View {
                     content()
                 }
                 .frame(maxWidth: 360)
-                // Deterministic dark scrim behind the content of the
-                // showcase/ask beats so the fixed-white copy + glyphs sit on a
-                // reliably dark surface (white-on-dark, like the hero) instead of
-                // the LIGHT frost neutral glass renders as — the recurring
-                // legibility bug. Drawn *inside* the card shape and in front of
-                // the glass material (it's added before `.steddiGlass`), so it
-                // darkens the frost while the glass shell still owns the morph,
-                // edge highlight, and shape. The theme beat keeps its live
-                // accent-tinted glass (no scrim). Same dark tone as the
-                // Reduce-Transparency fallback, so the two paths agree.
+                // Deterministic dark scrim behind the content so the fixed-white
+                // copy + glyphs sit on a reliably dark surface (white-on-dark, like
+                // the hero) instead of the LIGHT frost neutral glass renders as, or
+                // the worst-band tinted glass the theme beat renders as — the
+                // recurring legibility bug. Drawn *inside* the card shape and in
+                // front of the glass material (it's added before `.steddiGlass`),
+                // so it darkens the frost while the glass shell still owns the
+                // morph, edge highlight, and shape. Same dark tone as the
+                // Reduce-Transparency fallback, so the two paths agree. The
+                // showcase/ask beats use a near-opaque scrim (0.94); the THEME beat
+                // uses a PARTIAL scrim (`themeScrimOpacity`) so its accent tint
+                // still glows through (the delight peak) while the surface goes
+                // reliably dark and the copy clears AA with margin in both states.
                 .background {
-                    if needsDarkScrim {
-                        RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge)
-                            .fill(SteddiTheme.onboardingCardFallbackFill.opacity(0.94))
-                    }
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge)
+                        .fill(SteddiTheme.onboardingCardFallbackFill.opacity(scrimOpacity))
                 }
                 .steddiGlass(
                     tint: cardTint,
