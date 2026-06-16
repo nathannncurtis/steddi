@@ -141,3 +141,44 @@ struct MeasurementUnitFormatTests {
         #expect(MeasurementUnit.kilometers.formatDistance(meters: 9_400) == "9.4 km")
     }
 }
+
+@Suite("MeasurementUnit.formatNavDistance")
+struct MeasurementUnitNavFormatTests {
+
+    // Band-boundary edge for the NAV formatter (the live HUD / Live Activity /
+    // CarPlay / route-preview distance readout). Distances that round to 10 must
+    // use the whole-number style ("10 mi"/"10 km"), not the "%.1f" path that
+    // rendered a stray-decimal "10.0 mi" — branching on the rounded value, like
+    // its sibling formatDistance already does. 9.95–9.97 sit in the [9.95, 10.0)
+    // window that previously slipped through ("%.1f" of 9.97 rounds to "10.0").
+
+    @Test("Miles: 9.95 mi rounds to whole 10 mi (no stray decimal)")
+    func milesNavBoundary995() {
+        #expect(MeasurementUnit.miles.formatNavDistance(meters: 9.95 * 1609.34) == "10 mi")
+    }
+
+    @Test("Miles: 9.97 mi rounds to whole 10 mi (no stray decimal)")
+    func milesNavBoundary997() {
+        #expect(MeasurementUnit.miles.formatNavDistance(meters: 9.97 * 1609.34) == "10 mi")
+    }
+
+    @Test("Miles: exactly 10.0 mi is whole 10 mi")
+    func milesNavBoundary10() {
+        #expect(MeasurementUnit.miles.formatNavDistance(meters: 10.0 * 1609.34) == "10 mi")
+    }
+
+    @Test("Kilometers: 9.95 km rounds to whole 10 km (no stray decimal)")
+    func kmNavBoundary995() {
+        #expect(MeasurementUnit.kilometers.formatNavDistance(meters: 9_950) == "10 km")
+    }
+
+    @Test("Kilometers: 9.97 km rounds to whole 10 km (no stray decimal)")
+    func kmNavBoundary997() {
+        #expect(MeasurementUnit.kilometers.formatNavDistance(meters: 9_970) == "10 km")
+    }
+
+    @Test("Kilometers: exactly 10.0 km is whole 10 km")
+    func kmNavBoundary10() {
+        #expect(MeasurementUnit.kilometers.formatNavDistance(meters: 10_000) == "10 km")
+    }
+}
