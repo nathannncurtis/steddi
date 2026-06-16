@@ -368,16 +368,31 @@ struct TripPlannerMap: UIViewRepresentable {
                 let rect = CGRect(x: 0, y: 0, width: size, height: size)
                 ctx.cgContext.setFillColor(SteddiTheme.accentUIColor.cgColor)
                 ctx.cgContext.fillEllipse(in: rect)
-                ctx.cgContext.setStrokeColor(UIColor.white.cgColor)
-                ctx.cgContext.setLineWidth(2)
-                ctx.cgContext.strokeEllipse(in: rect.insetBy(dx: 1, dy: 1))
+
+                // Dual contrast-bearing ring instead of a fixed white edge: a fixed
+                // white ring lands ~2.4–3.5:1 on the light-pastel accent fill and
+                // ~1.1:1 on a light Apple Maps tile, so the pin loses its edge in
+                // light themes. Stroke the inner edge in the on-accent tone (the
+                // SAME contrasting color as the digit — near-black on these pastels,
+                // so it reads on the fill), and add a thin outer hairline in the
+                // OPPOSITE endpoint (light on these accents) so the marker still
+                // separates from a dark map tile. Both derive from the canonical
+                // WCAG on-fill picker, so the pin stays legible for every accent.
+                let innerEdge = SteddiTheme.onAccentRGB
+                let outerEdge = ContrastRatio.contrastingForeground(on: innerEdge)
+                ctx.cgContext.setStrokeColor(outerEdge.uiColor.cgColor)
+                ctx.cgContext.setLineWidth(1)
+                ctx.cgContext.strokeEllipse(in: rect.insetBy(dx: 0.5, dy: 0.5))
+                ctx.cgContext.setStrokeColor(innerEdge.uiColor.cgColor)
+                ctx.cgContext.setLineWidth(1.5)
+                ctx.cgContext.strokeEllipse(in: rect.insetBy(dx: 1.75, dy: 1.75))
 
                 let text = "\(stop.number)" as NSString
                 let attributes: [NSAttributedString.Key: Any] = [
                     .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold),
                     // The pin fills with the (light pastel) brand accent, so a
                     // white digit washes out — use the on-accent contrasting color.
-                    .foregroundColor: UIColor(SteddiTheme.onAccentRGB.color)
+                    .foregroundColor: SteddiTheme.onAccentRGB.uiColor
                 ]
                 let textSize = text.size(withAttributes: attributes)
                 text.draw(
