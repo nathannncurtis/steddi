@@ -73,3 +73,62 @@ struct PendingCommuteStartStoreTests {
         #expect(store.version == v)
     }
 }
+
+@Suite("PendingUIRouteStore")
+@MainActor
+struct PendingUIRouteStoreTests {
+
+    @Test("Empty store consumes to nil")
+    func emptyConsumesNil() {
+        let store = PendingUIRouteStore()
+        #expect(store.pending == nil)
+        #expect(store.consume() == nil)
+    }
+
+    @Test("Show-places request round-trips and clears")
+    func showPlacesRoundTrip() {
+        let store = PendingUIRouteStore()
+        store.request(.showPlaces)
+        #expect(store.pending == .showPlaces)
+        #expect(store.consume() == .showPlaces)
+        #expect(store.consume() == nil)
+    }
+
+    /// Wires the `steddi://search?q=` deep link end-to-end at the store seam:
+    /// the query the URL carries must survive the durable hand-off so HomeView's
+    /// `consumePendingUIRoute` can open search pre-seeded with it (previously the
+    /// route posted a NotificationCenter notification nothing observed).
+    @Test("Search request round-trips the query and clears")
+    func searchRoundTrip() {
+        let store = PendingUIRouteStore()
+        store.request(.search(query: "Coffee"))
+        #expect(store.pending == .search(query: "Coffee"))
+        #expect(store.consume() == .search(query: "Coffee"))
+        #expect(store.consume() == nil)
+    }
+
+    @Test("Search equality is query-sensitive")
+    func searchEquality() {
+        #expect(PendingUIRoute.search(query: "A") == PendingUIRoute.search(query: "A"))
+        #expect(PendingUIRoute.search(query: "A") != PendingUIRoute.search(query: "B"))
+        #expect(PendingUIRoute.search(query: "A") != .showPlaces)
+    }
+
+    @Test("Latest route wins when not yet consumed")
+    func latestWins() {
+        let store = PendingUIRouteStore()
+        store.request(.showPlaces)
+        store.request(.search(query: "Gym"))
+        #expect(store.consume() == .search(query: "Gym"))
+    }
+
+    @Test("Version bumps on every request, including identical payloads")
+    func versionBumps() {
+        let store = PendingUIRouteStore()
+        let start = store.version
+        store.request(.search(query: "X"))
+        #expect(store.version == start + 1)
+        store.request(.search(query: "X"))
+        #expect(store.version == start + 2)
+    }
+}
