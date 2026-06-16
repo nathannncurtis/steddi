@@ -21,9 +21,9 @@ import SwiftData
 ///
 /// ## What actually upgrades the store: automatic lightweight migration
 ///
-/// Every schema change Steddi has shipped is **purely additive** and is handled by
-/// SwiftData's automatic lightweight migration when the container opens — no
-/// explicit plan required:
+/// Almost every schema change Steddi has shipped is **purely additive** and is
+/// handled by SwiftData's automatic lightweight migration when the container opens —
+/// no explicit plan required:
 ///
 ///   * `Commute.notificationsEnabled` / `quietHoursStart` / `quietHoursEnd` /
 ///     `notificationLeadMinutes` — new properties with defaults.
@@ -39,6 +39,32 @@ import SwiftData
 ///     matching back-reference SwiftData needs to propagate the delete rule. The
 ///     new `driveRecords` to-many is empty/nil for every existing row, so opening a
 ///     pre-inverse store under the current schema requires no data transformation.
+///
+/// ## The one non-additive change: four enum columns renamed to `*Raw`
+///
+/// Commit 24c7c8a refactored four **already-shipped, already-persisted** enum
+/// properties from a typed stored property into a stored raw-`String` column plus a
+/// computed typed accessor (the `RoadCondition.kindRaw` forward-compat pattern). This
+/// renamed the on-disk attribute:
+///
+///   * `Route.source: RouteSource`        → `Route.sourceRaw: String`        (column `source` → `sourceRaw`)
+///   * `Route.direction: CommuteDirection` → `Route.directionRaw: String`    (column `direction` → `directionRaw`)
+///   * `Trip.flowMode: TripFlowMode`      → `Trip.flowModeRaw: String`       (column `flowMode` → `flowModeRaw`)
+///   * `CommuteTrip.direction: CommuteDirection` → `CommuteTrip.directionRaw: String` (column `direction` → `directionRaw`)
+///
+/// A column **rename is not additive**: a naive lightweight migration would see the
+/// old column dropped and a new, differently-named required column added, blanking
+/// every existing route's source/direction, every trip's flow mode, and every logged
+/// commute trip's direction. What keeps this lightweight-eligible AND data-preserving
+/// is `@Attribute(originalName:)` on each renamed property (so SwiftData maps the old
+/// column onto the new `*Raw` name) **plus** a declared default on each (so a row that
+/// somehow lacks the column gets the default stamped rather than aborting the open on
+/// a missing non-optional attribute — the same mechanic `PinnedLocation.category`
+/// relies on). With both in place the rename migrates automatically, with data intact,
+/// and still needs no `SchemaMigrationPlan`. `RawColumnRenameMigrationTests` (in
+/// `SteddiTests/PersistedEnumFallbackTests.swift`) proves it on disk: it writes a
+/// store under the OLD column names and reopens it under the current schema, asserting
+/// the route direction/source, trip flow mode, and logged-trip direction survive.
 ///
 /// `SteddiSchemaMigrationTests` (in `SteddiTests/ModelStoreLocatorTests.swift`)
 /// proves the inverse-relationship case end to end: it writes a store under a
