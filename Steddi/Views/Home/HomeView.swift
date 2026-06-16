@@ -227,10 +227,19 @@ struct HomeView: View {
 
                         // Save the raw drive record
                         if points.count >= 2 {
-                            let record = DriveRecord()
+                            // Anchor startedAt/endedAt to the trace's first and
+                            // last fix — the true drive span. The default
+                            // `DriveRecord()` would capture `Date()` HERE (end
+                            // of drive), a few lines before `endedAt = Date()`,
+                            // leaving the stored start ~equal to the end and the
+                            // duration ~0. finalizeSummary derives the real span
+                            // from the trace regardless, but the stored
+                            // startedAt also feeds the detail header and weekday
+                            // bucketing, so anchor it to first-fix here too.
+                            let record = DriveRecord(startedAt: points.first?.timestamp ?? Date())
                             record.rawGPSPoints = points
                             record.associatedCommute = activeCommute
-                            record.endedAt = Date()
+                            record.endedAt = points.last?.timestamp ?? Date()
                             // Cache the computed summary on write so analytics
                             // never has to decode the GPS blob to backfill it.
                             record.finalizeSummary()

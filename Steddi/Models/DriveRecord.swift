@@ -56,7 +56,20 @@ final class DriveRecord {
     /// existed.
     func finalizeSummary() {
         guard let endedAt else { return }
-        totalDurationSeconds = max(0, endedAt.timeIntervalSince(startedAt))
+        // The real drive span lives in the GPS trace, NOT in
+        // `endedAt - startedAt`. Both production write paths build the record
+        // with the default `startedAt = Date()` captured at the END of the
+        // drive (a few statements before `endedAt = Date()`), so
+        // `endedAt - startedAt` is the gap between two back-to-back `Date()`
+        // calls — effectively 0. Derive elapsed time from the trace's first
+        // and last fix, and take the larger of the two so callers that DO set
+        // a true `startedAt` (legacy records, tests) still get the right value.
+        let traceSpan: Double = {
+            guard let first = rawGPSPoints.first?.timestamp,
+                  let last = rawGPSPoints.last?.timestamp else { return 0 }
+            return max(0, last.timeIntervalSince(first))
+        }()
+        totalDurationSeconds = max(traceSpan, max(0, endedAt.timeIntervalSince(startedAt)))
 
         var trafficSeconds = 0.0
         var speedSum = 0.0
