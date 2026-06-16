@@ -107,94 +107,149 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func handleURL(_ url: URL) {
+        // Resolve the external (untrusted) URL into a route, then apply it. All
+        // parsing lives in `resolveRoute`, which is pure and never traps — see
+        // its note on tolerant query parsing. Unrecognized / malformed URLs
+        // resolve to nil and are silently ignored here.
+        guard let route = Self.resolveRoute(from: url) else { return }
+        Self.apply(route)
+    }
+
+    /// The intent a `steddi://` deep link resolves to. Separating resolution
+    /// (pure, testable, no side effects) from application (touches the shared
+    /// stores / NotificationCenter) lets us unit-test the externally-reachable
+    /// parsing — including crafted/malformed URLs — without a live UIScene.
+    enum DeepLinkRoute: Equatable {
+        case navigate(name: String, latitude: Double, longitude: Double)
+        case startSpecificCommute(commuteId: UUID, direction: CommuteDirection?)
+        case startFirstActiveCommute
+        case showPlaces
+        case search(query: String)
+#if DEBUG
+        case testArrival
+        case resetOnboarding
+#endif
+    }
+
+    /// Parse a URL's query items into a `[String: String]` **without trapping**.
+    ///
+    /// `Dictionary(uniqueKeysWithValues:)` has a documented precondition that
+    /// keys be unique and fatal-traps (uncatchable) otherwise. A `steddi://`
+    /// URL is fully attacker-controlled (the scheme ships in the release
+    /// Info.plist, so any web page / QR code / other app can open it), and can
+    /// repeat a query name — e.g. `steddi://search?q=a&q=b` — which would crash
+    /// the app, including at cold launch before any UI appears. Every consumer
+    /// reads single-valued params via subscript, so first-occurrence-wins is a
+    /// sane, non-trapping resolution for duplicates.
+    static func queryParams(from url: URL) -> [String: String] {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = components.queryItems else { return [:] }
+        var params: [String: String] = [:]
+        for item in items {
+            guard let value = item.value else { continue }
+            // First occurrence wins; ignore later duplicates rather than trap.
+            if params[item.name] == nil {
+                params[item.name] = value
+            }
+        }
+        return params
+    }
+
+    /// Resolve an external URL into a `DeepLinkRoute`, or nil for anything
+    /// unrecognized or malformed. Pure and total: never traps on missing /
+    /// empty / extra params, duplicate query keys, or unknown hosts.
+    static func resolveRoute(from url: URL) -> DeepLinkRoute? {
         // steddi://navigate?lat=X&lng=Y&name=Z
         // steddi://search?q=X
         // steddi://arrive
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
         let host = url.host ?? ""
-        let params = Dictionary(
-            uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
-                item.value.map { (item.name, $0) }
-            }
-        )
+        let params = queryParams(from: url)
 
         switch host {
         case "navigate":
             if let latStr = params["lat"], let lngStr = params["lng"],
                let lat = Double(latStr), let lng = Double(lngStr) {
                 let name = params["name"] ?? "Destination"
-                // Durable hand-off: this URL can arrive during cold-launch scene
-                // connection, before HomeView attaches its observers, so a bare
-                // post would evaporate. HomeView drains the store on appear and
-                // reactively. (CarPlay route-preview "Start Navigation" deep-links
-                // here too — see CarPlaySceneDelegate.)
-                MainActor.assumeIsolated {
-                    PendingUIRouteStore.shared.request(
-                        .navigate(
-                            name: name,
-                            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng)
-                        )
-                    )
-                }
+                return .navigate(name: name, latitude: lat, longitude: lng)
             } else if let commuteIdStr = params["commuteId"], let commuteId = UUID(uuidString: commuteIdStr) {
                 // Smart-commute notification "Start Commute" deep link:
                 // steddi://navigate?commuteId=<id>&direction=<dir>
-                //
-                // Queue a durable start request rather than posting into the
-                // void: this URL can arrive during cold-launch scene
-                // connection, before HomeView attaches its observers. The store
-                // survives that race and HomeView drains it on appear.
                 let direction = params["direction"].flatMap(CommuteDirection.init(rawValue:))
-                MainActor.assumeIsolated {
-                    PendingCommuteStartStore.shared.request(
-                        .specific(commuteId: commuteId, direction: direction)
-                    )
-                }
+                return .startSpecificCommute(commuteId: commuteId, direction: direction)
             }
+            return nil
         case "start-commute":
-            // CarPlay dashboard "Start Commute" button. Queue a durable
-            // first-active start request: this URL both foregrounds/launches the
-            // app and (on a cold launch) lands before HomeView attaches, so the
-            // store carries the intent until HomeView drains it on appear.
-            MainActor.assumeIsolated {
-                PendingCommuteStartStore.shared.request(.firstActive)
-            }
+            return .startFirstActiveCommute
         case "places":
-            // CarPlay dashboard "Recent Places" button — foreground the app on
-            // its Places tab so the driver can pick a destination. Durable
-            // hand-off: on a cold launch this URL lands before HomeView attaches
-            // its observer, so a bare post would be lost and the app would open
-            // on the default Commutes tab. HomeView drains the store on appear.
-            MainActor.assumeIsolated {
-                PendingUIRouteStore.shared.request(.showPlaces)
-            }
+            return .showPlaces
         case "search":
-            // steddi://search?q=<query> — open the in-app destination search
-            // pre-seeded with the query. Durable hand-off: like the sibling
-            // routes, this URL can arrive during cold-launch scene connection
-            // before HomeView attaches its observers, so a bare NotificationCenter
-            // post would evaporate (the bug this route had previously). HomeView
-            // drains the store on appear and reactively.
+            // Ignore a missing/empty query rather than open a blank search.
             if let query = params["q"], !query.isEmpty {
-                MainActor.assumeIsolated {
-                    PendingUIRouteStore.shared.request(.search(query: query))
-                }
+                return .search(query: query)
             }
+            return nil
 #if DEBUG
         // Developer/QA-only affordances. The "steddi" URL scheme ships in the
         // release Info.plist, so any web page, QR code, or other app could
         // otherwise invoke these to reset a shipping user's onboarding or fake
-        // an arrival. Compile them out of release builds — release falls through
-        // to the default no-op. Keep the user-facing routes above unguarded.
+        // an arrival. Compile them out of release builds — release resolves to
+        // nil. Keep the user-facing routes above unguarded.
         case "arrive":
-            NotificationCenter.default.post(name: .steddiTestArrival, object: nil)
+            return .testArrival
         case "reset-onboarding":
+            return .resetOnboarding
+#endif
+        default:
+            return nil
+        }
+    }
+
+    /// Apply a resolved route to the shared stores / NotificationCenter. The
+    /// durable stores (rather than a bare post) cover the cold-launch race where
+    /// the URL arrives during scene connection, before HomeView attaches its
+    /// observers; HomeView drains the stores on appear and reactively.
+    private static func apply(_ route: DeepLinkRoute) {
+        switch route {
+        case let .navigate(name, lat, lng):
+            // (CarPlay route-preview "Start Navigation" deep-links here too —
+            // see CarPlaySceneDelegate.)
+            MainActor.assumeIsolated {
+                PendingUIRouteStore.shared.request(
+                    .navigate(
+                        name: name,
+                        coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                    )
+                )
+            }
+        case let .startSpecificCommute(commuteId, direction):
+            MainActor.assumeIsolated {
+                PendingCommuteStartStore.shared.request(
+                    .specific(commuteId: commuteId, direction: direction)
+                )
+            }
+        case .startFirstActiveCommute:
+            // CarPlay dashboard "Start Commute" button.
+            MainActor.assumeIsolated {
+                PendingCommuteStartStore.shared.request(.firstActive)
+            }
+        case .showPlaces:
+            // CarPlay dashboard "Recent Places" button — foreground on Places.
+            MainActor.assumeIsolated {
+                PendingUIRouteStore.shared.request(.showPlaces)
+            }
+        case let .search(query):
+            // steddi://search?q=<query> — open in-app search pre-seeded.
+            MainActor.assumeIsolated {
+                PendingUIRouteStore.shared.request(.search(query: query))
+            }
+#if DEBUG
+        case .testArrival:
+            NotificationCenter.default.post(name: .steddiTestArrival, object: nil)
+        case .resetOnboarding:
             UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
             // Force restart by posting notification
             NotificationCenter.default.post(name: .steddiResetOnboarding, object: nil)
 #endif
-        default:
-            break
         }
     }
 }
