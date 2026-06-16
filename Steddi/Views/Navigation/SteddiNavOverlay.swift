@@ -499,10 +499,12 @@ struct SteddiNavOverlay: View {
 
                 // Instruction — the safety-critical maneuver words. This is the
                 // single most important readout in the HUD, so it gets the
-                // strongest treatment: textPrimary (near-black, like the distance
-                // line above) at semibold weight plus the soft shadow the compass
-                // uses — so it holds against any tile, never the mid-grey
-                // textSecondary that is only AA-proven on solid surfaces.
+                // strongest treatment: textPrimary (near-black in LIGHT theme,
+                // near-white in DARK) at semibold weight plus the soft shadow the
+                // compass uses. Its legibility against the glass over a moving map
+                // is carried by the over-map scrim below — a near-opaque fixed-
+                // dark fill in DARK theme (so this near-white text reads white-on-
+                // dark) and the faint approved wash in LIGHT theme.
                 Text(displayInstruction)
                     .font(SteddiTheme.body(18 * textScale, highContrast: highContrast).weight(.semibold))
                     .foregroundStyle(SteddiTheme.textPrimary)
@@ -925,7 +927,14 @@ struct SteddiNavOverlay: View {
                         Circle().fill(SteddiTheme.surfacePrimary)
                             .overlay(Circle().fill(SteddiTheme.warmRedSubtle))
                     } else {
-                        Circle().fill(.clear).steddiGlass(tint: nil, interactive: false, in: .circle)
+                        // Neutral glass housing. In DARK theme the over-map scrim
+                        // keeps the speed digit (textPrimary, near-white) legible:
+                        // without it, the light frost over a dark map washed the
+                        // at/under-limit digit to ~1.8:1. Same scrim the banners
+                        // use; light theme stays the faint approved wash.
+                        Circle().fill(.clear)
+                            .mapGlassScrim(in: .circle)
+                            .steddiGlass(tint: nil, interactive: false, in: .circle)
                     }
                 }
                 .overlay(
@@ -1187,11 +1196,16 @@ extension View {
         self.shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
     }
 
-    /// Back a translucent-glass panel with the faint opaque scrim the top banner
-    /// uses, lifting the glass off bright cartography so the readouts on it never
-    /// wash out. Skipped when glass is off (the fallback is already opaque), and
-    /// drawn *behind* the glass so the Liquid Glass aesthetic stays on top.
-    /// Apply this immediately before `.steddiGlass(…)` with the SAME shape.
+    /// Back a translucent-glass panel with the over-map scrim, lifting the glass
+    /// off the cartography so the readouts on it never wash out. Skipped when
+    /// glass is off (the fallback is already opaque), and drawn *behind* the glass
+    /// so the Liquid Glass aesthetic stays on top. Apply this immediately before
+    /// `.steddiGlass(…)` with the SAME shape.
+    ///
+    /// In DARK theme the scrim is a near-opaque luminance-FIXED dark fill (the
+    /// dark-theme washout fix — see `SteddiTheme.mapGlassScrimOpacity`); in light
+    /// theme it stays the original faint adaptive wash so the approved light HUD
+    /// is unchanged.
     func mapGlassScrim(in shape: some Shape) -> some View {
         modifier(MapGlassScrimModifier(shape: shape))
     }
@@ -1211,7 +1225,17 @@ private struct MapGlassScrimModifier<ClipShape: Shape>: ViewModifier {
         let _ = glassRevision
         content.background {
             if SteddiGlass.isAvailable {
-                shape.fill(SteddiTheme.surfacePrimary.opacity(0.22))
+                // DARK theme: a near-opaque luminance-fixed dark fill so the
+                // adaptive glass renders DARK and near-white readouts read
+                // white-on-dark (the washout fix). LIGHT theme: the original faint
+                // adaptive wash, so the approved light HUD is byte-for-byte
+                // unchanged. High contrast forces opaque glass, so the scrim is
+                // suppressed there (it would never show).
+                let highContrast = DisplayModeService.shared.useHighContrast
+                shape.fill(
+                    SteddiTheme.mapGlassScrimFill
+                        .opacity(SteddiTheme.mapGlassScrimOpacity(highContrast: highContrast))
+                )
             }
         }
     }
