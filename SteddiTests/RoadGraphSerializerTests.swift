@@ -258,4 +258,80 @@ struct RoadGraphSerializerTests {
         #expect(binary.count > 0)
         #expect(binary.count < 2000)
     }
+
+    // MARK: - Heuristic-admissibility (graphMaxSpeedMPS) revalidation
+
+    /// Little-endian F32 bit pattern for the trailing `graphMaxSpeedMPS` field,
+    /// which `serialize` writes as the very last 4 bytes of the blob.
+    private func overwriteTrailingMaxSpeed(_ data: Data, with value: Float) -> Data {
+        var out = data
+        let bits = value.bitPattern
+        let end = out.endIndex
+        for i in 0..<4 {
+            out[end - 4 + i] = UInt8((bits >> (8 * UInt32(i))) & 0xff)
+        }
+        return out
+    }
+
+    /// The A* heuristic is `h = haversine / graphMaxSpeedMPS`; it stays admissible
+    /// (a true lower bound) only while `graphMaxSpeedMPS` >= every edge's
+    /// `freeFlowSpeedMPS`. A corrupt/stale blob whose stored maxSpeed is BELOW
+    /// some edge's speed would make `h` overestimate and break A* optimality. The
+    /// loader must re-derive the floor from the edges and clamp the stored value
+    /// up to it, so the heuristic can never become inadmissible regardless of
+    /// what the blob claims.
+    @Test("A stored maxSpeed below an edge's speed is corrected on load (heuristic stays admissible)")
+    func belowFloorMaxSpeedIsClampedUp() throws {
+        let graph = buildSampleGraph()
+        let trueMax = graph.edges.reduce(Float(0)) { max($0, $1.freeFlowSpeedMPS) }
+        #expect(trueMax > 0)
+
+        // Tamper the trailing maxSpeed to a positive-but-too-LOW value (half the
+        // slowest plausible edge speed) — the inadmissible direction.
+        let tampered = overwriteTrailingMaxSpeed(
+            RoadGraphSerializer.serialize(graph),
+            with: trueMax / 2
+        )
+        let restored = try #require(RoadGraphSerializer.deserialize(tampered))
+
+        // Corrected up to (at least) the true max edge speed, so for EVERY edge
+        // `graphMaxSpeedMPS >= freeFlowSpeedMPS` and `h` is a true lower bound.
+        #expect(restored.graphMaxSpeedMPS >= trueMax)
+        for edge in restored.edges {
+            #expect(restored.graphMaxSpeedMPS >= edge.freeFlowSpeedMPS)
+        }
+    }
+
+    /// A non-finite (NaN/∞) stored maxSpeed — another corruption mode — must not
+    /// propagate into the heuristic denominator; it is replaced by the derived
+    /// finite floor so `h` stays a finite, admissible lower bound.
+    @Test("A non-finite stored maxSpeed is replaced by the derived edge max")
+    func nonFiniteMaxSpeedIsReplaced() throws {
+        let graph = buildSampleGraph()
+        let trueMax = graph.edges.reduce(Float(0)) { max($0, $1.freeFlowSpeedMPS) }
+
+        let tampered = overwriteTrailingMaxSpeed(
+            RoadGraphSerializer.serialize(graph),
+            with: .nan
+        )
+        let restored = try #require(RoadGraphSerializer.deserialize(tampered))
+        #expect(restored.graphMaxSpeedMPS.isFinite)
+        #expect(restored.graphMaxSpeedMPS >= trueMax)
+    }
+
+    /// A stored maxSpeed already ABOVE every edge speed is admissible (only weak),
+    /// so the loader must keep it untouched rather than needlessly lowering it.
+    @Test("A stored maxSpeed at or above the edge max is preserved unchanged")
+    func aboveFloorMaxSpeedIsPreserved() throws {
+        let graph = buildSampleGraph()
+        let trueMax = graph.edges.reduce(Float(0)) { max($0, $1.freeFlowSpeedMPS) }
+        let inflated = trueMax + 100
+
+        let tampered = overwriteTrailingMaxSpeed(
+            RoadGraphSerializer.serialize(graph),
+            with: inflated
+        )
+        let restored = try #require(RoadGraphSerializer.deserialize(tampered))
+        #expect(abs(restored.graphMaxSpeedMPS - inflated) < 0.001)
+    }
 }

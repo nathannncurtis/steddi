@@ -314,6 +314,17 @@ struct SteddiDestructiveButtonStyle: ButtonStyle {
                 // prominent and the near-black on-fill label stays legible.
                 fallbackFill: SteddiTheme.warmRed
             )
+            // 44×44pt HIG hit-target floor, enforced HERE so the destructive CTA
+            // (End navigation, Call emergency contact) can never regress below it
+            // — the in-nav landscape End was ~40pt tall (17pt label + 2×10pt
+            // padding) under the default control scale, a sub-44 touch target on
+            // the single most consequential mid-drive control. Applied AFTER the
+            // glass so the visible warmRed capsule keeps its content-sized look;
+            // the frame only floors the layout/hit bounds and `contentShape`
+            // makes the full expanded area tappable. Mirrors the 44pt floors
+            // pinned elsewhere (sheet tabs, NowPlaying play/pause, nav glyphs).
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Capsule())
     }
 }
 
