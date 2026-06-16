@@ -233,6 +233,61 @@ struct ZoneCostTests {
         #expect(soft < .infinity)
     }
 
+    @Test("Direct edge-geometry slice matches the index-based RoadGraph lookup")
+    func geometryMatchesGraphLookup() {
+        // The zone-cost path resolves an edge's geometry in O(1) from the edge's
+        // own `geometryRange` instead of an O(degree) edge-index relookup. This is
+        // a pure perf change: for EVERY directed edge the direct slice must equal
+        // what `RoadGraph.geometry(of: index)` returns. Use a multi-edge junction
+        // so several edges share a from-node (the case the relookup scanned).
+        let g = buildGraph(
+            node(1, 34.0000, -117.0000),
+            node(2, 34.0010, -117.0000),  // north
+            node(3, 33.9990, -117.0000),  // south
+            node(4, 34.0000, -116.9988),  // east
+            node(5, 34.0000, -117.0012),  // west
+            way(10, [3, 1, 2], tags: ["highway": "secondary"]),
+            way(11, [5, 1, 4], tags: ["highway": "secondary"])
+        )
+        #expect(!g.edges.isEmpty)
+        for idx in 0..<g.edges.count {
+            let viaIndex = Array(g.geometry(of: Int32(idx)))
+            let viaEdge = Array(DefaultCostModel.geometry(of: g.edges[idx], in: g))
+            #expect(viaEdge.count == viaIndex.count)
+            for (a, b) in zip(viaEdge, viaIndex) {
+                #expect(a.latitude == b.latitude)
+                #expect(a.longitude == b.longitude)
+            }
+        }
+    }
+
+    @Test("Hard-zone edge cost is unchanged by the direct-slice resolution")
+    func hardZoneCostStableAcrossJunction() {
+        // Two parallel two-node edges that share NO endpoint, so a zone over one
+        // can never touch the other. The old relookup matched an edge by scanning
+        // its from-node's out-edges; the direct slice reads the edge's own range.
+        // The far edge staying finite while the near edge goes impassable proves
+        // the O(1) slice resolves the SAME geometry the index lookup did.
+        let g = buildGraph(
+            node(1, 34.0000, -117.0000),
+            node(2, 34.0020, -117.0000),   // NEAR edge 1->2 (will be zoned)
+            node(3, 34.0000, -116.9000),   // far west, well clear (~9 km away)
+            node(4, 34.0020, -116.9000),   // FAR edge 3->4
+            way(10, [1, 2], tags: ["highway": "secondary"]),
+            way(11, [3, 4], tags: ["highway": "secondary"])
+        )
+        // Zone squarely over the NEAR edge's midpoint; the far edge is ~9 km off.
+        let zone = RoutedZone(shape: .circle(
+            center: CLLocationCoordinate2D(latitude: 34.0010, longitude: -117.0000),
+            radiusMeters: 300
+        ))
+        let model = DefaultCostModel(context: RoutingContext(hardZones: [zone]))
+        let near = edge(in: g, from: 1, to: 2)!
+        let far = edge(in: g, from: 3, to: 4)!
+        #expect(model.edgeCost(near, in: g) == .infinity)
+        #expect(model.edgeCost(far, in: g).isFinite)
+    }
+
     @Test("Polygon point-in-polygon containment")
     func polygonContains() {
         let square = [

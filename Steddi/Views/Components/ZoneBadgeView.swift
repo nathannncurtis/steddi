@@ -17,7 +17,11 @@ struct ZoneBadgeView: View {
         HStack(spacing: 6) {
             Image(systemName: zoneIcon)
                 .font(.caption2)
-                .foregroundStyle(isViolated ? SteddiTheme.warmRed : SteddiTheme.textSecondary)
+                // Small meaning-bearing glyph on the surface/light tint: raw
+                // `warmRed` is a mid-tone hue below the small-glyph floor here
+                // (~2.6–3.1:1 over the 0.12 red tint), so use the surface-
+                // adaptive `warmRedText` while keeping the warning hue.
+                .foregroundStyle(isViolated ? SteddiTheme.warmRedText : SteddiTheme.textSecondary)
             Text(zone.name ?? "No-go zone")
                 .font(SteddiTheme.body(12))
                 .foregroundStyle(SteddiTheme.textPrimary)
@@ -25,7 +29,7 @@ struct ZoneBadgeView: View {
             if isViolated {
                 Image(systemName: "exclamationmark.circle.fill")
                     .font(.caption2)
-                    .foregroundStyle(SteddiTheme.warmRed)
+                    .foregroundStyle(SteddiTheme.warmRedText)
             }
         }
         .padding(.horizontal, 10)

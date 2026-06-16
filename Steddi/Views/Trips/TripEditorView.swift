@@ -131,9 +131,14 @@ struct TripEditorView: View {
             Spacer()
 
             if stop.arrivalTime != nil {
+                // The only visited-vs-not signal in the row. Raw `sage` is a
+                // mid-tone hue that drops below the small-glyph floor on the
+                // light Form (~2.3:1); use the surface-adaptive `sageText` and
+                // size it at `.body` so the status reads clearly.
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(SteddiTheme.sage)
+                    .font(.body)
+                    .foregroundStyle(SteddiTheme.sageText)
+                    .accessibilityLabel("Visited")
             }
         }
     }

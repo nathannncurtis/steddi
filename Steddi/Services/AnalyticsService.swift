@@ -159,9 +159,13 @@ final class AnalyticsService {
     /// Shown in place of trends when the window has too little data.
     private(set) var trendGateMessage: String?
 
-    /// The window/clock the most recent load ran with, so a background backfill
-    /// can re-aggregate the same view once it finishes draining legacy records.
-    private var lastLoad: (window: AnalyticsTimeWindow, now: Date)?
+    /// The window/clock AND the view's `ModelContext` the most recent load ran
+    /// with, so a background backfill can re-aggregate into the SAME context the
+    /// view owns once it finishes draining legacy records — keeping `recentDrives`
+    /// bound to the view's context rather than a throwaway one. MainActor-isolated
+    /// and only ever read/written on the MainActor, so holding the (non-Sendable)
+    /// context here never crosses an actor boundary.
+    private var lastLoad: (window: AnalyticsTimeWindow, context: ModelContext, now: Date)?
     /// Guards against spawning overlapping backfill passes when loadAnalytics is
     /// called repeatedly (appear + window changes) before the first one drains.
     private var backfillInFlight = false
@@ -188,7 +192,7 @@ final class AnalyticsService {
         isLoading = true
         defer { isLoading = false }
 
-        lastLoad = (window, now)
+        lastLoad = (window, context, now)
         aggregate(window: window, context: context, now: now)
 
         // Legacy records (saved before the summary fields existed) decode their
@@ -243,10 +247,14 @@ final class AnalyticsService {
             await MainActor.run {
                 self.backfillInFlight = false
                 guard backfilled > 0, let last = self.lastLoad else { return }
-                // Newly-finalized records now qualify for aggregation. Re-read on
-                // the MainActor context the view owns so published state stays
-                // consistent with the store.
-                self.aggregate(window: last.window, context: ModelContext(container), now: last.now)
+                // Newly-finalized records now qualify for aggregation. Re-aggregate
+                // into the SAME context the view passed to `loadAnalytics` (stashed
+                // in `lastLoad`), so `recentDrives` stays bound to the view's
+                // context — not a throwaway one a detail/edit/delete flow would then
+                // read from a different context than the rest of the app. Safe to
+                // reuse here: this block runs on the MainActor, the same actor that
+                // wrote `lastLoad`, so the non-Sendable context never crosses actors.
+                self.aggregate(window: last.window, context: last.context, now: last.now)
                 // A full batch likely means more legacy records remain — keep
                 // draining until the backlog is empty.
                 if backfilled >= Self.backfillBatchSize {

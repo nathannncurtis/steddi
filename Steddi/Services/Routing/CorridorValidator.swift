@@ -259,6 +259,36 @@ enum CorridorValidator {
             return full * (endSnap.fraction - startSnap.fraction)
         }
 
+        // Same-street REVERSE collapse — mirror of the router's `sameRoadDirectPath`
+        // Case 2 (AStarSearch). The origin is AHEAD of the destination on the same
+        // physical street, so the trip runs the OPPOSITE way down it: re-express on
+        // the co-located reverse edge of the origin's edge and charge the short
+        // reverse sub-segment, NOT the full block-around / U-turn the node-to-node
+        // Dijkstra below would otherwise return. Two sub-cases, both reducing to a
+        // reverse sub-segment, exactly as the router resolves them:
+        //   • both snapped to the SAME forward edge with origin fraction > dest
+        //     fraction → on the reverse edge origin sits at `1 - startFraction`,
+        //     dest at `1 - endFraction`;
+        //   • dest snapped to the origin edge's co-located REVERSE edge → origin at
+        //     `1 - startFraction`, dest directly at `endFraction`.
+        // A one-way street has no reverse edge (reverse == -1) → fall through to the
+        // node-to-node Dijkstra, matching the router returning nil so A* runs.
+        let reverse = Self.coLocatedReverseEdge(of: startSnap.edge, in: graph)
+        if reverse >= 0 {
+            let reverseStart = 1 - startSnap.fraction
+            var reverseEnd: Double? = nil
+            if endSnap.edge == startSnap.edge, startSnap.fraction > endSnap.fraction {
+                reverseEnd = 1 - endSnap.fraction
+            } else if endSnap.edge == reverse {
+                reverseEnd = endSnap.fraction
+            }
+            if let reverseEnd, reverseStart <= reverseEnd {
+                let full = cost.edgeCost(graph.edges[Int(reverse)], in: graph)
+                guard full.isFinite else { return nil }
+                return full * (reverseEnd - reverseStart)
+            }
+        }
+
         let startNode = startEdge.to            // travel from snap to the edge's downstream node
         let goalNode = endEdge.from             // reach the upstream node of the goal edge
 
@@ -295,6 +325,25 @@ enum CorridorValidator {
             }
         }
         return nil
+    }
+
+    /// The co-located REVERSE directed edge of `edgeIndex` on a two-way street —
+    /// the edge over the same physical OSM way running the opposite direction.
+    /// Mirrors `AStarSearch.coLocatedReverseEdge` (private there) so the reference
+    /// reverse-collapse matches the router's Case 2. Matches on `osmWayID` so a
+    /// distinct parallel road is never mistaken for the reverse twin; returns -1
+    /// when none exists (most importantly a one-way street, which emits only one
+    /// directed edge).
+    private static func coLocatedReverseEdge(of edgeIndex: EdgeIndex, in graph: RoadGraph) -> EdgeIndex {
+        guard edgeIndex >= 0, Int(edgeIndex) < graph.edges.count else { return -1 }
+        let edge = graph.edges[Int(edgeIndex)]
+        for candidate in graph.outEdgeRange(of: edge.to) {
+            let rev = graph.edges[Int(candidate)]
+            if rev.to == edge.from && rev.osmWayID == edge.osmWayID {
+                return candidate
+            }
+        }
+        return -1
     }
 
     // MARK: - Geometry stitching
