@@ -66,6 +66,7 @@
 		4641591AC55A72F04A852898 /* PreferenceLearnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA904694CE91F625D8EBE294 /* PreferenceLearnerTests.swift */; };
 		467E38515647BC8235BB44EC /* SteddiMigrationPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = F942585655543B2EEB90D98F /* SteddiMigrationPlan.swift */; };
 		4786241496BB09CF9AD53A97 /* OnboardingEmergencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71155E230D450D007980A661 /* OnboardingEmergencyView.swift */; };
+		498B6B2A166183582745CF79 /* OnboardingTapTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BCA2787A7360B9487FBB606 /* OnboardingTapTargetTests.swift */; };
 		4A0898B3E04DFD141E0808AD /* EmergencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F1F21786B81D853B9E61B6 /* EmergencyView.swift */; };
 		4A8A3A9A1BA94ADE882306D9 /* ThemeModeEx.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39CB453574DBE7702E929E6 /* ThemeModeEx.swift */; };
 		4BD69219F4033B5D7DD61286 /* SteddiWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2906A93D611EBB287BF726C4 /* SteddiWidgetBundle.swift */; };
@@ -150,7 +151,6 @@
 		9F54B7F94722C2EE69821F18 /* SteddiWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 534F293CE883ED26D52B0510 /* SteddiWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A0A759065A0F307E3D4BE984 /* CommuteNotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33471F234A8AF73EC6B62F93 /* CommuteNotificationsSettingsView.swift */; };
 		A11007ED36F987BD269EAEAB /* NavEndButtonTapTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F5267BF59F8E93375689632 /* NavEndButtonTapTargetTests.swift */; };
-		AABB1100CCDD22EE33FF4401 /* OnboardingTapTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB1100CCDD22EE33FF4402 /* OnboardingTapTargetTests.swift */; };
 		A22CFFF0BDE370AB28985EC8 /* AdvancedHapticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCFC39F318CB524298F1AF9 /* AdvancedHapticsView.swift */; };
 		A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */; };
 		A2C7FD04E4B73D1FEF8655FC /* RerouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B62C6E96AE2EE407492E65 /* RerouteCardView.swift */; };
@@ -287,6 +287,7 @@
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0B99A3381CC68B028C99DD0E /* TripStop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripStop.swift; sourceTree = "<group>"; };
 		0BB8A4F976CE18333497A882 /* CheckCommuteETAIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckCommuteETAIntentTests.swift; sourceTree = "<group>"; };
+		0BCA2787A7360B9487FBB606 /* OnboardingTapTargetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingTapTargetTests.swift; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
 		0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingPermissionsView.swift; sourceTree = "<group>"; };
 		11174913BB8D28369D82EC58 /* ZoneValidationEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneValidationEngineTests.swift; sourceTree = "<group>"; };
@@ -365,7 +366,6 @@
 		6AC5299003A0A378AC5AB4BB /* CommuteNotificationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationServiceTests.swift; sourceTree = "<group>"; };
 		6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteDirectionResolverTests.swift; sourceTree = "<group>"; };
 		6F5267BF59F8E93375689632 /* NavEndButtonTapTargetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavEndButtonTapTargetTests.swift; sourceTree = "<group>"; };
-		AABB1100CCDD22EE33FF4402 /* OnboardingTapTargetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingTapTargetTests.swift; sourceTree = "<group>"; };
 		7060DF2E09A67EF2AA284208 /* RoutePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
 		7072F1B4A4ECF3043E6462BF /* SteddiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SteddiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		71155E230D450D007980A661 /* OnboardingEmergencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingEmergencyView.swift; sourceTree = "<group>"; };
@@ -671,7 +671,7 @@
 				EDABAA1E4EA6678F4048B628 /* OfflineCacheServiceTests.swift */,
 				459630C573F0A9D783D34A94 /* OnboardingCoordinatorTests.swift */,
 				AB9A0655F23A1840BB8594B9 /* OnboardingFrostMeasurementTests.swift */,
-				AABB1100CCDD22EE33FF4402 /* OnboardingTapTargetTests.swift */,
+				0BCA2787A7360B9487FBB606 /* OnboardingTapTargetTests.swift */,
 				24696C110D4CE97828035F42 /* OneShotLocationTests.swift */,
 				3380F79E0670137420A0A6AC /* OSMSpeedLimitServiceTests.swift */,
 				1DF2357BC61FE13D4126E3D0 /* OSMTagParsingTests.swift */,
@@ -1316,7 +1316,6 @@
 				EC2A22C59A5539845B5C4173 /* MapMatchingServiceTests.swift in Sources */,
 				9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */,
 				A11007ED36F987BD269EAEAB /* NavEndButtonTapTargetTests.swift in Sources */,
-				AABB1100CCDD22EE33FF4401 /* OnboardingTapTargetTests.swift in Sources */,
 				4C8381646E78AB0103940B8C /* NavHUDFrostMeasurementTests.swift in Sources */,
 				19C3C8979AE3DF1ABFFF5567 /* NavPoseInterpolatorTests.swift in Sources */,
 				0C08EAD3F313231609EC9E89 /* NavigationEngineTests.swift in Sources */,
@@ -1329,6 +1328,7 @@
 				516F8FD78A65AF874CB94FEE /* OfflineCacheServiceTests.swift in Sources */,
 				1FF72605649C41DE725CA997 /* OnboardingCoordinatorTests.swift in Sources */,
 				26A73BEEC04338EF022F15E7 /* OnboardingFrostMeasurementTests.swift in Sources */,
+				498B6B2A166183582745CF79 /* OnboardingTapTargetTests.swift in Sources */,
 				1B70D80153C16FE9D1D1C8C8 /* OneShotLocationTests.swift in Sources */,
 				0B4B8A0683044E51CD7D29AE /* POIDiscoveryTests.swift in Sources */,
 				3C6ECCF87073C9F5713AC231 /* PendingCommuteStartStoreTests.swift in Sources */,
