@@ -463,24 +463,30 @@ struct CommuteDriveRecordRelationshipTests {
 
 /// A FROZEN snapshot of the model graph as it shipped BEFORE the
 /// `Commute.driveRecords` ↔ `DriveRecord.associatedCommute` inverse relationship
-/// existed. This is a real, independent `VersionedSchema` — its nested `@Model`
-/// types are NOT the live classes, so they capture the genuine old on-disk shape:
+/// existed (i.e. before commit d339f57). This is a real, independent
+/// `VersionedSchema` whose nested `@Model` types are NOT the live classes — they
+/// reproduce the genuine old on-disk shape, differing from the live models in
+/// EXACTLY ONE way:
 ///
 ///   * `DriveRecord.associatedCommute` is a plain to-one relationship with NO
-///     `inverse:` and NO explicit delete rule (exactly how it was persisted before
-///     commit d339f57).
-///   * `Commute` has NO `driveRecords` back-reference.
+///     `inverse:` and NO explicit delete rule (how it was persisted before d339f57).
+///   * `Commute` correspondingly has NO `driveRecords` back-reference.
+///
+/// Every OTHER persisted attribute is reproduced faithfully (same names, same
+/// optionality, same scalar types) so the snapshot's store has the same columns a
+/// real pre-inverse store had. That faithfulness matters: a non-optional attribute
+/// with no default (`DriveRecord.rawGPSPoints`, `wasConverted`; `Commute.name`,
+/// `isActive`, …) must already exist in the source store, or the upgrade fails with
+/// "missing attribute values on mandatory destination attribute". The snapshot is
+/// reduced to just the two entities under test (their relationships to the other ten
+/// model types are omitted — those are nullable/to-many and migrate in as nil/empty,
+/// the additive case), which keeps the snapshot a valid, self-consistent schema.
 ///
 /// SwiftData derives a nested type's entity name from its SIMPLE name, so
 /// `PreInverseSchema.Commute` maps to the same store table ("Commute") as the live
-/// `Commute`, and likewise for `DriveRecord`. That is what lets a store WRITTEN
-/// with this snapshot be REOPENED under the current live schema — the migration
-/// path real users on a pre-inverse build take.
-///
-/// The snapshot is intentionally reduced to just the two entities under test (with
-/// no relationships to the other ten model types) so it forms a valid, minimal,
-/// self-consistent schema. Reopening it under the full current schema is itself the
-/// additive case (the other entities/columns are added empty) — which is the point.
+/// `Commute`, and likewise for `DriveRecord`. That is what lets a store WRITTEN with
+/// this snapshot be REOPENED under the current live schema — the exact migration
+/// path a real user on a pre-inverse build takes.
 enum PreInverseSchema: VersionedSchema {
     static var versionIdentifier = Schema.Version(1, 0, 0)
 
@@ -497,6 +503,22 @@ enum PreInverseSchema: VersionedSchema {
         var isActive: Bool = true
         var createdAt: Date = Date()
 
+        var avoidsTolls: Bool?
+        var avoidsHighways: Bool?
+        var skipRoutePreview: Bool?
+
+        var scheduleToDestDays: String?
+        var scheduleToDestStartHour: Int?
+        var scheduleToDestEndHour: Int?
+        var scheduleToOriginDays: String?
+        var scheduleToOriginStartHour: Int?
+        var scheduleToOriginEndHour: Int?
+
+        var notificationsEnabled: Bool = true
+        var quietHoursStart: Int?
+        var quietHoursEnd: Int?
+        var notificationLeadMinutes: Int = 15
+
         init(name: String) {
             self.id = UUID()
             self.name = name
@@ -510,14 +532,24 @@ enum PreInverseSchema: VersionedSchema {
         var id: UUID = UUID()
         var startedAt: Date = Date()
         var endedAt: Date?
-        var wasConverted: Bool = false
-        // Pre-inverse shape: a plain to-one with no inverse and no explicit delete
+        // Non-optional, no default — must exist in the source store (this is the
+        // column whose absence broke an earlier, unfaithful version of this snapshot).
+        var rawGPSPoints: [GPSPoint] = []
+        var matchedPolyline: String?
+        // Pre-inverse shape: a plain to-one with no `inverse:` and no explicit delete
         // rule — the exact field declaration that shipped before d339f57.
         var associatedCommute: Commute?
+        var wasConverted: Bool = false
+
+        var trafficDurationSeconds: Double?
+        var totalDurationSeconds: Double?
+        var maxSpeedMps: Double?
+        var averageSpeedMps: Double?
 
         init(startedAt: Date = Date()) {
             self.id = UUID()
             self.startedAt = startedAt
+            self.rawGPSPoints = []
             self.wasConverted = false
         }
     }
