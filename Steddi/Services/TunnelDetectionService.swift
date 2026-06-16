@@ -62,6 +62,17 @@ final class TunnelDetectionService {
     /// streak with no OSM data) only arms when the driver was actually moving
     /// before the signal died — a phone indoors loses accuracy at zero speed.
     private var lastGoodSpeedMPS: Double = 0
+    /// Fix timestamp at which the current unbroken weak-signal streak began —
+    /// the clock for the blind-latch time-decay. Reset to nil on any non-weak
+    /// fix (which also clears `weakSignalStreak`). The blind arm has only a
+    /// fix-QUALITY escape (a good fix flips `detected` false); deep underground
+    /// or in a long urban-canyon dropout a good fix never arrives, so without a
+    /// time escape the dark theme would pin indefinitely. After
+    /// `blindLatchMaxSeconds` of sustained degradation with no good fix and no
+    /// geometric tunnel signal, we expire `lastGoodSpeedMPS` so the blind arm
+    /// disarms and the normal slow exit fade reverts the theme. Genuine short
+    /// tunnels exit well inside this window (signal returns → good fix → fade).
+    private var weakStreakStartedAt: Date?
 
     init(
         transport: @escaping Transport = { try await URLSession.shared.data(for: $0) },
@@ -124,6 +135,10 @@ final class TunnelDetectionService {
         install(ways: ways, routeKey: routeKey)
     }
 
+    /// Test seam: the blind-latch decay window, so the decay test drives the
+    /// clock past the real bound without hardcoding it (keeps `Tuning` private).
+    nonisolated static var blindLatchMaxSecondsForTesting: TimeInterval { Tuning.blindLatchMaxSeconds }
+
     func clearRoute() {
         segments = []
         loadedRouteKey = nil
@@ -135,6 +150,7 @@ final class TunnelDetectionService {
         phaseChangedAt = nil
         progressAtChange = 0
         weakSignalStreak = 0
+        weakStreakStartedAt = nil
         lastFixTimestamp = nil
         lastGoodSpeedMPS = 0
         status = .outdoor
@@ -173,18 +189,41 @@ final class TunnelDetectionService {
 
         let accuracy = location.horizontalAccuracy
         let weakSignal = accuracy < 0 || accuracy > Tuning.weakAccuracyMeters
-        weakSignalStreak = weakSignal ? weakSignalStreak + 1 : 0
-        if !weakSignal, location.speed >= 0 { lastGoodSpeedMPS = location.speed }
+        if weakSignal {
+            weakSignalStreak += 1
+            if weakStreakStartedAt == nil { weakStreakStartedAt = location.timestamp }
+        } else {
+            weakSignalStreak = 0
+            weakStreakStartedAt = nil
+            if location.speed >= 0 { lastGoodSpeedMPS = location.speed }
+        }
 
         let coordinate = location.coordinate
         let geometricallyInside = Self.isInside(coordinate, segments: segments)
         let nearTunnel = geometricallyInside
             || Self.isNear(coordinate, segments: segments, radius: Tuning.portalProximityMeters)
 
+        // Time-decay the BLIND latch so a long reception dropout that isn't a
+        // tunnel (underground garage at trip's end, urban canyon, dead-zone)
+        // can't pin the dark theme forever. The blind arm's only other escape
+        // is a good fix — which never arrives deep underground — so after a
+        // bounded duration of UNBROKEN degradation with no geometric tunnel
+        // signal we expire the frozen last-good speed; the blind arm then
+        // disarms and the normal slow exit fade reverts the theme. Genuine
+        // short tunnels clear well inside this window (signal returns → a good
+        // fix breaks the streak and resets the clock). Geometric/near-tunnel
+        // detection is untouched — neither depends on `lastGoodSpeedMPS`, so a
+        // driver actually sitting on OSM tunnel geometry still stays detected.
+        if !nearTunnel, let startedAt = weakStreakStartedAt,
+           location.timestamp.timeIntervalSince(startedAt) >= Tuning.blindLatchMaxSeconds {
+            lastGoodSpeedMPS = 0
+        }
+
         // Signals, strongest first: standing on a tunnel way; signal lost near
         // a known tunnel (GPS coasts stale fixes inside, so proximity + loss
         // beats pure geometry); prolonged loss with no OSM data at all, but
-        // only if the driver was moving at road speed before the signal died.
+        // only if the driver was moving at road speed before the signal died
+        // (and only until the blind latch decays — see above).
         let detected = geometricallyInside
             || (nearTunnel && weakSignalStreak >= Tuning.weakStreakNearTunnel)
             || (segments.isEmpty && weakSignalStreak >= Tuning.weakStreakBlind
@@ -410,6 +449,14 @@ private enum Tuning {
     static let weakStreakBlind = 6
     /// Last-good-fix speed below this (m/s) disarms blind detection (~18 mph).
     static let blindMinSpeedMPS: Double = 8
+    /// Max duration the BLIND latch (no OSM data) may hold on an unbroken weak-
+    /// signal streak with no geometric tunnel signal before it decays. Past
+    /// this, a sustained dropout (underground garage, urban canyon, dead-zone)
+    /// is treated as "not a tunnel" and the dark theme is released. Sized well
+    /// above any plausible blind short tunnel — those restore signal (and break
+    /// the streak) in seconds; long mapped tunnels carry OSM geometry and use
+    /// the geometric path, which this never touches.
+    static let blindLatchMaxSeconds: TimeInterval = 180
 
     static let entryRampSeconds: TimeInterval = 1
     static let exitFadeSeconds: TimeInterval = 5

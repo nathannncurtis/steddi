@@ -361,7 +361,14 @@ struct NoGoZoneEditorView: View {
                         ForEach(searchResults) { result in
                             Button { selectSearchResult(result) } label: {
                                 HStack {
-                                    Image(systemName: "mappin").foregroundStyle(SteddiTheme.warmRed).frame(width: 24)
+                                    // Surface-adaptive red: the results list is a
+                                    // `.steddiGlass` light frost over the bright map (and a
+                                    // near-white solid under Reduce Transparency), where raw
+                                    // `warmRed` falls to ~1.77:1 in grey / ~3.56:1 in light —
+                                    // below the 3:1 glyph floor. `warmRedText` darkens the hue
+                                    // the direction the live surface has headroom in, clearing
+                                    // the floor while the pin still reads red.
+                                    Image(systemName: "mappin").foregroundStyle(SteddiTheme.warmRedText).frame(width: 24)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(result.name).font(.body).foregroundStyle(SteddiTheme.textPrimary)
                                         if !result.address.isEmpty && result.address != result.name {

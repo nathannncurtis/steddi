@@ -85,3 +85,110 @@ struct TunnelDetectionServiceTests {
         #expect(!TunnelDetectionService.isNear(far, segments: [segment], radius: radius))
     }
 }
+
+@Suite("TunnelDetectionService blind-latch decay")
+@MainActor
+struct TunnelDetectionBlindLatchTests {
+
+    /// A degraded fix far from any tunnel: negative accuracy (or > weakAccuracy)
+    /// marks it weak; speed is irrelevant once weak (not recorded as good).
+    private func weakFix(at t: TimeInterval, base: Date) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 40.0, longitude: -74.0),
+            altitude: 0,
+            horizontalAccuracy: 200,   // > weakAccuracyMeters (80) → degraded
+            verticalAccuracy: 10,
+            course: 0,
+            speed: -1,                 // unknown while degraded
+            timestamp: base.addingTimeInterval(t)
+        )
+    }
+
+    /// A trustworthy fix at road speed, so the blind heuristic's "was moving"
+    /// gate arms (lastGoodSpeedMPS ≥ blindMinSpeedMPS).
+    private func goodFastFix(at t: TimeInterval, base: Date) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 40.0, longitude: -74.0),
+            altitude: 0,
+            horizontalAccuracy: 5,     // < weakAccuracyMeters → trustworthy
+            verticalAccuracy: 5,
+            course: 0,
+            speed: 25,                 // ~56 mph, well above blindMinSpeedMPS (8)
+            timestamp: base.addingTimeInterval(t)
+        )
+    }
+
+    @Test("Sustained degraded GPS (no OSM data) releases the blind latch after the timeout")
+    func sustainedDegradationReleasesLatch() {
+        // No tunnel ways loaded → segments stays empty → the BLIND arm is the
+        // only path to `detected`. Drive a clock the fade math reads off `now`.
+        let base = Date(timeIntervalSince1970: 1_000_000)
+        var clock = base
+        var lastDetected: Bool?
+        let service = TunnelDetectionService(
+            now: { clock },
+            apply: { _, detected in lastDetected = detected }
+        )
+
+        // 1) One good fast fix arms the "was moving at road speed" gate.
+        clock = base
+        service.updateLocation(goodFastFix(at: 0, base: base))
+
+        // 2) Enough consecutive weak fixes to cross weakStreakBlind (6) → the
+        //    blind latch fires and pins the in-tunnel (dark) theme.
+        for i in 1...7 {
+            clock = base.addingTimeInterval(Double(i))
+            service.updateLocation(weakFix(at: Double(i), base: base))
+        }
+        #expect(service.status == .inTunnel, "blind latch should fire on a sustained streak after road-speed motion")
+        #expect(lastDetected == true)
+
+        // 3) Keep the dropout going past the decay window (180s) WITHOUT a good
+        //    fix — exactly the underground-garage / urban-canyon case. The latch
+        //    must release: detected flips false and the theme reverts.
+        var t = 8.0
+        while t <= TunnelDetectionService.blindLatchMaxSecondsForTesting + 5 {
+            clock = base.addingTimeInterval(t)
+            service.updateLocation(weakFix(at: t, base: base))
+            t += 1
+        }
+        #expect(service.status == .outdoor, "a sustained dropout that isn't a tunnel must not pin dark forever")
+        #expect(lastDetected == false, "blind latch should have decayed and released")
+    }
+
+    @Test("A good fix during the dropout resets the decay clock (genuine short-tunnel exit preserved)")
+    func goodFixResetsDecayClock() {
+        let base = Date(timeIntervalSince1970: 2_000_000)
+        var clock = base
+        var lastDetected: Bool?
+        let service = TunnelDetectionService(
+            now: { clock },
+            apply: { _, detected in lastDetected = detected }
+        )
+
+        clock = base
+        service.updateLocation(goodFastFix(at: 0, base: base))
+        for i in 1...7 {
+            clock = base.addingTimeInterval(Double(i))
+            service.updateLocation(weakFix(at: Double(i), base: base))
+        }
+        #expect(service.status == .inTunnel)
+
+        // A good fix arrives well before the decay window — the streak (and its
+        // clock) reset, so detection ends via the normal quality escape, not the
+        // timeout. This is the genuine short-tunnel path: signal returns, fade out.
+        clock = base.addingTimeInterval(20)
+        service.updateLocation(goodFastFix(at: 20, base: base))
+        #expect(service.status == .outdoor)
+        #expect(lastDetected == false)
+
+        // Re-arming starts a fresh streak whose clock begins now — so a brand-new
+        // short dropout is NOT immediately decayed by the earlier elapsed time.
+        for i in 1...7 {
+            let t = 21.0 + Double(i)
+            clock = base.addingTimeInterval(t)
+            service.updateLocation(weakFix(at: t, base: base))
+        }
+        #expect(service.status == .inTunnel, "a fresh blind streak after a good fix re-arms and is not pre-decayed")
+    }
+}
