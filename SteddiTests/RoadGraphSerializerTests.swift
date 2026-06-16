@@ -37,6 +37,27 @@ private func coordsEqual(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2
     abs(a.latitude - b.latitude) < tolerance && abs(a.longitude - b.longitude) < tolerance
 }
 
+/// Minimal little-endian cursor for locating a field's byte offset in a
+/// serialized blob from the test (the serializer's own reader is private). Only
+/// the few operations the CSR-tamper test needs: skip fixed bytes, read a U32,
+/// and skip a LEB128 varint (one continuation-bit walk).
+private struct ByteReaderProbe {
+    private let data: Data
+    private(set) var offset: Int
+    init(_ data: Data) { self.data = data; self.offset = 0 }
+    mutating func skip(_ n: Int) { offset += n }
+    mutating func readU32LE() -> Int {
+        var v = 0
+        for i in 0..<4 { v |= Int(data[data.startIndex + offset + i]) << (8 * i) }
+        offset += 4
+        return v
+    }
+    mutating func skipVarint() {
+        while data[data.startIndex + offset] & 0x80 != 0 { offset += 1 }
+        offset += 1   // the terminating byte (high bit clear)
+    }
+}
+
 // MARK: - Round-trip
 
 @Suite("RoadGraphSerializer")
@@ -248,6 +269,72 @@ struct RoadGraphSerializerTests {
         let graph = buildSampleGraph()
         let data = RoadGraphSerializer.serialize(graph)
         #expect(RoadGraphSerializer.deserialize(data) != nil)
+    }
+
+    // MARK: - CSR adjacency-consistency revalidation
+
+    /// Byte offset of node `index`'s `firstEdge` field within the serialized blob.
+    /// Layout: 4 magic + 1 version, then geomCount(4) + geometry varints, then
+    /// nodeCount(4) + nodes. Each node record is a fixed 25 bytes; within it the
+    /// fields are osmID(8) + lat(4) + lon(4) + firstEdge(4) + edgeCount(4) +
+    /// flags(1), so `firstEdge` sits 16 bytes into the record.
+    private func firstEdgeFieldOffset(in data: Data, nodeIndex: Int) -> Int {
+        var reader = ByteReaderProbe(data)
+        reader.skip(5)                          // magic + version
+        let geomCount = reader.readU32LE()
+        for _ in 0..<geomCount {                // two signed varints per coord
+            reader.skipVarint()
+            reader.skipVarint()
+        }
+        reader.skip(4)                          // nodeCount
+        let nodesStart = reader.offset
+        return nodesStart + nodeIndex * 25 + 16 // firstEdge field within the record
+    }
+
+    private func writeI32LE(_ data: inout Data, at offset: Int, _ value: Int32) {
+        let bits = UInt32(bitPattern: value)
+        for i in 0..<4 {
+            data[data.startIndex + offset + i] = UInt8((bits >> (8 * UInt32(i))) & 0xff)
+        }
+    }
+
+    /// A blob whose CSR offsets stay IN BOUNDS but no longer describe a real CSR
+    /// layout (a node's `firstEdge` shifted off the running offset) must be
+    /// rejected — otherwise the forward expansion in A* would trust the window
+    /// blindly and stitch a disconnected/teleporting route presented as valid
+    /// instead of falling back to MapKit. The valid blob round-trips (proven by
+    /// the round-trip suite); this asserts the inconsistent twin returns nil.
+    @Test("Inconsistent (but in-bounds) CSR node offset is rejected")
+    func inconsistentCSROffsetRejected() throws {
+        let graph = buildSampleGraph()
+        let totalEdges = Int32(graph.edges.count)
+        #expect(totalEdges > 1)
+
+        // Find a node with a non-empty out-edge window — its `firstEdge` carries a
+        // real CSR offset we can shift to break tiling while staying in bounds.
+        guard let nodeIndex = graph.nodes.firstIndex(where: { $0.edgeCount > 0 }) else {
+            Issue.record("sample graph has no node with out-edges")
+            return
+        }
+        let node = graph.nodes[nodeIndex]
+        // Pick an in-bounds target offset that differs from the true one and keeps
+        // `firstEdge + edgeCount <= totalEdges` (so the EXISTING per-node bounds
+        // check still passes and only the new consistency check can reject it).
+        let trueFirst = node.firstEdge
+        let maxStart = totalEdges - node.edgeCount        // largest in-bounds start
+        let tamperedFirst: Int32 = trueFirst == maxStart ? max(0, maxStart - 1) : trueFirst + 1
+        #expect(tamperedFirst != trueFirst)
+        #expect(tamperedFirst >= 0 && tamperedFirst + node.edgeCount <= totalEdges)
+
+        var data = RoadGraphSerializer.serialize(graph)
+        // Sanity: the untampered blob deserializes (valid round-trip).
+        #expect(RoadGraphSerializer.deserialize(data) != nil)
+
+        let offset = firstEdgeFieldOffset(in: data, nodeIndex: nodeIndex)
+        writeI32LE(&data, at: offset, tamperedFirst)
+
+        // In-bounds but CSR-inconsistent → rejected so the loader falls back.
+        #expect(RoadGraphSerializer.deserialize(data) == nil)
     }
 
     @Test("Binary blob is materially smaller than JSON would be")
