@@ -42,16 +42,23 @@ struct SteddiRoutePrefBadge: View {
                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                 .lineLimit(1)
         }
+        // This badge rides translucent nav glass over the moving map like every
+        // sibling readout — the soft per-glyph shadow keeps the icon + label off
+        // the tiles (textSecondary's AA is only proven on solid surfaces).
+        .legibleOverMap()
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background {
+        // Match the street-name capsule's over-map hardening: a faint scrim under
+        // the glass so the readout holds against bright/varied cartography, then
+        // the centralized glass surface (Reduce Transparency / high contrast goes
+        // opaque like the rest of the nav chrome). The accent hairline — the
+        // badge's "preference active" identity — stays as an overlay on top.
+        .mapGlassScrim(in: Capsule())
+        .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.25)
+        .overlay(
             Capsule()
-                .fill(SteddiTheme.surfacePrimary.opacity(SteddiTheme.navSurfaceOpacity(0.8, highContrast: highContrast)))
-                .overlay(
-                    Capsule()
-                        .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.18, highContrast: highContrast)), lineWidth: 1)
-                )
-        }
+                .stroke(SteddiTheme.accent.opacity(SteddiTheme.navStrokeOpacity(0.18, highContrast: highContrast)), lineWidth: 1)
+        )
     }
 
     /// Spoken as a single phrase so VoiceOver doesn't read each pill separately.
