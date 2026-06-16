@@ -70,11 +70,18 @@ struct TripPlannerView: View {
             VStack {
                 // Top bar
                 HStack {
+                    // Keep the compact capsule visuals but expand each hit region
+                    // to the 44pt minimum (contentShape so the padded area still
+                    // takes the tap) — these float over the tap-to-add-stop map, so
+                    // a sub-44pt near-miss would otherwise fall through and drop an
+                    // unwanted stop. Matches this view's own 44pt zoom buttons.
                     Button("Cancel") { dismiss() }
                         .font(.body.weight(.medium))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .padding(10)
                         .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Capsule())
 
                     Spacer()
 
@@ -92,6 +99,8 @@ struct TripPlannerView: View {
                         .foregroundStyle(canSave ? SteddiTheme.accent : SteddiTheme.textMuted)
                         .padding(10)
                         .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Capsule())
                         .disabled(!canSave)
                 }
                 .padding(.horizontal, 16)
@@ -213,9 +222,13 @@ struct TripPlannerView: View {
                     Button {
                         draftStops.removeAll { $0.id == stop.id }
                     } label: {
+                        // Compact glyph, 44pt hit region (contentShape so the
+                        // padding takes the tap) — Apple's minimum tap target.
                         Image(systemName: "xmark.circle.fill")
                             .font(.body)
                             .foregroundStyle(SteddiTheme.textMuted)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
