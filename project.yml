@@ -117,6 +117,12 @@ targets:
     platform: iOS
     sources:
       - SteddiTests
+      # CommuteETAEntry's staleness/liveness logic lives in the widget extension
+      # target; compile this one self-contained file (WidgetKit + SwiftUI only,
+      # no app-type deps) into the test target too so it can be unit-tested
+      # directly. xcodegen owns membership, so it must be declared here — a manual
+      # pbxproj edit does not survive regeneration.
+      - SteddiWidget/CommuteETAWidget.swift
     settings:
       GENERATE_INFOPLIST_FILE: YES
       DEVELOPMENT_TEAM: Z46423B3U9
