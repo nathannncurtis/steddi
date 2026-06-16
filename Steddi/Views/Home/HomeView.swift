@@ -2668,6 +2668,25 @@ struct HomeView: View {
                     break
                 }
 
+                // Commute (non-trip) arrival: the engine latches hasArrived but
+                // deliberately stays isNavigating=true so the "You have arrived"
+                // overlay + manual End / route-save flow persist. Without stopping
+                // the feed here, this 2 Hz loop would keep spinning indefinitely —
+                // holding kCLLocationAccuracyBestForNavigation background GPS hot
+                // and churning the Live Activity on a frozen arrived state — until
+                // the driver remembers to tap End. Push ONE final arrived update to
+                // the Live Activity, downgrade location out of high-accuracy
+                // navigation mode, then break: the arrival UI stays up, and a fresh
+                // navigation calls startLocationFeed again (re-enabling nav mode in
+                // beginNavigation). End/teardown still runs its own cleanup.
+                if activeTrip == nil, navigationEngine?.hasArrived == true {
+                    if let engine = navigationEngine {
+                        LiveActivityService.shared.updateActivity(engine: engine)
+                    }
+                    locationService.disableNavigationMode()
+                    break
+                }
+
                 // Only feed fresh fixes — refeeding the same stale CLLocation
                 // every 500ms churns the engine's published pose for no reason
                 if let location = locationService.currentLocation,
