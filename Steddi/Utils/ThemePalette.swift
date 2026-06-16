@@ -74,12 +74,22 @@ struct ThemePalette: Equatable {
     /// achievable: 5.09/4.04/3.24 on P/S/E (was 2.75/2.18/1.75, well below any
     /// floor). Primary clears AA; secondary/elevated clear the 3:1 large-text/UI
     /// floor, matching the contrast envelope of `textPrimary` itself in grey mode.
+    /// `textSecondary` lifted from 0.80→0.93. At 0.80 it was DARKER (lum 0.605)
+    /// than `textMuted` (0.88, lum 0.750) — an inverted hierarchy — and read
+    /// only 4.17/3.31/2.66 on P/S/E, below the 4.5:1 AA floor for the
+    /// information-bearing labels that use it (inactive sheet tabs, commute-card
+    /// subtitle, resume-banner subtitle, empty-state captions). At 0.93 it lands
+    /// 5.73/4.55/3.65 on P/S/E (4.98 on the commute-card fill), clears AA on
+    /// primary/secondary, and restores the intended ordering: it now sits between
+    /// textPrimary (0.96) and textMuted (0.88) in both luminance and contrast, so
+    /// contrast(primary) > contrast(secondary) > contrast(muted) on every grey
+    /// surface — matching how the dark/light palettes rank these tokens.
     static let grey = ThemePalette(
         surfacePrimary: RGBColor(0.36, 0.36, 0.37),
         surfaceSecondary: RGBColor(0.42, 0.42, 0.43),
         surfaceElevated: RGBColor(0.48, 0.48, 0.49),
         textPrimary: RGBColor(0.96, 0.96, 0.96),
-        textSecondary: RGBColor(0.80, 0.80, 0.81),
+        textSecondary: RGBColor(0.93, 0.93, 0.94),
         textMuted: RGBColor(0.88, 0.88, 0.89)
     )
 

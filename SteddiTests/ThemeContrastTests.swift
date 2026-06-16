@@ -83,6 +83,97 @@ struct ThemeContrastTests {
         #expect(ContrastRatio.ratio(ThemePalette.light.textMuted, ThemePalette.light.surfacePrimary) > oldLight)
     }
 
+    // MARK: - textSecondary: AA + the primary>secondary>muted hierarchy
+
+    @Test("textSecondary clears AA on surfacePrimary in every palette")
+    func textSecondaryPrimaryAA() {
+        for (name, p) in palettes {
+            let r = ContrastRatio.ratio(p.textSecondary, p.surfacePrimary)
+            #expect(r >= ContrastRatio.aaBody, "\(name) textSecondary/primary = \(r), want >= 4.5")
+        }
+    }
+
+    @Test("textSecondary clears at least the 3:1 floor on every surface, every palette")
+    func textSecondaryFloorEverywhere() {
+        for (name, p) in palettes {
+            for (sName, surf) in [("primary", p.surfacePrimary),
+                                  ("secondary", p.surfaceSecondary),
+                                  ("elevated", p.surfaceElevated)] {
+                let r = ContrastRatio.ratio(p.textSecondary, surf)
+                #expect(r >= ContrastRatio.aaLarge, "\(name) textSecondary/\(sName) = \(r), want >= 3.0")
+            }
+        }
+    }
+
+    /// The GREY palette is the one where textSecondary was mis-tuned: at RGB(0.80)
+    /// it was DARKER than textMuted (RGB 0.88) — an inverted hierarchy — and read
+    /// only 4.17/3.31/2.66 on P/S/E, below the 4.5 AA floor for the
+    /// information-bearing labels that consume it (inactive sheet tabs,
+    /// commute-card subtitle, resume-banner subtitle, empty-state captions). These
+    /// pin the fix: secondary clears AA on the grey sheet/card surfaces AND the
+    /// intended contrast(primary) > contrast(secondary) > contrast(muted) ordering
+    /// holds on every grey surface, including the composited commute-card fill.
+
+    @Test("grey textSecondary clears AA on surfacePrimary, surfaceSecondary, and the commute-card fill")
+    func greyTextSecondaryAA() {
+        let p = ThemePalette.grey
+        // The commute-card fill is surfaceSecondary @0.6 composited over surfacePrimary.
+        let a = 0.6
+        let card = RGBColor(
+            p.surfaceSecondary.r * a + p.surfacePrimary.r * (1 - a),
+            p.surfaceSecondary.g * a + p.surfacePrimary.g * (1 - a),
+            p.surfaceSecondary.b * a + p.surfacePrimary.b * (1 - a))
+        for (sName, surf) in [("primary", p.surfacePrimary),
+                              ("secondary", p.surfaceSecondary),
+                              ("card", card)] {
+            let r = ContrastRatio.ratio(p.textSecondary, surf)
+            #expect(r >= ContrastRatio.aaBody, "grey textSecondary/\(sName) = \(r), want >= 4.5")
+        }
+    }
+
+    @Test("grey text hierarchy holds: contrast(primary) > contrast(secondary) > contrast(muted) on every surface")
+    func greyTextHierarchy() {
+        let p = ThemePalette.grey
+        // textSecondary must be brighter than textMuted (the inversion that was the bug).
+        #expect(ContrastRatio.relativeLuminance(p.textSecondary)
+                > ContrastRatio.relativeLuminance(p.textMuted),
+                "grey textSecondary must be lighter than textMuted (was inverted)")
+        let a = 0.6
+        let card = RGBColor(
+            p.surfaceSecondary.r * a + p.surfacePrimary.r * (1 - a),
+            p.surfaceSecondary.g * a + p.surfacePrimary.g * (1 - a),
+            p.surfaceSecondary.b * a + p.surfacePrimary.b * (1 - a))
+        for (sName, surf) in [("primary", p.surfacePrimary),
+                              ("secondary", p.surfaceSecondary),
+                              ("elevated", p.surfaceElevated),
+                              ("card", card)] {
+            let cp = ContrastRatio.ratio(p.textPrimary, surf)
+            let cs = ContrastRatio.ratio(p.textSecondary, surf)
+            let cm = ContrastRatio.ratio(p.textMuted, surf)
+            #expect(cp > cs, "grey \(sName): primary \(cp) must out-contrast secondary \(cs)")
+            #expect(cs > cm, "grey \(sName): secondary \(cs) must out-contrast muted \(cm)")
+            // All three must still clear the 3:1 readable floor on every surface.
+            #expect(cm >= ContrastRatio.aaLarge, "grey \(sName) muted = \(cm), want >= 3.0")
+        }
+    }
+
+    @Test("the OLD grey textSecondary inverted the hierarchy and failed AA (documents the bug)")
+    func greyTextSecondaryRegression() {
+        let p = ThemePalette.grey
+        let oldSecondary = RGBColor(0.80, 0.80, 0.81) // pre-fix value
+        // It was DARKER than textMuted — the inversion.
+        #expect(ContrastRatio.relativeLuminance(oldSecondary)
+                < ContrastRatio.relativeLuminance(p.textMuted),
+                "old grey textSecondary should have been darker than textMuted")
+        // And below AA on surfacePrimary.
+        let oldR = ContrastRatio.ratio(oldSecondary, p.surfacePrimary)
+        #expect(oldR < ContrastRatio.aaBody, "old grey textSecondary/primary was \(oldR), expected sub-AA")
+        // The fix clears AA and out-contrasts the old value.
+        let newR = ContrastRatio.ratio(p.textSecondary, p.surfacePrimary)
+        #expect(newR >= ContrastRatio.aaBody)
+        #expect(newR > oldR)
+    }
+
     // MARK: - accent-as-text (finding 2): AA on primary/secondary, all accents
 
     @Test("text-safe accent clears AA on surfacePrimary for every accent in every palette")
