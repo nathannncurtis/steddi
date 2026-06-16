@@ -448,10 +448,20 @@ enum SteddiTheme {
 
 /// The signature "steady line" visual — a flat, calm line that subtly pulses.
 /// Used as a brand element on cards, headers, dividers.
+///
+/// The pulse is a gentle opacity breathe that loops forever. It is gated by
+/// ``SteddiMotion``: under Reduce Motion `phase` is set instantly to its rest
+/// value and never animates, so the line renders as a static, full-presence
+/// gradient — no motion, no flicker.
 struct SteadyLine: View {
     var color: Color = SteddiTheme.accent
     var height: CGFloat = 2
+
+    /// 0 = rest (full presence), 1 = the dimmest point of the breathe.
     @State private var phase: CGFloat = 0
+
+    /// Opacity travels between full and `pulseFloor` as `phase` breathes.
+    private var pulseFloor: CGFloat { 0.55 }
 
     var body: some View {
         Rectangle()
@@ -463,10 +473,13 @@ struct SteadyLine: View {
                 )
             )
             .frame(height: height)
-            .mask(
-                Rectangle()
-                    .frame(height: height)
-            )
+            .opacity(1 - phase * (1 - pulseFloor))
+            .onAppear {
+                guard SteddiMotion.shouldAnimate else { return }
+                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                    phase = 1
+                }
+            }
     }
 }
 

@@ -65,6 +65,18 @@ final class OSMSpeedLimitService {
     private var challengerIndex: Int?
     private var challengerStreak = 0
 
+    /// Age-out streak for the within-margin case. The fast `challengerStreak`
+    /// only accrues when a challenger is closer than the held way by more than
+    /// the hysteresis margin, so a genuinely-changed road that runs within the
+    /// margin of the old one (tightly-parallel frontage/service roads, slip
+    /// lanes) could otherwise pin the readout to the stale way indefinitely.
+    /// This slower streak forces a switch once a *different* way has been the
+    /// strict-nearest qualifying candidate for long enough that it can't be
+    /// jitter — the driver has clearly left the old way. Strict-nearest, so a
+    /// truly equidistant co-located pair never trips it (no flicker).
+    private var staleChallengerIndex: Int?
+    private var staleChallengerStreak = 0
+
     init(
         transport: @escaping Transport = { try await URLSession.shared.data(for: $0) },
         cacheDirectory: URL? = nil,
@@ -183,6 +195,15 @@ final class OSMSpeedLimitService {
     private func resetChallenger() {
         challengerIndex = nil
         challengerStreak = 0
+        staleChallengerIndex = nil
+        staleChallengerStreak = 0
+    }
+
+    /// Reset only the fast (>margin) streak, leaving the slow age-out streak to
+    /// keep accruing across lookups that stay inside the margin.
+    private func resetFastChallenger() {
+        challengerIndex = nil
+        challengerStreak = 0
     }
 
     private nonisolated static func buildIndex(for newWays: [SpeedLimitWay]) -> SpatialIndex {
@@ -280,7 +301,28 @@ final class OSMSpeedLimitService {
                     } else {
                         resetChallenger()
                     }
+                } else if nearest.value < lastDistance {
+                    // Challenger is strictly nearer than the held way but inside
+                    // the flicker margin. Normally we hold `last` here so two
+                    // co-located ways don't ping-pong, but if the SAME way stays
+                    // the strict-nearest for a long run the driver has actually
+                    // left the old way (a tightly-parallel road that never gets
+                    // >margin closer) — age out the stale lock and switch.
+                    resetFastChallenger()
+                    if staleChallengerIndex == nearest.key {
+                        staleChallengerStreak += 1
+                    } else {
+                        staleChallengerIndex = nearest.key
+                        staleChallengerStreak = 1
+                    }
+                    if staleChallengerStreak < Tuning.staleWayLookups {
+                        chosen = last
+                    } else {
+                        resetChallenger()
+                    }
                 } else {
+                    // Held way is at least as near (equidistant or nearer):
+                    // genuine flicker territory — hold and reset both streaks.
                     resetChallenger()
                     chosen = last
                 }
@@ -599,4 +641,10 @@ private enum Tuning {
     static let headingToleranceDegrees: Double = 50
     static let hysteresisMarginMeters: Double = 5
     static let hysteresisLookups = 3
+    /// Age-out threshold for a challenger that stays strictly nearest but always
+    /// inside the flicker margin. Comfortably longer than `hysteresisLookups` so
+    /// brief within-margin jitter is still ignored, but bounded so a road that
+    /// genuinely changed under a tightly-parallel geometry updates within a few
+    /// seconds of GPS fixes rather than pinning to the stale way forever.
+    static let staleWayLookups = 8
 }
