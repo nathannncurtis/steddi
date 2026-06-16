@@ -256,7 +256,13 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     }
 
     func recenter() {
-        guard let mapView, let coord = mapView.userLocation.location?.coordinate else { return }
+        // Validate the coordinate before centering, matching every other consumer
+        // in this file (lines 121, 203, 320). Before the first GPS fix
+        // MKUserLocation can transiently report a non-nil (0,0)/garbage coordinate;
+        // without this guard tapping recenter in that window jumps the CarPlay
+        // camera to Null Island instead of no-opping.
+        guard let mapView, let coord = mapView.userLocation.location?.coordinate,
+              CLLocationCoordinate2DIsValid(coord) else { return }
         isFreeLook = false
         currentZoom = 17.5
         if isInNavigation {
