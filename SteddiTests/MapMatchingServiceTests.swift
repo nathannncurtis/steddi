@@ -160,4 +160,57 @@ struct MapMatchingServiceTests {
         let firstKeptAlong = (stitched.first!.latitude - base) / degPerMeter
         #expect(firstKeptAlong > 200.0)
     }
+
+    @Test("Overlap mapping to >8 matched vertices: adaptive tail window drops the WHOLE seam")
+    func adaptiveTailWindowSpansLongOverlap() {
+        // The input overlap (~120m here) re-traces onto MANY matched vertices when
+        // OSRM resamples finely — 12 vertices at 10m spacing. A fixed 8-vertex tail
+        // window reaches back only ~70m, so the 4 deepest overlap points (the start
+        // of the re-trace) sit BEYOND the window, match nothing, and survive — a
+        // seam that is under-dropped, backtracking the polyline. An adaptive window
+        // sized to the overlap LENGTH reaches all 12 and drops the entire seam.
+        let degPerMeter = 1.0 / 111_320.0
+        let base = 33.0
+
+        // Stitched tail: vertices every 10m from +0m to +200m (21 vertices). The
+        // overlap re-traces the last ~120m of this (+80m .. +200m).
+        let stitchedTail: [CLLocationCoordinate2D] = stride(from: 0.0, through: 200.0, by: 10.0).map {
+            .init(latitude: base + $0 * degPerMeter, longitude: -117.0)
+        }
+        let tail = stitchedTail.last!
+
+        // New chunk: re-traces +90m .. +200m at 10m spacing (12 overlap vertices,
+        // each ~within seamEpsilon of a tail vertex), then continues +210m .. +300m.
+        let overlapCoords: [CLLocationCoordinate2D] = stride(from: 90.0, through: 200.0, by: 10.0).map {
+            .init(latitude: base + $0 * degPerMeter, longitude: -117.0)
+        }
+        // Forward geometry starts ~25m past the tail — comfortably clear of the 10m
+        // seamEpsilon so the first kept point is unambiguous.
+        let forwardCoords: [CLLocationCoordinate2D] = stride(from: 225.0, through: 300.0, by: 25.0).map {
+            .init(latitude: base + $0 * degPerMeter, longitude: -117.0)
+        }
+        let chunk = overlapCoords + forwardCoords
+        #expect(overlapCoords.count > MapMatchingService.seamTailWindow)   // the trigger: >8 overlap vertices
+
+        // The measured overlap span (~120m of input geometry at the seam).
+        let overlapMeters = 120.0
+
+        // Fixed 8-vertex window (the old behavior): it reaches only the last ~70m of
+        // the tail, so the deepest overlap points (~+90m..+120m) match nothing and
+        // survive — the seam is under-dropped.
+        let fixedRegion = Array(stitchedTail.suffix(MapMatchingService.seamTailWindow))
+        let fixedStitched = MapMatchingService.stitchSeam(tailRegion: fixedRegion, chunk: chunk)
+        #expect(fixedStitched.count > forwardCoords.count)   // leftover overlap geometry (bad)
+
+        // Adaptive window: sized by the overlap length, it spans the whole overlap,
+        // so every overlap vertex is dropped and only the forward geometry remains.
+        let adaptiveRegion = MapMatchingService.adaptiveTailRegion(stitchedTail, overlapMeters: overlapMeters)
+        #expect(adaptiveRegion.count > MapMatchingService.seamTailWindow)   // window grew past the fixed floor
+        let stitched = MapMatchingService.stitchSeam(tailRegion: adaptiveRegion, chunk: chunk)
+        #expect(stitched.count == forwardCoords.count)
+        #expect(NavigationEngine.haversineDistance(from: tail, to: stitched[0]) > MapMatchingService.seamEpsilon)
+        // The kept geometry strictly advances past the tail — no backtrack.
+        let firstKeptAlong = (stitched.first!.latitude - base) / degPerMeter
+        #expect(firstKeptAlong > 200.0)
+    }
 }
