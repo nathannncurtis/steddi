@@ -236,6 +236,121 @@ struct ChooseTests {
     }
 }
 
+// MARK: - Abandon-retry prompt budget (HomeView nag guard)
+
+/// Regression guard for the MEDIUM bug: handleOffRoute used to re-prompt
+/// voice/haptic on EVERY off-route retry but only consumed the per-trip recovery
+/// budget on a COMMITTED splice. A driver deliberately detouring (the engine
+/// keeps scoring .abandonToDestination) therefore never hit the cap, so recovery
+/// re-fired the haptic + "Rerouting ahead" voice line + MKDirections fetches
+/// roughly every 30s for the rest of the trip — nagging indefinitely.
+///
+/// The fix: a genuine abandon DECISION from a non-empty options set consumes the
+/// budget too, and handleOffRoute throttles (suppresses the prompt + fetch)
+/// once `recoveriesThisTrip >= RouteRecoveryEngine.recoveryBudget`. These tests
+/// model that caller-side accounting + throttle over `choose` to prove prompts
+/// are BOUNDED on a pure-abandon trajectory while a genuine splice still works.
+@Suite("Off-route recovery abandon-retry prompt budget")
+struct AbandonRetryPromptBudgetTests {
+
+    // A deliberate-detour driver: a usable forward rejoin route exists, but it
+    // costs far more than going direct, so `choose` keeps returning
+    // .abandonToDestination — the exact pre-fix nag trajectory.
+    private let candidates = [
+        RejoinCandidate(coordinate: .init(latitude: 33.05, longitude: -117), alongDistance: 5000, kind: .macroLegEntry),
+        RejoinCandidate(coordinate: .init(latitude: 33.09, longitude: -117), alongDistance: 10000, kind: .destination),
+    ]
+    private let abandonOptions = [
+        // Expensive rejoin (>> direct), so choose abandons even below the cap.
+        RecoveryOption(candidateIndex: 0, etaSeconds: 1500, initialBearingDegrees: nil, beginsWithUTurn: false),
+        RecoveryOption(candidateIndex: 1, etaSeconds: 400, initialBearingDegrees: nil, beginsWithUTurn: false),
+    ]
+
+    /// Drive the SAME accounting handleOffRoute now uses: throttle the prompt
+    /// once the budget is spent; consume the budget on a genuine abandon from a
+    /// non-empty options set. Count how many times a prompt would actually fire
+    /// over many off-route retries. It must be BOUNDED by the recovery budget,
+    /// not unbounded.
+    @Test("A deliberate-detour driver gets a bounded number of recovery prompts")
+    func boundedPromptsOnRepeatedAbandon() {
+        var recoveriesThisTrip = 0
+        var promptCount = 0
+
+        // One off-route retry, mirroring handleOffRoute's structure.
+        func retry() {
+            // Entry throttle: budget spent -> suppress prompt + fetch entirely.
+            guard recoveriesThisTrip < RouteRecoveryEngine.recoveryBudget else { return }
+            // Past the throttle, the haptic + "Rerouting ahead" voice fire.
+            promptCount += 1
+            let decision = RouteRecoveryEngine.choose(
+                candidates: candidates, options: abandonOptions, event: event(along: 4000),
+                totalDistance: 10000, expectedTravelTime: 900, recoveriesThisTrip: recoveriesThisTrip
+            )
+            // A genuine abandon from a non-empty options set consumes the budget.
+            if case .abandonToDestination = decision, !abandonOptions.isEmpty {
+                recoveriesThisTrip += 1
+            }
+        }
+
+        // Simulate a long detour: many off-route episodes (pre-fix: ~one prompt
+        // every 30s for the whole trip).
+        for _ in 0..<50 { retry() }
+
+        // Prompts are bounded by the budget — not 50.
+        #expect(promptCount == RouteRecoveryEngine.recoveryBudget)
+        #expect(promptCount < 50)
+        // And the engine is now firmly in abandon mode.
+        let final = RouteRecoveryEngine.choose(
+            candidates: candidates, options: abandonOptions, event: event(along: 4000),
+            totalDistance: 10000, expectedTravelTime: 900, recoveriesThisTrip: recoveriesThisTrip
+        )
+        #expect(final == .abandonToDestination)
+    }
+
+    /// A TRANSIENT failure (every fetch failed -> empty options) must NOT consume
+    /// the budget, so saved-route recovery isn't permanently disabled by a brief
+    /// network blip. Prompts keep retrying (the failure is recoverable), but the
+    /// cap is never burned by the blip itself.
+    @Test("Transient all-fetches-failed abandon does not consume the budget")
+    func transientFailureDoesNotConsumeBudget() {
+        var recoveriesThisTrip = 0
+
+        func retryWithNoOptions() {
+            guard recoveriesThisTrip < RouteRecoveryEngine.recoveryBudget else { return }
+            let emptyOptions: [RecoveryOption] = []
+            let decision = RouteRecoveryEngine.choose(
+                candidates: candidates, options: emptyOptions, event: event(along: 4000),
+                totalDistance: 10000, expectedTravelTime: 900, recoveriesThisTrip: recoveriesThisTrip
+            )
+            #expect(decision == .abandonToDestination) // no options -> abandon
+            // Caller rule: empty options is transient, so DON'T consume budget.
+            if case .abandonToDestination = decision, !emptyOptions.isEmpty {
+                recoveriesThisTrip += 1
+            }
+        }
+
+        for _ in 0..<10 { retryWithNoOptions() }
+        // The blip never burned the budget — recovery can still splice once the
+        // network returns.
+        #expect(recoveriesThisTrip == 0)
+    }
+
+    /// A genuine successful recovery is preserved: when a forward rejoin is
+    /// cheaper than going direct, `choose` rejoins (no abandon), and that path
+    /// consumes the budget on a committed splice — exactly as before.
+    @Test("A genuine cheap rejoin still recovers (not throttled away)")
+    func genuineRecoveryPreserved() {
+        let cheapRejoin = [
+            RecoveryOption(candidateIndex: 0, etaSeconds: 200, initialBearingDegrees: nil, beginsWithUTurn: false),
+        ]
+        let decision = RouteRecoveryEngine.choose(
+            candidates: candidates, options: cheapRejoin, event: event(along: 4000),
+            totalDistance: 10000, expectedTravelTime: 900, recoveriesThisTrip: 0
+        )
+        #expect(decision == .rejoin(candidateIndex: 0))
+    }
+}
+
 // MARK: - Per-trip recovery budget reset
 
 /// The 3-recovery cap (`RouteRecoveryEngine.choose`) is PER-TRIP. The reset

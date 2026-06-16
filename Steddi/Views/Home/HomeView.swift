@@ -109,6 +109,15 @@ struct HomeView: View {
     @State private var lastRecoveryAt: Date?
     @State private var recoveriesThisTrip = 0
 
+    // Handles to the in-flight OSM corridor prefetches (speed limits + cameras),
+    // so a route switch / reroute / recovery splice can CANCEL the prior
+    // corridor's prefetch before warming the new one. Without this, rapid route
+    // changes stack concurrent multi-MB Overpass responses against rate-limited
+    // public mirrors. The services treat URLError.cancelled/CancellationError as
+    // a clean abort, so cancelling the handle interrupts the network work.
+    @State private var speedLimitPrefetchTask: Task<Void, Never>?
+    @State private var speedCameraPrefetchTask: Task<Void, Never>?
+
     // When navigation ends with the 30s "You have arrived" linger (the
     // non-immediate endActivity()), the activity stays presented for that window.
     // Record the window end so an incidental onAppear rebuild (e.g. Reduce
@@ -204,6 +213,7 @@ struct HomeView: View {
                         locationService.disableNavigationMode()
                         locationFeedTask?.cancel()
                         locationFeedTask = nil
+                        cancelCorridorPrefetches()
                         navigationEngine?.stopNavigation()
                         navStateManager.stopObserving()
                         endActivityWithArrivalLinger()
@@ -708,7 +718,12 @@ struct HomeView: View {
             String(format: "%.5f,%.5f-%.5f,%.5f",
                    corridor[0].latitude, corridor[0].longitude,
                    corridor[corridor.count - 1].latitude, corridor[corridor.count - 1].longitude)
-        Task {
+        // Cancel the previous corridor's prefetch before warming this one, so a
+        // route switch / reroute / recovery splice doesn't stack concurrent
+        // Overpass fetches. The normal single-route case cancels a nil/finished
+        // task — a harmless no-op.
+        speedLimitPrefetchTask?.cancel()
+        speedLimitPrefetchTask = Task {
             await OSMSpeedLimitService.shared.prefetch(for: corridor, routeKey: key)
         }
     }
@@ -735,9 +750,24 @@ struct HomeView: View {
             String(format: "%.5f,%.5f-%.5f,%.5f",
                    corridor[0].latitude, corridor[0].longitude,
                    corridor[corridor.count - 1].latitude, corridor[corridor.count - 1].longitude)
-        Task {
+        // Cancel the previous corridor's camera prefetch before warming this one
+        // (route switch / reroute / recovery splice) so concurrent Overpass
+        // fetches don't stack. Normal single-route case cancels a nil/finished
+        // task — a harmless no-op.
+        speedCameraPrefetchTask?.cancel()
+        speedCameraPrefetchTask = Task {
             await SpeedCameraService.shared.prefetchOSMCameras(for: corridor, routeKey: key)
         }
+    }
+
+    /// Cancel any in-flight OSM corridor prefetches (speed limits + cameras) at
+    /// navigation teardown so a fetch started for this drive doesn't keep running
+    /// against rate-limited Overpass mirrors after the drive ends.
+    private func cancelCorridorPrefetches() {
+        speedLimitPrefetchTask?.cancel()
+        speedLimitPrefetchTask = nil
+        speedCameraPrefetchTask?.cancel()
+        speedCameraPrefetchTask = nil
     }
 
     /// Hook road-condition memory into the engine: a grid-indexed proximity
@@ -982,9 +1012,16 @@ struct HomeView: View {
                                     Image(systemName: "magnifyingglass")
                                         .font(.body.weight(.medium))
                                         .foregroundStyle(SteddiTheme.accent)
+                                        // Per-glyph over-map shadow, matching the
+                                        // portrait pill — holds the icon over bright
+                                        // cartography in landscape too.
+                                        .legibleOverMap()
                                     Text("Where to?")
                                         .font(SteddiTheme.heading(15))
                                         .foregroundStyle(SteddiTheme.textPrimary)
+                                        // Same per-glyph shadow as portrait so the
+                                        // label never washes out on a bright tile.
+                                        .legibleOverMap()
                                     Spacer()
                                 }
                                 .padding(.horizontal, 12)
@@ -1200,10 +1237,14 @@ struct HomeView: View {
                     } label: {
                         Label("New Commute", systemImage: "plus")
                             .font(SteddiTheme.heading(14))
-                            .foregroundStyle(SteddiTheme.accent)
+                            // Legible on-fill pairing — accentBrand fill + onAccent
+                            // label — matching TripCard/RoutePreview. Avoids the
+                            // low-contrast accent-on-accentSubtle the rest of the
+                            // app deliberately rejects.
+                            .foregroundStyle(SteddiTheme.onAccent)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(SteddiTheme.accentSubtle, in: Capsule())
+                            .background(SteddiTheme.accentBrand, in: Capsule())
                             // Keep the pill's visual size but expand the tappable
                             // area to the 44pt minimum (the capsule is ~34pt tall).
                             .frame(minHeight: 44)
@@ -1682,10 +1723,12 @@ struct HomeView: View {
             } else {
                 Label("Add Place", systemImage: "plus")
                     .font(SteddiTheme.heading(14))
-                    .foregroundStyle(SteddiTheme.accent)
+                    // Legible on-fill pairing — accentBrand fill + onAccent label
+                    // — matching TripCard/RoutePreview, not accent-on-accentSubtle.
+                    .foregroundStyle(SteddiTheme.onAccent)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(SteddiTheme.accentSubtle, in: Capsule())
+                    .background(SteddiTheme.accentBrand, in: Capsule())
                     // Keep the pill's visual size but expand the tappable area
                     // to the 44pt minimum (the capsule is ~34pt tall).
                     .frame(minHeight: 44)
@@ -1772,10 +1815,13 @@ struct HomeView: View {
                     } label: {
                         Label("New Trip", systemImage: "plus")
                             .font(SteddiTheme.heading(14))
-                            .foregroundStyle(SteddiTheme.accent)
+                            // Legible on-fill pairing — accentBrand fill + onAccent
+                            // label — matching TripCard/RoutePreview, not
+                            // accent-on-accentSubtle.
+                            .foregroundStyle(SteddiTheme.onAccent)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(SteddiTheme.accentSubtle, in: Capsule())
+                            .background(SteddiTheme.accentBrand, in: Capsule())
                             // Keep the pill's visual size but expand the tappable
                             // area to the 44pt minimum (the capsule is ~34pt tall).
                             .frame(minHeight: 44)
@@ -1996,6 +2042,7 @@ struct HomeView: View {
         locationService.disableNavigationMode()
         locationFeedTask?.cancel()
         locationFeedTask = nil
+        cancelCorridorPrefetches()
         navigationEngine?.stopNavigation()
         navStateManager.stopObserving()
         endActivityWithArrivalLinger()
@@ -2019,6 +2066,7 @@ struct HomeView: View {
         locationService.disableNavigationMode()
         locationFeedTask?.cancel()
         locationFeedTask = nil
+        cancelCorridorPrefetches()
         navigationEngine?.stopNavigation()
         navStateManager.stopObserving()
         endActivityWithArrivalLinger()
@@ -2156,6 +2204,7 @@ struct HomeView: View {
         locationService.disableNavigationMode()
         locationFeedTask?.cancel()
         locationFeedTask = nil
+        cancelCorridorPrefetches()
         // The shared engine is already stopped by the manager; sever our
         // reference so nothing keeps feeding or rendering it.
         navigationEngine?.onOffRoute = nil
@@ -2427,6 +2476,22 @@ struct HomeView: View {
             engine.clearOffRouteRecovery()
             return
         }
+
+        // Budget exhausted: the driver is clearly improvising (repeated abandons
+        // or splices already spent the per-trip recovery budget). RouteRecoveryEngine
+        // .choose would now short-circuit to .abandonToDestination anyway, so don't
+        // re-prompt (no haptic, no "Rerouting ahead" voice line) and don't burn
+        // another round of MKDirections fetches every 30s for the rest of the trip.
+        // Just keep guidance live toward the destination by clearing the latch.
+        // This is the throttle that stops recovery nagging indefinitely — the
+        // budget is consumed per genuine abandon DECISION below, not only per
+        // committed splice, so a deliberate-detour driver reaches the cap and is
+        // then left alone.
+        guard recoveriesThisTrip < RouteRecoveryEngine.recoveryBudget else {
+            engine.clearOffRouteRecovery()
+            return
+        }
+
         isRecoveryInFlight = true
         lastRecoveryAt = Date()
         persistRecoveryBudget()
@@ -2542,15 +2607,18 @@ struct HomeView: View {
             recoveriesThisTrip: recoveriesThisTrip
         )
 
-        // The per-trip recovery budget (cap of 3 in RouteRecoveryEngine.choose)
-        // is meant to detect a driver who's clearly improvising, so only a
-        // recovery that actually *commits* a rejoin splice should consume it.
-        // Outcomes that produced nothing — no candidates (early return above),
-        // no usable options/abandon, or a splice bail-out — leave the budget
-        // intact so transient failures (e.g. a brief mid-drive network loss
-        // failing every fetch) don't permanently disable saved-route recovery
-        // for the rest of the trip. We increment below, only on a successful
-        // splice, keeping the accounting uniform across every non-committed path.
+        // The per-trip recovery budget (RouteRecoveryEngine.recoveryBudget) is
+        // meant to detect a driver who's clearly improvising. It is consumed by:
+        //   (a) a recovery that actually COMMITS a rejoin splice, and
+        //   (b) a genuine abandon DECISION reached from a real (non-empty) options
+        //       set — "we had usable rejoin routes and still chose to abandon".
+        // Both are signals the driver is going their own way, so both count toward
+        // the cap. Once the cap is hit the handleOffRoute entry-throttle above
+        // stops re-prompting, so recovery can't nag indefinitely on a deliberate
+        // detour. TRULY transient failures still leave the budget intact: no
+        // candidates (early return above) and no usable options (every fetch
+        // failed — `options.isEmpty`) don't consume it, so a brief mid-drive
+        // network loss doesn't permanently disable saved-route recovery.
         switch decision {
         case .rejoin(let index):
             guard index < candidates.count, let route = routesByCandidate[index] else {
@@ -2573,9 +2641,17 @@ struct HomeView: View {
                 engine.clearOffRouteRecovery()
             }
         case .abandonToDestination:
-            // Deliberate abandon (no usable options, recovery budget spent, or
-            // direct beats rejoining): no splice happens, so clear the latch to
-            // keep guidance live toward the destination.
+            // A genuine abandon decision (we had usable options and still chose to
+            // go direct, or the budget was already spent) consumes the budget so a
+            // deliberate-detour driver reaches the cap and is then left alone. A
+            // transient all-fetches-failed abandon (options empty) does NOT, so it
+            // can retry once the network recovers.
+            if !options.isEmpty {
+                recoveriesThisTrip += 1
+                persistRecoveryBudget()
+            }
+            // No splice happens, so clear the latch to keep guidance live toward
+            // the destination.
             engine.clearOffRouteRecovery()
             if let destination = savedPolyline.last {
                 await handleOffRoute(from: event.coordinate, to: destination)

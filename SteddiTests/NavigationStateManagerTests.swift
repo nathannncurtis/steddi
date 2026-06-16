@@ -841,6 +841,113 @@ struct NavigationStateManagerWidgetReloadThrottleTests {
     }
 }
 
+// MARK: - Reroute Cadence Tests
+
+/// Regression guard for the MEDIUM bug: the reroute observation loop used to
+/// `await sleep(300s)` at the TOP of its body, BEFORE the first evaluation, so
+/// no faster-route suggestion could surface for the first ~5 minutes of any
+/// drive — the exact moment an alternate is most valuable (and the only moment a
+/// short commute may have). The fix sleeps a short settle delay before the first
+/// evaluation, then the full interval, so an evaluation lands promptly.
+@Suite("NavigationStateManager reroute cadence")
+@MainActor
+struct NavigationStateManagerRerouteCadenceTests {
+
+    private func startedEngine() -> NavigationEngine {
+        let engine = NavigationEngine()
+        let polyline = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        let steps = [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline[0], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[10], maneuverSymbol: "flag.fill"),
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+        return engine
+    }
+
+    /// The first reroute evaluation must happen WELL before the 5-minute steady
+    /// interval. We shrink the initial settle delay to a few ms (production is
+    /// 30s) and KEEP the steady interval at its full 5 minutes, then assert the
+    /// loop reaches its evaluation phase quickly. Pre-fix the loop slept the full
+    /// steady interval first, so the count would stay 0 for ~5 min and this would
+    /// time out.
+    @Test("First reroute evaluation lands well before the 5-minute steady interval")
+    func firstEvaluationIsPrompt() async {
+        let savedInitial = NavigationStateManager.rerouteInitialDelay
+        let savedSteady = NavigationStateManager.rerouteSteadyInterval
+        defer {
+            NavigationStateManager.rerouteInitialDelay = savedInitial
+            NavigationStateManager.rerouteSteadyInterval = savedSteady
+        }
+        // Tiny first delay; FULL steady interval so a prompt count can only come
+        // from the first-cycle path, not from a fast steady cadence.
+        NavigationStateManager.rerouteInitialDelay = .milliseconds(5)
+        NavigationStateManager.rerouteSteadyInterval = .seconds(300)
+
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        // Commute + direction => the periodic reroute loop is created.
+        manager.startObserving(
+            engine: engine,
+            commute: Commute(name: "Work"),
+            direction: .originToDestination
+        )
+
+        // Poll for the first evaluation. A generous ceiling (~2s) that is still
+        // FAR under the 5-minute pre-fix floor: if the loop slept the steady
+        // interval first, the count would still be 0 here.
+        var evaluated = false
+        for _ in 0..<200 {
+            if manager.rerouteEvaluationCount >= 1 { evaluated = true; break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(evaluated)
+        #expect(manager.rerouteEvaluationCount >= 1)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// A fresh session resets the evaluation count, so the next drive's cadence
+    /// is measured from its own start rather than carrying the prior session's
+    /// total.
+    @Test("Session start resets the reroute evaluation count")
+    func sessionStartResetsCount() async {
+        let savedInitial = NavigationStateManager.rerouteInitialDelay
+        let savedSteady = NavigationStateManager.rerouteSteadyInterval
+        defer {
+            NavigationStateManager.rerouteInitialDelay = savedInitial
+            NavigationStateManager.rerouteSteadyInterval = savedSteady
+        }
+        NavigationStateManager.rerouteInitialDelay = .milliseconds(5)
+        NavigationStateManager.rerouteSteadyInterval = .seconds(300)
+
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+
+        manager.startObserving(
+            engine: engine,
+            commute: Commute(name: "Work"),
+            direction: .originToDestination
+        )
+        for _ in 0..<200 {
+            if manager.rerouteEvaluationCount >= 1 { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(manager.rerouteEvaluationCount >= 1)
+
+        // New session — count must reset to zero immediately.
+        manager.startObserving(
+            engine: engine,
+            commute: Commute(name: "Home"),
+            direction: .destinationToOrigin
+        )
+        #expect(manager.rerouteEvaluationCount == 0)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+}
+
 // MARK: - Active Trip Teardown Tests
 
 @Suite("NavigationStateManager active trip teardown")
