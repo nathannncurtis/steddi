@@ -292,6 +292,15 @@ struct OnboardingThemeView: View {
                         Text(card.label)
                             .font(.headline)
                             .foregroundStyle(rowForeground)
+                            // At the largest Dynamic Type sizes the headline + the
+                            // "Recommended" chip can exceed the label column. Let
+                            // the label shrink-to-fit on one line (mirroring the
+                            // HUD-mock guard in OnboardingTurnByTurnView) so the row
+                            // never clips or pushes the chip into an overflow — the
+                            // chip itself stays fixed-size (below) so its pill never
+                            // wraps internally.
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                         if card.recommended {
                             recommendedChip(over: themeCardSurface(selected: isSelected))
                         }
@@ -353,6 +362,12 @@ struct OnboardingThemeView: View {
         return Text("Recommended")
             .font(.caption2.weight(.semibold))
             .foregroundStyle(SteddiTheme.contrastingForeground(on: capsuleFillRGB))
+            // Keep the chip on one line at its natural width so its pill never
+            // wraps into a broken two-line capsule at large Dynamic Type. The
+            // adjacent label shrink-to-fits to make room (see `themeCard`); the
+            // chip stays crisp.
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(capsuleFill, in: Capsule())
