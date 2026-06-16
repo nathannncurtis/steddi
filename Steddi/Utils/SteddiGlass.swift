@@ -28,6 +28,36 @@ enum SteddiGlass {
     static let mediumShape = RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium) // 16
 }
 
+// MARK: - Glass revision (non-destructive re-resolution)
+
+/// Monotonic "glass revision" carried through the SwiftUI environment.
+///
+/// `SteddiGlass.isAvailable` reads `UIAccessibility.isReduceTransparencyEnabled`
+/// and `DisplayModeService.useHighContrast` IMPERATIVELY at each call site, so
+/// SwiftUI has no dependency on those values and won't re-run a `steddiGlass`
+/// body when the user toggles Reduce Transparency / Increase Contrast mid-flight.
+/// The app root bumps this revision on those notifications; the `steddiGlass`
+/// modifier reads it, registering a dependency so the live-glass ⇄ solid-fallback
+/// branch re-resolves WITHOUT discarding any view's `@State`.
+///
+/// This replaces the old `.id(glassRevision)` on the root subtree, which forced a
+/// full rebuild — tearing down HomeView's navigation @State (GPS feed, overlay,
+/// Live Activity wiring) mid-drive. Driving re-resolution through the environment
+/// keeps the active navigation session alive while still flipping glass→solid.
+private struct GlassRevisionKey: EnvironmentKey {
+    static let defaultValue = 0
+}
+
+extension EnvironmentValues {
+    /// Bumped when Reduce Transparency / Increase Contrast toggles so
+    /// `steddiGlass`-backed chrome re-resolves between live glass and the solid
+    /// `SteddiTheme` fallback — without rebuilding view identity.
+    var glassRevision: Int {
+        get { self[GlassRevisionKey.self] }
+        set { self[GlassRevisionKey.self] = newValue }
+    }
+}
+
 // MARK: - The core modifier
 
 extension View {
@@ -42,7 +72,6 @@ extension View {
     ///   - shape: clipping shape; defaults to the card rounded-rect.
     ///   - fallbackFill: the opaque fill used when glass is off.
     ///   - fallbackStrokeOpacity: hairline stroke opacity used when glass is off.
-    @ViewBuilder
     func steddiGlass(
         tint: Color? = nil,
         interactive: Bool = false,
@@ -50,6 +79,43 @@ extension View {
         fallbackFill: Color = SteddiTheme.surfacePrimary,
         fallbackStrokeOpacity: Double = 0.12
     ) -> some View {
+        modifier(SteddiGlassModifier(
+            tint: tint,
+            interactive: interactive,
+            shape: shape,
+            fallbackFill: fallbackFill,
+            fallbackStrokeOpacity: fallbackStrokeOpacity
+        ))
+    }
+}
+
+/// Backs ``SwiftUI/View/steddiGlass(tint:interactive:in:fallbackFill:fallbackStrokeOpacity:)``.
+///
+/// Why a `ViewModifier` and not a plain `@ViewBuilder` function: glass
+/// availability (`SteddiGlass.isAvailable`) is read imperatively from
+/// `UIAccessibility` / `DisplayModeService`, so SwiftUI has no dependency on it.
+/// Reading `@Environment(\.glassRevision)` here registers a dependency on the
+/// root's revision counter, which is bumped on the Reduce-Transparency /
+/// Increase-Contrast notifications. That re-runs `body` (re-resolving the
+/// live-glass ⇄ solid-fallback branch) WITHOUT discarding any `@State` in the
+/// surrounding view — the fix that keeps an active navigation session alive when
+/// the user toggles those settings mid-drive.
+struct SteddiGlassModifier<ClipShape: Shape>: ViewModifier {
+    let tint: Color?
+    let interactive: Bool
+    let shape: ClipShape
+    let fallbackFill: Color
+    let fallbackStrokeOpacity: Double
+
+    /// Dependency-only: changing this re-evaluates the glass availability branch
+    /// below. The value itself is never read.
+    @Environment(\.glassRevision) private var glassRevision
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        // Touch the revision so SwiftUI tracks it as a dependency; the imperative
+        // `SteddiGlass.isAvailable` read then reflects the just-toggled setting.
+        let _ = glassRevision
         if SteddiGlass.isAvailable {
             // Build the Glass value: regular base, optional accent tint, optional
             // interactivity. There is no `isEnabled:` parameter on `glassEffect`
@@ -60,12 +126,12 @@ extension View {
                 if interactive { g = g.interactive() }
                 return g
             }()
-            self.glassEffect(glass, in: shape)
+            content.glassEffect(glass, in: shape)
         } else {
             // Exact current look: opaque-ish surface + hairline accent stroke,
             // honoring high-contrast promotion the same way nav chrome does.
             let highContrast = DisplayModeService.shared.useHighContrast
-            self.background {
+            content.background {
                 shape
                     .fill(
                         fallbackFill.opacity(

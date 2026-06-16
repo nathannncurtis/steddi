@@ -203,8 +203,9 @@ private struct SteddiRootView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx = ThemeModeEx.dynamic.rawValue
 
-    /// Bumped when Reduce Transparency toggles so `SteddiGlass`-backed chrome
-    /// re-resolves between live glass and the solid `SteddiTheme` fallback.
+    /// Bumped when Reduce Transparency / Increase Contrast toggles so
+    /// `SteddiGlass`-backed chrome re-resolves between live glass and the solid
+    /// `SteddiTheme` fallback.
     @State private var glassRevision = 0
 
     var body: some View {
@@ -215,10 +216,30 @@ private struct SteddiRootView: View {
                 OnboardingView()
             }
         }
-        .id(glassRevision)
+        // Propagate the glass revision through the environment instead of
+        // `.id(glassRevision)`. The old `.id` reset the entire subtree's
+        // IDENTITY on every toggle, which discarded HomeView's navigation @State
+        // (GPS feed task, the nav overlay, Live Activity wiring) — silently
+        // ending an in-progress drive when the user flipped Reduce Transparency
+        // (or, now, Increase Contrast) mid-route. `SteddiGlass.isAvailable` is
+        // read imperatively at each `steddiGlass` call site, so the modifier
+        // reads `\.glassRevision` to register a SwiftUI dependency: bumping it
+        // re-resolves the live-glass ⇄ solid-fallback branch in place, WITHOUT
+        // tearing down any view's state. Navigation survives the toggle.
+        .environment(\.glassRevision, glassRevision)
         .onReceive(
             NotificationCenter.default.publisher(
                 for: UIAccessibility.reduceTransparencyStatusDidChangeNotification
+            )
+        ) { _ in
+            glassRevision &+= 1
+        }
+        // Increase Contrast (Darker System Colors) also flips
+        // `SteddiGlass.isAvailable` via `DisplayModeService.useHighContrast`, so
+        // re-resolve glass on its change too — same non-destructive path.
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIAccessibility.darkerSystemColorsStatusDidChangeNotification
             )
         ) { _ in
             glassRevision &+= 1
