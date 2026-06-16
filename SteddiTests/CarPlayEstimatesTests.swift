@@ -102,4 +102,42 @@ struct MeasurementUnitFormatTests {
     func kmRoundsDown() {
         #expect(MeasurementUnit.kilometers.formatDistance(meters: 10_400) == "10 km")
     }
+
+    // Band-boundary edge: distances that round to 10 must use the whole-number
+    // style ("10 km"), not the "%.1f" path that rendered a stray-decimal
+    // "10.0 km". The whole/decimal decision is made off the rounded value.
+    @Test("Kilometers: 9.95 km rounds to whole 10 km (no stray decimal)")
+    func kmBoundary995() {
+        #expect(MeasurementUnit.kilometers.formatDistance(meters: 9_950) == "10 km")
+    }
+
+    @Test("Kilometers: 9.99 km rounds to whole 10 km (no stray decimal)")
+    func kmBoundary999() {
+        #expect(MeasurementUnit.kilometers.formatDistance(meters: 9_990) == "10 km")
+    }
+
+    @Test("Kilometers: exactly 10.0 km is whole 10 km")
+    func kmBoundary10() {
+        #expect(MeasurementUnit.kilometers.formatDistance(meters: 10_000) == "10 km")
+    }
+
+    @Test("Miles: 9.95 mi rounds to whole 10 mi (no stray decimal)")
+    func milesBoundary995() {
+        #expect(MeasurementUnit.miles.formatDistance(meters: 9.95 * 1609.34) == "10 mi")
+    }
+
+    @Test("Miles: 9.99 mi rounds to whole 10 mi (no stray decimal)")
+    func milesBoundary999() {
+        #expect(MeasurementUnit.miles.formatDistance(meters: 9.99 * 1609.34) == "10 mi")
+    }
+
+    @Test("Miles: exactly 10.0 mi is whole 10 mi")
+    func milesBoundary10() {
+        #expect(MeasurementUnit.miles.formatDistance(meters: 10.0 * 1609.34) == "10 mi")
+    }
+
+    @Test("Just below the band: 9.4 km keeps one decimal")
+    func kmBelowBand() {
+        #expect(MeasurementUnit.kilometers.formatDistance(meters: 9_400) == "9.4 km")
+    }
 }

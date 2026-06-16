@@ -29,11 +29,17 @@ enum MeasurementUnit: String, CaseIterable, Identifiable {
         case .miles: value = meters / 1609.34
         case .kilometers: value = meters / 1000
         }
-        if value < 10 {
+        // Decide whole-vs-decimal off the ROUNDED value, not the raw one, so the
+        // band boundary is consistent. Branching on the raw value let a distance
+        // in [9.95, 10.0) take the "%.1f" path and round up to a stray-decimal
+        // "10.0 mi", contradicting the whole-number "10 mi"/"11 mi" just above the
+        // threshold. A value that rounds to >= 10 takes the whole-number path.
+        let whole = value.rounded()
+        if whole < 10 {
             return String(format: "%.1f %@", value, abbreviation)
         }
         // Round, don't truncate: 10.95 -> "11 mi", not "10 mi" (an up-to-1-unit
         // understatement of the distance).
-        return "\(Int(value.rounded())) \(abbreviation)"
+        return "\(Int(whole)) \(abbreviation)"
     }
 }
