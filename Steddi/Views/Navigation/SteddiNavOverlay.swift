@@ -190,7 +190,7 @@ struct SteddiNavOverlay: View {
                 }
 
                 if showNowPlayingBar && nowPlaying.hasNowPlaying {
-                    NowPlayingMiniBar(service: nowPlaying)
+                    NowPlayingMiniBar(service: nowPlaying, textScale: textScale, highContrast: highContrast)
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
                 }
