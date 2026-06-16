@@ -269,7 +269,19 @@ enum RoadGraphSerializer {
             // search entirely" philosophy — rather than rendering a silent jump.
             guard lower >= 0, upper >= lower, upper <= totalGeometry,
                   upper - lower >= 2 else { return nil }
-            if edge.freeFlowSpeedMPS.isFinite, edge.freeFlowSpeedMPS > derivedMax {
+            // Reject a non-finite or negative edge speed. `freeFlowSpeedMPS` is
+            // decoded via `Float(bitPattern:)` over arbitrary bytes, so a corrupt
+            // /format-drifted blob can yield `+∞` (0x7F800000). An `+∞` speed
+            // sails past `DefaultCostModel.edgeCost`'s `guard speed > 0` and makes
+            // `time = lengthMeters / ∞ = 0` — a zero-cost edge A* would greedily
+            // route through, producing a nonsense shortest path. (`NaN`/negative
+            // would be excluded by that guard, but the validator's job is to keep
+            // corrupt blobs out of the search entirely, so reject them here too.)
+            // The builder never emits a non-finite/negative speed — every routable
+            // road class has a positive default — so this never over-rejects a
+            // legitimate graph.
+            guard edge.freeFlowSpeedMPS.isFinite, edge.freeFlowSpeedMPS >= 0 else { return nil }
+            if edge.freeFlowSpeedMPS > derivedMax {
                 derivedMax = edge.freeFlowSpeedMPS
             }
         }
