@@ -162,8 +162,18 @@ final class ThemeEngine {
         if let locationProvider {
             self.locationProvider = locationProvider
         } else {
+            // Read the process-wide, lock-guarded last-known fix FIRST: the live
+            // location/navigation feed publishes every fix to `LastKnownLocation`,
+            // so the singleton built at launch (which never starts its own updates
+            // or requests authorization) still gets a real coordinate for the
+            // solar/golden-hour math. A freshly-created `CLLocationManager`'s
+            // `.location` read cold is almost always nil — relying on it silently
+            // degraded dynamic theming to the fixed 7am–7pm clock fallback and
+            // golden-hour warmth never fired. Fall back to the cold manager only
+            // when no fix has been recorded this process. Mirrors the same fix
+            // already applied to `SteddiTheme.ThemeMode.isDaytime`.
             let manager = CLLocationManager()
-            self.locationProvider = { manager.location?.coordinate }
+            self.locationProvider = { LastKnownLocation.current ?? manager.location?.coordinate }
         }
         self.now = now
         baseMode = ThemeModeEx.current()
