@@ -219,15 +219,16 @@ struct RerouteEngineTests {
     }
 
     /// Above the near-arrival floor but still a sub-floor absolute saving: a high
-    /// percentage alone must not trigger. 240s remaining, 60s saved = 25% (clears
-    /// the scaled gate) but only 1 min absolute — below the 90s absolute floor.
+    /// percentage alone must not trigger. 180s remaining (at the near-arrival
+    /// floor, so not suppressed by it), 80s saved = ~44% — well over the scaled
+    /// percentage gate — but below the 90s absolute floor, so no card.
     @Test("High percentage but sub-floor absolute saving does not reroute")
     func highPctSubFloorAbsoluteSuppressed() {
         let decision = RerouteEngine.evaluate(
-            remainingETASeconds: 240, fallbackETASeconds: 180,
+            remainingETASeconds: 180, fallbackETASeconds: 100,
             basePercentage: 0.20, hardMinuteFloor: nil
         )
-        #expect(!decision.shouldReroute, "60s saved is below the absolute floor even at 25%")
+        #expect(!decision.shouldReroute, "80s saved is below the absolute floor even at ~44%")
         if case .belowAbsoluteFloor = decision.reason {} else {
             Issue.record("Expected belowAbsoluteFloor reason")
         }
