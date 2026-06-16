@@ -186,4 +186,66 @@ struct RerouteEngineTests {
         )
         #expect(abs(decision.savingsMinutes - 10.0) < 0.01)
     }
+
+    // MARK: - Absolute-savings / near-arrival floor
+
+    /// THE BUG: on a ~1-min remaining drive, scaledThreshold raises the PERCENTAGE
+    /// gate (~0.27) but a percentage of a tiny ETA is only seconds — a ~16s
+    /// alternate (well over 27%) cleared the gate and popped a "Save ~1 min" card
+    /// seconds before arrival. With less than the near-arrival floor remaining, no
+    /// suggestion should surface at all.
+    @Test("Tiny saving on a sub-minute remaining drive does not surface a suggestion")
+    func tinySavingNearArrivalSuppressed() {
+        // 60s remaining, fallback 44s -> 16s saved = ~27% (above scaled 0.27).
+        let decision = RerouteEngine.evaluate(
+            remainingETASeconds: 60, fallbackETASeconds: 44,
+            basePercentage: 0.20, hardMinuteFloor: nil
+        )
+        #expect(!decision.shouldReroute, "no card for a ~16s save right before arrival")
+    }
+
+    /// A ~1-min saving (60s) is exactly the misleading-card case the overlay
+    /// clamps to "Save ~1 min". On a short remaining drive it must NOT surface,
+    /// whether suppressed by the near-arrival floor or the absolute-savings floor.
+    @Test("A ~1-min saving on a short remaining drive does not surface a suggestion")
+    func oneMinuteSavingOnShortDriveSuppressed() {
+        // 150s remaining (2.5 min, below the 3-min near-arrival floor), 60s saved
+        // (40% — easily clears the scaled percentage). Must be suppressed.
+        let decision = RerouteEngine.evaluate(
+            remainingETASeconds: 150, fallbackETASeconds: 90,
+            basePercentage: 0.20, hardMinuteFloor: nil
+        )
+        #expect(!decision.shouldReroute, "a ~1-min save just before arrival must not pop a card")
+    }
+
+    /// Above the near-arrival floor but still a sub-floor absolute saving: a high
+    /// percentage alone must not trigger. 240s remaining, 60s saved = 25% (clears
+    /// the scaled gate) but only 1 min absolute — below the 90s absolute floor.
+    @Test("High percentage but sub-floor absolute saving does not reroute")
+    func highPctSubFloorAbsoluteSuppressed() {
+        let decision = RerouteEngine.evaluate(
+            remainingETASeconds: 240, fallbackETASeconds: 180,
+            basePercentage: 0.20, hardMinuteFloor: nil
+        )
+        #expect(!decision.shouldReroute, "60s saved is below the absolute floor even at 25%")
+        if case .belowAbsoluteFloor = decision.reason {} else {
+            Issue.record("Expected belowAbsoluteFloor reason")
+        }
+    }
+
+    /// The floor must not over-suppress a genuinely worthwhile reroute: a saving
+    /// well above the absolute floor on a drive past the near-arrival window still
+    /// triggers. 660s remaining, 480s fallback -> 180s saved = ~27% on an 11-min
+    /// drive (clears the scaled gate) and 180s >= the 90s absolute floor.
+    @Test("A clearly-good saving past the near-arrival window still reroutes")
+    func savingAboveFloorStillReroutes() {
+        let decision = RerouteEngine.evaluate(
+            remainingETASeconds: 660, fallbackETASeconds: 480,
+            basePercentage: 0.20, hardMinuteFloor: nil
+        )
+        #expect(decision.shouldReroute, "a 3-min, ~27% saving past the near-arrival window must still reroute")
+        if case .percentageThresholdMet = decision.reason {} else {
+            Issue.record("Expected percentageThresholdMet reason")
+        }
+    }
 }

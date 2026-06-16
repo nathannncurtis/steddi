@@ -6,6 +6,21 @@ import CoreLocation
 /// the user's threshold settings and current remaining ETA.
 struct RerouteEngine {
 
+    /// Absolute-savings floor for the percentage gate. `scaledThreshold` only
+    /// raises the PERCENTAGE needed on short drives — but a percentage of a tiny
+    /// remaining ETA collapses to seconds, so a ~15-30s alternate can clear the
+    /// gate seconds before arrival and pop a "Save ~1 min" card (the overlay
+    /// clamps the displayed savings up to a full minute) right when a reroute is
+    /// least useful. Require a real saving — never suggest a reroute for less than
+    /// this no matter how high the percentage — so a sub-minute delta can't surface
+    /// a card. The long-drive `hardMinuteFloor` is a far larger, separate gate.
+    static let minPercentageSavingsSeconds: TimeInterval = 90 // 1.5 min
+
+    /// Near-arrival suppression floor. With less remaining than this you're on
+    /// final approach; a reroute can't meaningfully help and only distracts, so
+    /// suppress suggestions entirely regardless of percentage or absolute savings.
+    static let minRemainingForRerouteSeconds: TimeInterval = 180 // 3 min
+
     /// Determines if a reroute should be suggested.
     ///
     /// The threshold is percentage-based with intelligent scaling:
@@ -34,6 +49,18 @@ struct RerouteEngine {
             return RerouteDecision(shouldReroute: false, savingsSeconds: savingsSeconds, reason: .noSavings)
         }
 
+        // Near-arrival suppression: with only a few minutes left you're on final
+        // approach; no reroute is worth the distraction, and a tiny absolute
+        // saving here is exactly what pops a pointless "Save ~1 min" card right
+        // before arrival. Gate it out before any percentage/floor evaluation.
+        guard remainingETASeconds >= minRemainingForRerouteSeconds else {
+            return RerouteDecision(
+                shouldReroute: false,
+                savingsSeconds: savingsSeconds,
+                reason: .belowAbsoluteFloor(savingsSeconds: savingsSeconds)
+            )
+        }
+
         let remainingMinutes = remainingETASeconds / 60.0
         let savingsMinutes = savingsSeconds / 60.0
 
@@ -49,12 +76,25 @@ struct RerouteEngine {
         // remainingETASeconds > fallbackETASeconds >= 0, so it's strictly positive.
         let actualPercentage = savingsSeconds / remainingETASeconds
 
-        // Percentage threshold met — always suggest, regardless of hard floor
-        if actualPercentage >= scaledPercentage {
+        // Percentage threshold met AND the saving clears the absolute floor —
+        // suggest, regardless of hard floor. The absolute floor stops a high
+        // percentage of a small remaining ETA (e.g. 27% of a 1-min drive ≈ 16s)
+        // from surfacing a card for a sub-minute delta.
+        if actualPercentage >= scaledPercentage && savingsSeconds >= minPercentageSavingsSeconds {
             return RerouteDecision(
                 shouldReroute: true,
                 savingsSeconds: savingsSeconds,
                 reason: .percentageThresholdMet(actual: actualPercentage, threshold: scaledPercentage)
+            )
+        }
+
+        // Percentage met but the absolute saving is below the floor — don't pop a
+        // low-value card. (Distinct from .belowThreshold so the reason is honest.)
+        if actualPercentage >= scaledPercentage {
+            return RerouteDecision(
+                shouldReroute: false,
+                savingsSeconds: savingsSeconds,
+                reason: .belowAbsoluteFloor(savingsSeconds: savingsSeconds)
             )
         }
 
@@ -113,4 +153,7 @@ enum RerouteReason {
     case percentageThresholdMet(actual: Double, threshold: Double)
     case hardFloorMet(savingsMinutes: Double, floor: Double)
     case belowThreshold(actual: Double, threshold: Double)
+    /// Savings cleared the percentage gate (or the drive is on final approach)
+    /// but the absolute saving / remaining time is too small to be worth a card.
+    case belowAbsoluteFloor(savingsSeconds: TimeInterval)
 }
