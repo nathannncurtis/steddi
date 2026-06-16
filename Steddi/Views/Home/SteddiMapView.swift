@@ -250,7 +250,20 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
 
         // Recenter button (hidden until free-look)
         let btn = UIButton(type: .system)
-        btn.setImage(UIImage(systemName: "location.fill"), for: .normal)
+        // SF Symbol scaled by a text style so the glyph tracks Dynamic Type
+        // (the body-style metrics grow it for larger content sizes) while the
+        // chip stays in its fixed 44pt frame — the glyph alone scales, not the
+        // touch target.
+        let recenterGlyph = UIImage(
+            systemName: "location.fill",
+            withConfiguration: UIImage.SymbolConfiguration(textStyle: .body)
+        )
+        btn.setImage(recenterGlyph, for: .normal)
+        // VoiceOver: a bare SF Symbol does not derive a meaningful name, so this
+        // would otherwise announce as just "Button". This is the only mid-drive
+        // exit from free-look back to follow-mode, so it must be clearly labeled.
+        btn.accessibilityLabel = NSLocalizedString("Recenter map", comment: "Recenter button accessibility label")
+        btn.accessibilityTraits = .button
         // Glyph that CONTRASTS the fill, not the raw brand accent. The brand
         // accents are mid/light hues — on the near-white light-mode fill below
         // they fail the 3:1 large-glyph floor (gold ~2.2:1, lavender ~2.7:1).
