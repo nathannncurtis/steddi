@@ -1148,10 +1148,16 @@ struct SteddiNavOverlay: View {
     private var reportSheet: some View {
         NavigationStack {
             List {
+                // Glyph colors are drawn ON the near-white `surfaceSecondary` list
+                // row, so they use the surface-adaptive *text* tokens, not the raw
+                // fill hues: `accent` is already text-safe, and `warmRedText`
+                // darkens warmRed (raw ~1.77:1 on grey) the direction the surface
+                // has headroom in so the icon clears WCAG's 3:1 non-text floor
+                // while still reading red.
                 reportOption(icon: "exclamationmark.triangle.fill", label: "Hazard", color: SteddiTheme.accent)
                 reportOption(icon: "shield.fill", label: "Police", color: SteddiTheme.accent)
-                reportOption(icon: "car.side.fill", label: "Accident", color: SteddiTheme.warmRed)
-                reportOption(icon: "road.lanes", label: "Road Closure", color: SteddiTheme.warmRed)
+                reportOption(icon: "car.side.fill", label: "Accident", color: SteddiTheme.warmRedText)
+                reportOption(icon: "road.lanes", label: "Road Closure", color: SteddiTheme.warmRedText)
                 cameraReportOption(.speedCamera)
                 cameraReportOption(.redLightCamera)
                 cameraReportOption(.mobileSpeedTrap)
@@ -1230,7 +1236,12 @@ struct SteddiNavOverlay: View {
             HStack(spacing: 14) {
                 Image(systemName: kind.icon)
                     .font(.system(size: 20 * iconScale))
-                    .foregroundStyle(kind.color)
+                    // List-row glyph on the near-white `surfaceSecondary`, not a
+                    // filled badge — use the surface-adaptive `listGlyphColor`
+                    // (amberText/warmRedText/text-safe accent), not the raw fill
+                    // `kind.color`, so the icon clears the 3:1 non-text floor in
+                    // light/dynamic-day while keeping its amber/red identity.
+                    .foregroundStyle(kind.listGlyphColor)
                     .frame(width: 32 * iconScale)
 
                 Text(kind.displayName)
