@@ -118,6 +118,17 @@ struct OnboardingView: View {
                         .legibleOverMap()
                     Text("Where to?")
                         .font(SteddiTheme.heading(17))
+                        // Use the EXACT label token the real Home search pill uses
+                        // (HomeView.swift: `SteddiTheme.textPrimary`), the analogue of
+                        // the glyph fix above — NOT a label pinned to the fixed-dark
+                        // showcase frost. The settle runs AFTER `persistSelections()`
+                        // applies the user's theme, so `textPrimary` resolves to the
+                        // identical value the Home pill computes (zero jump at the
+                        // morph boundary) and shifts the correct way per theme: in
+                        // LIGHT it's near-black on the light frost the morph can render
+                        // as, in DARK it's near-white on the dark composite — the
+                        // `mapGlassScrim` + `legibleOverMap` per-glyph shadow (both
+                        // mirrored from Home below) holding it over any backdrop.
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .legibleOverMap()
                     Spacer()
