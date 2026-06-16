@@ -1012,9 +1012,16 @@ struct HomeView: View {
                                     Image(systemName: "magnifyingglass")
                                         .font(.body.weight(.medium))
                                         .foregroundStyle(SteddiTheme.accent)
+                                        // Per-glyph over-map shadow, matching the
+                                        // portrait pill — holds the icon over bright
+                                        // cartography in landscape too.
+                                        .legibleOverMap()
                                     Text("Where to?")
                                         .font(SteddiTheme.heading(15))
                                         .foregroundStyle(SteddiTheme.textPrimary)
+                                        // Same per-glyph shadow as portrait so the
+                                        // label never washes out on a bright tile.
+                                        .legibleOverMap()
                                     Spacer()
                                 }
                                 .padding(.horizontal, 12)
@@ -1230,10 +1237,14 @@ struct HomeView: View {
                     } label: {
                         Label("New Commute", systemImage: "plus")
                             .font(SteddiTheme.heading(14))
-                            .foregroundStyle(SteddiTheme.accent)
+                            // Legible on-fill pairing — accentBrand fill + onAccent
+                            // label — matching TripCard/RoutePreview. Avoids the
+                            // low-contrast accent-on-accentSubtle the rest of the
+                            // app deliberately rejects.
+                            .foregroundStyle(SteddiTheme.onAccent)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(SteddiTheme.accentSubtle, in: Capsule())
+                            .background(SteddiTheme.accentBrand, in: Capsule())
                             // Keep the pill's visual size but expand the tappable
                             // area to the 44pt minimum (the capsule is ~34pt tall).
                             .frame(minHeight: 44)
@@ -1712,10 +1723,12 @@ struct HomeView: View {
             } else {
                 Label("Add Place", systemImage: "plus")
                     .font(SteddiTheme.heading(14))
-                    .foregroundStyle(SteddiTheme.accent)
+                    // Legible on-fill pairing — accentBrand fill + onAccent label
+                    // — matching TripCard/RoutePreview, not accent-on-accentSubtle.
+                    .foregroundStyle(SteddiTheme.onAccent)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(SteddiTheme.accentSubtle, in: Capsule())
+                    .background(SteddiTheme.accentBrand, in: Capsule())
                     // Keep the pill's visual size but expand the tappable area
                     // to the 44pt minimum (the capsule is ~34pt tall).
                     .frame(minHeight: 44)
@@ -1802,10 +1815,13 @@ struct HomeView: View {
                     } label: {
                         Label("New Trip", systemImage: "plus")
                             .font(SteddiTheme.heading(14))
-                            .foregroundStyle(SteddiTheme.accent)
+                            // Legible on-fill pairing — accentBrand fill + onAccent
+                            // label — matching TripCard/RoutePreview, not
+                            // accent-on-accentSubtle.
+                            .foregroundStyle(SteddiTheme.onAccent)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(SteddiTheme.accentSubtle, in: Capsule())
+                            .background(SteddiTheme.accentBrand, in: Capsule())
                             // Keep the pill's visual size but expand the tappable
                             // area to the 44pt minimum (the capsule is ~34pt tall).
                             .frame(minHeight: 44)
