@@ -12,12 +12,22 @@ struct LocationPickerView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PinnedLocation.sortOrder) private var pinnedLocations: [PinnedLocation]
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
 
     @State private var query = ""
     @State private var searchResults: [GeocodingResult] = []
     @State private var searchTask: Task<Void, Never>?
 
     private let geocodingService = GeocodingService()
+
+    /// A presented sheet gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin the app theme here
+    /// too — otherwise this picker's grouped List/accent glyphs render in the
+    /// device appearance and mismatch the rest of Steddi when the chosen theme
+    /// differs from the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
@@ -110,6 +120,7 @@ struct LocationPickerView: View {
                 }
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     private func selectSearchResult(_ result: GeocodingResult) {

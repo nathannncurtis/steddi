@@ -9,6 +9,16 @@ struct RoutePlannerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
+
+    /// A presented full-screen cover gets its own presentation context and does
+    /// not inherit the presenter's `.preferredColorScheme`, so pin the app theme
+    /// here too — otherwise the system TextField/Toggle chrome renders in the
+    /// device appearance and mismatches the theme-colored card when the chosen
+    /// theme differs from the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     @State private var direction: CommuteDirection = .originToDestination
     @State private var routeName = ""
@@ -141,6 +151,7 @@ struct RoutePlannerView: View {
                     .background(SteddiTheme.surfacePrimary.opacity(0.85), in: RoundedRectangle(cornerRadius: 14))
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
         .task { await calculateRoute() }
     }
 

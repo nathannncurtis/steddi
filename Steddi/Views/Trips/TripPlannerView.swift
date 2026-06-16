@@ -11,6 +11,16 @@ struct TripPlannerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LocationService.self) private var locationService
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
+
+    /// A presented full-screen cover gets its own presentation context and does
+    /// not inherit the presenter's `.preferredColorScheme`, so pin the app theme
+    /// here too — otherwise the embedded List and segmented Picker render in the
+    /// device appearance and mismatch the theme-colored card when the chosen
+    /// theme differs from the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     /// Draft stop being assembled before save.
     struct DraftStop: Identifiable, Equatable {
@@ -92,6 +102,7 @@ struct TripPlannerView: View {
                 bottomCard
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     private var canSave: Bool {
