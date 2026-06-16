@@ -69,10 +69,36 @@ struct OnboardingHeroView: View {
                         .font(SteddiTheme.heading(30))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
+                        // App-standard per-glyph over-map shadow (same .black
+                        // .opacity(0.25) shadow HomeView / the nav HUD / this
+                        // flow's own settle pill use) so the copy never washes
+                        // out against the live cartography.
+                        .legibleOverMap()
                     Text("Let's get started")
                         .font(.title3)
                         .foregroundStyle(SteddiTheme.onboardingTextSecondary)
+                        .legibleOverMap()
                 }
+                // The shadow alone can't guarantee AA over the BRIGHTEST possible
+                // under-pixel (the accent route line, line-width 7, is near the
+                // copy's vertical band). Seat the copy block on a soft radial
+                // black wash — a gentle gradient plate, not an opaque box — so the
+                // headline holds ≥3:1 and the subtitle ≥4.5:1 over ANY map content
+                // while preserving the cinematic dark-map look (transparent at the
+                // edges, ~0.5 black at the copy's center, fading out before the
+                // wordmark plate above).
+                .padding(.horizontal, 28)
+                .padding(.vertical, 18)
+                .background(
+                    RadialGradient(
+                        colors: [.black.opacity(0.5), .black.opacity(0.32), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 180
+                    )
+                    .blur(radius: 12)
+                    .allowsHitTesting(false)
+                )
                 // Cap the supporting copy at the app-wide Dynamic Type ceiling
                 // (.accessibility3 == SteddiTheme.dynamicTypeCeiling /
                 // .accessibilityExtraLarge), the same bound every other onboarding
