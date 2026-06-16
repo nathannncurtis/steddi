@@ -103,6 +103,19 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
         NowPlayingService.shared.registerCommands()
 
+        // Re-tint the live maneuver glyphs on a mid-drive accent change. The
+        // route polyline (CarPlayMapController) and dashboard buttons already
+        // observe this notification; without observing it here, the turn-arrow
+        // glyphs keep the old accent until the next instruction change, so the
+        // route line and the maneuver arrow can show two different accents on a
+        // long held instruction (e.g. a highway leg).
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(accentColorChanged),
+            name: .steddiAccentColorChanged,
+            object: nil
+        )
+
         Task { @MainActor in
             stateManager.isCarPlayActive = true
 
@@ -119,6 +132,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         didDisconnect interfaceController: CPInterfaceController,
         from window: CPWindow
     ) {
+        NotificationCenter.default.removeObserver(self, name: .steddiAccentColorChanged, object: nil)
         phoneNavWatchTask?.cancel()
         phoneNavWatchTask = nil
         liveUpdateTask?.cancel()
@@ -568,6 +582,25 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
 
         session.upcomingManeuvers = maneuvers
+    }
+
+    /// Re-tint the live maneuver glyphs when the accent changes mid-drive.
+    /// `rebuildManeuvers` reads `SteddiTheme.accentUIColor` (which resolves the
+    /// current accent live), so rebuilding once now adopts the new tint without
+    /// waiting for the next instruction change. Only acts while nav is showing,
+    /// and does NOT touch `lastInstruction`/`lastFollowOn`, so the 1 Hz live
+    /// loop's diff is unaffected — this re-tints exactly once per accent change
+    /// rather than thrashing.
+    @MainActor
+    private func retintManeuvers() {
+        guard isShowingNavigation, navigationSession != nil else { return }
+        rebuildManeuvers()
+    }
+
+    @objc private func accentColorChanged() {
+        Task { @MainActor [weak self] in
+            self?.retintManeuvers()
+        }
     }
 
     private func updateTravelEstimates() {
