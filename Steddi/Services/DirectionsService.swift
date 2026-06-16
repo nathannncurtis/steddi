@@ -322,14 +322,31 @@ final class DirectionsService {
     /// destination-only estimate from the current position would ignore the
     /// roads the driver is committed to and bias the savings.
     ///
+    /// `distanceAlongRoute` is the driver's already-traversed arc length, as the
+    /// route projector computes it with continuity. When supplied, the remainder
+    /// is sliced at THAT arc-length position rather than re-derived by a hint-free
+    /// global nearest-segment scan. This matters on a self-crossing or
+    /// out-and-back route (a divided road carrying both directions, a loop): the
+    /// globally-nearest segment to the current position can be a LATER or EARLIER
+    /// crossing, so a hint-free scan would start the remainder at the wrong
+    /// occurrence and bias the savings. Slicing by the driver's monotone progress
+    /// always yields the genuinely-remaining geometry. Pass nil (e.g. for an
+    /// alternate candidate the driver is not on, so no live progress exists) to
+    /// fall back to the global nearest-segment scan.
+    ///
     /// Returns the whole polyline if it has fewer than two vertices (nothing to
     /// project onto), and at minimum a two-point line (snapped position ->
     /// destination) so the result is always routable.
     static func remainingPolyline(
         of polyline: [CLLocationCoordinate2D],
-        from position: CLLocationCoordinate2D
+        from position: CLLocationCoordinate2D,
+        distanceAlongRoute: Double? = nil
     ) -> [CLLocationCoordinate2D] {
         guard polyline.count >= 2 else { return polyline }
+
+        if let distanceAlongRoute {
+            return remainingPolyline(of: polyline, slicedAt: distanceAlongRoute)
+        }
 
         var bestSegment = 0
         var bestSnapped = polyline[0]
@@ -349,6 +366,35 @@ final class DirectionsService {
         var remaining: [CLLocationCoordinate2D] = [bestSnapped]
         remaining.append(contentsOf: polyline[(bestSegment + 1)...])
         return remaining.count >= 2 ? remaining : [bestSnapped, polyline[polyline.count - 1]]
+    }
+
+    /// Remaining geometry sliced at a known arc-length position along the route:
+    /// the coordinate `distance` meters in, followed by every vertex strictly
+    /// beyond it. Driven by the driver's monotone progress, so a self-crossing /
+    /// out-and-back route can't snap the remainder to a wrong crossing.
+    private static func remainingPolyline(
+        of polyline: [CLLocationCoordinate2D],
+        slicedAt distance: Double
+    ) -> [CLLocationCoordinate2D] {
+        let cumulative = RouteGeometry.cumulativeDistances(polyline)
+        guard let total = cumulative.last, total > 0 else {
+            return [polyline[0], polyline[polyline.count - 1]]
+        }
+        let clamped = min(max(0, distance), total)
+
+        guard let snapped = RouteGeometry.coordinate(
+            atDistance: clamped, polyline: polyline, cumulative: cumulative
+        ) else {
+            return [polyline[0], polyline[polyline.count - 1]]
+        }
+
+        // Keep every vertex strictly ahead of the slice point so the snapped
+        // start isn't immediately followed by a vertex it already passed.
+        var remaining: [CLLocationCoordinate2D] = [snapped]
+        for i in 0..<polyline.count where cumulative[i] > clamped {
+            remaining.append(polyline[i])
+        }
+        return remaining.count >= 2 ? remaining : [snapped, polyline[polyline.count - 1]]
     }
 
     static func isArrivalStep(_ step: DirectionsStep) -> Bool {

@@ -61,6 +61,63 @@ struct RemainingPolylineTests {
         #expect(result.count == 1)
         #expect(DirectionsService.remainingPolyline(of: [], from: single[0]).isEmpty)
     }
+
+    /// Out-and-back / self-crossing route: a north-bound outbound leg, then a
+    /// return leg running ~6m to the east back south to near the origin. The
+    /// driver is partway up the OUTBOUND leg, but slightly east — so the
+    /// GLOBALLY nearest segment is the RETURN leg (the wrong, later occurrence).
+    /// A hint-free scan would start the remainder on the return leg and throw
+    /// away the whole northbound climb still ahead; slicing by the driver's
+    /// already-traversed arc length keeps the genuinely-remaining geometry.
+    @Test("Self-crossing route slices the forward remainder by progress, not a wrong crossing")
+    func selfCrossingSlicesByProgress() {
+        // Outbound: north up -117.0000 from 33.000 to 33.010.
+        let outbound: [CLLocationCoordinate2D] = (0...10).map {
+            CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0)
+        }
+        // Return: south down -116.99993 (~6.5m east) from 33.010 back to 33.000.
+        let returnLeg: [CLLocationCoordinate2D] = (0...10).reversed().map {
+            CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -116.99993)
+        }
+        let route = outbound + returnLeg
+        let cumulative = RouteGeometry.cumulativeDistances(route)
+        let total = cumulative.last ?? 0
+
+        // Driver is ~40% up the OUTBOUND leg but nudged east PAST the midline so
+        // the globally-nearest segment is unambiguously the return leg.
+        let position = CLLocationCoordinate2D(latitude: 33.004, longitude: -116.999945)
+        let progress = cumulative[4] // arc length at outbound vertex 4 (33.004)
+
+        // Hint-free scan: snaps to the globally-nearest segment. The driver sits
+        // closer to the return leg, so the baseline remainder is computed from
+        // the WRONG (return-leg) occurrence — far shorter than the truth.
+        let hintFree = DirectionsService.remainingPolyline(of: route, from: position)
+        let hintFreeLen = RouteGeometry.cumulativeDistances(hintFree).last ?? 0
+
+        // Progress-sliced: the genuinely-remaining geometry from 40% along the
+        // outbound leg — the rest of the climb plus the entire return leg.
+        let sliced = DirectionsService.remainingPolyline(
+            of: route, from: position, distanceAlongRoute: progress
+        )
+        let slicedLen = RouteGeometry.cumulativeDistances(sliced).last ?? 0
+
+        // The forward remainder is most of the route (only ~40% of one leg is
+        // behind), and dramatically longer than what the wrong-crossing snap gave.
+        #expect(slicedLen > total * 0.7)
+        #expect(slicedLen > hintFreeLen * 2)
+        // It still ends at the true destination (near the origin, on the return leg).
+        let dest = route.last!
+        #expect(abs(sliced.last!.latitude - dest.latitude) < 1e-9)
+        #expect(abs(sliced.last!.longitude - dest.longitude) < 1e-9)
+        // Its start sits on the OUTBOUND climb (the slice point), not snapped
+        // back down onto the return leg.
+        #expect(abs(sliced.first!.latitude - position.latitude) < 0.0005)
+        #expect(abs(sliced.first!.longitude - (-117.0)) < 1e-4)
+        // The first vertex after the snapped start continues NORTH up the
+        // outbound leg (progress hasn't reached the turnaround), proving the
+        // remainder didn't jump to the return leg.
+        #expect(sliced[1].latitude > sliced.first!.latitude)
+    }
 }
 
 // MARK: - Symmetric Reroute ETA Comparison

@@ -419,9 +419,18 @@ final class NavigationStateManager {
                     // ETA along the candidate's polyline — they share an endpoint
                     // but differ by path, so a genuinely faster route shows real
                     // savings while an equal/slower one shows none.
+                    //
+                    // Slice the active remainder at the driver's already-traversed
+                    // arc length (the projector computes it with continuity), NOT
+                    // a hint-free global nearest-segment scan: on a self-crossing /
+                    // out-and-back active route the globally-nearest segment can be
+                    // a wrong crossing, which would start the baseline remainder at
+                    // the wrong place and bias the savings. `activePolyline` is the
+                    // projector's own polyline, so its arc length lines up here.
                     let remainingPolyline = DirectionsService.remainingPolyline(
                         of: activePolyline,
-                        from: currentCoord
+                        from: currentCoord,
+                        distanceAlongRoute: engine.navPose?.distanceAlongRoute
                     )
                     let baseline: RouteETA
                     do {
