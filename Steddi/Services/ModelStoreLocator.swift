@@ -25,17 +25,15 @@ enum ModelStoreLocator {
     /// across two stores). See `makeAppContainer`.
     static let groupStoreEstablishedKey = "steddi.groupStoreEstablished"
 
-    /// Full schema for the app's model graph. Built from the current
-    /// `VersionedSchema` so the schema and the migration plan can never drift —
-    /// every container opens the exact set of models the plan migrates.
-    static var schema: Schema {
-        Schema(versionedSchema: SteddiMigrationPlan.currentSchema)
-    }
-
-    /// Migration plan passed to every container so additive schema changes are
-    /// deterministic and reviewable rather than relying on implicit lightweight
-    /// migration. See `SteddiMigrationPlan`.
-    static var migrationPlan: SchemaMigrationPlan.Type { SteddiMigrationPlan.self }
+    /// Full schema for the app's model graph — the single source of truth every
+    /// container opens, so the app store, the read-only shared store, and the
+    /// in-memory fallback can never drift apart. See `SteddiSchema`.
+    ///
+    /// There is no explicit `SchemaMigrationPlan`: every shipped schema change has
+    /// been purely additive and is handled by SwiftData's automatic lightweight
+    /// migration when the container opens. `SteddiSchema` documents why, and when a
+    /// real versioned plan would be warranted.
+    static var schema: Schema { SteddiSchema.current }
 
     // MARK: - Store URLs
 
@@ -216,7 +214,6 @@ enum ModelStoreLocator {
                 do {
                     let container = try ModelContainer(
                         for: schema,
-                        migrationPlan: migrationPlan,
                         configurations: [ModelConfiguration(url: url)]
                     )
                     defaults.set(true, forKey: groupStoreEstablishedKey)
@@ -252,7 +249,6 @@ enum ModelStoreLocator {
         do {
             let container = try ModelContainer(
                 for: schema,
-                migrationPlan: migrationPlan,
                 configurations: [ModelConfiguration(url: legacyURL)]
             )
             storeLog.info("Opened SwiftData store at legacy location: \(legacyURL.path)")
@@ -304,15 +300,15 @@ enum ModelStoreLocator {
     /// extensions, falling back to the legacy store until the app has run
     /// its migration. Throws if no store exists on disk at all.
     ///
-    /// The migration plan is passed for parity with the app container so the
-    /// declared current schema is the single source of truth. It does NOT let a
-    /// read-only store run a migration — an in-place migration must write the
-    /// store, which `allowsSave: false` forbids. So when the on-disk store is
-    /// behind this build's schema (the post-update window before the user has
-    /// cold-launched the app, which migrates the group store), `ModelContainer`
-    /// throws here; the caller (the commute-ETA intent) catches it and steers the
-    /// user to open the app once to finish updating. Once the app has migrated,
-    /// this open succeeds against the now-current store.
+    /// A read-only (`allowsSave: false`) store CANNOT run a migration — an in-place
+    /// migration must write the store, which the configuration forbids. So when the
+    /// on-disk store is behind this build's schema (the post-update window before
+    /// the user has cold-launched the app, which performs the automatic lightweight
+    /// migration on the group store), `ModelContainer` throws here; the caller (the
+    /// commute-ETA intent) catches it and steers the user to open the app once to
+    /// finish updating. Once the app has migrated, this open succeeds against the
+    /// now-current store. (No explicit migration plan would change this — see
+    /// `SteddiSchema` for why the schema is unversioned.)
     static func makeReadOnlySharedContainer(fileManager: FileManager = .default) throws -> ModelContainer {
         guard let url = readOnlyStoreURL(
             groupURL: groupStoreURL(fileManager: fileManager),
@@ -322,7 +318,7 @@ enum ModelStoreLocator {
             throw StoreError.sharedStoreUnavailable
         }
         let config = ModelConfiguration(url: url, allowsSave: false)
-        return try ModelContainer(for: schema, migrationPlan: migrationPlan, configurations: [config])
+        return try ModelContainer(for: schema, configurations: [config])
     }
 
     enum StoreError: Error {
