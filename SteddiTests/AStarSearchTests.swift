@@ -880,4 +880,139 @@ struct AStarSearchTests {
         #expect(result.edgePath.contains(qEdge), "route should approach M via Q")
         #expect(!result.edgePath.contains(pEdge), "route should NOT approach M via the trapped P")
     }
+
+    // MARK: - Reverse-arrival terminal U-turn must be priced
+
+    @Test("reverse arrival that needs a U-turn is NOT chosen over a cheaper-with-turns forward arrival")
+    func reverseArrivalUTurnIsPriced() {
+        // A two-way destination street A(1) <-> B(2) (~445m, forward A->B heads
+        // east). The destination snaps mid-edge NEAR A (~fraction 0.15), so two
+        // arrivals exist: FORWARD (reach A, drive 0.15 east to the point) and
+        // REVERSE (reach B, take the co-located reverse twin B->A west and drive
+        // 0.85 back to the point).
+        //
+        // The origin O(3) sits near B and reaches B cheaply via O->W->B (way 101),
+        // whose final segment W->B heads EAST — so turning onto the reverse twin
+        // B->A (which heads WEST) is a physical U-turn. The only U-turn-FREE way to
+        // the destination is the forward arrival, reached via the longer detour
+        // O->G->A (way 102) whose final segment G->A heads east into A, so the
+        // forward continuation A->B is straight.
+        //
+        // Pre-fix the reverse arrival's trailing partial was charged as pure edge
+        // time with NO terminal-maneuver cost, so the cheap-to-reach-B + long
+        // reverse partial looked cheaper than the longer forward detour, and the
+        // engine returned a route ending in an UNPRICED U-turn. Pricing the terminal
+        // maneuver onto the reverse twin (uTurnPenalty=140) makes the reverse
+        // arrival honestly expensive, so the forward arrival — genuinely cheaper once
+        // every turn is counted — is chosen.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),            // A
+            node(2, 0.0, 0.004),          // B  (~445m east of A)
+            node(3, 0.00004, 0.003),      // O  (origin, near B)
+            node(4, 0.00002, 0.0035),     // W  (just west of B, ~2m off the line)
+            node(5, 0.0, -0.001),         // G  (west of A, forward feeder)
+            way(100, [1, 2], tags: ["highway": "primary", "maxspeed": "45 mph"]),       // A<->B dest street
+            way(101, [3, 4, 2], tags: ["highway": "primary", "maxspeed": "45 mph"]),    // O->W->B (arrives east → reverse is a U-turn)
+            way(102, [3, 5, 1], tags: ["highway": "primary", "maxspeed": "45 mph"])     // O->G->A (forward feeder, no U-turn)
+        )
+        let cost = DefaultCostModel()   // production weights: uTurnPenalty=140
+
+        let originNode = NodeIndex(graph.osmToIndex[3]!)
+        // Destination ~fraction 0.15 along A->B (near A).
+        let dest = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0006)
+        guard let destSnap = graph.snap(dest, maxDistanceMeters: 200) else {
+            Issue.record("destination snap failed"); return
+        }
+        let nodeA = graph.nodes[Int(graph.osmToIndex[1]!)].coordinate
+        let nodeB = graph.nodes[Int(graph.osmToIndex[2]!)].coordinate
+        #expect(RouteGeometry.haversineDistance(from: destSnap.snapped, to: nodeA)
+                < RouteGeometry.haversineDistance(from: destSnap.snapped, to: nodeB),
+                "destination should snap nearer the A-end")
+
+        guard let result = search.search(from: .node(originNode), to: .coordinate(dest), in: graph, cost: cost) else {
+            Issue.record("no path"); return
+        }
+
+        let destEdge = graph.edges[Int(destSnap.edge)]
+        // G and W are MIDDLE vertices of ways 102/101, so the builder folds them into
+        // edge geometry rather than emitting graph nodes — way 102 is a single O->A
+        // edge (bending through G, arriving at A heading east) and way 101 a single
+        // O->B edge (bending through W, arriving at B heading east). Identify arrivals
+        // by OSM way, not by an intermediate node.
+        // The co-located reverse twin of the destination edge (same OSM way, swapped
+        // endpoints) — terminating on it from the east-aligned approach is the
+        // unpriced-U-turn signature.
+        let reverseTwinPresent = result.edgePath.contains { e in
+            let ge = graph.edges[Int(e)]
+            return ge.osmWayID == destEdge.osmWayID && ge.from == destEdge.to && ge.to == destEdge.from
+        }
+        // Forward arrival: the path uses the O->A feeder (way 102) and continues onto
+        // the FORWARD destination edge A->B (way 100, A->B), never the reverse twin.
+        let viaForwardFeeder = result.edgePath.contains { graph.edges[Int($0)].osmWayID == 102 }
+        #expect(viaForwardFeeder, "forward arrival via the O->A feeder (way 102) should be chosen")
+        #expect(!reverseTwinPresent, "route must NOT terminate on the reverse twin B->A (an unpriced U-turn)")
+        // And it does NOT use the O->B feeder (way 101) that would force the U-turn.
+        #expect(!result.edgePath.contains { graph.edges[Int($0)].osmWayID == 101 },
+                "route must not use the O->B feeder that requires the terminal U-turn")
+
+        // No U-turn maneuver in the synthesized steps.
+        guard let synth = StepSynthesizer.synthesize(result, in: graph) else {
+            Issue.record("synthesis failed"); return
+        }
+        #expect(!synth.steps.contains { $0.instruction.lowercased().contains("u-turn") },
+                "the chosen route must not contain a U-turn")
+
+        // The reported cost equals the honest forward-arrival cost (reach A via the
+        // feeder, straight onto A->B, 0.15 partial) — well under what an honestly-
+        // priced reverse U-turn arrival would cost (which now includes +140).
+        let viaNodeA = search.search(from: .node(originNode), to: .node(NodeIndex(graph.osmToIndex[1]!)), in: graph, cost: cost)
+        let forwardLowerBound = viaNodeA?.totalCost ?? .infinity
+        #expect(result.totalCost >= forwardLowerBound - 1e-6,
+                "forward arrival cost should be at least the cost to reach A")
+        #expect(result.totalCost < forwardLowerBound + 0.16 * cost.edgeCost(destEdge, in: graph) + 1e-6,
+                "forward arrival should add only the ~0.15 forward partial, no U-turn")
+    }
+
+    @Test("reverse arrival with NO U-turn still wins the no-overshoot case (regression guard)")
+    func reverseArrivalWithoutUTurnPreserved() {
+        // Regression guard for the no-overshoot win: when reaching edge.to does NOT
+        // require a U-turn onto the reverse twin, the reverse arrival must still be
+        // chosen over a full-edge forward overshoot. Mirrors the existing
+        // wrong-end fixture but explicitly under the production cost model: origin C
+        // feeds the B-end via a connector arriving roughly perpendicular (a normal
+        // turn, not a U-turn), so the short reverse partial back to a near-A
+        // destination remains the optimal arrival.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),        // A
+            node(2, 0.0, 0.004),      // B  (~445m east of A)
+            node(3, 0.0009, 0.004),   // C  (~100m north of B)
+            way(100, [1, 2], tags: ["highway": "primary", "maxspeed": "45 mph"]),  // A<->B long two-way
+            way(101, [2, 3], tags: ["highway": "primary", "maxspeed": "45 mph"])   // B<->C connector
+        )
+        let cost = DefaultCostModel()
+        let originNode = NodeIndex(graph.osmToIndex[3]!)
+        let dest = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0008)   // ~fraction 0.2 from A
+
+        guard let destSnap = graph.snap(dest, maxDistanceMeters: 200),
+              let result = search.search(from: .node(originNode), to: .coordinate(dest), in: graph, cost: cost) else {
+            Issue.record("no path"); return
+        }
+        // The route ends at the destination (within snap noise), not a block past it.
+        guard let synth = StepSynthesizer.synthesize(result, in: graph) else {
+            Issue.record("synthesis failed"); return
+        }
+        #expect(RouteGeometry.haversineDistance(from: synth.coordinates.last!, to: destSnap.snapped) < 2.0)
+        // Approaching B from the north and turning onto B->A is a normal turn, not a
+        // U-turn — so the reverse no-overshoot arrival is still taken.
+        let longEdge = graph.edges[Int(destSnap.edge)]
+        let forwardLong = result.edgePath.contains { e in
+            let ge = graph.edges[Int(e)]
+            return ge.osmWayID == longEdge.osmWayID && ge.from == graph.osmToIndex[1]! && ge.to == graph.osmToIndex[2]!
+        }
+        let reverseLong = result.edgePath.contains { e in
+            let ge = graph.edges[Int(e)]
+            return ge.osmWayID == longEdge.osmWayID && ge.from == graph.osmToIndex[2]! && ge.to == graph.osmToIndex[1]!
+        }
+        #expect(!(forwardLong && reverseLong), "must not traverse the long edge in BOTH directions (overshoot)")
+    }
 }

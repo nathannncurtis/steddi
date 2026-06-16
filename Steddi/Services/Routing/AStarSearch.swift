@@ -205,18 +205,45 @@ struct AStarSearch: PathSearch {
 
         // The best destination arrival found so far: its total cost, the edge whose
         // traversal reached the goal node (-1 for a degenerate node-start arrival),
-        // and which arrival orientation it used.
+        // which arrival orientation it used, and the terminal maneuver cost charged
+        // for turning off that arrival edge ONTO the trailing partial edge.
         var bestTotal = Double.infinity
         var bestArrivalEdge: EdgeIndex = -1
         var bestArrival: GoalArrival? = nil
+        var bestTerminalTurn: Double = 0
+
+        // Cost of the terminal maneuver: turning off the edge the search arrived on
+        // (`arrivalEdge`) ONTO the trailing partial edge that runs to the snapped
+        // destination point. Without this the trailing partial is charged as pure
+        // edge time, so a REVERSE-orientation arrival on a two-way destination —
+        // which reaches `edge.to` and then takes the co-located reverse twin back
+        // toward the point — pays NOTHING for the physical U-turn that transition
+        // requires when the approach into `edge.to` was aligned with the forward
+        // direction. That makes an unpenalized-U-turn reverse arrival look cheaper
+        // than a legitimately-penalized forward approach. Pricing the maneuver with
+        // the same `turnCost` machinery used everywhere else costs the reverse
+        // U-turn honestly while leaving genuinely-straight arrivals (forward
+        // continuation, or a reverse arrival reached from a direction that needs no
+        // U-turn) unchanged. Zero for a node arrival (no trailing edge) and for the
+        // degenerate node-start arrival (no incoming edge — matches `turnCost(nil)`).
+        func terminalTurnCost(arrivalEdge: EdgeIndex, arrival: GoalArrival) -> Double {
+            guard arrival.trailingEdge >= 0, arrivalEdge >= 0 else { return 0 }
+            let incoming = graph.edges[Int(arrivalEdge)]
+            let trailing = graph.edges[Int(arrival.trailingEdge)]
+            let node = graph.nodes[Int(arrival.node)]
+            let turn = cost.turnCost(from: incoming, to: trailing, at: node, in: graph)
+            return turn.isFinite ? turn : 0
+        }
 
         func consider(arrivalEdge: EdgeIndex, gAtNode: Double, arrivals: [GoalArrival]) {
             for arrival in arrivals {
-                let total = gAtNode + arrival.trailingCost
+                let terminalTurn = terminalTurnCost(arrivalEdge: arrivalEdge, arrival: arrival)
+                let total = gAtNode + arrival.trailingCost + terminalTurn
                 if total < bestTotal {
                     bestTotal = total
                     bestArrivalEdge = arrivalEdge
                     bestArrival = arrival
+                    bestTerminalTurn = terminalTurn
                 }
             }
         }
@@ -320,7 +347,8 @@ struct AStarSearch: PathSearch {
         return reconstruct(
             arrival: arrival,
             arrivalEdge: bestArrivalEdge,
-            gAtGoal: bestTotal - arrival.trailingCost,
+            gAtGoal: bestTotal - arrival.trailingCost - bestTerminalTurn,
+            terminalTurn: bestTerminalTurn,
             cameFromEdge: cameFromEdge,
             start: start,
             in: graph
@@ -663,6 +691,7 @@ struct AStarSearch: PathSearch {
         arrival: GoalArrival,
         arrivalEdge: EdgeIndex,
         gAtGoal: Double,
+        terminalTurn: Double,
         cameFromEdge: [Int32],
         start: ResolvedOrigin,
         in graph: RoadGraph
@@ -702,7 +731,10 @@ struct AStarSearch: PathSearch {
             nodes.append(graph.edges[Int(arrival.trailingEdge)].to)
         }
 
-        let total = gAtGoal + arrival.trailingCost
+        // The reported total includes the terminal maneuver onto the trailing
+        // partial edge (the U-turn charge for a reverse arrival, 0 for a straight
+        // forward continuation), so the cost matches the route actually returned.
+        let total = gAtGoal + arrival.trailingCost + terminalTurn
         return SearchResult(
             nodePath: nodes,
             edgePath: edges,
