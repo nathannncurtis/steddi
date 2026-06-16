@@ -659,6 +659,143 @@ struct NavigationStateManagerTripTeardownTests {
     }
 }
 
+// MARK: - Mid-Drive Rebuild Re-Adoption Tests
+
+/// Regression guard for the HIGH bug: toggling Reduce Transparency (or Increase
+/// Contrast) mid-drive used to force a `.id(glassRevision)` rebuild of the whole
+/// HomeView subtree. That ran HomeView.onDisappear — which nils the active
+/// engine's `onOffRoute` and cancels the GPS feed but deliberately does NOT call
+/// stopObserving() — then mounted a fresh HomeView with empty @State. The fresh
+/// view never re-adopted the still-live session, so the engine stopped getting
+/// fixes (turn-by-turn froze), the overlay vanished, and the Live Activity went
+/// stale: navigation silently died with no recovery.
+///
+/// The fix has two prongs. Prong 1 (prevention) routes glass re-resolution
+/// through `\.glassRevision` in the environment instead of `.id`, so a toggle no
+/// longer rebuilds the subtree at all — not exercisable in a unit test without a
+/// UI host. Prong 2 (defense) is `HomeView.reAdoptActiveSessionIfNeeded()`, which
+/// these tests pin at the manager+engine layer it depends on: after the
+/// onDisappear-style teardown, the SHARED session must remain fully intact and
+/// adoptable so a rebuilt view can resume guidance.
+@Suite("Mid-drive rebuild re-adoption")
+@MainActor
+struct NavigationStateManagerReAdoptionTests {
+
+    private func startedEngine() -> NavigationEngine {
+        let engine = NavigationEngine()
+        let polyline = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        let steps = [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline[0], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[10], maneuverSymbol: "flag.fill"),
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+        return engine
+    }
+
+    /// Simulates exactly what HomeView.onDisappear does on a forced rebuild over a
+    /// live session: severs the engine's off-route closure and cancels the (here,
+    /// stand-in) GPS feed task — but does NOT call stopObserving(). The shared
+    /// session must survive so a rebuilt HomeView can re-adopt it. This is the
+    /// invariant the bug violated by assuming the fresh view would never resume.
+    @Test("onDisappear-style teardown leaves the shared session adoptable (not ended)")
+    func teardownLeavesSessionAdoptable() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        engine.onOffRoute = { _ in }
+
+        manager.startObserving(engine: engine, destinationName: "Office")
+        #expect(manager.isNavigating == true)
+        #expect(manager.activeEngine === engine)
+
+        // A stand-in for HomeView's locationFeedTask, cancelled in onDisappear.
+        let feed = Task<Void, Never> { while !Task.isCancelled { } }
+
+        // --- What HomeView.onDisappear runs on a rebuild over a live session ---
+        manager.activeEngine?.onOffRoute = nil
+        feed.cancel()
+        // NOTE: NO stopObserving() — that's the whole point.
+
+        // The shared source of truth is untouched: the engine is alive and still
+        // navigating, so reAdoptActiveSessionIfNeeded()'s guard
+        // (!isNavigating && manager.isNavigating && engine.isNavigating) holds.
+        #expect(manager.isNavigating == true)
+        #expect(manager.activeEngine === engine)
+        #expect(engine.isNavigating == true)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// Models the re-adoption a rebuilt HomeView performs: re-point at the live
+    /// engine, re-wire onOffRoute (onDisappear nilled it to break the retain
+    /// cycle), and confirm the engine still accepts GPS fixes — i.e. guidance can
+    /// resume. Pins that re-wiring the closure after the teardown actually works.
+    @Test("Re-adopting the live engine restores off-route wiring and GPS feeding")
+    func reAdoptionRestoresWiringAndFeeding() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        // onDisappear severs the closure on the orphaned engine.
+        manager.activeEngine?.onOffRoute = nil
+        #expect(engine.onOffRoute == nil)
+
+        // Re-adoption: a rebuilt view re-wires off-route against itself.
+        var offRouteFired = false
+        let adopted = manager.activeEngine
+        adopted?.onOffRoute = { _ in offRouteFired = true }
+        #expect(adopted === engine)
+        #expect(engine.onOffRoute != nil)
+
+        // The engine still accepts fixes — guidance resumes once the feed restarts.
+        let fix = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 33.005, longitude: -117.0),
+            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: -1, courseAccuracy: -1, speed: 13, speedAccuracy: 1,
+            timestamp: Date()
+        )
+        engine.updateLocation(fix)
+        #expect(engine.isNavigating == true)
+        #expect(engine.currentCoordinate != nil)
+        _ = offRouteFired // closure existence is what matters; on-route won't fire it
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// The re-adoption guard must be a strict no-op when there is no live session,
+    /// so a routine onAppear (cold launch, returning to an idle home screen) never
+    /// fabricates a phantom navigating state. Mirrors the guard's first clause.
+    @Test("No live session means nothing to re-adopt")
+    func noSessionNothingToReAdopt() {
+        let manager = NavigationStateManager()
+        #expect(manager.isNavigating == false)
+        #expect(manager.activeEngine == nil)
+        // The guard `manager.isNavigating && manager.activeEngine != nil` is false,
+        // so reAdoptActiveSessionIfNeeded() would return without touching state.
+    }
+
+    /// A genuine session end (in-view End / external teardown) DOES call
+    /// stopObserving, which clears the engine — so a subsequent onAppear finds
+    /// nothing to adopt and correctly stays idle. Distinguishes a real end from
+    /// the transient rebuild the bug conflated.
+    @Test("After a real session end there is nothing to re-adopt")
+    func realEndIsNotReAdopted() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        // Genuine end (e.g. handleExternalSessionTeardown / End button path).
+        engine.stopNavigation()
+        manager.stopObserving()
+
+        // The re-adoption guard now fails on every clause — stays idle.
+        #expect(manager.isNavigating == false)
+        #expect(manager.activeEngine == nil)
+        #expect(engine.isNavigating == false)
+    }
+}
+
 // MARK: - Session Generation Tests
 
 @Suite("NavigationStateManager session generation")
