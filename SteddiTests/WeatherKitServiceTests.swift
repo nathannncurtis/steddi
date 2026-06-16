@@ -116,3 +116,153 @@ struct WeatherKitRefreshAvailabilityTests {
         #expect(service.isAvailable == false)
     }
 }
+
+// MARK: - refresh() drives the ThemeEngine weather + temperature layers
+
+/// The weather and temperature theme layers were inert: nothing fed
+/// `WeatherKitService.refresh()` output into `ThemeEngine`, so the weather grey
+/// pull / brightness shift and the temperature warmth never moved. These verify
+/// the wired path — a fresh observation drives BOTH layers through the same
+/// setters production uses (`setWeather` + `setTemperature`) — and that a fixed
+/// (non-dynamic) theme suppresses the effect even when the inputs land.
+@Suite("WeatherKitService refresh drives ThemeEngine")
+@MainActor
+struct WeatherKitDrivesThemeTests {
+
+    /// San Diego in summer — a hot 95°F reading sits well above the local norm,
+    /// so temperature tinting must push the surfaces warm.
+    private static let location = CLLocation(latitude: 32.7, longitude: -117.2)
+    private static func summerNoon() -> Date {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal.date(from: DateComponents(year: 2026, month: 7, day: 15, hour: 20))!
+    }
+
+    /// Build a dynamic-theming engine with the weather + temperature layers on,
+    /// and a WeatherKitService whose apply closure routes into it exactly as the
+    /// production default closure routes into `ThemeEngine.shared`.
+    private func makeEngine(mode: ThemeModeEx) -> ThemeEngine {
+        let engine = ThemeEngine(
+            locationProvider: { Self.location.coordinate },
+            now: { Self.summerNoon() }
+        )
+        engine.baseMode = mode
+        var components = DynamicThemeComponents()
+        components.weatherResponse = true
+        components.temperatureTinting = true
+        // Isolate the weather/temperature layers from solar golden-hour warmth so
+        // a changed warmth vector is unambiguously the temperature layer's doing.
+        components.solarCycle = false
+        engine.dynamicComponents = components
+        return engine
+    }
+
+    private func makeService(
+        condition: WeatherConditionSnapshot,
+        into engine: ThemeEngine
+    ) -> WeatherKitService {
+        WeatherKitService(
+            provider: { _ in condition },
+            now: { Self.summerNoon() },
+            apply: { snapshot, coefficients in
+                engine.setWeather(condition: snapshot, coefficients: coefficients)
+                engine.setTemperature(currentF: snapshot.temperatureF, norm: nil)
+            }
+        )
+    }
+
+    @Test("A rain + hot observation moves the dynamic theme's weather and temperature state")
+    func refreshDrivesDynamicTheme() async {
+        let engine = makeEngine(mode: .dynamic)
+        let baselineWarmth = engine.currentState.warmthVector
+        let baselineCondition = engine.weatherCondition
+
+        let observation = WeatherConditionSnapshot(
+            kind: .rain, temperatureF: 95, fetchedAt: Self.summerNoon()
+        )
+        let service = makeService(condition: observation, into: engine)
+        await service.refresh(at: Self.location)
+
+        // Weather layer engaged: the engine now holds the rain condition and its
+        // grey-pull / brightness-shift coefficients (rain pulls grey + darkens).
+        #expect(engine.weatherCondition.kind == .rain)
+        #expect(engine.weatherCondition != baselineCondition)
+        #expect(engine.weatherCoefficients.greyPull > 0)
+        #expect(engine.weatherCoefficients.brightnessShift < 0)
+
+        // Temperature layer engaged: 95°F drove a temperature into the engine and
+        // the warm reading shifted the surfaces (warmth vector changed).
+        #expect(engine.currentTemperatureF == 95)
+        #expect(engine.currentState.warmthVector != baselineWarmth,
+                "a hot reading should warm the surfaces vs the no-weather baseline")
+    }
+
+    @Test("Clear vs rain produce different theme states through the refresh path")
+    func differentConditionsMoveDifferently() async {
+        let clearEngine = makeEngine(mode: .dynamic)
+        await makeService(
+            condition: WeatherConditionSnapshot(kind: .clear, temperatureF: 70, fetchedAt: Self.summerNoon()),
+            into: clearEngine
+        ).refresh(at: Self.location)
+
+        let rainEngine = makeEngine(mode: .dynamic)
+        await makeService(
+            condition: WeatherConditionSnapshot(kind: .rain, temperatureF: 70, fetchedAt: Self.summerNoon()),
+            into: rainEngine
+        ).refresh(at: Self.location)
+
+        // Rain pulls grey + darkens; clear is neutral. The published surfaces
+        // must differ — proof the weather layer actually reaches the look.
+        #expect(clearEngine.currentState != rainEngine.currentState)
+        #expect(clearEngine.weatherCoefficients.greyPull == 0)
+        #expect(rainEngine.weatherCoefficients.greyPull > 0)
+    }
+
+    @Test("A fixed (non-dynamic) theme ignores the weather + temperature inputs")
+    func fixedThemeSuppressesWeatherAndTemperature() async {
+        // Same hot-rain observation, but the user chose a FIXED Dark theme — the
+        // weather/temperature layers must NOT alter the look, even though the
+        // inputs still land in the engine. This is the user's explicit choice;
+        // dynamic-only layers must respect it.
+        let fixedEngine = makeEngine(mode: .dark)
+        let fixedBaseline = fixedEngine.currentState
+
+        let observation = WeatherConditionSnapshot(
+            kind: .rain, temperatureF: 95, fetchedAt: Self.summerNoon()
+        )
+        await makeService(condition: observation, into: fixedEngine).refresh(at: Self.location)
+
+        // Inputs landed (the setters ran)...
+        #expect(fixedEngine.weatherCondition.kind == .rain)
+        #expect(fixedEngine.currentTemperatureF == 95)
+        // ...but the published look is byte-for-byte the fixed Dark palette: no
+        // grey pull, no brightness shift, no warmth. The fixed theme is honored.
+        #expect(fixedEngine.currentState == fixedBaseline)
+        #expect(fixedEngine.currentState.warmthVector == .zero)
+    }
+
+    @Test("Disabling the weatherResponse / temperatureTinting toggles suppresses the layers")
+    func disabledTogglesSuppressLayers() async {
+        let engine = ThemeEngine(
+            locationProvider: { Self.location.coordinate },
+            now: { Self.summerNoon() }
+        )
+        engine.baseMode = .dynamic
+        var components = DynamicThemeComponents()
+        components.weatherResponse = false
+        components.temperatureTinting = false
+        components.solarCycle = false // isolate: no solar warmth either
+        engine.dynamicComponents = components
+        let baseline = engine.currentState
+
+        let observation = WeatherConditionSnapshot(
+            kind: .rain, temperatureF: 95, fetchedAt: Self.summerNoon()
+        )
+        await makeService(condition: observation, into: engine).refresh(at: Self.location)
+
+        // Both per-layer toggles are off, so even in dynamic mode the look must
+        // not move — the engine honors the user's component preferences.
+        #expect(engine.currentState == baseline)
+        #expect(engine.currentState.warmthVector == .zero)
+    }
+}
