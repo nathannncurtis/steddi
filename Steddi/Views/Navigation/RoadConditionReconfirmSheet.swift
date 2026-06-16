@@ -20,12 +20,21 @@ struct RoadConditionReconfirmSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
 
     @State private var currentIndex = 0
 
     private var current: RoadCondition? {
         guard currentIndex < conditions.count else { return nil }
         return conditions[currentIndex]
+    }
+
+    /// A presented sheet gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin the app theme here
+    /// too — otherwise this sheet renders in the device appearance and mismatches
+    /// the rest of Steddi when the chosen theme differs from the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
     }
 
     var body: some View {
@@ -49,6 +58,7 @@ struct RoadConditionReconfirmSheet: View {
                 }
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     private func promptBody(_ condition: RoadCondition) -> some View {
