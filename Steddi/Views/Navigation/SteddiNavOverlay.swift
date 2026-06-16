@@ -6,6 +6,17 @@ import AVFoundation
 /// Uses NavigationEngine for routing brain, renders its own SwiftUI interface.
 struct SteddiNavOverlay: View {
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
+
+    /// A presented sheet gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin the app theme on
+    /// the report sheet too — otherwise its grouped List chrome renders in the
+    /// device appearance and mismatches Steddi when the chosen theme differs from
+    /// the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
+
     let engine: NavigationEngine
     let onEndNavigation: () -> Void
     var onToggleVoice: () -> Void = {}
@@ -1033,6 +1044,7 @@ struct SteddiNavOverlay: View {
                 }
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     private func reportOption(icon: String, label: String, color: Color) -> some View {
