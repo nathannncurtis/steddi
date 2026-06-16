@@ -169,10 +169,10 @@ struct OnboardingView: View {
             EmptyView() // hero never renders inside the card
 
         case .routeRules:
-            OnboardingRouteRulesView(accent: coordinator.selectedAccent.color)
+            OnboardingRouteRulesView(accent: coordinator.selectedAccent)
 
         case .turnByTurn:
-            OnboardingTurnByTurnView(accent: coordinator.selectedAccent.color)
+            OnboardingTurnByTurnView(accent: coordinator.selectedAccent)
 
         case .theme:
             OnboardingThemeView(coordinator: coordinator)

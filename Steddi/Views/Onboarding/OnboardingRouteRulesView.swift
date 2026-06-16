@@ -13,7 +13,24 @@ import SwiftUI
 /// shown whole and static.
 struct OnboardingRouteRulesView: View {
     /// Live accent — the re-route line and blob ring glow the chosen color.
-    var accent: Color = SteddiTheme.accent
+    /// Taken as the `AccentOption` (not a resolved `Color`) so the view can
+    /// derive both the raw hue for the subtle blob fill and a surface-aware
+    /// *legible* hue for the glyphs that must read on the lighter frosted card.
+    var accent: SteddiTheme.AccentOption = SteddiTheme.currentAccentOption
+
+    /// The raw brand hue — used only for the soft blob *fill*, where contrast is
+    /// carried by the fill, not the glyph.
+    private var accentFill: Color { accent.color }
+
+    /// Glyph color for the affordance illustrations (no-go ring, nosign symbol,
+    /// re-route line). They sit on the `.regular` Liquid Glass card, which the OS
+    /// renders as a noticeably LIGHT frost over the dark backdrop — the raw
+    /// mid-tone accents wash out there (below the 3:1 graphical-object floor).
+    /// Shift toward the side the light frost has headroom in so they clear the
+    /// floor while staying recognisably the brand hue (see `OnboardingShowcaseFrost`).
+    private var glyphAccent: Color {
+        SteddiTheme.legibleText(accent.rgb, onSurface: OnboardingShowcaseFrost.surface).color
+    }
 
     @State private var drawProgress: CGFloat = 0
 
@@ -66,23 +83,25 @@ struct OnboardingRouteRulesView: View {
                     .stroke(SteddiTheme.onboardingTextMuted.opacity(0.6),
                             style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [2, 7]))
 
-                // The no-go zone: a soft accent-ringed blob.
+                // The no-go zone: a soft accent-ringed blob. The fill stays the
+                // raw hue (contrast carried by the fill); the ring + symbol use
+                // the legible accent so they read on the light frost.
                 Ellipse()
-                    .fill(accent.opacity(0.12))
-                    .overlay(Ellipse().stroke(accent.opacity(0.55), lineWidth: 2))
+                    .fill(accentFill.opacity(0.12))
+                    .overlay(Ellipse().stroke(glyphAccent.opacity(0.85), lineWidth: 2))
                     .frame(width: blob.width, height: blob.height)
                     .position(x: blob.midX, y: blob.midY)
                     .overlay(
                         Image(systemName: "nosign")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(accent)
+                            .foregroundStyle(glyphAccent)
                             .position(x: blob.midX, y: blob.midY)
                     )
 
                 // The chosen route, curving around the blob — drawn on.
                 reroutePath(w: w, h: h, blob: blob)
                     .trim(from: 0, to: drawProgress)
-                    .stroke(accent,
+                    .stroke(glyphAccent,
                             style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
 
                 // The moving tip dot at the head of the drawn line.

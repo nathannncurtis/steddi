@@ -1,5 +1,25 @@
 import SwiftUI
 
+/// Representative surface for the onboarding *showcase* beats' affordance glyphs.
+///
+/// The showcase/route-rules beats render their illustration inside the morphing
+/// `OnboardingShowpieceCard`, whose shell is neutral `.regular` Liquid Glass
+/// (`cardTint == nil` for everything but the theme beat). Over the dark
+/// cinematic backdrop the OS renders that glass as a noticeably LIGHT frost
+/// (measured card luminance ~0.5–0.7), so accent glyphs drawn in the raw
+/// mid-tone brand hue wash out (~1.2–1.6:1, below the 3:1 graphical-object
+/// floor) — the same reason the card *copy* uses the fixed-white onboarding
+/// tiers rather than theme tokens.
+///
+/// Live glass luminance isn't deterministic from code, so we size the legible
+/// shift against a fixed light-grey panel near the measured frost (>0.5 so the
+/// accent darkens, the worst case for these mid-tone hues). Feeding this to
+/// `SteddiTheme.legibleText(_:onSurface:)` lifts the glyph above the floor while
+/// preserving the brand hue — mirroring `DonationView`'s accent-on-frost fix.
+enum OnboardingShowcaseFrost {
+    static let surface = RGBColor(0.62, 0.62, 0.64)
+}
+
 /// Showcase beat 3: "Turn-by-turn, done Steddi's way." Communicates that Steddi
 /// does its *own* navigation — not a hand-off to another app. Morphs in from the
 /// route-rules card (the glass shell is shared); this view supplies only the
@@ -11,7 +31,25 @@ import SwiftUI
 /// stock SF Symbol. Reduce-Motion shows the arc filled and static.
 struct OnboardingTurnByTurnView: View {
     /// Live accent — the maneuver chip and speedo arc glow the chosen color.
-    var accent: Color = SteddiTheme.accent
+    /// Taken as the `AccentOption` (not a resolved `Color`) so the view can
+    /// derive both the raw hue for subtle fills and a surface-aware *legible*
+    /// hue for the glyphs that read on the lighter frosted card.
+    var accent: SteddiTheme.AccentOption = SteddiTheme.currentAccentOption
+
+    /// The raw brand hue — used only for the subtle chip backing fill, where
+    /// contrast is carried by the fill, not the glyph.
+    private var accentFill: Color { accent.color }
+
+    /// Glyph color for the affordance illustrations (turn arrow, speedo sweep).
+    /// These sit on the `.regular` Liquid Glass card, which the OS renders as a
+    /// noticeably LIGHT frost over the dark backdrop — the raw mid-tone accents
+    /// wash out there (~1.2–1.6:1, below the 3:1 graphical-object floor). Shift
+    /// the accent toward the side the light frost has headroom in so it clears
+    /// the floor while staying recognisably the brand hue — the same fix the
+    /// donation sheet uses for accent-on-frost (DonationView.sheetPriceColor).
+    private var glyphAccent: Color {
+        SteddiTheme.legibleText(accent.rgb, onSurface: OnboardingShowcaseFrost.surface).color
+    }
 
     @State private var arcProgress: CGFloat = 0
 
@@ -66,7 +104,7 @@ struct OnboardingTurnByTurnView: View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.turn.up.right")
                 .font(.system(size: 30, weight: .bold))
-                .foregroundStyle(accent)
+                .foregroundStyle(glyphAccent)
             VStack(alignment: .leading, spacing: 2) {
                 Text("400 ft")
                     .font(.headline.weight(.bold))
@@ -82,7 +120,7 @@ struct OnboardingTurnByTurnView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
+        .background(accentFill.opacity(0.15), in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
     }
 
     /// The speedometer motif: a sweeping arc with the speed at its center —
@@ -100,7 +138,7 @@ struct OnboardingTurnByTurnView: View {
             // Sweep to ~"60%" of the arc.
             Circle()
                 .trim(from: 0.0, to: 0.75 * 0.6 * arcProgress)
-                .stroke(accent,
+                .stroke(glyphAccent,
                         style: StrokeStyle(lineWidth: 7, lineCap: .round))
                 .rotationEffect(.degrees(135))
             VStack(spacing: 0) {
