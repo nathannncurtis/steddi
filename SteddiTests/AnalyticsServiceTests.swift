@@ -710,6 +710,119 @@ struct AnalyticsBackfillTests {
         #expect(fresh.first?.hasSummary == true)
     }
 
+    /// A failing save must never trigger the rollback that would discard the
+    /// user's in-flight edits.
+    struct ForcedSaveError: Error {}
+
+    /// The shared main context holds a legitimate in-flight user edit (a commute
+    /// rename) when a background backfill lands and calls `refreshFromStore`. If
+    /// the flush save FAILS, `refreshFromStore` must NOT rollback — doing so would
+    /// silently throw away the unsaved rename. The edit must survive intact so a
+    /// later save can still flush it.
+    @Test("refreshFromStore with a failing save preserves the pending edit (no rollback)")
+    @MainActor
+    func refreshFailingSavePreservesEdit() throws {
+        let container = try Self.makeContainer()
+        let viewContext = ModelContext(container)
+
+        let commute = Commute(name: "Original")
+        viewContext.insert(commute)
+        try viewContext.save() // clean baseline persisted
+
+        // User edit made through the shared main context, not yet autosaved.
+        commute.name = "Renamed"
+        #expect(viewContext.hasChanges)
+
+        // The flush save fails (mirrors store I/O / constraint failure).
+        var saveAttempted = false
+        AnalyticsService.refreshFromStore(viewContext) { _ in
+            saveAttempted = true
+            throw ForcedSaveError()
+        }
+
+        // The save was attempted, but the edit was NOT discarded by a rollback.
+        #expect(saveAttempted)
+        #expect(commute.name == "Renamed")
+        #expect(viewContext.hasChanges) // edit still pending, ready for a later save
+
+        // And it can still be flushed for real on a later, succeeding save.
+        try viewContext.save()
+        let verify = ModelContext(container)
+        let persisted = (try? verify.fetch(FetchDescriptor<Commute>())) ?? []
+        #expect(persisted.count == 1)
+        #expect(persisted.first?.name == "Renamed")
+    }
+
+    /// A pending edit with a SUCCEEDING save: the edit is flushed AND registered
+    /// objects are faulted so a backfilled summary still becomes visible.
+    @Test("refreshFromStore with a pending edit flushes it on a succeeding save, then faults")
+    @MainActor
+    func refreshSucceedingSaveFlushesAndFaults() throws {
+        let container = try Self.makeContainer()
+        let viewContext = ModelContext(container)
+
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        Self.insertLegacy(viewContext, start: start, minutes: 20)
+        try viewContext.save()
+
+        // Materialize the legacy record (registered with nil duration).
+        let before = Self.allRecords(viewContext)
+        #expect(before.first?.totalDurationSeconds == nil)
+
+        // Background context finalizes it in the store.
+        #expect(AnalyticsService.backfillMissingSummaries(container: container) == 1)
+
+        // The view context also holds a pending edit (a commute rename).
+        let commute = Commute(name: "Original")
+        viewContext.insert(commute)
+        #expect(viewContext.hasChanges)
+
+        // Default (real) save succeeds, so the edit is flushed and the stale
+        // registered record is faulted — the backfilled summary is now visible.
+        AnalyticsService.refreshFromStore(viewContext)
+
+        let fresh = Self.allRecords(viewContext)
+        #expect((fresh.first?.totalDurationSeconds ?? 0) > 0) // backfill visible
+
+        // The pending rename was persisted, not lost.
+        let verify = ModelContext(container)
+        let persisted = (try? verify.fetch(FetchDescriptor<Commute>())) ?? []
+        #expect(persisted.first?.name == "Original")
+    }
+
+    /// No pending edits: rollback runs unconditionally so backfilled drives
+    /// become visible without relaunch — even via a save closure that would
+    /// throw if called (it must never be called when there's nothing to flush).
+    @Test("refreshFromStore with no pending edits faults/reloads and never saves")
+    @MainActor
+    func refreshNoPendingEditsFaultsWithoutSaving() throws {
+        let container = try Self.makeContainer()
+        let viewContext = ModelContext(container)
+
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        Self.insertLegacy(viewContext, start: start, minutes: 20)
+        try viewContext.save() // context is now clean — no pending edits
+
+        let before = Self.allRecords(viewContext)
+        #expect(before.first?.totalDurationSeconds == nil)
+        #expect(!viewContext.hasChanges)
+
+        #expect(AnalyticsService.backfillMissingSummaries(container: container) == 1)
+
+        // The save closure must NOT be invoked when there are no pending edits;
+        // a throwing closure proves it and would surface any spurious save.
+        var saveCalled = false
+        AnalyticsService.refreshFromStore(viewContext) { _ in
+            saveCalled = true
+            throw ForcedSaveError()
+        }
+        #expect(!saveCalled)
+
+        let fresh = Self.allRecords(viewContext)
+        #expect((fresh.first?.totalDurationSeconds ?? 0) > 0) // backfill visible
+        #expect(fresh.first?.hasSummary == true)
+    }
+
     @Test("Backfill leaves already-summarized records untouched and returns 0")
     func backfillSkipsFinalized() throws {
         let container = try Self.makeContainer()

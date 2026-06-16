@@ -1,6 +1,9 @@
 import Foundation
 import SwiftData
 import CoreLocation
+import os
+
+private let analyticsLog = Logger(subsystem: "to.nathancurtis.steddi", category: "Analytics")
 
 // MARK: - Time Window
 
@@ -345,15 +348,43 @@ final class AnalyticsService {
     ///
     /// `rollback()` is the only public primitive that faults registered objects
     /// (SwiftData on this SDK exposes no `refresh(_:)`/`refreshAllObjects()`).
-    /// It also discards any UNSAVED changes, so we first flush legitimate
-    /// pending edits the main context may hold — a save loses nothing, and
-    /// leaves only clean registered objects for rollback to fault. MainActor-
-    /// isolated: only ever called on the actor that owns the view context.
+    /// It also discards any UNSAVED changes, so before faulting we must first
+    /// flush any legitimate pending user edits the shared main context holds
+    /// (a rename, a toggled setting). A SUCCESSFUL save persists those edits and
+    /// leaves only clean registered objects, which rollback then safely faults.
+    ///
+    /// But if the save THROWS (store I/O, a constraint, corruption), an
+    /// unconditional rollback would discard the user's unsaved edits — silent
+    /// data loss. So on save failure we log and SKIP both the rollback and the
+    /// reload this cycle, leaving the edits intact for a later save to flush.
+    /// A subsequent refresh (the backfill/rebuild re-queues across cycles) will
+    /// retry once the underlying save problem clears. When there are no pending
+    /// edits at all, the save is skipped and we rollback directly — the normal
+    /// path that makes background-backfilled drives visible without relaunch.
+    ///
+    /// `save` is injected (defaults to the context's own save) so a save failure
+    /// can be exercised deterministically in tests. MainActor-isolated: only ever
+    /// called on the actor that owns the view context.
     @MainActor
-    static func refreshFromStore(_ context: ModelContext) {
+    static func refreshFromStore(
+        _ context: ModelContext,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) {
         if context.hasChanges {
-            try? context.save()
+            do {
+                try save(context)
+            } catch {
+                // Saving the pending user edits failed. Rolling back now would
+                // throw those edits away — leave them intact and skip this
+                // refresh cycle; a later save/refresh will flush them.
+                analyticsLog.error(
+                    "refreshFromStore: save of pending edits failed, skipping rollback to avoid discarding them: \(error.localizedDescription, privacy: .public)"
+                )
+                return
+            }
         }
+        // Either there were no pending edits, or the save just persisted them —
+        // the only registered state left is clean, so faulting it loses nothing.
         context.rollback()
     }
 
