@@ -122,6 +122,31 @@ struct GridValidatorTests {
         // Router sub-cost and the reference must agree (both = full * Δfraction).
         #expect(abs(v.searchResult.totalCost - ref) < 0.01)
     }
+
+    @Test("reference shortest cost mirrors the router's same-street REVERSE collapse")
+    func referenceMatchesRouterSameEdgeReverse() {
+        let g = gridGraph()
+        let cost = TravelTimeCost()
+        // Same physical street (the two-way bottom block between nodes 11 and 21)
+        // but the origin is AHEAD of the destination — origin nearer node 21,
+        // destination nearer node 11. The router takes its Case-2 reverse collapse
+        // (a short reverse sub-segment on the co-located reverse edge, NOT a
+        // block-around + U-turn). With referenceShortestCost now mirroring Case 2,
+        // the reference must agree rather than returning the full overshoot cost.
+        let originAhead = coord(34.0000, -116.99930)   // ~70% from node 11 toward 21
+        let destBehind = coord(34.0000, -116.99970)    // ~30% from node 11 toward 21
+
+        let v = CorridorValidator.validate(from: originAhead, to: destBehind, in: g, cost: cost)
+        let ref = CorridorValidator.referenceShortestCost(from: originAhead, to: destBehind, in: g, cost: cost)
+        #expect(v != nil)
+        #expect(ref != nil)
+        guard let v, let ref else { return }
+        // The collapse keeps the whole trip on one (reverse) edge.
+        #expect(v.searchResult.edgePath.count == 1)
+        // Reference now matches the router's short reverse sub-segment, not the
+        // full-block-around detour the old node-to-node Dijkstra would return.
+        #expect(abs(v.searchResult.totalCost - ref) < 0.01)
+    }
 }
 
 // MARK: - Fixture 2: a one-way couplet (parallel one-way pair)
