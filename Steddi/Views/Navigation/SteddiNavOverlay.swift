@@ -656,13 +656,20 @@ struct SteddiNavOverlay: View {
                 .legibleOverMap()
 
             VStack(alignment: .leading, spacing: 2) {
+                // The glass is tinted with the camera's KIND color, so the title +
+                // distance sit on a semantically-COLORED surface — not the neutral
+                // surface the textPrimary/textSecondary tokens are tuned for, where
+                // they can fall low-contrast on the colored tint. Draw them in the
+                // same on-fill treatment the glyph uses (`contrastingForeground(on:)`
+                // picks the legible near-black/white per kind fill), so the heads-up
+                // reads against its own colored banner in every theme.
                 Text("\(camera.kind.displayName) ahead")
                     .font(SteddiTheme.body(15 * textScale, highContrast: highContrast))
-                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .foregroundStyle(SteddiTheme.contrastingForeground(on: camera.kind.kindRGB))
                     .legibleOverMap()
                 Text(formatDistance(camera.distanceMeters))
                     .font(SteddiTheme.mono(13 * textScale))
-                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                    .foregroundStyle(SteddiTheme.contrastingForeground(on: camera.kind.kindRGB))
                     .legibleOverMap()
             }
 
