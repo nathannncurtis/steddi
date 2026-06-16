@@ -274,14 +274,23 @@ final class TunnelDetectionService {
         radius: Double
     ) -> Bool {
         let coarse = radius / 111_000 * 2 + 0.001
+        // One degree of longitude spans only 111km·cos(latitude), so a latitude-
+        // symmetric pad covers fewer meters in longitude as latitude rises — at
+        // high latitudes the longitude window narrows below `radius` and a valid
+        // segment just longitudinally beyond a point is wrongly skipped. Scale the
+        // longitude pad by 1/cos(latitude) (equirectangular correction, clamped near
+        // the poles), mirroring the cosLat handling in OSMSpeedLimitService /
+        // RouteGeometry's precise distance paths.
+        let cosLat = max(0.2, cos(coordinate.latitude * .pi / 180))
+        let coarseLon = coarse / cosLat
         for segment in segments {
             // Full bounding-box pre-filter on BOTH axes, expanded by `coarse`. A
             // latitude-only check would skip long N-S segments whose endpoints are
             // far in latitude from a mid-segment point even though it sits on them.
             let minLat = min(segment.start.latitude, segment.end.latitude) - coarse
             let maxLat = max(segment.start.latitude, segment.end.latitude) + coarse
-            let minLon = min(segment.start.longitude, segment.end.longitude) - coarse
-            let maxLon = max(segment.start.longitude, segment.end.longitude) + coarse
+            let minLon = min(segment.start.longitude, segment.end.longitude) - coarseLon
+            let maxLon = max(segment.start.longitude, segment.end.longitude) + coarseLon
             guard coordinate.latitude >= minLat, coordinate.latitude <= maxLat,
                   coordinate.longitude >= minLon, coordinate.longitude <= maxLon else { continue }
             if OSMSpeedLimitService.distanceToSegment(coordinate, segment.start, segment.end) <= radius {

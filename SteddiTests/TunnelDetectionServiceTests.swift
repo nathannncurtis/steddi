@@ -46,4 +46,42 @@ struct TunnelDetectionServiceTests {
 
         #expect(TunnelDetectionService.isInside(midpoint, segments: [segment]))
     }
+
+    @Test("High-latitude tunnel: a point within radius but east of the segment is NOT skipped by the longitude pre-filter")
+    func highLatitudeLongitudePreFilterCosineScaled() {
+        // At latitude 70° one degree of longitude is only 111km·cos(70°) ≈ 38km, so
+        // an UN-scaled longitude pad (a raw degree delta applied identically to both
+        // axes) covers far fewer meters than intended. For the 150m portal radius the
+        // un-scaled pad spans only ~140m of longitude here — narrower than the radius
+        // itself — so a driver within 150m of, but just east of, a tunnel's longitude
+        // band falls outside the box pre-filter and the precise distance check is
+        // wrongly skipped. Scaling the longitude pad by 1/cos(latitude) restores it.
+        let lat = 70.0
+        let radius = 150.0
+        // A roughly north-south tunnel at longitude 20.0, spanning ~1.1km in latitude
+        // so the probe's latitude sits comfortably inside the latitude band.
+        let segment = TunnelSegment(
+            start: CLLocationCoordinate2D(latitude: lat - 0.005, longitude: 20.0),
+            end: CLLocationCoordinate2D(latitude: lat + 0.005, longitude: 20.0)
+        )
+        // Probe at the segment's mid-latitude, offset EAST by ~145m — inside the 150m
+        // radius, but ~145m > the un-scaled pad's ~140m longitude reach at this
+        // latitude. metersPerLonDegree = 111_000·cos(lat).
+        let metersPerLonDegree = 111_000.0 * cos(lat * .pi / 180)
+        let lonOffset = 145.0 / metersPerLonDegree
+        let probe = CLLocationCoordinate2D(latitude: lat, longitude: 20.0 + lonOffset)
+
+        // The precise perpendicular distance really is within the radius (~145m).
+        let precise = OSMSpeedLimitService.distanceToSegment(probe, segment.start, segment.end)
+        #expect(precise <= radius, "probe is genuinely \(precise) m from the segment, within \(radius) m")
+
+        // So isNear must report it — the cosine-scaled longitude pad keeps it in the box.
+        #expect(TunnelDetectionService.isNear(probe, segments: [segment], radius: radius))
+
+        // Guard: a point genuinely well beyond the radius (~400m east) is still
+        // rejected — the scaled pad widens the cheap pass, not the precise decision.
+        let farOffset = 400.0 / metersPerLonDegree
+        let far = CLLocationCoordinate2D(latitude: lat, longitude: 20.0 + farOffset)
+        #expect(!TunnelDetectionService.isNear(far, segments: [segment], radius: radius))
+    }
 }

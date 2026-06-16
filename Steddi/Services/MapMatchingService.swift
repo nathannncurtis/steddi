@@ -15,11 +15,19 @@ final class MapMatchingService {
     /// stitched tail, so the seam dedupe must compare against a TAIL REGION at
     /// least this deep, not just the single last vertex.
     static let chunkOverlap = 5
-    /// How many trailing stitched coordinates the seam dedupe compares each
-    /// leading new-chunk point against. Sized a bit beyond `chunkOverlap` so a
-    /// coarse OSRM resample (overlap emitted as a few widely-spaced vertices)
-    /// still has a tail vertex within `seamEpsilon` of each overlap point.
+    /// FLOOR for how many trailing stitched coordinates the seam dedupe compares
+    /// each leading new-chunk point against. The real window is ADAPTIVE — it
+    /// extends back far enough to span the actual overlap geometry (see
+    /// `adaptiveTailRegion`) — because the `chunkOverlap` input points can map to
+    /// far more than this many matched vertices when OSRM resamples finely. A fixed
+    /// window then stops short of the overlap and the seam is under-dropped
+    /// (duplicate/backtracking geometry at the boundary). This value is only the
+    /// minimum depth, used when the overlap span is short or its length is unknown.
     static let seamTailWindow = 8
+    /// Safety multiplier on the measured overlap length when sizing the adaptive
+    /// tail window, so OSRM's re-snap jitter (the seam can wander a few meters off
+    /// the input line) is comfortably covered without over-eating genuine geometry.
+    static let seamTailLengthSlack = 1.5
     private let session: URLSession
 
     init(session: URLSession = .shared) {
@@ -68,14 +76,27 @@ final class MapMatchingService {
                 // chunk re-trace some length already present at the tail of the
                 // stitched output. Dropping a fixed input-point count leaves
                 // seam gaps or overlaps. Instead dedupe by matched geometry
-                // against the previous chunk's TAIL REGION (the last
-                // `seamTailWindow` stitched coords spanning the overlap), not
-                // just the single last vertex — a coarse OSRM resample emits the
-                // overlap as a few widely-spaced points that never land within
-                // `seamEpsilon` of the lone tail, so a single-vertex compare
-                // re-appends the whole overlap and inflates the trace distance.
-                let tailRegion = allCoordinates.suffix(Self.seamTailWindow)
-                allCoordinates.append(contentsOf: Self.stitchSeam(tailRegion: Array(tailRegion), chunk: coords))
+                // against the previous chunk's TAIL REGION — the trailing stitched
+                // coords that SPAN the overlap, not just the single last vertex —
+                // because a coarse OSRM resample emits the overlap as a few
+                // widely-spaced points that never land within `seamEpsilon` of the
+                // lone tail, so a single-vertex compare re-appends the whole
+                // overlap and inflates the trace distance.
+                //
+                // The window is ADAPTIVE: the `overlap` leading input points of
+                // this chunk are the same physical points fed at the seam, so their
+                // cumulative geometry length is the true overlap span — and the
+                // tail region must reach back at least that far. A fixed
+                // `seamTailWindow` of vertices falls short whenever the overlap maps
+                // to MORE than that many matched vertices (a fine OSRM resample),
+                // re-admitting the un-dropped tail of the overlap. Sizing the window
+                // by length covers it regardless of vertex density.
+                let overlapInput = chunk.prefix(overlap).map {
+                    CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+                }
+                let overlapMeters = RouteGeometry.cumulativeDistances(overlapInput).last ?? 0
+                let tailRegion = Self.adaptiveTailRegion(allCoordinates, overlapMeters: overlapMeters)
+                allCoordinates.append(contentsOf: Self.stitchSeam(tailRegion: tailRegion, chunk: coords))
             }
         }
 
@@ -84,6 +105,39 @@ final class MapMatchingService {
         let totalDistance = RouteGeometry.cumulativeDistances(allCoordinates).last ?? 0
         let polyline = PolylineEncoder.encode(allCoordinates)
         return MatchedRoute(encodedPolyline: polyline, coordinates: allCoordinates, distanceMeters: totalDistance)
+    }
+
+    /// The trailing slice of the stitched output the seam dedupe compares
+    /// against, sized to SPAN the overlap geometry rather than a fixed vertex
+    /// count. Walks back from the tail accumulating arc length until it covers
+    /// `overlapMeters` (times `seamTailLengthSlack` for re-snap jitter), with
+    /// `seamTailWindow` as a vertex-count floor so a short or unknown-length
+    /// overlap still gets a sensible window. This is what makes the dedupe robust
+    /// when the `chunkOverlap` input points map to MANY matched vertices: a fixed
+    /// 8-vertex window would stop short of such an overlap and leave its tail
+    /// un-dropped; a length-sized window reaches the whole overlap regardless of
+    /// how finely OSRM resampled it.
+    static func adaptiveTailRegion(_ coords: [CLLocationCoordinate2D], overlapMeters: Double) -> [CLLocationCoordinate2D] {
+        guard !coords.isEmpty else { return [] }
+        let target = max(0, overlapMeters) * seamTailLengthSlack
+        var accumulated: Double = 0
+        var count = 0
+        var i = coords.count - 1
+        // Include the tail vertex, then walk back summing segment lengths until the
+        // accumulated span reaches `target` (the vertex that crosses the threshold
+        // is included so the region fully brackets the overlap).
+        while i >= 0 {
+            count += 1
+            if i > 0 {
+                accumulated += NavigationEngine.haversineDistance(from: coords[i - 1], to: coords[i])
+            }
+            if accumulated >= target { break }
+            i -= 1
+        }
+        // Floor at `seamTailWindow` vertices so short overlaps still compare against
+        // a few coords (matches the prior fixed-window behaviour at minimum).
+        count = max(count, min(coords.count, seamTailWindow))
+        return Array(coords.suffix(count))
     }
 
     /// Dedupe a subsequent chunk against the stitched tail REGION by
