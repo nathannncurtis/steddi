@@ -278,10 +278,34 @@ final class CommuteNotificationService {
     /// `guard let`); it currently always produces a snapshot for an active
     /// commute.
     private func snapshot(for commute: Commute, allTrips: [CommuteTrip], now: Date) -> CommuteSnapshot? {
-        // Direction for this window: schedule rules first, then next-scheduled.
-        let direction = CommuteDirectionResolver.scheduledDirection(commute: commute, now: now)
+        // Direction for this window: a schedule rule, else the next upcoming
+        // window's direction. Both are authoritative directional signals.
+        let scheduledOrNext = CommuteDirectionResolver.scheduledDirection(commute: commute, now: now)
             ?? CommuteDirectionResolver.nextScheduledDirection(commute: commute, now: now)
-            ?? .originToDestination
+
+        // Without any directional signal the resolver falls back to the default
+        // originToDestination. For a SINGLE-DIRECTION commute (a route saved only
+        // one way, no schedule) that arbitrary default can land on the empty
+        // direction, so the idle-ETA fallback reads a nil typical and the widget
+        // shows nothing even though a usable typical exists the other way. When
+        // the default direction has no saved route but the opposite does, snap to
+        // the direction that actually has one — keeping destination coordinate,
+        // destination NAME and typicalDurationSeconds all keyed to the SAME
+        // direction, so the fallback never shows the wrong duration under the
+        // wrong destination label. A schedule/next-window signal is left as-is.
+        let direction: CommuteDirection
+        if let signal = scheduledOrNext {
+            direction = signal
+        } else {
+            let defaultDir: CommuteDirection = .originToDestination
+            let opposite: CommuteDirection = .destinationToOrigin
+            if commute.preferredRoute(for: defaultDir)?.typicalDurationSeconds == nil,
+               commute.preferredRoute(for: opposite)?.typicalDurationSeconds != nil {
+                direction = opposite
+            } else {
+                direction = defaultDir
+            }
+        }
 
         let learned = Self.learnedDepartureHours(commute: commute, trips: allTrips, now: now)
         let scheduled = Self.scheduledDepartureHours(commute: commute, direction: direction, now: now)

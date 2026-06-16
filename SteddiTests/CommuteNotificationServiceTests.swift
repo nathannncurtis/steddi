@@ -595,6 +595,73 @@ struct ServiceIdleETAExtractionTests {
         #expect(capture.minutes == 25)
         #expect(capture.commuteName == "Work")
     }
+
+    /// Single-direction consistency: a commute with NO schedule and a route saved
+    /// only for `.destinationToOrigin` used to resolve to the arbitrary default
+    /// direction (originToDestination), whose preferred-route typical is nil — so
+    /// the idle-ETA fallback read nil and the widget showed nothing even though a
+    /// usable typical exists the other way. The snapshot now snaps to the
+    /// direction that actually has a route, keeping the typical AND the destination
+    /// label consistent. With no location fix the fallback must surface the
+    /// to-origin typical (1200s => 20 min) under the to-origin destination (the
+    /// origin's name, "Home"), never blank and never the wrong-direction label.
+    @Test("Single-direction commute falls back to the matching direction's typical")
+    @MainActor
+    func singleDirectionFallbackUsesMatchingDirection() async throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+
+        let origin = PinnedLocation(name: "Home", latitude: 37.0, longitude: -122.0)
+        let destination = PinnedLocation(name: "Office", latitude: 37.5, longitude: -122.5)
+        let commute = Commute(name: "Evening", origin: origin, destination: destination)
+        commute.isActive = true
+        commute.notificationsEnabled = true
+        // No schedule rules at all → direction resolution falls to the default.
+        context.insert(commute)
+
+        // A route saved ONLY for the destinationToOrigin direction.
+        let route = Route(
+            rank: 0,
+            encodedPolyline: "xyz",
+            typicalDurationSeconds: 1200,            // 20 min
+            direction: .destinationToOrigin
+        )
+        context.insert(route)
+        commute.routes = [route]
+        route.commute = commute
+
+        // >= confidence-floor learned trips so the widget selection
+        // (`nextDepartureCommuteID`) picks this commute without any schedule.
+        // CommuteTrip records its weekday/hour from the real `Date()`, so the
+        // query below uses real `now` to keep the learned-history match aligned.
+        for _ in 0..<6 {
+            context.insert(CommuteTrip(commute: commute, direction: .destinationToOrigin))
+        }
+        try context.save()
+
+        final class ETACapture: @unchecked Sendable {
+            var minutes: Int?
+            var destinationName: String?
+        }
+        let capture = ETACapture()
+        let svc = CommuteNotificationService(
+            modelContainer: container,
+            defaults: freshDefaults(),
+            idleETASink: { _, dest, minutes in
+                capture.destinationName = dest
+                capture.minutes = minutes
+            }
+        )
+
+        // No location fix (default provider returns nil) → the typical-duration
+        // fallback runs. The resolved direction must be destinationToOrigin (the
+        // one with a route), so the fallback surfaces 1200s ⇒ 20 min under the
+        // origin's name.
+        await svc.refreshIdleCommuteETA(now: Date())
+
+        #expect(capture.minutes == 20)               // 1200s, the to-origin typical
+        #expect(capture.destinationName == "Home")    // to-origin destination label
+    }
 }
 
 // MARK: - CommuteTrip Cascade Delete
