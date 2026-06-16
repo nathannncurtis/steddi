@@ -157,6 +157,17 @@ struct WeatherKitDrivesThemeTests {
         return engine
     }
 
+    /// The VISIBLE look of a state: surfaces, warmth, and chrome — everything
+    /// the user actually sees. Deliberately excludes the informational
+    /// `weatherCondition`/`fetchedAt` tags, which `composeState` records on the
+    /// state regardless of mode (so a fixed theme can stamp the latest reading
+    /// without it ever touching the rendered palette). Comparing this proves the
+    /// LOOK is unchanged even when the condition tag advances.
+    private func visibleLook(_ state: ThemeState) -> [RGBColor] {
+        [state.surfacePrimary, state.surfaceSecondary, state.surfaceElevated,
+         state.textPrimary, state.textSecondary, state.textMuted]
+    }
+
     private func makeService(
         condition: WeatherConditionSnapshot,
         into engine: ThemeEngine
@@ -235,9 +246,11 @@ struct WeatherKitDrivesThemeTests {
         // Inputs landed (the setters ran)...
         #expect(fixedEngine.weatherCondition.kind == .rain)
         #expect(fixedEngine.currentTemperatureF == 95)
-        // ...but the published look is byte-for-byte the fixed Dark palette: no
-        // grey pull, no brightness shift, no warmth. The fixed theme is honored.
-        #expect(fixedEngine.currentState == fixedBaseline)
+        // ...but the published LOOK is the fixed Dark palette unchanged: no grey
+        // pull, no brightness shift, no warmth. The fixed theme is honored. (The
+        // state's weatherCondition tag advances regardless — it is informational
+        // and never reaches the rendered palette in a fixed mode.)
+        #expect(visibleLook(fixedEngine.currentState) == visibleLook(fixedBaseline))
         #expect(fixedEngine.currentState.warmthVector == .zero)
     }
 
@@ -260,9 +273,11 @@ struct WeatherKitDrivesThemeTests {
         )
         await makeService(condition: observation, into: engine).refresh(at: Self.location)
 
-        // Both per-layer toggles are off, so even in dynamic mode the look must
-        // not move — the engine honors the user's component preferences.
-        #expect(engine.currentState == baseline)
+        // Both per-layer toggles are off, so even in dynamic mode the LOOK must
+        // not move — the engine honors the user's component preferences. (The
+        // informational weatherCondition tag still advances; the rendered
+        // surfaces/warmth do not.)
+        #expect(visibleLook(engine.currentState) == visibleLook(baseline))
         #expect(engine.currentState.warmthVector == .zero)
     }
 }
