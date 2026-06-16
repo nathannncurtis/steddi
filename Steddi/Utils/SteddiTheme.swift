@@ -293,6 +293,47 @@ enum SteddiTheme {
     /// resolves to over the bright accent glass — or the copy goes invisible.
     static let onboardingCardFallbackFillRGB = RGBColor(0.12, 0.12, 0.13)
 
+    // MARK: - Over-map glass scrim (nav HUD legibility)
+
+    /// True when the resolved app theme is DARK (the nav overlay pins the live
+    /// app theme, so this matches what the HUD actually renders in). Read by the
+    /// over-map scrim so the dark-theme washout fix never touches the
+    /// already-approved light-theme HUD.
+    static var prefersDarkChrome: Bool { ThemeEngine.snapshot.prefersDarkChrome }
+
+    /// Opacity for the scrim painted *behind* nav glass over the moving map.
+    ///
+    /// THE DARK-THEME WASHOUT FIX. Neutral/lightly-tinted `.regular` Liquid Glass
+    /// over a DARK map renders as a LIGHT frost (the codebase's own sampled
+    /// ~0.73 sRGB — see `OnboardingShowcaseFrost`), so the HUD's near-white
+    /// `textPrimary` readouts collapsed to ~1.8:1 in dark theme (measured). A
+    /// faint scrim *behind* the glass can't fix it: the translucent frost
+    /// composites over the scrim and dominates. The proven onboarding remedy is a
+    /// near-opaque luminance-FIXED dark scrim — dark enough that the adaptive
+    /// glass renders DARK against it, so the readout sits white-on-dark.
+    ///
+    /// In LIGHT theme the HUD already reads fine (near-black text on the light
+    /// frost, ~9–12:1) and the look is user-approved, so the scrim stays the
+    /// original faint wash there and nothing changes. High contrast already forces
+    /// the glass fully opaque, so the scrim is irrelevant then.
+    static func mapGlassScrimOpacity(highContrast: Bool) -> Double {
+        if highContrast { return 0 }            // glass is opaque under high contrast
+        return prefersDarkChrome ? 0.9 : 0.22   // dark: near-opaque dark; light: original faint wash
+    }
+
+    /// Fill for the over-map scrim. In dark theme it's the luminance-FIXED dark
+    /// `onboardingCardFallbackFill` (so the panel composite is reliably dark
+    /// regardless of how light the live glass renders); in light theme it's the
+    /// original adaptive `surfacePrimary` faint wash (unchanged, approved look).
+    static var mapGlassScrimFill: Color { prefersDarkChrome ? onboardingCardFallbackFill : surfacePrimary }
+
+    /// The deterministic dark surface the dark-theme HUD readouts effectively sit
+    /// on after the scrim fix — the near-opaque fixed-dark scrim composited over a
+    /// representative dark map tile. Mirrors `OnboardingShowcaseFrost.surface`:
+    /// the contrast math is sized against this worst-case (no-lighter-than)
+    /// composite, which the real adaptive-glass render then beats.
+    static let mapGlassDarkScrimSurface = RGBColor(0.118, 0.118, 0.128)
+
     /// Build a dynamic SwiftUI color whose UIKit provider (a) reads the live
     /// `ThemeEngine.snapshot` so the value is always current, and (b) touches
     /// `traitCollection.themeRevision` so the provider registers a dependency on
