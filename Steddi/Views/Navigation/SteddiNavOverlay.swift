@@ -771,9 +771,11 @@ struct SteddiNavOverlay: View {
                     Text("\(engine.etaMinutes)")
                         .font(SteddiTheme.mono(32 * textScale))
                         .foregroundStyle(SteddiTheme.textPrimary)
+                        .legibleOverMap()
                     Text("min")
                         .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
                         .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                        .legibleOverMap()
                         .padding(.top, 8)
                 }
 
@@ -781,6 +783,7 @@ struct SteddiNavOverlay: View {
                     Text(engine.distanceRemaining)
                         .font(SteddiTheme.mono(13 * textScale))
                         .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                        .legibleOverMap()
 
                     Circle()
                         // Match the textSecondary readouts it sits between and
@@ -788,6 +791,7 @@ struct SteddiNavOverlay: View {
                         // guarantee is only against solid surfaces, not nav glass.
                         .fill(SteddiTheme.textSecondary(highContrast: highContrast))
                         .frame(width: 3, height: 3)
+                        .legibleOverMap()
 
                     // Arrival time is a meaningful readout over translucent glass —
                     // textSecondary to match its distance sibling above (textMuted's
@@ -795,6 +799,7 @@ struct SteddiNavOverlay: View {
                     Text(engine.arrivalTime)
                         .font(SteddiTheme.mono(13 * textScale))
                         .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                        .legibleOverMap()
                 }
             }
             .frame(maxWidth: .infinity)
@@ -810,6 +815,9 @@ struct SteddiNavOverlay: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+        // Faint scrim under the glass (same shape), exactly like the top banner,
+        // so the ETA / distance / arrival readouts hold against bright cartography.
+        .mapGlassScrim(in: UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
         // Single neutral glass layer replaces the material+surface double bg.
         .steddiGlass(
             tint: nil,
@@ -891,6 +899,11 @@ struct SteddiNavOverlay: View {
                     Text("\(Int(engine.currentSpeedMph))")
                         .font(SteddiTheme.mono(22 * scale))
                         .foregroundStyle(speedTextColor)
+                        // The digit rides the translucent glass housing in the
+                        // common at/under-limit state (textPrimary, no solid
+                        // backing) — the shared soft shadow keeps it legible on
+                        // any tile, independent of the warning color state.
+                        .legibleOverMap()
                         // The font scales with OS Dynamic Type but the housing is
                         // fixed (64*iconScale), so shrink-to-fit rather than clip:
                         // a 3-digit speed at the accessibility ceiling must stay
@@ -908,6 +921,7 @@ struct SteddiNavOverlay: View {
                         // the sibling readouts — textSecondary, not textMuted,
                         // whose AA guarantee holds only against solid surfaces.
                         .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                        .legibleOverMap()
                 }
             }
             .frame(width: size, height: size)
