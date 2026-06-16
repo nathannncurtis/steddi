@@ -109,6 +109,21 @@ struct GraphSpatialIndex: Sendable {
     /// or an antimeridian crossing; skip it rather than enumerate ~360k cells.
     static let maxCellSpanPerSegment = 1000
 
+    /// Valid WGS-84 coordinate ranges. A finite-but-out-of-range coordinate (e.g.
+    /// latitude 9999 from a corrupted GPS fix or a mis-computed waypoint) still
+    /// overflows the `Int(floor(degrees / cellSizeDegrees))` conversion in
+    /// `cellIndex` and traps — `isFinite` alone is not enough. Callers that take
+    /// untrusted coordinates (`snap`, `buildSnapIndex`) range-check against these.
+    static let latRange = -90.0...90.0
+    static let lonRange = -180.0...180.0
+
+    /// Whether a coordinate is safe to feed into `cellIndex` — finite AND within
+    /// WGS-84 bounds, so the `Int(...)` conversion can never overflow and trap.
+    static func isIndexable(_ coord: CLLocationCoordinate2D) -> Bool {
+        coord.latitude.isFinite && coord.longitude.isFinite
+            && latRange.contains(coord.latitude) && lonRange.contains(coord.longitude)
+    }
+
     struct Cell: Hashable, Sendable {
         let lat: Int
         let lon: Int
@@ -117,8 +132,15 @@ struct GraphSpatialIndex: Sendable {
     /// cell -> edge indices whose geometry passes through that cell.
     let grid: [Cell: [EdgeIndex]]
 
+    /// Map a degree value to its cell index. Defensive: a non-finite or
+    /// out-of-WGS-84-range degree (`1e30`, `NaN`, `±∞`) would make the raw
+    /// `Int(...)` conversion trap, so the input is clamped to the widest valid
+    /// magnitude (±180°) first. Callers feeding untrusted coordinates should
+    /// still gate with `isIndexable` and bail to MapKit; this clamp is the
+    /// last-line guard so a missed caller degrades a snap rather than crashing.
     static func cellIndex(_ degrees: Double) -> Int {
-        Int(floor(degrees / cellSizeDegrees))
+        let safe = degrees.isFinite ? min(max(degrees, lonRange.lowerBound), lonRange.upperBound) : 0
+        return Int(floor(safe / cellSizeDegrees))
     }
 
     static func cellRange(_ a: Double, _ b: Double) -> ClosedRange<Int> {
@@ -222,12 +244,16 @@ struct RoadGraph: Sendable {
         headingToleranceDegrees: Double = 50
     ) -> GraphSnap? {
         guard !edges.isEmpty else { return nil }
-        // A non-finite (NaN/infinite) coordinate — bad GPS, an uninitialized
-        // coord, or `kCLLocationCoordinate2DInvalid` — would trap in
-        // `cellIndex` (`Int(floor(NaN))` fatal-errors). Fail clean instead so
-        // the caller falls back to MapKit routing rather than crashing the
-        // drive (CustomRouter's "never strands a drive" contract).
-        guard coord.latitude.isFinite, coord.longitude.isFinite else { return nil }
+        // A non-finite (NaN/infinite) OR finite-but-out-of-range coordinate —
+        // bad GPS, an uninitialized coord, `kCLLocationCoordinate2DInvalid`, a
+        // mis-computed waypoint (e.g. latitude 9999 / longitude 1e6), or migrated
+        // bad persisted pin data — would trap in `cellIndex`: `Int(floor(NaN))`
+        // and `Int(floor(1e30 / 0.001))` both fatal-error (the latter overflows
+        // Int.max). `isFinite` alone misses the out-of-range case, so check the
+        // WGS-84 bounds too and fail clean so the caller falls back to MapKit
+        // routing rather than crashing the drive (CustomRouter's "never strands a
+        // drive" contract).
+        guard GraphSpatialIndex.isIndexable(coord) else { return nil }
         let centerLat = GraphSpatialIndex.cellIndex(coord.latitude)
         let centerLon = GraphSpatialIndex.cellIndex(coord.longitude)
         let radius = GraphSpatialIndex.cellSearchRadius(
