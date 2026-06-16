@@ -225,6 +225,12 @@ enum RouteRecoveryEngine {
         return expectedTravelTime * remainingFraction
     }
 
+    /// Per-trip recovery budget: once this many recovery attempts have been
+    /// consumed, the driver is clearly improvising and recovery stops fighting
+    /// for the saved route. Shared so `choose` and the caller's prompt-throttle
+    /// can't drift apart.
+    static let recoveryBudget = 3
+
     /// Pick the recovery target. `options` must reference `candidates` by
     /// index; absent options (failed fetches) are simply not considered.
     static func choose(
@@ -238,7 +244,7 @@ enum RouteRecoveryEngine {
         guard !options.isEmpty else { return .abandonToDestination }
 
         // Driver clearly improvising — stop fighting for the saved route.
-        if recoveriesThisTrip >= 3 { return .abandonToDestination }
+        if recoveriesThisTrip >= recoveryBudget { return .abandonToDestination }
 
         var bestIndex: Int?
         var bestScore = Double.greatestFiniteMagnitude

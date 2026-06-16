@@ -2427,6 +2427,22 @@ struct HomeView: View {
             engine.clearOffRouteRecovery()
             return
         }
+
+        // Budget exhausted: the driver is clearly improvising (repeated abandons
+        // or splices already spent the per-trip recovery budget). RouteRecoveryEngine
+        // .choose would now short-circuit to .abandonToDestination anyway, so don't
+        // re-prompt (no haptic, no "Rerouting ahead" voice line) and don't burn
+        // another round of MKDirections fetches every 30s for the rest of the trip.
+        // Just keep guidance live toward the destination by clearing the latch.
+        // This is the throttle that stops recovery nagging indefinitely — the
+        // budget is consumed per genuine abandon DECISION below, not only per
+        // committed splice, so a deliberate-detour driver reaches the cap and is
+        // then left alone.
+        guard recoveriesThisTrip < RouteRecoveryEngine.recoveryBudget else {
+            engine.clearOffRouteRecovery()
+            return
+        }
+
         isRecoveryInFlight = true
         lastRecoveryAt = Date()
         persistRecoveryBudget()
@@ -2542,15 +2558,18 @@ struct HomeView: View {
             recoveriesThisTrip: recoveriesThisTrip
         )
 
-        // The per-trip recovery budget (cap of 3 in RouteRecoveryEngine.choose)
-        // is meant to detect a driver who's clearly improvising, so only a
-        // recovery that actually *commits* a rejoin splice should consume it.
-        // Outcomes that produced nothing — no candidates (early return above),
-        // no usable options/abandon, or a splice bail-out — leave the budget
-        // intact so transient failures (e.g. a brief mid-drive network loss
-        // failing every fetch) don't permanently disable saved-route recovery
-        // for the rest of the trip. We increment below, only on a successful
-        // splice, keeping the accounting uniform across every non-committed path.
+        // The per-trip recovery budget (RouteRecoveryEngine.recoveryBudget) is
+        // meant to detect a driver who's clearly improvising. It is consumed by:
+        //   (a) a recovery that actually COMMITS a rejoin splice, and
+        //   (b) a genuine abandon DECISION reached from a real (non-empty) options
+        //       set — "we had usable rejoin routes and still chose to abandon".
+        // Both are signals the driver is going their own way, so both count toward
+        // the cap. Once the cap is hit the handleOffRoute entry-throttle above
+        // stops re-prompting, so recovery can't nag indefinitely on a deliberate
+        // detour. TRULY transient failures still leave the budget intact: no
+        // candidates (early return above) and no usable options (every fetch
+        // failed — `options.isEmpty`) don't consume it, so a brief mid-drive
+        // network loss doesn't permanently disable saved-route recovery.
         switch decision {
         case .rejoin(let index):
             guard index < candidates.count, let route = routesByCandidate[index] else {
@@ -2573,9 +2592,17 @@ struct HomeView: View {
                 engine.clearOffRouteRecovery()
             }
         case .abandonToDestination:
-            // Deliberate abandon (no usable options, recovery budget spent, or
-            // direct beats rejoining): no splice happens, so clear the latch to
-            // keep guidance live toward the destination.
+            // A genuine abandon decision (we had usable options and still chose to
+            // go direct, or the budget was already spent) consumes the budget so a
+            // deliberate-detour driver reaches the cap and is then left alone. A
+            // transient all-fetches-failed abandon (options empty) does NOT, so it
+            // can retry once the network recovers.
+            if !options.isEmpty {
+                recoveriesThisTrip += 1
+                persistRecoveryBudget()
+            }
+            // No splice happens, so clear the latch to keep guidance live toward
+            // the destination.
             engine.clearOffRouteRecovery()
             if let destination = savedPolyline.last {
                 await handleOffRoute(from: event.coordinate, to: destination)
