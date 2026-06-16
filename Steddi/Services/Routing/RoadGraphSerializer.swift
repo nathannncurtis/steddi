@@ -257,7 +257,18 @@ enum RoadGraphSerializer {
                   Int(edge.to) >= 0, Int(edge.to) < totalNodes else { return nil }
             let lower = Int(edge.geometryRange.lowerBound)
             let upper = Int(edge.geometryRange.upperBound)
-            guard lower >= 0, upper >= lower, upper <= totalGeometry else { return nil }
+            // In-bounds is not enough: the builder always emits a geometry slice
+            // that includes BOTH endpoint coordinates, so `geometryRange.count >= 2`
+            // is a hard invariant (RoadGraph.swift:83, RoadGraphBuilder >= 2). A
+            // corrupt/format-drifted blob can decode an in-bounds but DEGENERATE
+            // range (`upper == lower` empty, or `upper - lower == 1` single coord);
+            // such an edge makes `graph.geometry(of:)` return a <2-coord slice that
+            // StepSynthesizer.stitchedPolyline would silently drop while A* already
+            // counted its cost, teleporting the drawn route across the missing step.
+            // Reject here — matching the file's "keep the corrupt blob out of the
+            // search entirely" philosophy — rather than rendering a silent jump.
+            guard lower >= 0, upper >= lower, upper <= totalGeometry,
+                  upper - lower >= 2 else { return nil }
             if edge.freeFlowSpeedMPS.isFinite, edge.freeFlowSpeedMPS > derivedMax {
                 derivedMax = edge.freeFlowSpeedMPS
             }
