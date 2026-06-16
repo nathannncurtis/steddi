@@ -336,6 +336,36 @@ struct DriveRecordSummaryTests {
         #expect(record.hasSummary)
     }
 
+    @Test("Duration comes from the GPS trace span, not back-to-back Date() calls")
+    func summaryDurationFromTrace() {
+        // Reproduces the production write path: `DriveRecord()` defaults
+        // startedAt to NOW (the END of the drive), then endedAt is set to NOW a
+        // moment later — so endedAt - startedAt ≈ 0. The real 25-minute span
+        // lives only in the GPS timestamps. finalizeSummary must recover it.
+        let end = Date()
+        let record = DriveRecord() // startedAt defaults to ~end (the bug)
+        record.endedAt = end
+        let traceStart = end.addingTimeInterval(-25 * 60) // 25 min before "end"
+        record.rawGPSPoints = (0...50).map { i in
+            Self.point(start: traceStart, offset: Double(i) * 30, speed: 15)
+        }
+        record.finalizeSummary()
+        // 50 intervals * 30s = 1500s = 25 min, NOT ~0.
+        #expect(abs((record.totalDurationSeconds ?? 0) - 1500) < 1.0)
+
+        // And the analytics that consume it reflect the real duration: a single
+        // 25-minute drive yields a 25-minute average, not 0.
+        let sample = DriveSample(
+            startedAt: record.startedAt,
+            durationSeconds: record.totalDurationSeconds ?? 0,
+            trafficSeconds: record.trafficDurationSeconds ?? 0
+        )
+        let stats = AnalyticsService.computeAggregateStats(samples: [sample])
+        #expect(stats.driveCount == 1)
+        #expect(abs(stats.averageDurationMinutes - 25) < 0.1)
+        #expect(abs(stats.totalDrivingSeconds - 1500) < 1.0)
+    }
+
     @Test("GPS dropouts don't count as traffic time")
     func summaryGapCap() {
         let start = Date(timeIntervalSinceReferenceDate: 700_000_000)
@@ -642,6 +672,42 @@ struct AnalyticsBackfillTests {
         let records = Self.allRecords(verify)
         #expect(records.allSatisfy { $0.totalDurationSeconds != nil })
         #expect(records.allSatisfy { $0.hasSummary })
+    }
+
+    /// The view's long-lived (main) context materializes a legacy record with
+    /// its summary still nil. A background context then finalizes that SAME
+    /// record in the store. Without refreshing, the main context keeps handing
+    /// back the stale registered object (nil duration) on re-fetch — the
+    /// just-backfilled drive only appears after relaunch. `refreshFromStore`
+    /// must make the freshly-persisted value visible to the view context
+    /// WITHOUT recreating the container.
+    @Test("Backfilled summaries become visible to the view context without relaunch")
+    @MainActor
+    func backfillVisibleToViewContext() throws {
+        let container = try Self.makeContainer()
+        let viewContext = ModelContext(container) // stands in for the view's main context
+
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        Self.insertLegacy(viewContext, start: start, minutes: 20)
+        try viewContext.save()
+
+        // Materialize the record in the view context, exactly as fetchRecentDrives
+        // / fetchSamples would on first paint — registering it with nil duration.
+        let before = Self.allRecords(viewContext)
+        #expect(before.count == 1)
+        #expect(before.first?.totalDurationSeconds == nil)
+
+        // Background context finalizes the record in the store (mirrors
+        // backfillMissingSummaries running off the MainActor on a fresh context).
+        let backfilled = AnalyticsService.backfillMissingSummaries(container: container)
+        #expect(backfilled == 1)
+
+        // The fix: refresh the view context from the store, then re-fetch.
+        AnalyticsService.refreshFromStore(viewContext)
+        let fresh = Self.allRecords(viewContext)
+        #expect(fresh.first?.totalDurationSeconds != nil)
+        #expect((fresh.first?.totalDurationSeconds ?? 0) > 0)
+        #expect(fresh.first?.hasSummary == true)
     }
 
     @Test("Backfill leaves already-summarized records untouched and returns 0")
