@@ -47,7 +47,13 @@ struct SearchResult: Sendable, Equatable {
 /// Kept deliberately minimal — three pure functions, all in seconds-equivalent.
 /// `heuristic` MUST be an admissible lower bound (≤ true remaining cost) or A*
 /// loses optimality; this is asserted in tests (§4.1).
-protocol SearchCost {
+///
+/// `Sendable`: a resolved cost model is captured by the `Task.detached` that runs
+/// the search off the main actor (`CustomRouter.generateRoute`), so it crosses an
+/// isolation boundary. Conformers are value-like cost models (their stored state
+/// is itself `Sendable` — `CostWeights`/`RoutingContext`), so the bound is safe
+/// and makes the cross-actor capture sound under Swift 6 strict concurrency.
+protocol SearchCost: Sendable {
     /// Cost of traversing one edge.
     func edgeCost(_ edge: GraphEdge, in graph: RoadGraph) -> Double
     /// Cost of the maneuver from `incoming` to `outgoing` through their shared
