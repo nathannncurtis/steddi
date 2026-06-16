@@ -642,6 +642,160 @@ struct NavigationStateManagerWidgetSyncTests {
     }
 }
 
+// MARK: - Widget Freshness Stamp (stall) Tests
+
+/// Regression guard for the HIGH bug: the widget's live-vs-dead classification
+/// (CommuteETAEntry.isLiveNavigating) treats a `navigating` entry whose
+/// `kETAUpdatedAt` has aged past the 3-minute staleness window as an OOM/watchdog
+/// kill and retires the live pill. The writer used to restamp `kETAUpdatedAt`
+/// only when the DISPLAYED whole-minute ETA changed — so a drive that STALLS
+/// (stop-and-go traffic, a long light) at a constant ETA for minutes let the
+/// stamp go stale and the widget wrongly retired a still-live drive's pill. The
+/// fix restamps the freshness keys on every active-nav tick, decoupled from the
+/// minute change, so a stalled-but-live drive stays classified live while a
+/// genuine kill (no writer at all afterward) still goes stale.
+@Suite("NavigationStateManager widget freshness stamp")
+@MainActor
+struct NavigationStateManagerWidgetFreshnessTests {
+
+    private static let widgetSuite = "group.to.nathancurtis.steddi"
+
+    private func startedEngine() -> NavigationEngine {
+        let engine = NavigationEngine()
+        let polyline = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        let steps = [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline[0], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[10], maneuverSymbol: "flag.fill"),
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+        return engine
+    }
+
+    /// THE BUG: a multi-minute stall with an UNCHANGED whole-minute ETA must keep
+    /// the freshness stamp current so the widget keeps classifying the drive as
+    /// live (pill stays). We sync at a constant ETA across timestamps spanning
+    /// well past the 3-minute navigating-staleness window, then build the widget
+    /// entry from what the writer left in the App Group, dated at the final sync
+    /// instant. Pre-fix, the stamp would still hold the first-write time (the ETA
+    /// never changed), so by the final sync it would be >3 min old and the entry
+    /// would be classified NOT live — the phantom-dead misclassification.
+    @Test("A multi-minute stall (ETA unchanged) keeps the widget entry classified live")
+    func stalledDriveStaysLive() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        // The ETA holds at 12 min for the whole stall (constant — never crosses a
+        // whole-minute boundary).
+        engine.etaMinutes = 12
+
+        // Sync once a "minute" for 6 minutes — well past the 3-min staleness
+        // window — with the ETA never changing (a gridlock stall).
+        let lastSync = start.addingTimeInterval(6 * 60)
+        var now = start
+        while now <= lastSync {
+            manager.syncFromEngine(engine, now: now, reload: { _ in })
+            now = now.addingTimeInterval(60)
+        }
+
+        // Read back what the writer left for the widget and build the entry as the
+        // widget would at the moment of the final sync.
+        let isNav = defaults.bool(forKey: "widget.isNavigating")
+        let stampRaw = defaults.double(forKey: "widget.etaUpdatedAt")
+        let eta = defaults.integer(forKey: "widget.etaMinutes")
+        #expect(isNav == true)
+        #expect(eta == 12)
+
+        let entry = CommuteETAEntry(
+            date: lastSync,
+            commuteName: "Work",
+            etaMinutes: eta,
+            destinationName: "Office",
+            isNavigating: isNav,
+            etaUpdatedAt: stampRaw > 0 ? Date(timeIntervalSince1970: stampRaw) : nil
+        )
+        // The stamp tracked the final tick, so the still-live drive is NOT
+        // misclassified as a dead OOM session.
+        #expect(entry.isLiveNavigating == true, "a stalled-but-live drive must stay classified live")
+        #expect(entry.isStale == false)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// A genuine OOM/watchdog kill leaves NO writer after the last tick, so the
+    /// stamp must go stale on its own. This pins that the per-tick restamp doesn't
+    /// over-correct: once syncs STOP, an entry dated past the staleness window is
+    /// correctly classified not-live.
+    @Test("A killed session (no further writes) still goes stale past the window")
+    func killedSessionGoesStale() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        let lastTick = Date(timeIntervalSince1970: 1_750_000_000)
+        engine.etaMinutes = 9
+        // One last live write, then the process is "killed" — no more syncs.
+        manager.syncFromEngine(engine, now: lastTick, reload: { _ in })
+
+        let entry = CommuteETAEntry(
+            date: lastTick.addingTimeInterval(5 * 60),   // 5 min later, no writes since
+            commuteName: "Work",
+            etaMinutes: defaults.integer(forKey: "widget.etaMinutes"),
+            destinationName: "Office",
+            isNavigating: defaults.bool(forKey: "widget.isNavigating"),
+            etaUpdatedAt: Date(timeIntervalSince1970: defaults.double(forKey: "widget.etaUpdatedAt"))
+        )
+        #expect(entry.isLiveNavigating == false, "a killed session with no fresh writes must retire the pill")
+        #expect(entry.isStale == true)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// Finding 2: on commute arrival the engine latches hasArrived but keeps
+    /// isNavigating true (the manual-End linger) with etaMinutes zeroed. The
+    /// widget must NOT render a phantom live "Navigating / No ETA yet" card during
+    /// that window — the writer marks the session idle so the entry is not live.
+    @Test("Arrival linger writes idle (not navigating) so the widget shows no phantom live card")
+    func arrivalLingerWritesIdle() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        // A normal live tick first.
+        engine.etaMinutes = 3
+        manager.syncFromEngine(engine, now: now, reload: { _ in })
+        #expect(defaults.bool(forKey: "widget.isNavigating") == true)
+
+        // Arrival: engine latches hasArrived, keeps isNavigating true, zeroes ETA.
+        engine.hasArrived = true
+        engine.etaMinutes = 0
+        manager.syncFromEngine(engine, now: now.addingTimeInterval(1), reload: { _ in })
+
+        // The widget must see an idle session, not a live 0-min "Navigating" card.
+        #expect(defaults.bool(forKey: "widget.isNavigating") == false)
+
+        let entry = CommuteETAEntry(
+            date: now.addingTimeInterval(1),
+            commuteName: "Work",
+            etaMinutes: defaults.integer(forKey: "widget.etaMinutes"),
+            destinationName: "Office",
+            isNavigating: defaults.bool(forKey: "widget.isNavigating"),
+            etaUpdatedAt: Date(timeIntervalSince1970: defaults.double(forKey: "widget.etaUpdatedAt"))
+        )
+        #expect(entry.isLiveNavigating == false, "no phantom live pill during the arrival linger")
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+}
+
 // MARK: - Widget Reload Throttle Tests
 
 /// During an active drive the per-minute ETA change used to force a

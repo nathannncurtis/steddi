@@ -654,34 +654,55 @@ final class NavigationStateManager {
         // Write to shared App Group for widget and refresh its timeline when the
         // displayed minute changes. Without the reload the widget keeps showing
         // the ETA captured at session start; writing the defaults alone doesn't
-        // re-render the extension. Throttled to minute changes so the 2 Hz sync
-        // doesn't spam WidgetKit with no-op reloads.
+        // re-render the extension.
         //
         // The live ETA is also the freshest real commute ETA the app computes,
         // so persist it (with a timestamp) as the "last known" value the widget
         // shows when idle — that's the whole point of a commute-ETA widget.
         //
-        // kIsNavigating is cheap and must stay current every tick. But the
-        // displayed ETA only changes on a whole-minute boundary, so writing
-        // kETAMinutes + restamping kETAUpdatedAt every 500ms is pure churn the
-        // widget can't observe (the freshness stamp would also tick needlessly).
-        // Only write the ETA + restamp when the minute actually changes.
+        // FRESHNESS STAMP (kIsNavigating + kETAMinutes + kETAUpdatedAt): the
+        // widget treats a `navigating` entry whose `kETAUpdatedAt` has aged past
+        // its staleness window as a dead OOM/watchdog kill and retires the live
+        // pill (CommuteETAWidget.isLiveNavigating). That defense rests on a live
+        // session restamping freshness on a tight cadence. The DISPLAYED minute
+        // does NOT change on a tight cadence, though — in stop-and-go traffic, a
+        // long light, or any stall the integer ETA can hold for many minutes — so
+        // gating the stamp on a minute change let the stamp go stale mid-drive and
+        // the widget wrongly retired a live pill on a stalled-but-live drive.
+        // Restamp the freshness keys on EVERY active-nav tick (a cheap App Group
+        // write, ~2 Hz), independent of the displayed minute. A genuine OOM kill
+        // still goes stale because there is no writer at all after it.
         //
-        // We ALWAYS rewrite the App Group defaults on a minute change, so the
-        // widget shows fresh data whenever iOS refreshes it on its own ~15-min
-        // timeline cadence. But we do NOT force a `reloadTimelines` every minute:
-        // a long commute would fire ~40-60 app-initiated reloads and can blow
-        // through WidgetKit's daily reload budget, after which even the idle
-        // widget stops updating. The live minute-by-minute ETA is already
-        // surfaced by the phone UI / Live Activity / CarPlay, so the home-screen
-        // widget doesn't need a per-minute push. Instead, during active nav we
-        // force a reload at most once per `liveReloadMinInterval` (session start,
-        // arrival, and end still force immediate reloads via their own paths).
-        widgetDefaults?.set(engine.isNavigating, forKey: Self.kIsNavigating)
-        if engine.etaMinutes != lastWidgetETAMinutes {
+        // We do NOT force a `reloadTimelines` on every tick: a long commute would
+        // fire ~40-60 app-initiated reloads and can blow through WidgetKit's daily
+        // reload budget, after which even the idle widget stops updating. The live
+        // minute-by-minute ETA is already surfaced by the phone UI / Live Activity
+        // / CarPlay, so the home-screen widget doesn't need a per-minute push.
+        // Instead, force a reload only on a whole-minute change, throttled to at
+        // most once per `liveReloadMinInterval` (session start, arrival, and end
+        // still force immediate reloads via their own paths).
+        if engine.isNavigating && engine.hasArrived {
+            // Commute arrival linger: the engine latches hasArrived but keeps
+            // isNavigating true (the "You have arrived" / manual-End flow), with
+            // etaMinutes zeroed. Writing kIsNavigating=true + etaMinutes=0 here
+            // would render a phantom live "Navigating / No ETA yet" card for the
+            // whole linger. Mark the session idle so the widget stops presenting
+            // it as a live drive; clearWidgetSession runs the full reset at End.
+            widgetDefaults?.set(false, forKey: Self.kIsNavigating)
+        } else {
+            widgetDefaults?.set(engine.isNavigating, forKey: Self.kIsNavigating)
+            // While actively navigating, keep the freshness stamp current every
+            // tick (cheap defaults write) so a stalled-but-live drive stays live.
+            if engine.isNavigating {
+                widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
+                widgetDefaults?.set(now.timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
+            }
+        }
+
+        // Force a throttled reload only when the displayed whole-minute ETA
+        // changes — the only thing a reload would make visibly different.
+        if engine.isNavigating && !engine.hasArrived && engine.etaMinutes != lastWidgetETAMinutes {
             lastWidgetETAMinutes = engine.etaMinutes
-            widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
-            widgetDefaults?.set(now.timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
 
             // Throttle drive-time forced reloads to a coarse cadence. First
             // minute-change of a session (lastWidgetReloadAt nil) reloads
