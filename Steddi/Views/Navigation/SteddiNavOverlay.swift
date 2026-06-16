@@ -241,12 +241,15 @@ struct SteddiNavOverlay: View {
     }
 
     /// Top offset for the portrait floating-control cluster, derived from the
-    /// banner column's actual scaled height so the controls always start below
-    /// the tallest banner stack. The banners scale with iconScale/textScale; a
+    /// FULL stacked column's actual scaled height so the controls always start
+    /// below the tallest stack. The elements scale with iconScale/textScale; a
     /// fixed offset (the old hardcoded 270) overlapped them once the type grew.
-    /// Mirrors the banner geometry: top inset (60) + top banner (72*iconScale
-    /// icon + 40 padding) + the optional trip-leg and follow-on banners that are
-    /// actually present, plus a small gap.
+    /// Mirrors the portrait stack geometry exactly (lines 146-185): top inset
+    /// (60) + top banner + the optional trip-leg / follow-on banners + the
+    /// optional street-name capsule, route-preference badge, and the full-width
+    /// NowPlaying mini-bar — each only when actually present, with its own top
+    /// spacing — plus a small gap, so the right cluster never lands on top of the
+    /// mini-bar / badge / capsule when those are showing.
     private var floatingClusterTopOffset: CGFloat {
         let topInset: CGFloat = 60
         // Top banner: 72*iconScale icon framed inside 20pt padding all round.
@@ -261,7 +264,21 @@ struct SteddiNavOverlay: View {
             // +6 spacing above.
             height += 6 + (28 * iconScale + 20)
         }
-        // Small gap below the banner column before the controls begin. Never sit
+        if !engine.roadName.isEmpty {
+            // Street-name capsule: 14pt label in 7pt vertical padding, +10 above.
+            height += 10 + (14 * textScale + 14)
+        }
+        if !activePreferenceLabels.isEmpty {
+            // Route-pref badge: 12pt label in 6pt vertical padding, +10 above.
+            height += 10 + (12 * textScale + 12)
+        }
+        if showNowPlayingBar && nowPlaying.hasNowPlaying {
+            // NowPlaying mini-bar: fixed 52pt full-width card, +8 spacing above.
+            // Full-width, so its right edge sits directly under the cluster —
+            // the decisive element this offset must clear.
+            height += 8 + 52
+        }
+        // Small gap below the stacked column before the controls begin. Never sit
         // higher than the original hand-tuned 270 in the unscaled default state.
         return max(270, height + 12)
     }
