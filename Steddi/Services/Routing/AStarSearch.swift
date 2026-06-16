@@ -189,19 +189,45 @@ struct AStarSearch: PathSearch {
 
         var heap = BinaryHeap<Double>(minimumCapacity: edgeCount)
 
-        // Degenerate node-start arrival: a node start whose node IS already the
-        // goal node. No edge is traversed, so there is no edge state to settle —
-        // reconstruct the empty interior path directly (cost 0, plus any trailing
-        // partial). Mirrors the old "pop the start node == goal node" exit.
-        for entry in start.entries where entry.viaEdge < 0 && entry.node == goal.node {
-            return reconstruct(
-                goalNode: goal,
-                arrivalEdge: -1,
-                gAtGoal: entry.g,
-                cameFromEdge: cameFromEdge,
-                start: start,
-                in: graph
-            )
+        // Map each goal-arrival node to its arrival(s), so the loop can recognise
+        // every legal termination — for a two-way mid-edge destination that is BOTH
+        // the forward upstream node and the reverse upstream node. The best total
+        // (settled g + that arrival's trailing cost) across all goal nodes is the
+        // answer; because the two arrivals carry DIFFERENT trailing costs and the
+        // heuristic targets the destination point (not a node), the first goal edge
+        // popped is not automatically optimal, so we keep the best candidate and
+        // stop only once the heap can no longer beat it (standard multi-goal A*
+        // with goal-dependent terminal cost; see the loop's exit condition).
+        var goalNodes: [NodeIndex: [GoalArrival]] = [:]
+        for arrival in goal.arrivals {
+            goalNodes[arrival.node, default: []].append(arrival)
+        }
+
+        // The best destination arrival found so far: its total cost, the edge whose
+        // traversal reached the goal node (-1 for a degenerate node-start arrival),
+        // and which arrival orientation it used.
+        var bestTotal = Double.infinity
+        var bestArrivalEdge: EdgeIndex = -1
+        var bestArrival: GoalArrival? = nil
+
+        func consider(arrivalEdge: EdgeIndex, gAtNode: Double, arrivals: [GoalArrival]) {
+            for arrival in arrivals {
+                let total = gAtNode + arrival.trailingCost
+                if total < bestTotal {
+                    bestTotal = total
+                    bestArrivalEdge = arrivalEdge
+                    bestArrival = arrival
+                }
+            }
+        }
+
+        // Degenerate node-start arrival: a node start whose node IS already a goal
+        // arrival node. No edge is traversed, so there is no edge state to settle —
+        // it is a candidate at cost `entry.g` plus that arrival's trailing partial.
+        for entry in start.entries where entry.viaEdge < 0 {
+            if let arrivals = goalNodes[entry.node] {
+                consider(arrivalEdge: -1, gAtNode: entry.g, arrivals: arrivals)
+            }
         }
 
         // Seed the open set. A mid-edge start arrives having "traversed" its
@@ -240,6 +266,15 @@ struct AStarSearch: PathSearch {
         }
 
         while let popped = heap.popMin() {
+            // Optimality cut-off: every edge still in (or yet to enter) the open set
+            // has f = g + h ≤ its true total cost to the destination point (h is an
+            // admissible lower bound). Once the smallest such f cannot beat the best
+            // arrival already found, no remaining path can either — stop. This is
+            // the multi-goal generalisation of A*'s single-goal "first pop wins":
+            // with goal-dependent trailing costs the first goal edge popped need not
+            // be optimal, but this bound still guarantees the returned arrival is.
+            if popped.priority >= bestTotal { break }
+
             let currentEdgeIndex = Int32(popped.id)
             if closed[Int(currentEdgeIndex)] { continue }
             closed[Int(currentEdgeIndex)] = true
@@ -247,19 +282,12 @@ struct AStarSearch: PathSearch {
             let currentEdge = graph.edges[Int(currentEdgeIndex)]
             let v = currentEdge.to   // node we are standing at, having crossed this edge
 
-            // Goal reached: we have arrived at the goal's upstream graph node via
-            // some edge. The first such edge popped is the optimal arrival (A*
-            // settles in nondecreasing f order). The trailing partial cost is
-            // added in reconstruct so it never perturbs the heuristic.
-            if v == goal.node {
-                return reconstruct(
-                    goalNode: goal,
-                    arrivalEdge: currentEdgeIndex,
-                    gAtGoal: gScore[Int(currentEdgeIndex)],
-                    cameFromEdge: cameFromEdge,
-                    start: start,
-                    in: graph
-                )
+            // Goal reached: arrived at a goal arrival node via this edge. Record it
+            // as a candidate (the trailing partial cost is added here so it never
+            // perturbs the heuristic) and keep searching — a cheaper arrival, on this
+            // or the opposite orientation, may still settle before the cut-off above.
+            if let arrivals = goalNodes[v] {
+                consider(arrivalEdge: currentEdgeIndex, gAtNode: gScore[Int(currentEdgeIndex)], arrivals: arrivals)
             }
 
             let gCurrent = gScore[Int(currentEdgeIndex)]
@@ -284,7 +312,19 @@ struct AStarSearch: PathSearch {
             }
         }
 
-        return nil   // no path
+        // Settle the best arrival found (if any). For the reverse-orientation
+        // arrival on a two-way destination edge this terminates at `edge.to` and
+        // takes the short trailing partial back to the destination point, instead
+        // of routing to `edge.from` and traversing the whole edge.
+        guard let arrival = bestArrival else { return nil }
+        return reconstruct(
+            arrival: arrival,
+            arrivalEdge: bestArrivalEdge,
+            gAtGoal: bestTotal - arrival.trailingCost,
+            cameFromEdge: cameFromEdge,
+            start: start,
+            in: graph
+        )
     }
 
     // MARK: - Same-road direct sub-segment
@@ -416,18 +456,38 @@ struct AStarSearch: PathSearch {
         let leadingEdge: Int32
     }
 
-    /// A resolved destination: the single graph node A* must reach (the upstream
-    /// end of the goal edge for a mid-edge end), the trailing partial edge (or
-    /// -1), the end fraction, and the target coordinate the heuristic aims at.
-    private struct ResolvedGoal {
+    /// One way the search may legally arrive at the destination: the graph node it
+    /// must reach, the trailing partial edge taken from that node to the snapped
+    /// end (or -1 for a node destination), the end fraction along that edge, and
+    /// the extra (trailing) cost charged on arrival. A mid-edge destination on a
+    /// TWO-WAY street offers two such arrivals — one per directed orientation —
+    /// so the search can stop on whichever side it reaches more cheaply instead of
+    /// being forced to the single upstream node and overshooting a long edge.
+    private struct GoalArrival {
         let node: NodeIndex
         let trailingEdge: Int32
         let endFraction: Double
-        /// Extra cost charged when the goal node is reached: the partial trailing
-        /// edge time from the goal node to the snapped end. Added in reconstruct
-        /// so it never perturbs the heuristic.
+        /// Partial trailing-edge time from `node` to the snapped end. Added in
+        /// reconstruct so it never perturbs the heuristic.
+        let trailingCost: Double
+    }
+
+    /// A resolved destination: the PRIMARY (forward) arrival A* aims at, plus any
+    /// co-located alternate arrivals (the reverse twin of a two-way destination
+    /// edge), and the coordinate the heuristic aims at — the snapped destination
+    /// point itself, an admissible lower-bound target shared by every arrival.
+    private struct ResolvedGoal {
+        /// The forward arrival's upstream graph node. Also the node `sameRoadDirectPath`
+        /// and the degenerate node-start exit compare against.
+        let node: NodeIndex
+        let trailingEdge: Int32
+        let endFraction: Double
         let trailingCost: Double
         let targetCoordinate: CLLocationCoordinate2D
+        /// Every legal arrival, primary first. For a node destination or a one-way
+        /// mid-edge destination this is a single element; a two-way mid-edge
+        /// destination adds the reverse-orientation arrival.
+        let arrivals: [GoalArrival]
     }
 
     private func resolveOrigin(_ endpoint: SearchEndpoint, in graph: RoadGraph, cost: SearchCost) -> ResolvedOrigin? {
@@ -498,7 +558,8 @@ struct AStarSearch: PathSearch {
                 trailingEdge: -1,
                 endFraction: 1,
                 trailingCost: 0,
-                targetCoordinate: graph.nodes[Int(n)].coordinate
+                targetCoordinate: graph.nodes[Int(n)].coordinate,
+                arrivals: [GoalArrival(node: n, trailingEdge: -1, endFraction: 1, trailingCost: 0)]
             )
 
         case .coordinate(let coord, let heading):
@@ -526,7 +587,8 @@ struct AStarSearch: PathSearch {
                     trailingEdge: -1,
                     endFraction: 1,
                     trailingCost: 0,
-                    targetCoordinate: graph.nodes[Int(edge.from)].coordinate
+                    targetCoordinate: graph.nodes[Int(edge.from)].coordinate,
+                    arrivals: [GoalArrival(node: edge.from, trailingEdge: -1, endFraction: 1, trailingCost: 0)]
                 )
             }
             if snap.fraction >= 1 {
@@ -535,22 +597,62 @@ struct AStarSearch: PathSearch {
                     trailingEdge: -1,
                     endFraction: 1,
                     trailingCost: 0,
-                    targetCoordinate: graph.nodes[Int(edge.to)].coordinate
+                    targetCoordinate: graph.nodes[Int(edge.to)].coordinate,
+                    arrivals: [GoalArrival(node: edge.to, trailingEdge: -1, endFraction: 1, trailingCost: 0)]
                 )
             }
-            // Mid-edge end: A* must reach the edge's upstream node (`edge.from`),
-            // then travel the partial edge cost to the snapped end. The heuristic
-            // aims at `edge.from`'s coordinate so it stays a lower bound on
-            // reaching that node (the trailing partial cost is added separately).
+            // Mid-edge end. The FORWARD arrival reaches the edge's upstream node
+            // (`edge.from`) and travels `snap.fraction` of the edge to the snapped
+            // point. On a TWO-WAY street the co-located reverse twin gives a SECOND,
+            // equally-valid arrival: reach the reverse edge's upstream node
+            // (`edge.to`) and travel `1 - snap.fraction` of it back to the SAME
+            // point. Offering both lets A* terminate on whichever side it reaches
+            // more cheaply, so a destination near the `to`-end of a long edge no
+            // longer forces a full-edge traversal to `edge.from` plus a U-turn.
+            //
+            // The heuristic aims at the snapped destination POINT (not either node):
+            // it stays an admissible lower bound for both arrivals, since every edge
+            // cost is >= its free-flow time >= straight-line/maxSpeed and the
+            // straight line to the point never exceeds the real remaining cost
+            // through either node's trailing partial.
             let full = cost.edgeCost(edge, in: graph)
             let partial = full.isFinite ? full * snap.fraction : .infinity
             guard partial.isFinite else { return nil }
+
+            var arrivals = [GoalArrival(
+                node: edge.from,
+                trailingEdge: snap.edge,
+                endFraction: snap.fraction,
+                trailingCost: partial
+            )]
+
+            // Reverse-orientation arrival, when a co-located reverse twin exists
+            // (always for a two-way street, never for a one-way — preserving
+            // one-way correctness). The destination point sits at fraction
+            // `1 - snap.fraction` along the reverse edge.
+            let reverse = coLocatedReverseEdge(of: snap.edge, in: graph)
+            if reverse >= 0 {
+                let revEdge = graph.edges[Int(reverse)]
+                let revFull = cost.edgeCost(revEdge, in: graph)
+                let revFraction = 1 - snap.fraction
+                let revPartial = revFull.isFinite ? revFull * revFraction : .infinity
+                if revPartial.isFinite {
+                    arrivals.append(GoalArrival(
+                        node: revEdge.from,   // == edge.to
+                        trailingEdge: reverse,
+                        endFraction: revFraction,
+                        trailingCost: revPartial
+                    ))
+                }
+            }
+
             return ResolvedGoal(
                 node: edge.from,
                 trailingEdge: snap.edge,
                 endFraction: snap.fraction,
                 trailingCost: partial,
-                targetCoordinate: graph.nodes[Int(edge.from)].coordinate
+                targetCoordinate: snap.snapped,
+                arrivals: arrivals
             )
         }
     }
@@ -558,7 +660,7 @@ struct AStarSearch: PathSearch {
     // MARK: - Reconstruction
 
     private func reconstruct(
-        goalNode goal: ResolvedGoal,
+        arrival: GoalArrival,
         arrivalEdge: EdgeIndex,
         gAtGoal: Double,
         cameFromEdge: [Int32],
@@ -572,7 +674,7 @@ struct AStarSearch: PathSearch {
         // a real edge state) — we must NOT also prepend it below, so the leading
         // edge is prepended only for a NODE start (where no edge state carries it).
         var edges: [EdgeIndex] = []
-        var nodes: [NodeIndex] = [goal.node]
+        var nodes: [NodeIndex] = [arrival.node]
 
         var current = arrivalEdge   // -1 only for the degenerate node-start == goal case
         while current >= 0 {
@@ -592,19 +694,21 @@ struct AStarSearch: PathSearch {
         // `edges` (with its `from` node leading `nodes`) — also nothing to add.
         // The leading edge is never double-counted.
 
-        // Append the trailing partial end edge, if any.
-        if goal.trailingEdge >= 0 {
-            edges.append(goal.trailingEdge)
-            nodes.append(graph.edges[Int(goal.trailingEdge)].to)
+        // Append the trailing partial end edge, if any. For the reverse-orientation
+        // arrival this is the co-located REVERSE directed edge (from the goal node
+        // `edge.to` back toward `edge.from`), trimmed to `endFraction`.
+        if arrival.trailingEdge >= 0 {
+            edges.append(arrival.trailingEdge)
+            nodes.append(graph.edges[Int(arrival.trailingEdge)].to)
         }
 
-        let total = gAtGoal + goal.trailingCost
+        let total = gAtGoal + arrival.trailingCost
         return SearchResult(
             nodePath: nodes,
             edgePath: edges,
             totalCost: total,
             startFraction: start.startFraction,
-            endFraction: goal.endFraction
+            endFraction: arrival.endFraction
         )
     }
 }
