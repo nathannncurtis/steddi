@@ -181,7 +181,7 @@ struct OnboardingView: View {
             OnboardingPermissionsView(
                 onContinue: requestLocation,
                 onNotNow: { advance() },
-                accent: coordinator.selectedAccent.color,
+                accent: coordinator.selectedAccent,
                 onAccentLabel: coordinator.selectedAccent.contrastingGlyph
             )
 
