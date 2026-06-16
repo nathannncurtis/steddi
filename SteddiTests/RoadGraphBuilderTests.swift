@@ -486,6 +486,28 @@ struct RoadGraphSnapTests {
         #expect(graph.snap(near, heading: 0, maxDistanceMeters: 50, headingToleranceDegrees: 30) == nil)
     }
 
+    /// A non-finite (NaN/infinite) coordinate — bad GPS, an uninitialized coord,
+    /// or `kCLLocationCoordinate2DInvalid` — must fail clean to nil rather than
+    /// trap in `cellIndex` (`Int(floor(NaN))` fatal-errors). nil propagates to a
+    /// MapKit fallback, honoring the router's "never strands a drive" contract.
+    @Test("NaN or infinite coordinate snaps to nil instead of trapping")
+    func snapNonFiniteCoordinate() {
+        let graph = buildGraph(
+            nodeJSON(1, 33.0, -117.0),
+            nodeJSON(2, 33.0, -116.999),
+            wayElementJSON(100, nodes: [1, 2], tags: ["highway": "residential"])
+        )
+        let nanLat = CLLocationCoordinate2D(latitude: .nan, longitude: -116.9995)
+        let nanLon = CLLocationCoordinate2D(latitude: 33.00009, longitude: .nan)
+        let infLat = CLLocationCoordinate2D(latitude: .infinity, longitude: -116.9995)
+        let negInfLon = CLLocationCoordinate2D(latitude: 33.00009, longitude: -.infinity)
+        #expect(graph.snap(nanLat) == nil)
+        #expect(graph.snap(nanLon) == nil)
+        #expect(graph.snap(infLat) == nil)
+        #expect(graph.snap(negInfLon) == nil)
+        #expect(graph.snap(kCLLocationCoordinate2DInvalid) == nil)
+    }
+
     /// A way whose first and last node are the same OSM id (a closed loop, e.g. a
     /// cul-de-sac or roundabout drawn as a ring) must not emit a degenerate
     /// self-edge from a node to itself; the `fromIdx != toIdx` guard drops it.

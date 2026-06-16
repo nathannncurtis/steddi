@@ -400,6 +400,22 @@ struct LearnedWeightsStoreTests {
         store.save(w, scope: LearnedWeightsStore.globalScope)
         #expect(store.loadBest(scope: nil) == w)
     }
+
+    /// `destinationOnlyPenalty` must round-trip through the `StoredWeights`
+    /// Codable mirror; previously it was omitted and silently reset to the
+    /// `CostWeights` default on every save/load, losing the learned value.
+    @Test("destinationOnlyPenalty survives a save -> load round trip")
+    func destinationOnlyPenaltyRoundTrips() {
+        let store = LearnedWeightsStore(defaults: transientDefaults())
+        var w = CostWeights.default
+        // A value distinct from the 1200 default so a silent reset is caught.
+        w.destinationOnlyPenalty = 3456
+        #expect(w.destinationOnlyPenalty != CostWeights.default.destinationOnlyPenalty)
+        store.save(w, scope: "commute-D-toWork")
+        let loaded = store.load(scope: "commute-D-toWork")
+        #expect(loaded?.destinationOnlyPenalty == 3456)
+        #expect(loaded == w)
+    }
 }
 
 // MARK: - CustomRouter learned-weights hook

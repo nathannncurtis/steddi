@@ -81,6 +81,10 @@ private struct StoredWeights: Codable {
     var tollPenalty: Double
     var rushHourMultiplier: Double
     var softZoneTimeMultiplier: Double
+    /// Optional so a pre-existing payload written before this field was mirrored
+    /// still decodes; a missing key falls back to `CostWeights()`'s default in
+    /// the `costWeights` getter rather than failing the whole decode.
+    var destinationOnlyPenalty: Double?
 
     init(_ w: CostWeights) {
         straightPenalty = w.straightPenalty
@@ -96,6 +100,7 @@ private struct StoredWeights: Codable {
         tollPenalty = w.tollPenalty
         rushHourMultiplier = w.rushHourMultiplier
         softZoneTimeMultiplier = w.softZoneTimeMultiplier
+        destinationOnlyPenalty = w.destinationOnlyPenalty
     }
 
     var costWeights: CostWeights {
@@ -113,6 +118,9 @@ private struct StoredWeights: Codable {
         w.tollPenalty = tollPenalty
         w.rushHourMultiplier = rushHourMultiplier
         w.softZoneTimeMultiplier = softZoneTimeMultiplier
+        // A payload written before this field was mirrored has no value — keep
+        // the `CostWeights()` default rather than clobbering it with 0.
+        if let destinationOnlyPenalty { w.destinationOnlyPenalty = destinationOnlyPenalty }
         return w
     }
 }
