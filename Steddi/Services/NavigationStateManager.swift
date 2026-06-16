@@ -104,6 +104,23 @@ final class NavigationStateManager {
     /// beats what was rejected by at least this much — "materially better".
     private static let rerouteResuggestMargin: TimeInterval = 120 // 2 min
 
+    /// Reroute-loop cadence. The FIRST evaluation runs after only the short
+    /// settle delay (let GPS/EWMA warm up) so a faster alternate that exists
+    /// from departure surfaces promptly instead of being silenced for the whole
+    /// first leg; subsequent evaluations use the full steady interval to avoid
+    /// spamming the network/UI. `var` (not `let`) so tests can shrink the delays
+    /// and assert an evaluation lands well before 5 minutes.
+    static var rerouteInitialDelay: Duration = .seconds(30)
+    static var rerouteSteadyInterval: Duration = .seconds(300)
+
+    /// Test-only instrumentation: counts how many times the reroute loop has
+    /// woken from its sleep and reached the candidate-evaluation phase. Lets a
+    /// test confirm the FIRST evaluation happens promptly after nav starts
+    /// (well before the 5-minute steady interval) rather than being gated behind
+    /// the first sleep. Not used by production logic.
+    @ObservationIgnored
+    private(set) var rerouteEvaluationCount: Int = 0
+
     var upcomingSteps: [UpcomingStep] = []
 
     /// The active navigation engine — shared so CarPlay can read the same state
@@ -196,6 +213,8 @@ final class NavigationStateManager {
         // New session — bump the generation so CarPlay re-presents nav even when
         // isNavigating didn't observably dip to false (continuous trip legs).
         sessionGeneration &+= 1
+        // Fresh session starts a fresh reroute-cadence count.
+        rerouteEvaluationCount = 0
         activeEngine = engine
         activeCommute = commute
         activeDirection = direction
@@ -242,18 +261,41 @@ final class NavigationStateManager {
             }
         }
 
-        // Reroute engine - periodic fallback check (every 5 minutes)
+        // Reroute engine - periodic fallback check.
+        //
+        // Cadence: evaluate PROMPTLY after nav starts, then settle into the
+        // steady 5-minute interval. The loop sleeps at the END of each cycle —
+        // never before the first evaluation — so a faster alternate that exists
+        // from departure (the moment it's most valuable, and the only moment a
+        // short commute may have) can surface without being silenced for the
+        // whole first leg. The first sleep is shortened to let GPS/EWMA settle
+        // and a valid currentCoordinate appear; subsequent sleeps use the full
+        // interval to avoid spamming the network/UI.
         if let commute, let direction {
             rerouteTask = Task { @MainActor [weak self] in
                 let directionsService = DirectionsService()
+                let initialDelay = Self.rerouteInitialDelay
+                let steadyInterval = Self.rerouteSteadyInterval
+                var isFirstCycle = true
 
                 while !Task.isCancelled {
                     guard let self else { break }
                     guard !self.hasArrived else { break }
 
-                    try? await Task.sleep(for: .seconds(300))
+                    // Short settle delay before the FIRST evaluation (let GPS /
+                    // EWMA warm up), full interval between subsequent cycles.
+                    let delay = isFirstCycle ? initialDelay : steadyInterval
+                    isFirstCycle = false
+                    try? await Task.sleep(for: delay)
                     guard !Task.isCancelled else { break }
                     guard !self.hasArrived else { break }
+
+                    // Reached the evaluation phase for this cycle. Record it
+                    // (test instrumentation) BEFORE the suppression/engine
+                    // guards so the count reflects loop cadence, not whether a
+                    // suggestion is currently pending.
+                    self.rerouteEvaluationCount += 1
+
                     guard self.rerouteSuggestion == nil else { continue }
 
                     guard let engine = self.activeEngine,
