@@ -341,7 +341,7 @@ struct SteddiNavOverlay: View {
                         // solid surfaces) + the shared soft shadow, matching the
                         // portrait follow-on banner.
                         Text("Then: \(displayFollowOnInstruction)")
-                            .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                            .font(SteddiTheme.body(13 * textScale, highContrast: highContrast).weight(.medium))
                             .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                             .legibleOverMap()
                             .lineLimit(1)
@@ -349,6 +349,10 @@ struct SteddiNavOverlay: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .frame(width: landscapeCardWidth, alignment: .leading)
+                    // Faint scrim under the glass, matching the portrait
+                    // follow-on banner, so the next-maneuver readout holds
+                    // against bright/varied cartography.
+                    .mapGlassScrim(in: RoundedRectangle(cornerRadius: 12))
                     .steddiGlass(tint: nil, interactive: false, in: RoundedRectangle(cornerRadius: 12))
                 }
 
@@ -440,7 +444,7 @@ struct SteddiNavOverlay: View {
             // Street name: centered bottom
             if !engine.roadName.isEmpty {
                 Text(engine.roadName)
-                    .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                    .font(SteddiTheme.body(13 * textScale, highContrast: highContrast).weight(.medium))
                     .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                     // Street name rides neutral glass over the moving map — the
                     // shared soft shadow so it holds against any tile, matching
@@ -448,6 +452,10 @@ struct SteddiNavOverlay: View {
                     .legibleOverMap()
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
+                    // Faint scrim under the glass, matching the portrait
+                    // street-name capsule, so the current-street name holds
+                    // against bright/varied cartography.
+                    .mapGlassScrim(in: Capsule())
                     .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.25)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 8)
@@ -534,6 +542,10 @@ struct SteddiNavOverlay: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
+        // Faint scrim under the glass, like the top banner / bottom bar, so the
+        // leg-context readout holds against bright/varied cartography — the soft
+        // shadow alone leaves textSecondary washing out on light tiles.
+        .mapGlassScrim(in: SteddiGlass.mediumShape)
         .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.mediumShape)
     }
 
@@ -561,6 +573,10 @@ struct SteddiNavOverlay: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        // Faint scrim under the glass, like the top banner / bottom bar, so the
+        // next-maneuver readout holds against bright/varied cartography — the
+        // soft shadow alone leaves textSecondary washing out on light tiles.
+        .mapGlassScrim(in: SteddiGlass.mediumShape)
         .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.mediumShape, fallbackStrokeOpacity: 0.08)
     }
 
@@ -576,6 +592,11 @@ struct SteddiNavOverlay: View {
             .legibleOverMap()
             .padding(.horizontal, 16)
             .padding(.vertical, 7)
+            // Faint scrim under the glass, like the top banner / bottom bar, so
+            // the current-street name holds against bright/varied cartography —
+            // the soft shadow alone leaves textSecondary washing out on light
+            // tiles.
+            .mapGlassScrim(in: Capsule())
             .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.25)
     }
 

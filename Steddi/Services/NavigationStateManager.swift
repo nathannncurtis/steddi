@@ -207,9 +207,9 @@ final class NavigationStateManager {
                         of: activePolyline,
                         from: currentCoord
                     )
-                    let remainingETA: TimeInterval
+                    let baseline: RouteETA
                     do {
-                        remainingETA = try await directionsService.fetchETA(
+                        baseline = try await directionsService.fetchPathAwareETA(
                             from: currentCoord,
                             along: PolylineEncoder.encode(remainingPolyline, precision: 6)
                         )
@@ -219,6 +219,7 @@ final class NavigationStateManager {
                         // compare incomparable numbers.
                         continue
                     }
+                    let remainingETA = baseline.duration
 
                     // The fetch awaited; bail if the session changed underneath.
                     guard !Task.isCancelled,
@@ -243,14 +244,14 @@ final class NavigationStateManager {
                     let bestSuggestion = await Self.bestReroute(
                         candidates: candidates,
                         currentCoord: currentCoord,
-                        remainingETASeconds: remainingETA,
+                        baseline: baseline,
                         basePercentage: commute.thresholdPercentage,
                         hardMinuteFloor: commute.hardMinuteFloor,
                         isSuppressed: { [weak self] routeID, savingsSeconds in
                             self?.isRerouteSuppressed(routeID: routeID, savingsSeconds: savingsSeconds) ?? false
                         },
                         fetchETA: { coord, polyline in
-                            try await directionsService.fetchETA(from: coord, along: polyline)
+                            try await directionsService.fetchPathAwareETA(from: coord, along: polyline)
                         }
                     )
 
@@ -288,18 +289,29 @@ final class NavigationStateManager {
     /// a genuinely faster alternative shows real savings and an equal route shows
     /// ~0.
     ///
+    /// The active route's baseline carries its measurement basis (`isPathAware`),
+    /// and each candidate's fetched ETA carries its own. A candidate is only
+    /// compared when its basis MATCHES the baseline's: if either side fell back
+    /// to a direct (open-road) estimate while the other stayed path-aware, the
+    /// two numbers are incomparable (the direct estimate is generally shorter
+    /// than the committed path), so comparing them would manufacture phantom
+    /// "faster route" savings. Mismatched candidates are skipped this cycle
+    /// rather than compared across bases — exactly the symmetry guarantee the
+    /// main via-route path already upholds, now extended to the fallback.
+    ///
     /// Pure and dependency-injected (`fetchETA`, `isSuppressed`) so the
     /// symmetric-comparison contract is unit-testable without a live engine or
     /// network. Candidate exclusion (the active route) is the caller's job.
     nonisolated static func bestReroute(
         candidates: [Route],
         currentCoord: CLLocationCoordinate2D,
-        remainingETASeconds: TimeInterval,
+        baseline: RouteETA,
         basePercentage: Double,
         hardMinuteFloor: Int?,
         isSuppressed: (UUID, TimeInterval) -> Bool,
-        fetchETA: (CLLocationCoordinate2D, String) async throws -> TimeInterval
+        fetchETA: (CLLocationCoordinate2D, String) async throws -> RouteETA
     ) async -> (route: Route, savingsMinutes: Double, savingsPercentage: Double)? {
+        let remainingETASeconds = baseline.duration
         var bestSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)?
         var bestSavings: TimeInterval = 0
 
@@ -315,7 +327,7 @@ final class NavigationStateManager {
                 from: currentCoord
             )
 
-            let candidateETA: TimeInterval
+            let candidateETA: RouteETA
             do {
                 candidateETA = try await fetchETA(
                     currentCoord,
@@ -325,9 +337,15 @@ final class NavigationStateManager {
                 continue
             }
 
+            // Comparability gate: only compare ETAs measured on the SAME basis.
+            // A path-aware baseline vs. a direct-fallback candidate (or vice
+            // versa) would yield phantom savings, so skip the candidate rather
+            // than compare incomparable numbers.
+            guard candidateETA.isPathAware == baseline.isPathAware else { continue }
+
             let decision = RerouteEngine.evaluate(
                 remainingETASeconds: remainingETASeconds,
-                fallbackETASeconds: candidateETA,
+                fallbackETASeconds: candidateETA.duration,
                 basePercentage: basePercentage,
                 hardMinuteFloor: hardMinuteFloor
             )
