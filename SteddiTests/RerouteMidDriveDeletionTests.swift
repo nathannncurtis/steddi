@@ -132,4 +132,86 @@ struct RerouteMidDriveDeletionTests {
     func fetchLiveRouteNilContext() {
         #expect(NavigationStateManager.fetchLiveRoute(id: UUID(), in: nil) == nil)
     }
+
+    // MARK: - switchToRoute liveness gate (suggestion's route deleted before tap)
+
+    /// The reroute card holds a cached @Model Route and can display for up to 30s.
+    /// The loop validated liveness only at set-time; nothing re-checks while the
+    /// card shows. If the commute/route is deleted in that window (CommuteDetailView
+    /// delete, Settings "delete all data"), tapping "Switch" used to dereference the
+    /// invalidated @Model in navigateWithSavedRoute (encodedPolyline/name/…) and
+    /// trap. switchToRoute now re-validates with HomeView.isSwitchableRoute and
+    /// re-resolves a fresh live handle by id (fetchLiveRoute) before decoding,
+    /// dismissing the suggestion gracefully if the route is gone.
+
+    @Test("isSwitchableRoute is true for a live route")
+    func isSwitchableLive() throws {
+        let context = try makeContext()
+        let (_, _, candidate) = try makeCommute(in: context)
+        #expect(HomeView.isSwitchableRoute(candidate) == true)
+    }
+
+    @Test("isSwitchableRoute is false after the route is deleted mid-window — switch dismisses, no crash")
+    func isSwitchableFalseAfterRouteDeleted() throws {
+        let context = try makeContext()
+        let (commute, _, candidate) = try makeCommute(in: context)
+
+        // The suggestion was surfaced; THEN the route is deleted before "Switch".
+        context.delete(candidate)
+        try context.save()
+
+        // The switch-time liveness gate must reject the invalidated handle — so
+        // switchToRoute returns/dismisses instead of decoding it and trapping.
+        #expect(HomeView.isSwitchableRoute(candidate) == false,
+                "A deleted route must fail the switch gate so switchToRoute dismisses gracefully")
+        _ = commute
+    }
+
+    @Test("isSwitchableRoute is false after the whole commute is deleted (delete-all-data)")
+    func isSwitchableFalseAfterCommuteDeleted() throws {
+        let context = try makeContext()
+        let (commute, _, candidate) = try makeCommute(in: context)
+
+        // Cascade-delete via the commute — Settings "delete all data" mid-drive.
+        context.delete(commute)
+        try context.save()
+
+        #expect(HomeView.isSwitchableRoute(candidate) == false)
+    }
+
+    @Test("Switch path: deleted suggestion route resolves to nil via fetchLiveRoute — graceful dismissal")
+    func switchPathDeletedRouteResolvesNil() throws {
+        // End-to-end mirror of switchToRoute's guard: re-validate liveness, then
+        // re-resolve by id. With the route deleted, BOTH the liveness gate fails
+        // AND the id re-fetch returns nil, so the function bails (clears the
+        // suggestion) without ever reaching the navigateWithSavedRoute decode.
+        let context = try makeContext()
+        let (commute, _, candidate) = try makeCommute(in: context)
+        let candidateID = candidate.id
+
+        context.delete(candidate)
+        try context.save()
+
+        let switchable = HomeView.isSwitchableRoute(candidate)
+        let liveHandle = NavigationStateManager.fetchLiveRoute(id: candidateID, in: context)
+
+        #expect(switchable == false)
+        #expect(liveHandle == nil, "switchToRoute would dismiss the suggestion and skip navigation — no @Model deref, no crash")
+        _ = commute
+    }
+
+    @Test("Switch path: a still-live suggestion route re-resolves to a usable live handle")
+    func switchPathLiveRouteResolvesHandle() throws {
+        // The happy path: nothing was deleted, so the gate passes and the id
+        // re-fetch returns a live handle switchToRoute decodes safely.
+        let context = try makeContext()
+        let (_, _, candidate) = try makeCommute(in: context)
+        let candidateID = candidate.id
+
+        #expect(HomeView.isSwitchableRoute(candidate) == true)
+        let liveHandle = NavigationStateManager.fetchLiveRoute(id: candidateID, in: context)
+        #expect(liveHandle?.id == candidateID)
+        // The decode switchToRoute would run on the resolved handle succeeds.
+        #expect(liveHandle.map { PolylineEncoder.decode($0.encodedPolyline, precision: 6).count >= 2 } == true)
+    }
 }

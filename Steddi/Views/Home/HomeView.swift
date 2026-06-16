@@ -1424,10 +1424,38 @@ struct HomeView: View {
         }
     }
 
+    /// Whether a suggested route's `@Model` handle is still safe to switch onto.
+    /// The reroute loop vets liveness only at set-time (NavigationStateManager
+    /// re-resolves the winner via `fetchLiveRoute` before assigning
+    /// `rerouteSuggestion`); the card then displays for up to 30s. If the
+    /// commute/route is deleted in that window (CommuteDetailView delete, Settings
+    /// "delete all data"), the cached handle on the card is invalidated and
+    /// reading its persisted properties (`encodedPolyline`/`name`/…) in
+    /// `navigateWithSavedRoute` traps. Mirrors NavigationStateManager.isLive — a
+    /// deleted SwiftData model has `isDeleted == true` and/or a nil `modelContext`.
+    /// Pure + static so the switch-time liveness gate is unit-testable without a
+    /// UI host; `nonisolated` since it touches no actor state.
+    nonisolated static func isSwitchableRoute(_ route: Route) -> Bool {
+        !route.isDeleted && route.modelContext != nil
+    }
+
     /// Switch the active commute onto a suggested faster/fallback route. Shared
     /// by the on-phone nav overlay's reroute card and the CarPlay phone-companion
     /// reroute card so both surfaces perform the identical route swap.
     private func switchToRoute(_ route: Route) {
+        // The reroute card holds a cached @Model Route and can display for up to
+        // 30s. If the commute/route was deleted in that window, the handed-in
+        // handle is invalidated — decoding its polyline/name in
+        // navigateWithSavedRoute would trap. Re-validate liveness and re-resolve a
+        // fresh live handle by id (the card was already dismissed by the caller);
+        // if it's gone, dismiss gracefully — no teardown, no navigation, no crash.
+        guard Self.isSwitchableRoute(route),
+              let liveRoute = NavigationStateManager.fetchLiveRoute(id: route.id, in: modelContext) else {
+            print("[STEDDI-NAV] switchToRoute: suggested route deleted before Switch — dismissing")
+            navStateManager.rerouteSuggestion = nil
+            return
+        }
+
         // Reroute to the fallback
         let target: PinnedLocation? = activeDirection == .originToDestination ? activeCommute?.destination : activeCommute?.origin
         guard let target else { return }
@@ -1437,7 +1465,7 @@ struct HomeView: View {
         navStateManager.stopObserving()
         isNavigating = false
         navigationRoute = nil
-        navigateWithSavedRoute(route, to: target)
+        navigateWithSavedRoute(liveRoute, to: target)
     }
 
     /// Navigate using a saved route's polyline with custom turn-by-turn logic.
