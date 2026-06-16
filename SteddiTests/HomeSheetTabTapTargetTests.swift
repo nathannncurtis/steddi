@@ -27,7 +27,7 @@ struct HomeSheetTabTapTargetTests {
         let host = UIHostingController(rootView: view.frame(width: width))
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
-        return host.sizeThatFits(in: CGSize(width: width, height: .max))
+        return host.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
     }
 
     @Test("portrait bottom-sheet tab label is at least 44pt tall")
