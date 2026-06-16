@@ -192,21 +192,50 @@ enum ModelStoreLocator {
     /// - If the group open fails, retry it once: the most plausible failures
     ///   (transient App Group container unavailability at boot, a file still
     ///   protected while the device is locked) are momentary and self-heal.
-    /// - If the group open STILL fails once the group store is the source of
-    ///   truth (marker set, or the group file already exists with data), do NOT
-    ///   silently reopen the never-deleted, pre-migration legacy store
+    /// - If the group open STILL fails once the group store is *established*
+    ///   (the marker is set — the app has previously opened and written it), do
+    ///   NOT silently reopen the never-deleted, pre-migration legacy store
     ///   read-write. That would strand the user on stale data and split new
     ///   writes across two stores. Surface the in-memory warning instead so the
     ///   user sees "changes won't be saved" rather than quietly losing their
     ///   recent drives/commutes.
-    /// - Legacy is opened read-write ONLY when the group store was never
-    ///   established (e.g. the migration copy itself failed and `selectStoreURL`
-    ///   returned `.legacy`) — there is no divergent group data to lose then.
+    /// - If the group open fails and the store was NEVER established, the group
+    ///   file is at most a just-landed migration copy that no app write has ever
+    ///   touched — there is no divergent group data to lose, but the copy itself
+    ///   is suspect (corruption, interrupted prior copy, schema-incompatible).
+    ///   Quarantine that suspect copy so the next launch re-attempts migration,
+    ///   then open the never-deleted legacy store READ-WRITE so the user keeps
+    ///   their intact data rather than being stranded on a dead, unopenable
+    ///   store. (Merely checking `fileExists` here would wrongly treat the failed
+    ///   copy as established and divert to in-memory forever.)
+    /// - Legacy is opened read-write when the group store was never established
+    ///   (the migration copy failed and `selectStoreURL` returned `.legacy`, or
+    ///   the copied group store could not be opened and was quarantined above) —
+    ///   there is no divergent group data to lose then.
     /// - Last resort is the in-memory store with a user-visible warning.
     static func makeAppContainer(defaults: UserDefaults = .standard) -> ContainerResult {
-        let candidates = legacyStoreCandidates()
-        let groupURL = groupStoreURL()
-        let selection = selectStoreURL(groupURL: groupURL, legacyCandidates: candidates)
+        makeAppContainer(
+            groupURL: groupStoreURL(),
+            legacyCandidates: legacyStoreCandidates(),
+            defaults: defaults
+        )
+    }
+
+    /// Injectable core of `makeAppContainer`, exposed for tests so the recovery
+    /// path (a copied-but-unopenable group store with an intact legacy store) can
+    /// be exercised against real on-disk containers without the real App Group
+    /// container. Production calls the parameterless overload above.
+    static func makeAppContainer(
+        groupURL: URL?,
+        legacyCandidates: [URL],
+        defaults: UserDefaults = .standard,
+        fileManager: FileManager = .default
+    ) -> ContainerResult {
+        let selection = selectStoreURL(
+            groupURL: groupURL,
+            legacyCandidates: legacyCandidates,
+            fileManager: fileManager
+        )
 
         if case .group(let url) = selection {
             // One retry to ride out a transient container-unavailability at boot.
@@ -224,15 +253,26 @@ enum ModelStoreLocator {
                 }
             }
 
-            // Group open failed after retry. If the group store is the source of
-            // truth, refuse to diverge onto the stale legacy store — warn instead.
+            // Group open failed after retry. If the group store is ESTABLISHED
+            // (the app has opened and written it before), it is the source of
+            // truth: refuse to diverge onto the stale legacy store — warn instead.
             let groupEstablished = defaults.bool(forKey: groupStoreEstablishedKey)
-            let groupExists = FileManager.default.fileExists(atPath: url.path)
-            if groupEstablished || groupExists {
-                storeLog.fault("Group store unavailable but it is the source of truth (established=\(groupEstablished), exists=\(groupExists)) — refusing to revert to the pre-migration legacy store; using in-memory store with warning")
+            if groupEstablished {
+                storeLog.fault("Group store unavailable but it is the established source of truth — refusing to revert to the pre-migration legacy store; using in-memory store with warning")
                 return inMemoryFallback()
             }
-            storeLog.error("Group store never established — falling back to legacy store location")
+
+            // Never established: the group file is at most a just-landed migration
+            // copy (or a stale suspect copy from an earlier failed launch) with no
+            // app writes. Quarantine it so the next launch re-attempts migration,
+            // then fall through to open the intact, never-deleted legacy store
+            // read-write — recovering the user's data instead of stranding them.
+            if existingLegacyStoreURL(candidates: legacyCandidates, fileManager: fileManager) != nil {
+                quarantineSuspectGroupStore(at: url, fileManager: fileManager)
+                storeLog.error("Copied group store unopenable and never established — quarantined the suspect copy; falling back to the intact legacy store")
+            } else {
+                storeLog.error("Group store never established and no legacy store to recover — falling back to legacy store location")
+            }
         }
 
         // Legacy read-write fallback: reached only when the migration copy failed
@@ -242,8 +282,8 @@ enum ModelStoreLocator {
         if case .legacy(let url) = selection {
             legacyURL = url
         } else {
-            legacyURL = existingLegacyStoreURL(candidates: candidates)
-                ?? candidates.last
+            legacyURL = existingLegacyStoreURL(candidates: legacyCandidates, fileManager: fileManager)
+                ?? legacyCandidates.last
                 ?? URL.applicationSupportDirectory.appendingPathComponent(legacyStoreFilename)
         }
         do {
@@ -258,6 +298,33 @@ enum ModelStoreLocator {
         }
 
         return inMemoryFallback()
+    }
+
+    /// Move a suspect (copied-but-never-successfully-opened) group store and its
+    /// sidecars out of the way so the next launch's `selectStoreURL` sees no group
+    /// file and re-attempts migration from the intact legacy store. The suspect
+    /// files are renamed (not deleted) into a timestamped `.quarantine` sibling so
+    /// nothing is destroyed — if the copy was actually salvageable it can still be
+    /// recovered manually. Best-effort: failures here don't block the legacy open.
+    private static func quarantineSuspectGroupStore(
+        at groupURL: URL,
+        fileManager: FileManager = .default
+    ) {
+        let stamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        for suffix in ["", "-shm", "-wal"] {
+            let src = URL(fileURLWithPath: groupURL.path + suffix)
+            guard fileManager.fileExists(atPath: src.path) else { continue }
+            let dst = URL(fileURLWithPath: groupURL.path + suffix + ".quarantine-\(stamp)")
+            do {
+                if fileManager.fileExists(atPath: dst.path) {
+                    try fileManager.removeItem(at: dst)
+                }
+                try fileManager.moveItem(at: src, to: dst)
+            } catch {
+                storeLog.error("Failed to quarantine suspect group store file \(src.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
     }
 
     /// In-memory container of last resort, carrying the user-visible
