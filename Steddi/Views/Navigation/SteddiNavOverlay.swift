@@ -881,7 +881,11 @@ struct SteddiNavOverlay: View {
 
             // ETA block — center
             VStack(spacing: 4) {
-                HStack(spacing: 4) {
+                // Baseline-align "min" to the ETA number via `.firstTextBaseline`
+                // so it tracks the digits' baseline as both scale under Dynamic
+                // Type. The old hardcoded `.padding(.top, 8)` was hand-tuned for the
+                // default size and drifted/misaligned once the type grew.
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(engine.etaMinutes)")
                         .font(SteddiTheme.mono(32 * textScale))
                         .foregroundStyle(SteddiTheme.textPrimary)
@@ -890,7 +894,6 @@ struct SteddiNavOverlay: View {
                         .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
                         .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                         .legibleOverMap()
-                        .padding(.top, 8)
                 }
 
                 HStack(spacing: 8) {
