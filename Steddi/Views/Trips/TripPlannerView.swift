@@ -82,6 +82,11 @@ struct TripPlannerView: View {
                         .font(.body.weight(.medium))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .padding(10)
+                        // Theme-aware over-map scrim behind the glass (same shape),
+                        // like the NoGoZone editor — in DARK theme the light frost
+                        // would otherwise wash the label out over the map. Drawn
+                        // before `.steddiGlass`; suppressed when glass is off.
+                        .mapGlassScrim(in: Capsule())
                         .steddiGlass(interactive: true, in: Capsule())
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Capsule())
@@ -93,6 +98,9 @@ struct TripPlannerView: View {
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
+                        // Theme-aware over-map scrim behind the glass (same shape) so
+                        // the title stays legible over a dark map in DARK theme.
+                        .mapGlassScrim(in: Capsule())
                         .steddiGlass(in: Capsule())
 
                     Spacer()
@@ -101,6 +109,9 @@ struct TripPlannerView: View {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(canSave ? SteddiTheme.accent : SteddiTheme.textMuted)
                         .padding(10)
+                        // Theme-aware over-map scrim behind the glass (same shape) so
+                        // the Save label stays legible over a dark map in DARK theme.
+                        .mapGlassScrim(in: Capsule())
                         .steddiGlass(interactive: true, in: Capsule())
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Capsule())
@@ -130,7 +141,9 @@ struct TripPlannerView: View {
                 // Floats over the live tap-to-add-stop map — shared glass treatment
                 // so it falls back to a SOLID surface under Reduce Transparency /
                 // Increase Contrast instead of a translucent fill the cartography
-                // bleeds through.
+                // bleeds through. The theme-aware over-map scrim (same shape, behind
+                // the glass) keeps the glyph legible over a dark map in DARK theme.
+                .mapGlassScrim(in: RoundedRectangle(cornerRadius: 12))
                 .steddiGlass(interactive: true, in: RoundedRectangle(cornerRadius: 12))
         }
     }
@@ -208,7 +221,10 @@ struct TripPlannerView: View {
         .frame(maxWidth: .infinity)
         // Floats over the live map — shared glass treatment so the card falls back
         // to a SOLID surface under Reduce Transparency / Increase Contrast instead
-        // of a translucent fill the cartography bleeds through.
+        // of a translucent fill the cartography bleeds through. The theme-aware
+        // over-map scrim (same shape, behind the glass) stops the card content from
+        // washing out in DARK theme, exactly like the NoGoZone editor / nav HUD.
+        .mapGlassScrim(in: bottomCardShape)
         .steddiGlass(in: bottomCardShape)
         .clipShape(bottomCardShape)
         // Lift the card off the map (kept from the prior look). Applied outside the
