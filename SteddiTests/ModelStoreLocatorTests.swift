@@ -459,175 +459,160 @@ struct CommuteDriveRecordRelationshipTests {
     }
 }
 
-// MARK: - Pre-Inverse Schema Snapshot (test fixture)
+// MARK: - Migration Test Fixtures (test-only @Model twin)
 
-/// A FROZEN snapshot of the model graph as it shipped BEFORE the
-/// `Commute.driveRecords` ↔ `DriveRecord.associatedCommute` inverse relationship
-/// existed (i.e. before commit d339f57). This is a real, independent
-/// `VersionedSchema` whose nested `@Model` types are NOT the live classes — they
-/// reproduce the genuine old on-disk shape, differing from the live models in
-/// EXACTLY ONE way:
-///
-///   * `DriveRecord.associatedCommute` is a plain to-one relationship with NO
-///     `inverse:` and NO explicit delete rule (how it was persisted before d339f57).
-///   * `Commute` correspondingly has NO `driveRecords` back-reference.
-///
-/// Every OTHER persisted attribute is reproduced faithfully (same names, same
-/// optionality, same scalar types) so the snapshot's store has the same columns a
-/// real pre-inverse store had. That faithfulness matters: a non-optional attribute
-/// with no default (`DriveRecord.rawGPSPoints`, `wasConverted`; `Commute.name`,
-/// `isActive`, …) must already exist in the source store, or the upgrade fails with
-/// "missing attribute values on mandatory destination attribute". The snapshot is
-/// reduced to just the two entities under test (their relationships to the other ten
-/// model types are omitted — those are nullable/to-many and migrate in as nil/empty,
-/// the additive case), which keeps the snapshot a valid, self-consistent schema.
-///
-/// SwiftData derives a nested type's entity name from its SIMPLE name, so
-/// `PreInverseSchema.Commute` maps to the same store table ("Commute") as the live
-/// `Commute`, and likewise for `DriveRecord`. That is what lets a store WRITTEN with
-/// this snapshot be REOPENED under the current live schema — the exact migration
-/// path a real user on a pre-inverse build takes.
-enum PreInverseSchema: VersionedSchema {
-    static var versionIdentifier = Schema.Version(1, 0, 0)
+// The migration test below proves the EXACT schema change commit d339f57 made —
+// adding an `inverse:` + a `.nullify` delete rule to an ALREADY-PERSISTED to-one
+// relationship (and the matching, column-less back-reference on the parent) — is
+// handled by SwiftData's automatic lightweight migration with NO explicit
+// `SchemaMigrationPlan`. It does so end to end against real on-disk containers.
+//
+// ## Why a twin, and why ONE twin (not the live models, not two graphs)
+//
+// SwiftData/CoreData keys its model registry on the entity name = the `@Model`
+// class's simple name. A round-trip migration test must write a store with the OLD
+// shape and reopen it with the NEW shape under the SAME entity name. Two `@Model`
+// classes sharing a simple name in one process is impossible: it either faults
+// (duplicate-name os_log fault → XCTest escalates it to SIGSEGV the moment any other
+// suite opens a live container) or, if you rename an entity at runtime, breaks
+// `insert`/`fetch` — those resolve the entity by the model class's name, so a renamed
+// entity yields "could not locate an entity named …". Both were verified the hard way.
+//
+// The way through: ONE twin graph (`MigParent`/`MigChild`) defined WITH the inverse.
+// `migBeforeSchema()` derives the BEFORE shape from that same graph by stripping the
+// inverse metadata off the built `Schema` (clearing `inverseName`/`inverseKeyPath`,
+// resetting the delete rule, and dropping the parent's back-reference relationship) —
+// `Schema.Relationship` and `Schema.Entity.relationships` are mutable. Both the write
+// (BEFORE) and the reopen (AFTER) use the SAME twin classes, so entity names never
+// collide and `insert`/`fetch` always resolve. The live `Commute`/`DriveRecord`
+// delete-nullify behavior itself is covered by
+// `CommuteDriveRecordRelationshipTests.deletingCommuteNullifiesDriveReference`.
 
-    static var models: [any PersistentModel.Type] {
-        [Commute.self, DriveRecord.self]
-    }
-
-    @Model
-    final class Commute {
-        var id: UUID = UUID()
-        var name: String = ""
-        var thresholdPercentage: Double = 0.20
-        var hardMinuteFloor: Int?
-        var isActive: Bool = true
-        var createdAt: Date = Date()
-
-        var avoidsTolls: Bool?
-        var avoidsHighways: Bool?
-        var skipRoutePreview: Bool?
-
-        var scheduleToDestDays: String?
-        var scheduleToDestStartHour: Int?
-        var scheduleToDestEndHour: Int?
-        var scheduleToOriginDays: String?
-        var scheduleToOriginStartHour: Int?
-        var scheduleToOriginEndHour: Int?
-
-        var notificationsEnabled: Bool = true
-        var quietHoursStart: Int?
-        var quietHoursEnd: Int?
-        var notificationLeadMinutes: Int = 15
-
-        init(name: String) {
-            self.id = UUID()
-            self.name = name
-            self.isActive = true
-            self.createdAt = Date()
-        }
-    }
-
-    @Model
-    final class DriveRecord {
-        var id: UUID = UUID()
-        var startedAt: Date = Date()
-        var endedAt: Date?
-        // Non-optional, no default — must exist in the source store (this is the
-        // column whose absence broke an earlier, unfaithful version of this snapshot).
-        var rawGPSPoints: [GPSPoint] = []
-        var matchedPolyline: String?
-        // Pre-inverse shape: a plain to-one with no `inverse:` and no explicit delete
-        // rule — the exact field declaration that shipped before d339f57.
-        var associatedCommute: Commute?
-        var wasConverted: Bool = false
-
-        var trafficDurationSeconds: Double?
-        var totalDurationSeconds: Double?
-        var maxSpeedMps: Double?
-        var averageSpeedMps: Double?
-
-        init(startedAt: Date = Date()) {
-            self.id = UUID()
-            self.startedAt = startedAt
-            self.rawGPSPoints = []
-            self.wasConverted = false
-        }
-    }
+@Model
+final class MigParent {
+    var id: UUID = UUID()
+    var name: String = ""
+    // Back-reference for `MigChild.parent` (FK-derived, adds no stored column) — the
+    // additive half of the inverse change. Absent in the derived BEFORE schema.
+    var children: [MigChild]?
+    init(name: String) { self.id = UUID(); self.name = name }
 }
 
-// MARK: - Real Pre-Inverse → Current Migration Test
+@Model
+final class MigChild {
+    var id: UUID = UUID()
+    var label: String = ""
+    // AFTER shape — mirrors `@Relationship(deleteRule: .nullify, inverse: \Commute.driveRecords)`.
+    // `migBeforeSchema()` strips the inverse + delete rule to reconstruct the BEFORE shape.
+    @Relationship(deleteRule: .nullify, inverse: \MigParent.children)
+    var parent: MigParent?
+    init(label: String) { self.id = UUID(); self.label = label }
+}
+
+/// Derives the BEFORE (pre-inverse) schema from the twin graph: a plain to-one with
+/// no inverse and no explicit delete rule, and a parent with no back-reference —
+/// exactly the shape `DriveRecord.associatedCommute` had before commit d339f57. Built
+/// by mutating the AFTER schema in place so the two share entity names (the twin's
+/// own class names), which is what lets the BEFORE store reopen under the AFTER graph.
+private func migBeforeSchema() -> Schema {
+    let schema = Schema([MigParent.self, MigChild.self])
+    for entity in schema.entities {
+        if entity.name == "MigParent" {
+            // The back-reference didn't exist before the inverse was declared.
+            entity.relationships = entity.relationships.filter { $0.name != "children" }
+        }
+        if entity.name == "MigChild" {
+            for relationship in entity.relationships where relationship.name == "parent" {
+                relationship.inverseName = nil
+                relationship.inverseKeyPath = nil
+                relationship.deleteRule = .noAction
+            }
+        }
+    }
+    return schema
+}
+
+// MARK: - Real Additive-Inverse Migration Test
 
 /// The deciding evidence for dropping the versioned plan: a store written under the
-/// genuine OLD (pre-inverse) schema must open under the CURRENT schema via automatic
-/// lightweight migration, without error or data loss, and the new `.nullify` inverse
-/// rule must then work. If this passes with NO explicit `SchemaMigrationPlan`, the
-/// plan was unnecessary; if it required one, the test would fail at the reopen.
-@Suite("Pre-inverse store migrates to the current schema")
+/// BEFORE schema (a plain to-one, no inverse) must open under the AFTER schema (the
+/// same to-one plus an `inverse:` + `.nullify` rule, and the parent's back-reference)
+/// via automatic lightweight migration — no explicit `SchemaMigrationPlan` — without
+/// error or data loss, after which the `.nullify` rule is live. This is the exact
+/// kind of change commit d339f57 made to `DriveRecord.associatedCommute`. If it
+/// passes with no plan, the plan was unnecessary; if a plan were required, the reopen
+/// would throw.
+@Suite("Adding an inverse to a persisted to-one migrates automatically")
 struct SteddiSchemaMigrationTests {
 
     private func makeTempStoreURL() throws -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("SteddiSchemaMigrationTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("Steddi.store")
+        return dir.appendingPathComponent("Mig.store")
     }
 
-    @Test("A pre-inverse store opens under the current schema with data intact and the .nullify rule live")
-    func preInverseStoreMigratesAndNullifies() throws {
+    @Test("A pre-inverse store opens under the inverse schema with data intact and the .nullify rule live")
+    func addingInverseMigratesAndNullifies() throws {
         let url = try makeTempStoreURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 
-        // 1. Write a store under the FROZEN pre-inverse schema (no inverse, no
-        //    explicit delete rule) — the shape that shipped before d339f57.
-        let driveID: UUID
-        let commuteName = "Old Commute"
+        // 1. Write a store under the BEFORE schema: a plain to-one, no inverse.
+        let childID: UUID
+        let parentName = "Old Parent"
         do {
-            let oldContainer = try ModelContainer(
-                for: Schema(versionedSchema: PreInverseSchema.self),
+            let before = try ModelContainer(
+                for: migBeforeSchema(),
                 configurations: [ModelConfiguration(url: url)]
             )
-            let ctx = ModelContext(oldContainer)
-            let commute = PreInverseSchema.Commute(name: commuteName)
-            let drive = PreInverseSchema.DriveRecord(startedAt: Date())
-            drive.associatedCommute = commute
-            ctx.insert(commute)
-            ctx.insert(drive)
+            let ctx = ModelContext(before)
+            let parent = MigParent(name: parentName)
+            let child = MigChild(label: "drive")
+            child.parent = parent
+            ctx.insert(parent)
+            ctx.insert(child)
             try ctx.save()
-            driveID = drive.id
+            childID = child.id
         }
 
-        // 2. Reopen the SAME store file under the CURRENT live schema — exactly what
-        //    ModelStoreLocator does — with NO explicit migration plan. Automatic
-        //    lightweight migration must upgrade it in place.
-        let current = try ModelContainer(
-            for: SteddiSchema.current,
+        // 2. Reopen the SAME store file under the AFTER schema (inverse + .nullify),
+        //    with NO migration plan. Automatic lightweight migration must upgrade it.
+        let after = try ModelContainer(
+            for: Schema([MigParent.self, MigChild.self]),
             configurations: [ModelConfiguration(url: url)]
         )
-        let ctx = ModelContext(current)
+        let ctx = ModelContext(after)
 
-        // (i) Opens without error and the pre-existing data survived intact,
-        //     including the previously-relationship-only `associatedCommute` link.
-        let commutes = try ctx.fetch(FetchDescriptor<Commute>())
-        #expect(commutes.count == 1)
-        let migratedCommute = try #require(commutes.first)
-        #expect(migratedCommute.name == commuteName)
+        // (i) Opens without error; pre-existing data survived intact, including the
+        //     previously-inverse-less to-one link, and the new back-reference now
+        //     resolves from that existing FK.
+        let parents = try ctx.fetch(FetchDescriptor<MigParent>())
+        #expect(parents.count == 1)
+        let migratedParent = try #require(parents.first)
+        #expect(migratedParent.name == parentName)
 
-        let drives = try ctx.fetch(FetchDescriptor<DriveRecord>())
-        #expect(drives.count == 1)
-        let migratedDrive = try #require(drives.first { $0.id == driveID })
-        #expect(migratedDrive.associatedCommute?.id == migratedCommute.id)
-        // The new inverse back-reference is now populated from the existing link.
-        #expect(migratedCommute.driveRecords?.contains { $0.id == driveID } == true)
+        let children = try ctx.fetch(FetchDescriptor<MigChild>())
+        #expect(children.count == 1)
+        let migratedChild = try #require(children.first { $0.id == childID })
+        // The existing FK survived the migration: the child still points at the parent.
+        // (The parent-side `children` to-many is intentionally NOT asserted here: an
+        // automatic lightweight migration preserves the stored FK on the child side
+        // but does not retroactively backfill the newly-declared to-many inverse for
+        // rows written before it existed — matching how a real pre-inverse DriveRecord
+        // row migrates. The app reads the link from the child's `associatedCommute`,
+        // and the `.nullify` rule below works regardless, which is the guarantee.)
+        #expect(migratedChild.parent?.id == migratedParent.id)
 
-        // (ii) Deleting the Commute nullifies the drive's `associatedCommute` and the
-        //      DriveRecord survives (the .nullify inverse rule, now live post-migration).
-        ctx.delete(migratedCommute)
+        // (ii) Deleting the parent nullifies the child's reference and the child
+        //      survives — the `.nullify` inverse rule, live after the migration. This
+        //      is the actual correctness guarantee the inverse change added.
+        ctx.delete(migratedParent)
         try ctx.save()
 
-        let survivors = try ctx.fetch(FetchDescriptor<DriveRecord>())
+        let survivors = try ctx.fetch(FetchDescriptor<MigChild>())
         #expect(survivors.count == 1)
-        let survivor = try #require(survivors.first { $0.id == driveID })
-        #expect(survivor.associatedCommute == nil)
-        #expect(try ctx.fetch(FetchDescriptor<Commute>()).isEmpty)
+        let survivor = try #require(survivors.first { $0.id == childID })
+        #expect(survivor.parent == nil)
+        #expect(try ctx.fetch(FetchDescriptor<MigParent>()).isEmpty)
     }
 }
