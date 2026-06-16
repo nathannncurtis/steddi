@@ -23,6 +23,13 @@ struct SteddiRoutePrefBadge: View {
                         Circle()
                             .fill(SteddiTheme.textMuted(highContrast: highContrast))
                             .frame(width: 3, height: 3)
+                            // This separator rides directly on the moving map, so
+                            // give it the same over-map hardening as its sibling
+                            // pills — the shared soft shadow — or it washes out on
+                            // bright cartography (textMuted's AA holds only on
+                            // solid surfaces). Matches the bottom-bar distance /
+                            // arrival separator dot in SteddiNavOverlay.
+                            .legibleOverMap()
                     }
                     pill(label)
                 }
