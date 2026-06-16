@@ -359,16 +359,26 @@ struct AStarSearch: PathSearch {
 
     /// The co-located REVERSE directed edge of `edgeIndex` on a two-way street:
     /// the edge over the same physical OSM way that runs in the opposite direction
-    /// (`from`/`to` swapped). Identified by matching `osmWayID` so a genuinely
-    /// distinct parallel road is never mistaken for the reverse twin. Returns -1
-    /// when none exists — most importantly for a ONE-WAY street, which emits only
-    /// one directed edge, so a search can never terminate against its flow.
+    /// (`from`/`to` swapped). Identified by matching `osmWayID` AND requiring the
+    /// candidate to be the genuine opposite-orientation twin — its geometry is the
+    /// point-wise reverse of `edge`'s. Matching on `osmWayID` alone is unsafe on a
+    /// SELF-TOUCHING way (a node that appears twice in one way): a one-way loop
+    /// `[A,P,B,Q,A]` emits two FORWARD edges over the same way, A->B and B->A, and
+    /// B->A satisfies `rev.to == edge.from && rev.osmWayID == edge.osmWayID` for
+    /// edge A->B even though it is a distinct, SAME-direction arm — not a reverse
+    /// twin. The geometry-reversal check rejects that arm (B,Q,A is not the reverse
+    /// of A,P,B), so a same-direction co-located segment is never treated as the
+    /// reverse twin. Returns -1 when none exists — most importantly for a true
+    /// ONE-WAY street, which emits only one directed edge per physical arm, so a
+    /// search can never terminate against its flow.
     private func coLocatedReverseEdge(of edgeIndex: Int32, in graph: RoadGraph) -> Int32 {
         guard edgeIndex >= 0, Int(edgeIndex) < graph.edges.count else { return -1 }
         let edge = graph.edges[Int(edgeIndex)]
         for candidate in graph.outEdgeRange(of: edge.to) {
             let rev = graph.edges[Int(candidate)]
-            if rev.to == edge.from && rev.osmWayID == edge.osmWayID {
+            if rev.to == edge.from && rev.from == edge.to
+                && rev.osmWayID == edge.osmWayID
+                && CorridorValidator.isReverseTwinGeometry(candidate, of: edgeIndex, in: graph) {
                 return candidate
             }
         }
