@@ -205,10 +205,22 @@ final class WeatherKitService {
         }
     }
 
-    /// Entitlement/auth failures present as WeatherKit errors or as JWT/auth
-    /// URLErrors; treat anything that is clearly not transient as unavailable.
+    /// Genuine entitlement/authorization failures — the only thing that should
+    /// arm the 6-hour disable. Everything else (timeouts, rate limits, backend
+    /// hiccups, the catch-all `WeatherError.unknown`) is transient and must keep
+    /// the service available so it degrades to cache/heuristics for one cycle
+    /// only, per the class contract.
+    ///
+    /// `WeatherError` is NOT a permission-only type: it has exactly two cases,
+    /// `.permissionDenied` (real authorization failure) and `.unknown` (a
+    /// documented catch-all that WeatherKit also returns for transient backend
+    /// and network failures). Matching the whole type — as this once did —
+    /// tripped the long backoff on a momentary blip, killing weather theming
+    /// for hours. Match only `.permissionDenied`; let `.unknown` fall through.
     nonisolated static func isEntitlementFailure(_ error: Error) -> Bool {
-        if error is WeatherError { return true }
+        if let weatherError = error as? WeatherError, case .permissionDenied = weatherError {
+            return true
+        }
         let nsError = error as NSError
         if nsError.domain == "WeatherDaemon.WDSJWTAuthenticatorServiceListener.Errors" { return true }
         if nsError.domain == NSURLErrorDomain {
