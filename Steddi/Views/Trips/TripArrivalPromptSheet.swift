@@ -14,6 +14,15 @@ struct TripArrivalPromptSheet: View {
     let onEndTrip: () -> Void
 
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
+
+    /// A presented sheet gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin the app theme here
+    /// too — otherwise this sheet renders in the device appearance and mismatches
+    /// the rest of Steddi when the chosen theme differs from the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
@@ -117,5 +126,6 @@ struct TripArrivalPromptSheet: View {
             .background(SteddiTheme.surfacePrimary)
         }
         .background(SteddiTheme.surfacePrimary)
+        .preferredColorScheme(resolvedColorScheme)
     }
 }
