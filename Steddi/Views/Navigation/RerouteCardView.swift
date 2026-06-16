@@ -105,16 +105,25 @@ struct RerouteCardView: View {
                 }
             }
             .padding(20)
-            // Faint scrim under the glass — the shared over-map protection the
-            // nav banners use, so this mid-drive card's text holds against
-            // bright/varied cartography (same shape as the glass; skipped when
-            // glass is off — the fallback is already opaque).
+            // Scrim under the glass — the shared over-map protection the nav
+            // banners use, so this mid-drive card's text holds against the
+            // cartography (same shape as the glass; skipped when glass is off —
+            // the fallback is already opaque). In DARK theme this is a near-opaque
+            // luminance-fixed dark fill that makes the adaptive glass render dark.
             .mapGlassScrim(in: SteddiGlass.cardShape)
-            // Accent-tinted glass — this is a delight/suggestion moment. The tint
-            // is a FILL, so it uses the unshifted brand hue (`accentBrand`), not
-            // the darkened text-safe `accent`; this keeps headroom for the
-            // near-black textPrimary/textSecondary labels drawn on it.
-            .steddiGlass(tint: SteddiTheme.accentBrand, interactive: false, in: SteddiGlass.cardShape)
+            // Glass tint. In LIGHT theme: the accent FILL (`accentBrand`, the
+            // unshifted brand hue) — a delight/suggestion moment, where the
+            // near-BLACK textPrimary/textSecondary labels have ample headroom on
+            // the light lavender frost (~9:1). In DARK theme: NEUTRAL glass (no
+            // tint), so the dark scrim above dominates and the near-WHITE dark-
+            // theme labels read white-on-dark. (textPrimary is near-black only in
+            // LIGHT theme; in DARK theme it resolves near-white — a light lavender
+            // frost would wash it to ~1.5:1, the washout this fix removes.)
+            .steddiGlass(
+                tint: SteddiTheme.prefersDarkChrome ? nil : SteddiTheme.accentBrand,
+                interactive: false,
+                in: SteddiGlass.cardShape
+            )
             .padding(.horizontal, 16)
             // Slight Y overshoot on entrance for delight (gated by Reduce Motion).
             .scaleEffect(didSpringIn ? 1.0 : 0.92)
