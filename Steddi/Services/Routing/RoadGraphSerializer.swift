@@ -208,13 +208,37 @@ enum RoadGraphSerializer {
             let count = Int(node.edgeCount)
             guard count >= 0, first >= 0, first <= totalEdges, first + count <= totalEdges else { return nil }
         }
+        // Re-derive the max edge speed in the same pass that validates edges.
+        // The A* heuristic is `h = haversine / graphMaxSpeedMPS` and stays
+        // admissible (a true lower bound) only while `graphMaxSpeedMPS` is >=
+        // EVERY edge's `freeFlowSpeedMPS`. The stored value is read straight off
+        // an untrusted/possibly-stale blob; a corrupt or format-drifted value
+        // that is too LOW relative to some edge would make `h` OVERESTIMATE the
+        // remaining time over that fast edge → A* loses optimality and can
+        // silently return a slower-than-optimal route (a positive-but-too-LOW
+        // maxSpeed, not a too-high one, is the inadmissible direction). So,
+        // matching the file's "snapIndex/osmToIndex are derived; rebuilt on
+        // deserialize" philosophy, trust the edges (which ARE round-tripped) and
+        // re-derive the floor here, clamping the loaded value up to it.
+        var derivedMax: Float = 0
         for edge in edges {
             guard Int(edge.from) >= 0, Int(edge.from) < totalNodes,
                   Int(edge.to) >= 0, Int(edge.to) < totalNodes else { return nil }
             let lower = Int(edge.geometryRange.lowerBound)
             let upper = Int(edge.geometryRange.upperBound)
             guard lower >= 0, upper >= lower, upper <= totalGeometry else { return nil }
+            if edge.freeFlowSpeedMPS.isFinite, edge.freeFlowSpeedMPS > derivedMax {
+                derivedMax = edge.freeFlowSpeedMPS
+            }
         }
+
+        // Clamp the stored maxSpeed to a true upper bound on edge speed. A
+        // non-finite or below-floor stored value (the inadmissible cases) is
+        // raised to `derivedMax`; a stored value already >= every edge speed is
+        // kept as-is (a too-HIGH value only weakens the heuristic, never breaks
+        // admissibility). For an empty graph both are 0 — the heuristic's
+        // `maxSpeed > 0` guard degrades that to Dijkstra, which stays correct.
+        let validatedMax = (maxSpeed.isFinite && maxSpeed >= derivedMax) ? maxSpeed : derivedMax
 
         let snapIndex = RoadGraphBuilder.buildSnapIndex(edges: edges, geometry: geometry)
         return RoadGraph(
@@ -223,7 +247,7 @@ enum RoadGraphSerializer {
             geometry: geometry,
             osmToIndex: osmToIndex,
             snapIndex: snapIndex,
-            graphMaxSpeedMPS: maxSpeed
+            graphMaxSpeedMPS: validatedMax
         )
     }
 }
