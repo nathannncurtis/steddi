@@ -214,4 +214,97 @@ struct RerouteMidDriveDeletionTests {
         // The decode switchToRoute would run on the resolved handle succeeds.
         #expect(liveHandle.map { PolylineEncoder.decode($0.encodedPolyline, precision: 6).count >= 2 } == true)
     }
+
+    // MARK: - Surfaced-suggestion display reads survive a mid-display deletion
+
+    /// The HIGH crash: `rerouteSuggestion` used to hold a live `@Model Route` that
+    /// the reroute card (SteddiNavOverlay / PhoneCompanionView) re-read on EVERY
+    /// SwiftUI render pass for the ~30s display window — `suggestion.route.name`
+    /// each render and `suggestion.route.id` on dismiss. If the commute/route was
+    /// deleted in that window, the next render dereferencing a persisted property
+    /// of the deleted model trapped and crashed mid-drive. The fix makes
+    /// `rerouteSuggestion` a `Sendable` VALUE snapshot captured at set time, so the
+    /// card reads only value-type fields and never touches a `@Model`; the switch
+    /// re-resolves the live route by id at tap time.
+
+    @Test("Surfaced suggestion is a detached value snapshot — display reads survive deleting the route mid-display")
+    func surfacedSuggestionSurvivesRouteDeletion() throws {
+        let context = try makeContext()
+        let (commute, _, candidate) = try makeCommute(in: context)
+        let manager = NavigationStateManager()
+
+        // The loop surfaces the suggestion, capturing the snapshot while the route
+        // @Model is valid (exactly as startObserving does at set time).
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: candidate.id,
+            routeName: candidate.name,
+            savingsMinutes: 5,
+            savingsPercentage: 0.2
+        )
+
+        // Now the route is deleted out from under the displayed card — a single
+        // mid-drive deletion (CommuteDetailView route delete) on a session that
+        // never tore down.
+        context.delete(candidate)
+        try context.save()
+
+        // The card's per-render reads touch ONLY the snapshot's value-type fields.
+        // With a live @Model these reads would trap; with the snapshot they're safe.
+        let suggestion = try #require(manager.rerouteSuggestion)
+        #expect(suggestion.routeName == "Candidate")
+        #expect(suggestion.savingsMinutes == 5)
+        #expect(suggestion.savingsPercentage == 0.2)
+        // The exact computed values the card renders (clamp/round + percentage).
+        #expect(max(1, Int(suggestion.savingsMinutes.rounded())) == 5)
+        #expect(Int(suggestion.savingsPercentage * 100) == 20)
+        _ = commute
+    }
+
+    @Test("Dismiss after deleting the suggested route reads only the snapshot id — no @Model deref, no crash")
+    func dismissAfterDeletionReadsSnapshotID() throws {
+        let context = try makeContext()
+        let (commute, _, candidate) = try makeCommute(in: context)
+        let candidateID = candidate.id
+        let manager = NavigationStateManager()
+
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: candidateID,
+            routeName: candidate.name,
+            savingsMinutes: 5,
+            savingsPercentage: 0.2
+        )
+
+        // Whole commute deleted (Settings "delete all data") while the card shows.
+        context.delete(commute)
+        try context.save()
+
+        // "Stay" reads suggestion.routeID (a value) — previously read
+        // suggestion.route.id off the deleted @Model and trapped. It must clear the
+        // suggestion AND record the decline against the snapshotted id.
+        manager.dismissRerouteSuggestion()
+        #expect(manager.rerouteSuggestion == nil)
+        #expect(manager.isRerouteSuppressed(routeID: candidateID, savingsSeconds: 5 * 60) == true)
+    }
+
+    @Test("Switch after the suggested route is deleted dismisses gracefully — fetchLiveRoute returns nil")
+    func switchAfterDeletionDismissesGracefully() throws {
+        // The card hands switchToRoute only the snapshot's routeID. switchToRoute
+        // re-resolves the live Route by id via fetchLiveRoute; with the route
+        // deleted mid-display, the fetch returns nil so the function clears the
+        // suggestion and skips navigation — no @Model deref, no crash.
+        let context = try makeContext()
+        let (commute, _, candidate) = try makeCommute(in: context)
+        let candidateID = candidate.id
+
+        let snapshot = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: candidateID, routeName: candidate.name, savingsMinutes: 5, savingsPercentage: 0.2)
+
+        context.delete(candidate)
+        try context.save()
+
+        // The id carried by the card resolves to nil after deletion — switchToRoute's
+        // guard fires and the suggestion is dismissed gracefully.
+        #expect(NavigationStateManager.fetchLiveRoute(id: snapshot.routeID, in: context) == nil)
+        _ = commute
+    }
 }

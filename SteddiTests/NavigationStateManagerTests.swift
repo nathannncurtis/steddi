@@ -1258,7 +1258,8 @@ struct NavigationStateManagerRerouteDismissTests {
         let context = try makeContext()
         let route = makeRoute(in: context)
         let manager = NavigationStateManager()
-        manager.rerouteSuggestion = (route: route, savingsMinutes: 5, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: route.id, routeName: route.name, savingsMinutes: 5, savingsPercentage: 0.2)
 
         manager.expireRerouteSuggestion()
 
@@ -1274,7 +1275,8 @@ struct NavigationStateManagerRerouteDismissTests {
         let context = try makeContext()
         let route = makeRoute(in: context)
         let manager = NavigationStateManager()
-        manager.rerouteSuggestion = (route: route, savingsMinutes: 5, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: route.id, routeName: route.name, savingsMinutes: 5, savingsPercentage: 0.2)
 
         manager.dismissRerouteSuggestion()
 
@@ -1290,12 +1292,14 @@ struct NavigationStateManagerRerouteDismissTests {
         let manager = NavigationStateManager()
 
         // Timeout once — no suppression armed.
-        manager.rerouteSuggestion = (route: route, savingsMinutes: 5, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: route.id, routeName: route.name, savingsMinutes: 5, savingsPercentage: 0.2)
         manager.expireRerouteSuggestion()
         #expect(manager.isRerouteSuppressed(routeID: route.id, savingsSeconds: 5 * 60) == false)
 
         // The loop re-surfaces it; the driver now deliberately declines — suppress.
-        manager.rerouteSuggestion = (route: route, savingsMinutes: 5, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: route.id, routeName: route.name, savingsMinutes: 5, savingsPercentage: 0.2)
         manager.dismissRerouteSuggestion()
         #expect(manager.isRerouteSuppressed(routeID: route.id, savingsSeconds: 5 * 60) == true)
     }

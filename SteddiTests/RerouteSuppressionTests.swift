@@ -394,7 +394,8 @@ struct RerouteSuppressionTests {
     func declineSuppressesSameSavings() {
         let manager = NavigationStateManager()
         let r = route()
-        manager.rerouteSuggestion = (route: r, savingsMinutes: 6, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: r.id, routeName: r.name, savingsMinutes: 6, savingsPercentage: 0.2)
 
         manager.dismissRerouteSuggestion()
         #expect(manager.rerouteSuggestion == nil)
@@ -411,7 +412,8 @@ struct RerouteSuppressionTests {
         let manager = NavigationStateManager()
         let declined = route("A")
         let other = route("B")
-        manager.rerouteSuggestion = (route: declined, savingsMinutes: 6, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: declined.id, routeName: declined.name, savingsMinutes: 6, savingsPercentage: 0.2)
         manager.dismissRerouteSuggestion()
 
         #expect(!manager.isRerouteSuppressed(
@@ -423,7 +425,8 @@ struct RerouteSuppressionTests {
     func suppressionLapsesAfterCooldown() {
         let manager = NavigationStateManager()
         let r = route()
-        manager.rerouteSuggestion = (route: r, savingsMinutes: 6, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: r.id, routeName: r.name, savingsMinutes: 6, savingsPercentage: 0.2)
         manager.dismissRerouteSuggestion()
 
         // 11 minutes later (> 10 min cooldown) — no longer suppressed.
@@ -437,7 +440,8 @@ struct RerouteSuppressionTests {
     func materiallyBetterReSurfaces() {
         let manager = NavigationStateManager()
         let r = route()
-        manager.rerouteSuggestion = (route: r, savingsMinutes: 6, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: r.id, routeName: r.name, savingsMinutes: 6, savingsPercentage: 0.2)
         manager.dismissRerouteSuggestion()
 
         // Rejected 360s; now saving 360 + 180 = 540s (> 2 min margin) — allowed.
@@ -540,7 +544,8 @@ struct RerouteSuppressionTests {
     func stopObservingClearsDecline() {
         let manager = NavigationStateManager()
         let r = route()
-        manager.rerouteSuggestion = (route: r, savingsMinutes: 6, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: r.id, routeName: r.name, savingsMinutes: 6, savingsPercentage: 0.2)
         manager.dismissRerouteSuggestion()
         #expect(manager.isRerouteSuppressed(routeID: r.id, savingsSeconds: 360, now: Date()))
 
@@ -556,7 +561,8 @@ struct RerouteSuppressionTests {
     func snapshotMatchesLiveCheck() {
         let manager = NavigationStateManager()
         let r = route()
-        manager.rerouteSuggestion = (route: r, savingsMinutes: 6, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: r.id, routeName: r.name, savingsMinutes: 6, savingsPercentage: 0.2)
         manager.dismissRerouteSuggestion()
 
         let snapshot = manager.rerouteSuppressionSnapshot()
@@ -617,7 +623,8 @@ struct RerouteSuppressionAcrossAwaitTests {
         let declined = route("Declined fallback")
 
         // Driver declined this route saving ~6 min — it is suppressed now.
-        manager.rerouteSuggestion = (route: declined, savingsMinutes: 6, savingsPercentage: 0.2)
+        manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+            routeID: declined.id, routeName: declined.name, savingsMinutes: 6, savingsPercentage: 0.2)
         manager.dismissRerouteSuggestion()
         #expect(manager.isRerouteSuppressed(routeID: declined.id, savingsSeconds: 360, now: Date()))
 
@@ -685,7 +692,8 @@ struct RerouteSuppressionAcrossAwaitTests {
                 // A decline of THIS very route lands during the fetch. The
                 // snapshot predates it, so the candidate must still surface.
                 await MainActor.run {
-                    manager.rerouteSuggestion = (route: candidate, savingsMinutes: 6, savingsPercentage: 0.2)
+                    manager.rerouteSuggestion = NavigationStateManager.RerouteSuggestionSnapshot(
+                        routeID: candidate.id, routeName: candidate.name, savingsMinutes: 6, savingsPercentage: 0.2)
                     manager.dismissRerouteSuggestion()
                 }
                 return RouteETA(duration: 300, isPathAware: true)
