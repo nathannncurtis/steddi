@@ -123,7 +123,7 @@ struct ThresholdExplainerView: View {
                 .font(.title3)
         }
         .padding(12)
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+        .background(SteddiTheme.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func exampleSavings(remainingMinutes: Int) -> Int {
