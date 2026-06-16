@@ -21,7 +21,11 @@ struct SteddiNavOverlay: View {
     let onEndNavigation: () -> Void
     var onToggleVoice: () -> Void = {}
     var onToggleView: (Bool) -> Void = { _ in }
-    var onSwitchRoute: ((Route) -> Void)? = nil
+    /// The driver tapped "Switch" on a reroute suggestion. Carries the suggested
+    /// route's `id` (a value), NOT a live `@Model Route`: the card holds only a
+    /// detached snapshot, and HomeView re-resolves the live `Route` by id at this
+    /// moment (gracefully dismissing if it was deleted mid-display).
+    var onSwitchRoute: ((UUID) -> Void)? = nil
     var onReport: ((String, CLLocationCoordinate2D) -> Void)? = nil
     /// Crowdsourced enforcement-camera report. Routed separately from `onReport`
     /// (which writes generic `Report` rows) so cameras persist as `CameraReport`
@@ -220,14 +224,16 @@ struct SteddiNavOverlay: View {
 
                 if let suggestion = navState.rerouteSuggestion {
                     RerouteCardView(
-                        routeName: suggestion.route.name ?? "Faster route",
+                        // Value snapshot — reads only the detached name/savings, never
+                        // a live @Model, so a mid-display deletion can't trap a render.
+                        routeName: suggestion.routeName ?? "Faster route",
                         // The engine only surfaces a suggestion it has already
                         // vetted as worthwhile, so a sub-minute saving must never
                         // render "Save ~0 min". Round (not floor) and clamp to ≥1.
                         timeSavingsMinutes: max(1, Int(suggestion.savingsMinutes.rounded())),
                         percentageSavings: Int(suggestion.savingsPercentage * 100),
                         onSwitch: {
-                            onSwitchRoute?(suggestion.route)
+                            onSwitchRoute?(suggestion.routeID)
                             navState.rerouteSuggestion = nil
                         },
                         onStay: { navState.dismissRerouteSuggestion() },

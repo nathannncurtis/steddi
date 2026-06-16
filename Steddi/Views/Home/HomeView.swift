@@ -285,8 +285,8 @@ struct HomeView: View {
                     onToggleView: { is3D in
                         is3DNav = is3D
                     },
-                    onSwitchRoute: { route in
-                        switchToRoute(route)
+                    onSwitchRoute: { routeID in
+                        switchToRoute(routeID: routeID)
                     },
                     onReport: { type, coordinate in
                         let report = Report(type: type, latitude: coordinate.latitude, longitude: coordinate.longitude)
@@ -589,8 +589,8 @@ struct HomeView: View {
             get: { navStateManager.isCarPlayActive && navStateManager.isNavigating },
             set: { _ in }
         )) {
-            PhoneCompanionView(onSwitchRoute: { route in
-                switchToRoute(route)
+            PhoneCompanionView(onSwitchRoute: { routeID in
+                switchToRoute(routeID: routeID)
             })
             .environment(navStateManager)
         }
@@ -1424,17 +1424,15 @@ struct HomeView: View {
         }
     }
 
-    /// Whether a suggested route's `@Model` handle is still safe to switch onto.
-    /// The reroute loop vets liveness only at set-time (NavigationStateManager
-    /// re-resolves the winner via `fetchLiveRoute` before assigning
-    /// `rerouteSuggestion`); the card then displays for up to 30s. If the
-    /// commute/route is deleted in that window (CommuteDetailView delete, Settings
-    /// "delete all data"), the cached handle on the card is invalidated and
-    /// reading its persisted properties (`encodedPolyline`/`name`/…) in
-    /// `navigateWithSavedRoute` traps. Mirrors NavigationStateManager.isLive — a
-    /// deleted SwiftData model has `isDeleted == true` and/or a nil `modelContext`.
-    /// Pure + static so the switch-time liveness gate is unit-testable without a
-    /// UI host; `nonisolated` since it touches no actor state.
+    /// Whether a `Route` `@Model` handle is still safe to dereference. A deleted
+    /// SwiftData model has `isDeleted == true` and/or a nil `modelContext`; reading
+    /// its persisted properties (`encodedPolyline`/`name`/…) afterward traps.
+    /// Mirrors NavigationStateManager.isLive. The reroute card no longer holds a
+    /// live `@Model` (it carries a `RerouteSuggestionSnapshot` value, and the
+    /// switch path re-resolves the route by id via `fetchLiveRoute`, which already
+    /// returns nil for a deleted route), so this is no longer on the switch-crash
+    /// path; kept as a small, unit-tested liveness predicate. Pure + static so it's
+    /// testable without a UI host; `nonisolated` since it touches no actor state.
     nonisolated static func isSwitchableRoute(_ route: Route) -> Bool {
         !route.isDeleted && route.modelContext != nil
     }
@@ -1442,15 +1440,16 @@ struct HomeView: View {
     /// Switch the active commute onto a suggested faster/fallback route. Shared
     /// by the on-phone nav overlay's reroute card and the CarPlay phone-companion
     /// reroute card so both surfaces perform the identical route swap.
-    private func switchToRoute(_ route: Route) {
-        // The reroute card holds a cached @Model Route and can display for up to
-        // 30s. If the commute/route was deleted in that window, the handed-in
-        // handle is invalidated — decoding its polyline/name in
-        // navigateWithSavedRoute would trap. Re-validate liveness and re-resolve a
-        // fresh live handle by id (the card was already dismissed by the caller);
-        // if it's gone, dismiss gracefully — no teardown, no navigation, no crash.
-        guard Self.isSwitchableRoute(route),
-              let liveRoute = NavigationStateManager.fetchLiveRoute(id: route.id, in: modelContext) else {
+    ///
+    /// Takes the suggested route's `id` (a value), not a live `@Model`: the card
+    /// only ever held a `RerouteSuggestionSnapshot`, never a `Route`, so there is
+    /// no stale handle to dereference here. We re-resolve the live `Route` by id
+    /// AT TAP TIME via `fetchLiveRoute` — a predicate fetch that safely returns nil
+    /// if the commute/route was deleted while the card displayed (CommuteDetailView
+    /// delete, Settings "delete all data"). If it's gone, dismiss gracefully — no
+    /// teardown, no navigation, no crash.
+    private func switchToRoute(routeID: UUID) {
+        guard let liveRoute = NavigationStateManager.fetchLiveRoute(id: routeID, in: modelContext) else {
             print("[STEDDI-NAV] switchToRoute: suggested route deleted before Switch — dismissing")
             navStateManager.rerouteSuggestion = nil
             return

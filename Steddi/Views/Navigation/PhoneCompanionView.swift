@@ -21,8 +21,10 @@ struct PhoneCompanionView: View {
     /// suggestion. Plumbed from HomeView so the CarPlay companion reuses the
     /// exact same handler as the on-phone nav overlay's reroute card; without
     /// it the "Switch" button would only dismiss the card and leave the driver
-    /// on the slower route.
-    var onSwitchRoute: ((Route) -> Void)? = nil
+    /// on the slower route. Carries the suggested route's `id` (a value), NOT a
+    /// live `@Model Route`: HomeView re-resolves the live `Route` by id at tap
+    /// time, so a route deleted while the card showed dismisses gracefully.
+    var onSwitchRoute: ((UUID) -> Void)? = nil
 
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
@@ -56,14 +58,16 @@ struct PhoneCompanionView: View {
                 VStack {
                     Spacer()
                     RerouteCardView(
-                        routeName: suggestion.route.name ?? "Faster route",
+                        // Value snapshot — reads only the detached name/savings, never
+                        // a live @Model, so a mid-display deletion can't trap a render.
+                        routeName: suggestion.routeName ?? "Faster route",
                         // The engine only surfaces a vetted-worthwhile suggestion,
                         // so a sub-minute saving must never render "Save ~0 min".
                         // Round (not floor) and clamp to ≥1.
                         timeSavingsMinutes: max(1, Int(suggestion.savingsMinutes.rounded())),
                         percentageSavings: Int(suggestion.savingsPercentage * 100),
                         onSwitch: {
-                            onSwitchRoute?(suggestion.route)
+                            onSwitchRoute?(suggestion.routeID)
                             navState.rerouteSuggestion = nil
                         },
                         onStay: {

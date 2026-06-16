@@ -58,7 +58,19 @@ final class NavigationStateManager {
     /// instead of reaching into HomeView state.
     var activeTrip: Trip? = nil
 
-    var rerouteSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)? = nil
+    /// The currently surfaced reroute suggestion, as a `Sendable` VALUE snapshot —
+    /// NOT a live `@Model Route`. The reroute card (SteddiNavOverlay /
+    /// PhoneCompanionView) renders for up to ~30s and re-reads this on EVERY
+    /// SwiftUI render pass; if it held a live `@Model` and the commute/route were
+    /// deleted mid-display (CommuteDetailView delete, Settings "delete all data",
+    /// another device/CarPlay), the next render dereferencing a stored property of
+    /// the deleted model would trap and crash mid-drive. Holding a detached value
+    /// snapshot (route id + display name + savings) means the card touches only
+    /// value-type fields and never a `@Model`. The switch action re-resolves the
+    /// live `Route` by `routeID` at tap time via `fetchLiveRoute` (which safely
+    /// returns nil if deleted), so a stale id can't crash the switch either.
+    /// Mirrors the `RerouteSnapshot`/`RerouteCandidate` detachment pattern.
+    var rerouteSuggestion: RerouteSuggestionSnapshot? = nil
 
     /// The id of the route the driver is actually navigating, set at session
     /// start. The reroute loop excludes THIS route from candidates by identity
@@ -466,8 +478,14 @@ final class NavigationStateManager {
                        liveEngine.isNavigating,
                        !self.hasArrived,
                        let liveRoute = Self.fetchLiveRoute(id: result.routeID, in: self.rerouteModelContext) {
-                        self.rerouteSuggestion = (
-                            route: liveRoute,
+                        // Capture a Sendable VALUE snapshot NOW, while `liveRoute`
+                        // is valid — including its display `name`. The card reads
+                        // only this snapshot for the whole ~30s display window, so a
+                        // mid-display deletion of the route can't trap a render. The
+                        // live @Model is re-resolved by `routeID` at switch-tap time.
+                        self.rerouteSuggestion = RerouteSuggestionSnapshot(
+                            routeID: result.routeID,
+                            routeName: liveRoute.name,
                             savingsMinutes: result.savingsMinutes,
                             savingsPercentage: result.savingsPercentage
                         )
@@ -478,6 +496,23 @@ final class NavigationStateManager {
     }
 
     // MARK: - Reroute Snapshot (cross-await safety)
+
+    /// A plain, `Sendable` VALUE snapshot of a surfaced reroute suggestion — what
+    /// the reroute card draws and what the switch/dismiss actions need, with NO
+    /// reference to the live `@Model Route`. Captured at set time (while the route
+    /// model is valid) so the long-lived card can render for ~30s reading only
+    /// value-type fields; a mid-display deletion of the commute/route can never
+    /// trap a render. The `routeID` is re-resolved to a live `Route` only at
+    /// switch-tap time (via `fetchLiveRoute`), so even a deleted suggestion
+    /// dismisses gracefully instead of crashing.
+    struct RerouteSuggestionSnapshot: Sendable, Equatable {
+        let routeID: UUID
+        /// Display name captured at set time. Optional to mirror `Route.name`; the
+        /// card falls back to a generic label when nil.
+        let routeName: String?
+        let savingsMinutes: Double
+        let savingsPercentage: Double
+    }
 
     /// A plain, `Sendable` snapshot of one candidate route the reroute decision
     /// needs — its identity and the geometry to fetch a path-aware ETA along.
@@ -843,7 +878,9 @@ final class NavigationStateManager {
     /// setting `rerouteSuggestion = nil` directly, so the decline is recorded.
     func dismissRerouteSuggestion() {
         if let suggestion = rerouteSuggestion {
-            dismissedRouteID = suggestion.route.id
+            // Read the snapshot's value-type `routeID` — never a live @Model, which
+            // may have been deleted while the card was displayed.
+            dismissedRouteID = suggestion.routeID
             dismissedAt = Date()
             dismissedSavingsSeconds = suggestion.savingsMinutes * 60.0
         }
