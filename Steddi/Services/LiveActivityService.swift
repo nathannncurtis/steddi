@@ -64,6 +64,12 @@ final class LiveActivityService {
         self.tripContext = tripContext
         // Fresh session — clear the prior session's end latch so updates flow.
         self.sessionEnded = false
+        // Fresh session — reset the serial lifecycle chain per its documented
+        // contract. The prior session's end (and launch cleanup) leave a completed
+        // tail link here; nilling it stops this session's first update from
+        // needlessly awaiting that stale work, and guards against a future chain op
+        // that doesn't short-circuit on `sessionEnded` serializing behind it.
+        self.lifecycleTail = nil
 
         // Mirror the user's chosen accent into the shared App Group so the Live
         // Activity (a separate extension target that can't see SteddiTheme) can
