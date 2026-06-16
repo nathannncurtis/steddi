@@ -163,7 +163,7 @@ struct SymmetricRerouteETATests {
             baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
             hardMinuteFloor: 10,
-            isSuppressed: { _, _ in false },
+            suppression: .none,
             fetchETA: Self.lengthProportionalETA
         )
 
@@ -195,7 +195,7 @@ struct SymmetricRerouteETATests {
             baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
             hardMinuteFloor: 10,
-            isSuppressed: { _, _ in false },
+            suppression: .none,
             fetchETA: Self.lengthProportionalETA
         )
 
@@ -234,7 +234,7 @@ struct SymmetricRerouteETATests {
             baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
             hardMinuteFloor: 10,
-            isSuppressed: { _, _ in false },
+            suppression: .none,
             fetchETA: Self.lengthProportionalETA
         )
         #expect(best == nil)
@@ -278,7 +278,7 @@ struct SymmetricRerouteETATests {
             baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
             hardMinuteFloor: 10,
-            isSuppressed: { _, _ in false },
+            suppression: .none,
             fetchETA: Self.lengthProportionalETA
         )
 
@@ -340,7 +340,7 @@ struct SymmetricRerouteETATests {
             baseline: baseline,
             basePercentage: 0.20,
             hardMinuteFloor: 10,
-            isSuppressed: { _, _ in false },
+            suppression: .none,
             fetchETA: { _, _ in RouteETA(duration: directEstimate, isPathAware: false) }
         )
 
@@ -370,7 +370,7 @@ struct SymmetricRerouteETATests {
             baseline: baseline,
             basePercentage: 0.20,
             hardMinuteFloor: 10,
-            isSuppressed: { _, _ in false },
+            suppression: .none,
             fetchETA: { _, _ in RouteETA(duration: 600, isPathAware: false) }
         )
 
@@ -470,5 +470,152 @@ struct RerouteSuppressionTests {
         manager.stopObserving()
         // New session must not inherit a stale decline.
         #expect(!manager.isRerouteSuppressed(routeID: r.id, savingsSeconds: 360, now: Date()))
+    }
+
+    /// `isRerouteSuppressed` (live @MainActor read) and the `RerouteSuppression`
+    /// value snapshot must agree exactly — they share one pure cooldown function,
+    /// so the loop's snapshot path can never drift from the live-state path.
+    @Test("The suppression snapshot matches the live-state suppression check")
+    func snapshotMatchesLiveCheck() {
+        let manager = NavigationStateManager()
+        let r = route()
+        manager.rerouteSuggestion = (route: r, savingsMinutes: 6, savingsPercentage: 0.2)
+        manager.dismissRerouteSuggestion()
+
+        let snapshot = manager.rerouteSuppressionSnapshot()
+        let now = Date().addingTimeInterval(120)
+        // Same route, trivial improvement, within cooldown -> suppressed on BOTH.
+        #expect(manager.isRerouteSuppressed(routeID: r.id, savingsSeconds: 390, now: now))
+        #expect(snapshot.isSuppressed(routeID: r.id, savingsSeconds: 390, now: now))
+        // Materially better -> not suppressed on BOTH.
+        #expect(!manager.isRerouteSuppressed(routeID: r.id, savingsSeconds: 999, now: now))
+        #expect(!snapshot.isSuppressed(routeID: r.id, savingsSeconds: 999, now: now))
+    }
+}
+
+// MARK: - Suppression Decision Across the await Boundary (data-race fix)
+
+/// The MEDIUM data race: `bestReroute` is `nonisolated ... async` and resumes on
+/// a background cooperative-pool thread after its ETA `await`, then asked "is
+/// this candidate suppressed?". The old code answered by synchronously calling
+/// `isRerouteSuppressed`, which reads the `@MainActor` fields
+/// `dismissedRouteID`/`dismissedAt`/`dismissedSavingsSeconds` — racing the main
+/// actor's concurrent writes when the driver taps "Stay". The fix snapshots the
+/// suppression state on the main actor BEFORE the await and decides purely from
+/// that immutable `Sendable` value, so no main-actor field is ever read
+/// off-actor and the post-await decision is deterministic regardless of any
+/// concurrent decline landing during the fetch.
+@Suite("NavigationStateManager reroute suppression across await")
+@MainActor
+struct RerouteSuppressionAcrossAwaitTests {
+
+    private func route(_ name: String = "Fallback") -> Route {
+        Route(rank: 1, encodedPolyline: "", name: name, direction: .originToDestination)
+    }
+
+    /// A candidate route geometry whose path-aware ETA is clearly faster than the
+    /// baseline, so absent suppression the route WOULD be suggested — isolating
+    /// suppression as the only thing that can change the outcome.
+    private func fasterCandidate(id: UUID) -> NavigationStateManager.RerouteCandidate {
+        let origin = CLLocationCoordinate2D(latitude: 33.0, longitude: -117.0)
+        let destination = CLLocationCoordinate2D(latitude: 33.0, longitude: -116.8)
+        return NavigationStateManager.RerouteCandidate(
+            id: id,
+            encodedPolyline: PolylineEncoder.encode([origin, destination], precision: 6)
+        )
+    }
+
+    /// The decisive test. The candidate is suppressed in the snapshot captured
+    /// BEFORE the await. During `bestReroute`'s ETA fetch we mutate the manager's
+    /// LIVE suppression state on the main actor (the driver "un-declines" — the
+    /// strongest possible concurrent write). The decision must still come from
+    /// the pre-await snapshot: the suppressed candidate must NOT be surfaced. If
+    /// the loop instead read the live @MainActor fields after the await (the
+    /// race), the mutation would flip the result — and TSan/strict concurrency
+    /// would flag the cross-actor access. Asserting the snapshot wins proves both
+    /// the suppression behavior is preserved AND the read is off the snapshot.
+    @Test("A candidate suppressed in the pre-await snapshot stays suppressed even if live state changes mid-fetch")
+    func snapshotGovernsDecisionAcrossAwait() async throws {
+        let manager = NavigationStateManager()
+        let declined = route("Declined fallback")
+
+        // Driver declined this route saving ~6 min — it is suppressed now.
+        manager.rerouteSuggestion = (route: declined, savingsMinutes: 6, savingsPercentage: 0.2)
+        manager.dismissRerouteSuggestion()
+        #expect(manager.isRerouteSuppressed(routeID: declined.id, savingsSeconds: 360, now: Date()))
+
+        // Snapshot captured on the main actor, exactly as startObserving does
+        // before calling bestReroute — this is the value the decision must use.
+        let suppression = manager.rerouteSuppressionSnapshot()
+
+        let currentCoord = CLLocationCoordinate2D(latitude: 33.0, longitude: -117.0)
+        // Baseline 1200s; candidate ETA 840s -> savings 360s (= the rejected
+        // 6 min, NOT materially better than it). That clears RerouteEngine's
+        // threshold (360/1200 = 30% > 20%), so absent suppression the candidate
+        // WOULD surface — meaning suppression is the only thing that can make the
+        // result nil. (A materially-larger savings would legitimately bypass the
+        // cooldown, which is why this must NOT be materially better.)
+        let baseline = RouteETA(duration: 1200, isPathAware: true)
+
+        let best = await NavigationStateManager.bestReroute(
+            candidates: [fasterCandidate(id: declined.id)],
+            currentCoord: currentCoord,
+            baseline: baseline,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            suppression: suppression,
+            // Within the cooldown window — the snapshot still suppresses here.
+            now: Date().addingTimeInterval(60),
+            fetchETA: { _, _ in
+                // Mid-fetch, the main actor mutates the LIVE suppression fields
+                // (the exact write that raced the old off-actor read). The
+                // snapshot already handed to bestReroute is immutable, so this
+                // must NOT change the decision below.
+                await MainActor.run { manager.dismissRerouteSuggestion() }
+                manager.stopObserving() // clears dismissed* on the main actor too
+                return RouteETA(duration: 840, isPathAware: true)
+            }
+        )
+
+        #expect(best == nil,
+                "The pre-await snapshot says suppressed; a concurrent live-state change during the fetch must not surface it")
+    }
+
+    /// Mirror case: a route NOT suppressed in the snapshot is surfaced even if a
+    /// concurrent decline lands mid-fetch — again proving the decision is driven
+    /// solely by the immutable snapshot, not the racing live fields.
+    @Test("A candidate not suppressed in the snapshot is surfaced despite a concurrent decline mid-fetch")
+    func unsuppressedSnapshotSurfacesAcrossAwait() async throws {
+        let manager = NavigationStateManager()
+        let candidate = route("Faster route")
+
+        // Nothing declined yet -> snapshot suppresses nothing.
+        let suppression = manager.rerouteSuppressionSnapshot()
+        #expect(suppression.dismissedRouteID == nil)
+
+        let currentCoord = CLLocationCoordinate2D(latitude: 33.0, longitude: -117.0)
+        let baseline = RouteETA(duration: 1200, isPathAware: true)
+
+        let best = await NavigationStateManager.bestReroute(
+            candidates: [fasterCandidate(id: candidate.id)],
+            currentCoord: currentCoord,
+            baseline: baseline,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            suppression: suppression,
+            now: Date(),
+            fetchETA: { _, _ in
+                // A decline of THIS very route lands during the fetch. The
+                // snapshot predates it, so the candidate must still surface.
+                await MainActor.run {
+                    manager.rerouteSuggestion = (route: candidate, savingsMinutes: 6, savingsPercentage: 0.2)
+                    manager.dismissRerouteSuggestion()
+                }
+                return RouteETA(duration: 300, isPathAware: true)
+            }
+        )
+
+        let suggestion = try #require(best, "An unsuppressed faster route must surface")
+        #expect(suggestion.routeID == candidate.id)
     }
 }

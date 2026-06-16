@@ -312,6 +312,14 @@ final class NavigationStateManager {
 
                     self.currentRemainingETA = remainingETA
 
+                    // Snapshot the "Stay" suppression state HERE, on the main
+                    // actor, into a Sendable value — BEFORE bestReroute's awaits.
+                    // bestReroute then evaluates the cooldown purely from this
+                    // snapshot. Reading the @MainActor suppression fields from
+                    // inside the nonisolated post-await continuation (as the old
+                    // closure did) raced a concurrent decline writing them.
+                    let suppression = self.rerouteSuppressionSnapshot()
+
                     // Evaluate candidates over the Sendable snapshot — never the
                     // @Models — so the network awaits inside `bestReroute` can't
                     // touch a model invalidated by a concurrent delete. The result
@@ -323,9 +331,7 @@ final class NavigationStateManager {
                         baseline: baseline,
                         basePercentage: snapshot.thresholdPercentage,
                         hardMinuteFloor: snapshot.hardMinuteFloor,
-                        isSuppressed: { [weak self] routeID, savingsSeconds in
-                            self?.isRerouteSuppressed(routeID: routeID, savingsSeconds: savingsSeconds) ?? false
-                        },
+                        suppression: suppression,
                         fetchETA: { coord, polyline in
                             try await directionsService.fetchPathAwareETA(from: coord, along: polyline)
                         }
@@ -375,6 +381,38 @@ final class NavigationStateManager {
         let thresholdPercentage: Double
         let hardMinuteFloor: Int?
         let candidates: [RerouteCandidate]
+    }
+
+    /// A plain, `Sendable` value snapshot of the reroute-suppression state
+    /// (the "Stay" cooldown): which route was just declined, when, and the
+    /// savings that were rejected. Captured on the main actor immediately before
+    /// `bestReroute`'s candidate loop, so the post-`await` suppression decision
+    /// reads from THIS immutable value instead of touching the `@MainActor`
+    /// fields `dismissedRouteID`/`dismissedAt`/`dismissedSavingsSeconds` from a
+    /// background continuation — those fields are written on the main actor
+    /// (`dismissRerouteSuggestion`/`clearDismissedReroute`), so reading them off
+    /// the actor after the ETA fetch raced a concurrent decline. The cooldown
+    /// policy lives here as a pure function so the loop never re-enters the
+    /// actor to ask "is this suppressed?". Mirrors how `RerouteSnapshot`
+    /// detaches the `@Model` graph for the same cross-await safety reason.
+    struct RerouteSuppression: Sendable {
+        let dismissedRouteID: UUID?
+        let dismissedAt: Date?
+        let dismissedSavingsSeconds: TimeInterval
+
+        /// Nothing declined — suppresses nothing. The state at session start and
+        /// after `clearDismissedReroute`; also the obvious test default.
+        static let none = RerouteSuppression(dismissedRouteID: nil, dismissedAt: nil, dismissedSavingsSeconds: 0)
+
+        /// Whether a candidate is suppressed by a prior "Stay" at evaluation time
+        /// `now`. Suppressed only while the same route is still inside the cooldown
+        /// window, unless the new savings beats the rejected savings by a material
+        /// margin. Pure (no actor access) — safe to call from the nonisolated loop.
+        func isSuppressed(routeID: UUID, savingsSeconds: TimeInterval, now: Date) -> Bool {
+            guard routeID == dismissedRouteID, let dismissedAt else { return false }
+            guard now.timeIntervalSince(dismissedAt) < NavigationStateManager.rerouteDismissCooldown else { return false }
+            return savingsSeconds < dismissedSavingsSeconds + NavigationStateManager.rerouteResuggestMargin
+        }
     }
 
     /// Whether a SwiftData `@Model` is still valid to read. A deleted model has a
@@ -451,22 +489,31 @@ final class NavigationStateManager {
     /// rather than compared across bases — exactly the symmetry guarantee the
     /// main via-route path already upholds, now extended to the fallback.
     ///
-    /// Pure and dependency-injected (`fetchETA`, `isSuppressed`) so the
-    /// symmetric-comparison contract is unit-testable without a live engine or
-    /// network. Candidate exclusion (the active route) is the caller's job.
+    /// Pure and dependency-injected (`fetchETA`, plus a value `suppression`
+    /// snapshot) so the symmetric-comparison contract is unit-testable without a
+    /// live engine or network. Candidate exclusion (the active route) is the
+    /// caller's job.
     ///
     /// Operates on `Sendable` `RerouteCandidate` value snapshots (id + encoded
     /// polyline), never the `@Model Route`, so the network `fetchETA` awaits
     /// inside this loop can't re-touch a model invalidated by a concurrent
     /// mid-drive delete. Returns the WINNING candidate's id; the caller maps it
     /// back to a still-live `Route` under a fresh liveness gate.
+    ///
+    /// Suppression ("Stay" cooldown) is evaluated against the `Sendable`
+    /// `suppression` value snapshot captured on the main actor before this loop
+    /// runs — NEVER by reaching back into the `@MainActor` suppression fields
+    /// from this nonisolated continuation, which would race a concurrent decline
+    /// after the ETA `await`. `now` is injectable for tests; the cooldown is
+    /// measured from `now` against the snapshot's `dismissedAt`.
     nonisolated static func bestReroute(
         candidates: [RerouteCandidate],
         currentCoord: CLLocationCoordinate2D,
         baseline: RouteETA,
         basePercentage: Double,
         hardMinuteFloor: Int?,
-        isSuppressed: (UUID, TimeInterval) -> Bool,
+        suppression: RerouteSuppression,
+        now: Date = Date(),
         fetchETA: (CLLocationCoordinate2D, String) async throws -> RouteETA
     ) async -> (routeID: UUID, savingsMinutes: Double, savingsPercentage: Double)? {
         let remainingETASeconds = baseline.duration
@@ -510,7 +557,9 @@ final class NavigationStateManager {
 
             // Don't re-surface a route the driver just declined ("Stay") until
             // the cooldown lapses or it becomes materially faster than rejected.
-            if isSuppressed(candidate.id, decision.savingsSeconds) {
+            // Evaluated against the main-actor-captured snapshot, not the live
+            // @MainActor fields — so this off-actor read can't race a decline.
+            if suppression.isSuppressed(routeID: candidate.id, savingsSeconds: decision.savingsSeconds, now: now) {
                 continue
             }
 
@@ -639,14 +688,30 @@ final class NavigationStateManager {
         rerouteSuggestion = nil
     }
 
+    /// Capture the current "Stay" suppression state as a `Sendable` value so the
+    /// nonisolated reroute loop can evaluate the cooldown across its `await`
+    /// boundary WITHOUT reading the `@MainActor` suppression fields off-actor.
+    /// Built on the main actor (these fields are main-actor-isolated), then
+    /// handed to `bestReroute`. The race the snapshot closes: a driver tapping
+    /// "Stay" (`dismissRerouteSuggestion`) writes these fields on the main actor
+    /// at the same instant the post-ETA-fetch continuation reads them on a
+    /// cooperative-pool thread.
+    func rerouteSuppressionSnapshot() -> RerouteSuppression {
+        RerouteSuppression(
+            dismissedRouteID: dismissedRouteID,
+            dismissedAt: dismissedAt,
+            dismissedSavingsSeconds: dismissedSavingsSeconds
+        )
+    }
+
     /// Whether a candidate route is currently suppressed because the driver just
     /// declined it. Suppressed while inside the cooldown window, unless the new
     /// savings beats the rejected savings by a material margin.
     /// `internal` (not `private`) so the cooldown policy is unit-testable.
+    /// Delegates to the same pure logic the reroute loop uses via its snapshot,
+    /// so the live-state and snapshot paths can never drift.
     func isRerouteSuppressed(routeID: UUID, savingsSeconds: TimeInterval, now: Date = Date()) -> Bool {
-        guard routeID == dismissedRouteID, let dismissedAt else { return false }
-        guard now.timeIntervalSince(dismissedAt) < Self.rerouteDismissCooldown else { return false }
-        return savingsSeconds < dismissedSavingsSeconds + Self.rerouteResuggestMargin
+        rerouteSuppressionSnapshot().isSuppressed(routeID: routeID, savingsSeconds: savingsSeconds, now: now)
     }
 
     private func clearDismissedReroute() {
