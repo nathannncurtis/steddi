@@ -1010,7 +1010,9 @@ struct SteddiNavOverlay: View {
 
                 // Speed value
                 VStack(spacing: 0) {
-                    Text("\(Int(engine.currentSpeedMph))")
+                    // Unit-aware display value (mph or km/h per the user's setting);
+                    // the gauge math below stays mph-canonical to match OSM maxspeed.
+                    Text("\(engine.currentSpeedValue)")
                         .font(SteddiTheme.mono(22 * scale))
                         .foregroundStyle(speedTextColor)
                         // The digit rides the translucent glass housing in the
@@ -1025,7 +1027,7 @@ struct SteddiNavOverlay: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
 
-                    Text("mph")
+                    Text(engine.speedUnitLabel)
                         // Floor the unit caption so it stays legible: at the
                         // landscape/floating speedometer (size 44, scale ~0.69)
                         // an unfloored 9*scale renders ~6pt — unreadable on glass
@@ -1042,7 +1044,7 @@ struct SteddiNavOverlay: View {
 
             // Speed limit badge — small bordered circle when limit is available
             if let limit = speedLimitMph {
-                Text("\(Int(limit))")
+                Text("\(engine.speedLimitValue ?? Int(limit))")
                     .font(SteddiTheme.mono(10 * scale))
                     // Small 10pt value on a solid surfacePrimary fill — raw warmRed
                     // fails AA here (1.77:1 grey, 3.56:1 light), so use the
@@ -1089,10 +1091,10 @@ struct SteddiNavOverlay: View {
     /// Single spoken phrase for the speedometer gauge, e.g.
     /// "Current speed 65 miles per hour. Speed limit 55. Over the limit."
     private func speedometerAccessibilityLabel(speedLimitMph: Double?, overLimit: Double) -> String {
-        var phrase = "Current speed \(Int(engine.currentSpeedMph)) miles per hour."
+        var phrase = "Current speed \(engine.currentSpeedValue) \(engine.spokenSpeedUnit)."
         if let limit = speedLimitMph {
             let qualifier = engine.speedLimitIsEstimated ? "Estimated speed limit" : "Speed limit"
-            phrase += " \(qualifier) \(Int(limit))."
+            phrase += " \(qualifier) \(engine.speedLimitValue ?? Int(limit))."
         }
         if overLimit > 0 {
             phrase += " Over the limit."
