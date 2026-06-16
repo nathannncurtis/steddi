@@ -127,6 +127,26 @@ enum CameraReportKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// Glyph color for the camera icon when drawn ON A SURFACE (the report
+    /// sheet's near-white list row, `surfaceSecondary`), NOT on a filled badge.
+    /// `color` is the raw fill hue — correct on the map badge / glass chip where
+    /// contrast is carried by the fill — but as a foreground glyph on a light
+    /// list row the raw `warningAmber` (~1.76:1) and `warmRed` (~1.77:1 on grey)
+    /// fall below WCAG's 3:1 non-text floor and visually fade. These return the
+    /// surface-adaptive *text* tokens, which shift the hue the direction the live
+    /// surface has headroom in so the glyph clears the floor while staying
+    /// recognizably amber/red — the same fix used for the list-row glyphs in
+    /// `NoGoZoneEditorView` and `CommuteListView`. `.mobileSpeedTrap` already
+    /// resolves to the text-safe `accent` (not the raw brand hue), so it carries
+    /// straight through.
+    var listGlyphColor: Color {
+        switch self {
+        case .speedCamera:     return SteddiTheme.amberText
+        case .redLightCamera:  return SteddiTheme.warmRedText
+        case .mobileSpeedTrap: return SteddiTheme.accent
+        }
+    }
+
     /// Raw RGB of `color`, for picking an AA-correct on-fill foreground via
     /// `SteddiTheme.contrastingForeground(on:)` when a glyph/label is drawn ON a
     /// chip filled with this kind's color (a same-hue glyph washes out — see
