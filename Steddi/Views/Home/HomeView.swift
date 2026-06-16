@@ -805,14 +805,18 @@ struct HomeView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.body.weight(.medium))
                             .foregroundStyle(SteddiTheme.accent)
+                            .legibleOverMap()
                         Text("Where to?")
                             .font(SteddiTheme.heading(17))
                             .foregroundStyle(SteddiTheme.textPrimary)
+                            .legibleOverMap()
                         Spacer()
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
-                    // Neutral glass — the accent lives in the leading icon.
+                    // Neutral glass — the accent lives in the leading icon. Soft
+                    // per-glyph shadow so the pill copy holds over bright cartography,
+                    // matching the floating nav glyphs in the same over-map cluster.
                     .steddiGlass(tint: nil, interactive: true, in: Capsule())
                 }
 
@@ -821,7 +825,12 @@ struct HomeView: View {
                 } label: {
                     Image(systemName: "gearshape.fill")
                         .font(.body.weight(.medium))
-                        .foregroundStyle(SteddiTheme.textSecondary)
+                        // Inactive floating-control glyph over the moving map — matches
+                        // the nav floating-button tier (textSecondary + soft shadow) so
+                        // it holds above the 3:1 non-text floor on any tile and promotes
+                        // under Increase Contrast.
+                        .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                        .legibleOverMap()
                         .frame(width: 44, height: 44)
                         .steddiGlass(tint: nil, interactive: true, in: .circle)
                 }
@@ -915,7 +924,13 @@ struct HomeView: View {
                             Button { showSettings = true } label: {
                                 Image(systemName: "gearshape.fill")
                                     .font(.caption)
-                                    .foregroundStyle(SteddiTheme.textSecondary)
+                                    // Inactive floating-control glyph over the moving
+                                    // map — matches the nav floating-button tier
+                                    // (textSecondary + soft shadow) so it holds above
+                                    // the 3:1 non-text floor on any tile and promotes
+                                    // under Increase Contrast.
+                                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                                    .legibleOverMap()
                                     .frame(width: 36, height: 36)
                                     .steddiGlass(
                                         tint: nil,
@@ -938,19 +953,16 @@ struct HomeView: View {
                     HStack(spacing: 0) {
                         ForEach(SheetTab.allCases, id: \.self) { tab in
                             Button { withAnimation(TransitionKit.quickFade) { sheetTab = tab } } label: {
-                                Text(tab.rawValue)
-                                    .font(SteddiTheme.heading(12))
-                                    // Inactive tabs are primary nav, not decoration:
-                                    // textSecondary keeps them readable (textMuted
-                                    // fails contrast on the sheet) while still
-                                    // reading as inactive next to the accent label.
-                                    .foregroundStyle(sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textSecondary)
-                                    // Shrink-to-fit on one line so large Dynamic Type
-                                    // doesn't wrap/clip in the 280pt sidebar.
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 6)
+                                // Inactive tabs are primary nav, not decoration:
+                                // textSecondary keeps them readable (textMuted fails
+                                // contrast on the sheet) while still reading as
+                                // inactive next to the accent label. No active pill
+                                // in the sidebar — just the 44pt hit-target expansion.
+                                HomeSheetTabLabel(
+                                    title: tab.rawValue,
+                                    font: SteddiTheme.heading(12),
+                                    color: sheetTab == tab ? SteddiTheme.accent : SteddiTheme.textSecondary
+                                ) { EmptyView() }
                             }
                         }
                     }
@@ -1011,42 +1023,35 @@ struct HomeView: View {
                         Button {
                             withAnimation(TransitionKit.quickFade) { sheetTab = tab }
                         } label: {
-                            Text(tab.rawValue)
-                                .font(SteddiTheme.heading(14))
-                                // Active label rides on the accent pill, so it needs
-                                // the on-accent foreground (textPrimary is ~white and
-                                // washed out on the light accent fill). The pill is
-                                // tinted with accentBrand (the unshifted brand hue) —
-                                // onAccent is computed to clear AA against accentBrand,
-                                // not the surface-adaptive text-safe accent. Inactive
-                                // labels use textSecondary (textMuted fails on the bar).
-                                .foregroundStyle(sheetTab == tab ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
-                                // At large Dynamic Type the heading scales past the
-                                // ~1/3-width budget; shrink-to-fit on one line keeps
-                                // the single-row pill and the matched-geometry active
-                                // pill aligned instead of wrapping/clipping.
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background {
-                                    if sheetTab == tab {
-                                        Capsule()
-                                            .fill(.clear)
-                                            // fallbackFill: accentBrand so the selected pill keeps a
-                                            // SOLID accent fill when glass is off (Reduce Transparency
-                                            // / high contrast). Without it the default surfacePrimary
-                                            // fallback drops the lavender tint: the active-vs-inactive
-                                            // cue flattens, and in dark mode near-black onAccent text
-                                            // on a near-black surfacePrimary pill is an AA failure. The
-                                            // accent fill also keeps onAccent (computed against
-                                            // accentBrand) legible on any background. Mirrors
-                                            // SteddiPrimaryButtonStyle, which passes fallbackFill: tint.
-                                            .steddiGlass(tint: SteddiTheme.accentBrand, interactive: false, in: Capsule(), fallbackFill: SteddiTheme.accentBrand)
-                                            .glassEffectID("sheet.tab.active", in: sheetTabNamespace)
-                                            .glassEffectTransition(.matchedGeometry)
-                                    }
+                            // Active label rides on the accent pill, so it needs the
+                            // on-accent foreground (textPrimary is ~white and washed
+                            // out on the light accent fill). The pill is tinted with
+                            // accentBrand (the unshifted brand hue) — onAccent is
+                            // computed to clear AA against accentBrand, not the
+                            // surface-adaptive text-safe accent. Inactive labels use
+                            // textSecondary (textMuted fails on the bar).
+                            HomeSheetTabLabel(
+                                title: tab.rawValue,
+                                font: SteddiTheme.heading(14),
+                                color: sheetTab == tab ? SteddiTheme.onAccent : SteddiTheme.textSecondary
+                            ) {
+                                if sheetTab == tab {
+                                    Capsule()
+                                        .fill(.clear)
+                                        // fallbackFill: accentBrand so the selected pill keeps a
+                                        // SOLID accent fill when glass is off (Reduce Transparency
+                                        // / high contrast). Without it the default surfacePrimary
+                                        // fallback drops the lavender tint: the active-vs-inactive
+                                        // cue flattens, and in dark mode near-black onAccent text
+                                        // on a near-black surfacePrimary pill is an AA failure. The
+                                        // accent fill also keeps onAccent (computed against
+                                        // accentBrand) legible on any background. Mirrors
+                                        // SteddiPrimaryButtonStyle, which passes fallbackFill: tint.
+                                        .steddiGlass(tint: SteddiTheme.accentBrand, interactive: false, in: Capsule(), fallbackFill: SteddiTheme.accentBrand)
+                                        .glassEffectID("sheet.tab.active", in: sheetTabNamespace)
+                                        .glassEffectTransition(.matchedGeometry)
                                 }
+                            }
                         }
                     }
                 }
@@ -2745,6 +2750,42 @@ struct HomeView: View {
             changed = true
         }
         if changed { try? modelContext.save() }
+    }
+}
+
+// MARK: - Sheet Tab Label (testable)
+
+/// One Commutes/Places/Trips tab label, shared by the portrait bottom-sheet tab
+/// bar and the landscape sidebar. Primary top-level navigation, so the tappable
+/// area is expanded to Apple's 44×44pt HIG minimum WITHOUT growing the visible
+/// label/pill — the `.frame(minHeight: 44).contentShape(Rectangle())` is applied
+/// AFTER the optional active-pill background so the pill keeps its size. Lives
+/// outside HomeView (which needs a full SwiftData/environment) so the 44pt hit
+/// target is regression-testable in isolation, mirroring NowPlayingMiniBar's
+/// `playPauseButton`.
+struct HomeSheetTabLabel<Background: View>: View {
+    let title: String
+    let font: Font
+    let color: Color
+    /// Active-pill background layered behind the label before the hit-area
+    /// expansion. `EmptyView` for the landscape tabs (no pill).
+    @ViewBuilder var background: () -> Background
+
+    var body: some View {
+        Text(title)
+            .font(font)
+            .foregroundStyle(color)
+            // Shrink-to-fit on one line so large Dynamic Type doesn't wrap/clip.
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background { background() }
+            // Expand to the 44pt minimum tap target (after the pill background so
+            // the visible pill keeps its size), matching the gear / New Commute
+            // expansions elsewhere in HomeView.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
     }
 }
 

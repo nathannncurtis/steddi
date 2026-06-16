@@ -23,15 +23,18 @@ struct TripArrivalCard: View {
                     Text(isComplete ? "Trip complete" : "Arrived at \(stopName)")
                         .font(SteddiTheme.heading(16))
                         .foregroundStyle(SteddiTheme.textPrimary)
+                        .legibleOverMap()
 
                     if let nextStopName {
                         Text("Next: \(nextStopName)")
                             .font(SteddiTheme.body(13))
                             .foregroundStyle(SteddiTheme.textSecondary)
+                            .legibleOverMap()
                     } else {
                         Text("Arrived at \(stopName)")
                             .font(SteddiTheme.body(13))
                             .foregroundStyle(SteddiTheme.textSecondary)
+                            .legibleOverMap()
                     }
                 }
 
@@ -50,6 +53,9 @@ struct TripArrivalCard: View {
             // high-contrast goes opaque (matching the rest of the floating nav
             // chrome) instead of letting "Arrived at … / Next: …" fight the map.
             // Sage tint keeps the existing "all-clear" green hairline border.
+            // Scrim lifts the glass off bright cartography (same shape as the glass),
+            // matching the sibling nav banners' over-map hardening.
+            .mapGlassScrim(in: RoundedRectangle(cornerRadius: SteddiTheme.radiusCard))
             .steddiGlass(
                 tint: SteddiTheme.sage,
                 in: RoundedRectangle(cornerRadius: SteddiTheme.radiusCard),
