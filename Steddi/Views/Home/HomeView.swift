@@ -805,14 +805,18 @@ struct HomeView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.body.weight(.medium))
                             .foregroundStyle(SteddiTheme.accent)
+                            .legibleOverMap()
                         Text("Where to?")
                             .font(SteddiTheme.heading(17))
                             .foregroundStyle(SteddiTheme.textPrimary)
+                            .legibleOverMap()
                         Spacer()
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
-                    // Neutral glass — the accent lives in the leading icon.
+                    // Neutral glass — the accent lives in the leading icon. Soft
+                    // per-glyph shadow so the pill copy holds over bright cartography,
+                    // matching the floating nav glyphs in the same over-map cluster.
                     .steddiGlass(tint: nil, interactive: true, in: Capsule())
                 }
 
@@ -821,7 +825,12 @@ struct HomeView: View {
                 } label: {
                     Image(systemName: "gearshape.fill")
                         .font(.body.weight(.medium))
-                        .foregroundStyle(SteddiTheme.textSecondary)
+                        // Inactive floating-control glyph over the moving map — matches
+                        // the nav floating-button tier (textSecondary + soft shadow) so
+                        // it holds above the 3:1 non-text floor on any tile and promotes
+                        // under Increase Contrast.
+                        .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                        .legibleOverMap()
                         .frame(width: 44, height: 44)
                         .steddiGlass(tint: nil, interactive: true, in: .circle)
                 }
@@ -915,7 +924,13 @@ struct HomeView: View {
                             Button { showSettings = true } label: {
                                 Image(systemName: "gearshape.fill")
                                     .font(.caption)
-                                    .foregroundStyle(SteddiTheme.textSecondary)
+                                    // Inactive floating-control glyph over the moving
+                                    // map — matches the nav floating-button tier
+                                    // (textSecondary + soft shadow) so it holds above
+                                    // the 3:1 non-text floor on any tile and promotes
+                                    // under Increase Contrast.
+                                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                                    .legibleOverMap()
                                     .frame(width: 36, height: 36)
                                     .steddiGlass(
                                         tint: nil,
@@ -951,6 +966,11 @@ struct HomeView: View {
                                     .minimumScaleFactor(0.8)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 6)
+                                    // Primary nav: expand the hit area to the 44pt
+                                    // minimum tap target without growing the visual,
+                                    // matching the gear / New Commute expansions.
+                                    .frame(minHeight: 44)
+                                    .contentShape(Rectangle())
                             }
                         }
                     }
@@ -1047,6 +1067,12 @@ struct HomeView: View {
                                             .glassEffectTransition(.matchedGeometry)
                                     }
                                 }
+                                // Primary nav: expand the hit area to the 44pt minimum
+                                // tap target without growing the visible pill (applied
+                                // after the active-pill background so the pill keeps its
+                                // current size), matching the gear / New Commute fixes.
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                     }
                 }
