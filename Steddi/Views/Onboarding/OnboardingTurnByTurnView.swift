@@ -1,23 +1,32 @@
 import SwiftUI
 
-/// Representative surface for the onboarding *showcase* beats' affordance glyphs.
+/// The card surface the onboarding *showcase/ask* beats actually sit on.
 ///
-/// The showcase/route-rules beats render their illustration inside the morphing
-/// `OnboardingShowpieceCard`, whose shell is neutral `.regular` Liquid Glass
-/// (`cardTint == nil` for everything but the theme beat). Over the dark
-/// cinematic backdrop the OS renders that glass as a noticeably LIGHT frost
-/// (measured card luminance ~0.5–0.7), so accent glyphs drawn in the raw
-/// mid-tone brand hue wash out (~1.2–1.6:1, below the 3:1 graphical-object
-/// floor) — the same reason the card *copy* uses the fixed-white onboarding
-/// tiers rather than theme tokens.
+/// HISTORY (the root bug this constant used to embody): the non-theme beats
+/// render inside the morphing `OnboardingShowpieceCard`, whose shell is neutral
+/// `.regular` Liquid Glass (`cardTint == nil` for everything but the theme
+/// beat). Over the dark cinematic backdrop the OS renders that neutral glass as
+/// a noticeably LIGHT frost — sampled at ~0.73 sRGB (~0.49 relative luminance)
+/// from a real device render. The card *copy* is fixed-WHITE (matching the
+/// hero), so white-on-light-frost collapsed to ~1.9:1 and the accent glyphs to
+/// ~1.65:1 — both far below the AA floors. This constant was a *guessed* 0.62
+/// light surface, and the glyph shift sized against it saturated its cap and
+/// never cleared 3:1.
 ///
-/// Live glass luminance isn't deterministic from code, so we size the legible
-/// shift against a fixed light-grey panel near the measured frost (>0.5 so the
-/// accent darkens, the worst case for these mid-tone hues). Feeding this to
-/// `SteddiTheme.legibleText(_:onSurface:)` lifts the glyph above the floor while
-/// preserving the brand hue — mirroring `DonationView`'s accent-on-frost fix.
+/// FIX (dark cards): rather than fight the non-deterministic light glass,
+/// `OnboardingShowpieceCard` now paints a deterministic DARK scrim behind the
+/// content of every non-theme beat (gated on `needsDarkScrim`), so the copy +
+/// glyphs sit on a reliably dark surface — white-on-dark, exactly like the hero. This constant is the *conservative composited* value the
+/// content rests on: the dark scrim (`onboardingCardFallbackFill`, ~RGB 0.12)
+/// painted at high opacity over the lightest plausible glass composites no
+/// lighter than this, so any contrast asserted against this value is a worst-case
+/// lower bound that the real render beats. Feeding it to
+/// `SteddiTheme.legibleText(_:onSurface:)` LIGHTENS the mid-tone accent (a dark
+/// surface has headroom upward), lifting every glyph to 5.7:1 while preserving
+/// the brand hue, and the fixed-white copy tiers clear AA with margin
+/// (primary 11.6:1, secondary 9.7:1, muted 4.9:1).
 enum OnboardingShowcaseFrost {
-    static let surface = RGBColor(0.62, 0.62, 0.64)
+    static let surface = RGBColor(0.22, 0.22, 0.24)
 }
 
 /// Showcase beat 3: "Turn-by-turn, done Steddi's way." Communicates that Steddi
@@ -41,12 +50,11 @@ struct OnboardingTurnByTurnView: View {
     private var accentFill: Color { accent.color }
 
     /// Glyph color for the affordance illustrations (turn arrow, speedo sweep).
-    /// These sit on the `.regular` Liquid Glass card, which the OS renders as a
-    /// noticeably LIGHT frost over the dark backdrop — the raw mid-tone accents
-    /// wash out there (~1.2–1.6:1, below the 3:1 graphical-object floor). Shift
-    /// the accent toward the side the light frost has headroom in so it clears
-    /// the floor while staying recognisably the brand hue — the same fix the
-    /// donation sheet uses for accent-on-frost (DonationView.sheetPriceColor).
+    /// These sit on the card's deterministic DARK scrim (see
+    /// `OnboardingShowcaseFrost`): raw mid-tone accents are fine on dark, but the
+    /// shared `legibleText` shift LIGHTENS them to a uniform 5.7:1 so every accent
+    /// reads identically bright on the dark surface while staying recognisably the
+    /// brand hue — well above the 3:1 graphical-object floor.
     private var glyphAccent: Color {
         SteddiTheme.legibleText(accent.rgb, onSurface: OnboardingShowcaseFrost.surface).color
     }
@@ -130,9 +138,12 @@ struct OnboardingTurnByTurnView: View {
             // Track.
             Circle()
                 .trim(from: 0.0, to: 0.75)
-                // Fixed light-on-dark track: the muted theme token resolves
-                // near-black in Light and would disappear on this dark card.
-                .stroke(SteddiTheme.onboardingTextMuted.opacity(0.55),
+                // Fixed light-on-dark gauge track. `onboardingTextMuted` (white
+                // .66) at .60 reads ~3.2:1 on the dark card scrim — above the 3:1
+                // graphical floor, while staying a quiet track behind the
+                // brighter accent sweep. (The meaning is carried by the colored
+                // sweep + the white "32 mph" label, not the track.)
+                .stroke(SteddiTheme.onboardingTextMuted.opacity(0.6),
                         style: StrokeStyle(lineWidth: 7, lineCap: .round))
                 .rotationEffect(.degrees(135))
             // Sweep to ~"60%" of the arc.

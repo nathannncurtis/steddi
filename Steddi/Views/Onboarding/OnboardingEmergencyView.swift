@@ -18,6 +18,16 @@ struct OnboardingEmergencyView: View {
 
     private var hasContact: Bool { coordinator.emergencyContact != nil }
 
+    /// Frost-legible hue for the 64pt focal icon. Like the showcase beats, the
+    /// raw mid-tone accent is lifted to a uniform 5.7:1 on the card's dark scrim
+    /// (`OnboardingShowcaseFrost`) — preserving the brand hue while clearing the
+    /// 3:1 graphical-object floor with margin. The previous raw accent landed
+    /// ~1.1:1 on the old LIGHT frost (the focal point all but vanished).
+    private var glyphAccent: Color {
+        SteddiTheme.legibleText(coordinator.selectedAccent.rgb,
+                                onSurface: OnboardingShowcaseFrost.surface).color
+    }
+
     var body: some View {
         card
         .sheet(isPresented: $showPicker) {
@@ -38,7 +48,7 @@ struct OnboardingEmergencyView: View {
         VStack(spacing: 20) {
             Image(systemName: hasContact ? "checkmark.circle.fill" : "person.crop.circle.badge.plus")
                 .font(.system(size: 64))
-                .foregroundStyle(coordinator.selectedAccent.color)
+                .foregroundStyle(glyphAccent)
                 .scaleEffect(hasContact && savedCheckVisible ? 1.0 : (hasContact ? 0.6 : 1.0))
                 .accessibilityHidden(true)
 
@@ -85,11 +95,12 @@ struct OnboardingEmergencyView: View {
                 } label: {
                     Text("Choose a different contact")
                         .font(.subheadline)
-                        // Secondary "go back" link on the frosted card. The raw
-                        // brand accent fails AA on this lighter frosted panel in
-                        // every accent; use the fixed-white secondary tier the
-                        // rest of the card copy uses — matching the "Not now"
-                        // secondary in OnboardingPermissionsView.
+                        // Secondary "go back" link on the card. The raw brand
+                        // accent reads as itself but with low contrast; use the
+                        // fixed-white secondary tier the rest of the card copy
+                        // uses — on the card's dark scrim it clears AA at 9.7:1,
+                        // matching the "Not now" secondary in
+                        // OnboardingPermissionsView.
                         .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                 }
             }

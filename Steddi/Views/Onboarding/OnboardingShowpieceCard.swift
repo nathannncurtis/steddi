@@ -61,6 +61,25 @@ struct OnboardingShowpieceCard<Content: View>: View {
         beat == .theme ? accent : nil
     }
 
+    /// The showcase/ask beats (routeRules, turnByTurn, permissions, emergency)
+    /// draw fixed-WHITE copy + glyphs, sized to read white-on-dark like the hero.
+    /// But neutral `.regular` glass over the dark backdrop renders as a LIGHT
+    /// frost (~0.73 sRGB), so white copy on it collapsed to ~1.9:1 and the accent
+    /// glyphs to ~1.65:1 — the recurring legibility bug. The theme beat is
+    /// exempt: its glass is accent-tinted and its inner controls carry their own
+    /// dark/white washes.
+    ///
+    /// Rather than chase the non-deterministic glass luminance, give the
+    /// non-theme beats a deterministic DARK interior scrim behind the content, so
+    /// the white copy + the surface-aware glyphs sit on a reliably dark surface
+    /// (`OnboardingShowcaseFrost.surface` is the conservative composite they're
+    /// sized against). The scrim is the same fixed dark tone as the
+    /// Reduce-Transparency fallback (`onboardingCardFallbackFill`) at high
+    /// opacity, so even over the lightest plausible glass it composites no lighter
+    /// than that constant — keeping the card unmistakably a dark glass panel while
+    /// every element clears AA (white primary 11.6:1, glyphs 5.7:1).
+    private var needsDarkScrim: Bool { beat != .theme }
+
     var body: some View {
         ZStack {
             backdrop
@@ -97,6 +116,22 @@ struct OnboardingShowpieceCard<Content: View>: View {
                     content()
                 }
                 .frame(maxWidth: 360)
+                // Deterministic dark scrim behind the content of the
+                // showcase/ask beats so the fixed-white copy + glyphs sit on a
+                // reliably dark surface (white-on-dark, like the hero) instead of
+                // the LIGHT frost neutral glass renders as — the recurring
+                // legibility bug. Drawn *inside* the card shape and in front of
+                // the glass material (it's added before `.steddiGlass`), so it
+                // darkens the frost while the glass shell still owns the morph,
+                // edge highlight, and shape. The theme beat keeps its live
+                // accent-tinted glass (no scrim). Same dark tone as the
+                // Reduce-Transparency fallback, so the two paths agree.
+                .background {
+                    if needsDarkScrim {
+                        RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge)
+                            .fill(SteddiTheme.onboardingCardFallbackFill.opacity(0.94))
+                    }
+                }
                 .steddiGlass(
                     tint: cardTint,
                     in: RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge),

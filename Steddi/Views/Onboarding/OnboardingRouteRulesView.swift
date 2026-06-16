@@ -23,11 +23,12 @@ struct OnboardingRouteRulesView: View {
     private var accentFill: Color { accent.color }
 
     /// Glyph color for the affordance illustrations (no-go ring, nosign symbol,
-    /// re-route line). They sit on the `.regular` Liquid Glass card, which the OS
-    /// renders as a noticeably LIGHT frost over the dark backdrop — the raw
-    /// mid-tone accents wash out there (below the 3:1 graphical-object floor).
-    /// Shift toward the side the light frost has headroom in so they clear the
-    /// floor while staying recognisably the brand hue (see `OnboardingShowcaseFrost`).
+    /// re-route line). They sit on the card's deterministic DARK scrim (see
+    /// `OnboardingShowcaseFrost`): the shared `legibleText` shift LIGHTENS the
+    /// mid-tone accent to a uniform 5.7:1 on that dark surface, so every accent
+    /// reads identically bright while staying recognisably the brand hue — well
+    /// above the 3:1 graphical-object floor (the no-go ring at .85 opacity still
+    /// clears it at ~4.6:1).
     private var glyphAccent: Color {
         SteddiTheme.legibleText(accent.rgb, onSurface: OnboardingShowcaseFrost.surface).color
     }

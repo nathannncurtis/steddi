@@ -21,12 +21,22 @@ struct OnboardingPermissionsView: View {
     /// Live accent so the in-card primary matches the chosen theme. This is the
     /// IN-FLIGHT pick held on the coordinator (not yet persisted), so it's passed
     /// in rather than read from `SteddiTheme.accentBrand` (which lags a beat).
-    var accent: Color = SteddiTheme.accentBrand
+    /// Used as the Continue button's glass FILL (contrast carried by the fill).
+    var accent: SteddiTheme.AccentOption = SteddiTheme.currentAccentOption
     /// Luminance-correct on-fill label color for `accent` (the in-flight accent's
     /// `contrastingGlyph`). A system-white label fails AA on the light accents.
     var onAccentLabel: Color = SteddiTheme.onAccent
 
     @State private var pulse = false
+
+    /// Frost-legible hue for the 64pt focal icon. Like the showcase beats, the
+    /// raw mid-tone accent is lifted to a uniform 5.7:1 on the card's dark scrim
+    /// (`OnboardingShowcaseFrost`) — preserving the brand hue while clearing the
+    /// 3:1 graphical-object floor with margin. The previous raw accent landed
+    /// ~1.1:1 on the old LIGHT frost (the focal point all but vanished).
+    private var glyphAccent: Color {
+        SteddiTheme.legibleText(accent.rgb, onSurface: OnboardingShowcaseFrost.surface).color
+    }
 
     var body: some View {
         card
@@ -37,7 +47,7 @@ struct OnboardingPermissionsView: View {
         VStack(spacing: 20) {
             Image(systemName: "location.fill.viewfinder")
                 .font(.system(size: 64))
-                .foregroundStyle(accent)
+                .foregroundStyle(glyphAccent)
                 .opacity(pulse ? 0.6 : 1.0)
                 .accessibilityHidden(true)
 
@@ -72,8 +82,10 @@ struct OnboardingPermissionsView: View {
                 }
                 // In-flight accent glass fill + luminance-correct label instead
                 // of `.glassProminent` (which forces an AA-failing white label).
+                // The fill stays the RAW accent (contrast is carried by the fill
+                // + the on-fill `onAccentLabel`, not the glyph).
                 .buttonStyle(.plain)
-                .steddiGlass(tint: accent, interactive: true, in: Capsule())
+                .steddiGlass(tint: accent.color, interactive: true, in: Capsule())
 
                 Button("Not now") {
                     onNotNow()

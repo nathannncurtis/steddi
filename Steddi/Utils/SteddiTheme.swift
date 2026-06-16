@@ -255,23 +255,23 @@ enum SteddiTheme {
     /// inside the onboarding beats; everywhere else the adaptive theme tokens are
     /// correct.
     ///
-    /// CONTRAST — sized for BOTH surfaces the copy actually sits on:
+    /// CONTRAST — both surfaces the copy sits on are now DARK:
     ///   • The hero/footer chrome sits directly on the near-black backdrop, where
     ///     even the muted tier is far above AA.
     ///   • The showcase/ask beats (routeRules / turnByTurn / permissions /
-    ///     theme / emergency) render *inside* the morphing Liquid Glass card,
-    ///     which is `.regular` glass over the dark backdrop — i.e. a noticeably
-    ///     LIGHTER, frosted panel. The original tiers (secondary 0.8, muted 0.45)
-    ///     were chosen for a flat dark card; on the lighter frosted panel the
-    ///     white-secondary and especially white-muted copy go borderline. The
-    ///     tiers below are raised (secondary 0.8→0.92, muted 0.45→0.66) so
-    ///     secondary/muted copy clears comfortable contrast on the lighter frosted
-    ///     card while staying obviously legible on the dark backdrop too. The
-    ///     three tiers stay visually ranked (primary > secondary > muted).
+    ///     theme / emergency) render *inside* the morphing Liquid Glass card.
+    ///     That neutral `.regular` glass over the dark backdrop USED to render as
+    ///     a LIGHT frost (~0.73 sRGB), and white-on-light-frost collapsed to
+    ///     ~1.9:1 — the recurring legibility bug. `OnboardingShowpieceCard` now
+    ///     paints a deterministic DARK scrim behind the content of those beats
+    ///     (`OnboardingShowcaseFrost.surface` ≈ RGB 0.22), so the copy is reliably
+    ///     white-on-dark, like the hero. Against that surface the tiers clear AA
+    ///     with margin: primary 11.6:1, secondary (.92) 9.7:1, muted (.66) 4.9:1.
+    ///     The three tiers stay visually ranked (primary > secondary > muted).
     ///
-    /// The decorative graphic strokes (route-rules dashed line, speedo track)
-    /// layer their own `.opacity(...)` on top of `onboardingTextMuted`; the raise
-    /// only makes those slightly more present on the dark card, which is fine.
+    /// The decorative graphic strokes (route-rules dashed reject line, speedo
+    /// track) layer their own `.opacity(...)` on top of `onboardingTextMuted`;
+    /// on the dark scrim they read ~3.2:1 — quiet but above the graphical floor.
     static let onboardingTextPrimary = Color.white
     static let onboardingTextSecondary = Color.white.opacity(0.92)
     static let onboardingTextMuted = Color.white.opacity(0.66)
