@@ -434,10 +434,16 @@ struct SteddiNavOverlay: View {
                     .foregroundStyle(SteddiTheme.textPrimary)
                     .minimumScaleFactor(0.7)
 
-                // Instruction — clear and readable
+                // Instruction — the safety-critical maneuver words. This is the
+                // single most important readout in the HUD, so it gets the
+                // strongest treatment: textPrimary (near-black, like the distance
+                // line above) at semibold weight plus the soft shadow the compass
+                // uses — so it holds against any tile, never the mid-grey
+                // textSecondary that is only AA-proven on solid surfaces.
                 Text(displayInstruction)
-                    .font(SteddiTheme.body(18 * textScale, highContrast: highContrast))
-                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                    .font(SteddiTheme.body(18 * textScale, highContrast: highContrast).weight(.semibold))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .minimumScaleFactor(0.7)
@@ -446,8 +452,16 @@ struct SteddiNavOverlay: View {
             Spacer()
         }
         .padding(20)
-        // Single neutral glass layer replaces the old material+surface double
-        // background — legibility over the map matters more than tint here.
+        // Neutral glass with a faint opaque scrim underneath. The scrim lifts the
+        // glass off bright/varied cartography so the safety-critical instruction
+        // never washes out, while keeping the Liquid Glass aesthetic on top. The
+        // scrim is skipped when glass is off (the fallback is already opaque).
+        .background {
+            if SteddiGlass.isAvailable {
+                SteddiGlass.cardShape
+                    .fill(SteddiTheme.surfacePrimary.opacity(0.22))
+            }
+        }
         .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.cardShape)
     }
 
@@ -462,18 +476,21 @@ struct SteddiNavOverlay: View {
                 .foregroundStyle(SteddiTheme.accent)
 
             Text("Leg \(trip.legIndex) of \(trip.totalLegs) · \(trip.nextStopName)")
-                .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                .font(SteddiTheme.body(13 * textScale, highContrast: highContrast).weight(.medium))
                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
                 .lineLimit(1)
 
             Spacer()
 
             if let summary = trip.remainingSummary {
-                // Meaningful readout over translucent nav glass — textSecondary,
-                // not textMuted (which is only AA-guaranteed on solid surfaces).
+                // Meaningful readout over translucent nav glass — textSecondary
+                // (not textMuted, AA-guaranteed only on solid surfaces) with the
+                // compass's soft shadow so it holds against any tile.
                 Text(summary)
                     .font(SteddiTheme.mono(12 * textScale))
                     .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
             }
         }
         .padding(.horizontal, 14)
@@ -491,10 +508,14 @@ struct SteddiNavOverlay: View {
                 .frame(width: 28 * iconScale, height: 28 * iconScale)
 
             // The follow-on maneuver is real driving info over translucent nav
-            // glass — textSecondary, not textMuted (AA-guaranteed only on solids).
+            // glass. Secondary to the main instruction, so it stays on the
+            // textSecondary tier — but at medium weight + the compass's soft
+            // shadow so the words separate from any tile (textSecondary's AA is
+            // only proven on solid surfaces, not glass over a moving map).
             Text("Then: \(displayFollowOnInstruction)")
-                .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
+                .font(SteddiTheme.body(14 * textScale, highContrast: highContrast).weight(.medium))
                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
                 .lineLimit(1)
 
             Spacer()
@@ -508,8 +529,12 @@ struct SteddiNavOverlay: View {
 
     private var streetNameCapsule: some View {
         Text(engine.roadName)
-            .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
+            // The current street name rides neutral glass over the moving map —
+            // medium weight + the compass's soft shadow so it holds against any
+            // tile (textSecondary's AA is only proven on solid surfaces).
+            .font(SteddiTheme.body(14 * textScale, highContrast: highContrast).weight(.medium))
             .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
             .padding(.horizontal, 16)
             .padding(.vertical, 7)
             .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.25)
