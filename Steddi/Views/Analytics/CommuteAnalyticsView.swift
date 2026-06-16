@@ -65,13 +65,18 @@ struct CommuteAnalyticsView: View {
                         // fill instead would put near-black on a darkened fill
                         // and collapse to ~3.1:1 in light mode.
                         .foregroundStyle(window == option ? SteddiTheme.onAccent : SteddiTheme.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        // Expand each segment to the 44pt HIG tap floor (mirrors
+                        // DaysOfWeekPicker / HomeView), keeping the compact capsule
+                        // look but giving a forgiving in-car tap target. The
+                        // contentShape makes the full padded capsule tappable, not
+                        // just the glyph.
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .background {
                             if window == option {
                                 Capsule().fill(SteddiTheme.accentBrand)
                             }
                         }
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
