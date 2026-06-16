@@ -217,6 +217,70 @@ struct LeftTurnCostTests {
         let node = g.nodes[Int(g.osmToIndex[1]!)]
         #expect(DefaultCostModel().turnCost(from: nil, to: out, at: node, in: g) == 0)
     }
+
+    /// A Y-fork approached from the south (3->1, heading north) that splits into a
+    /// SLIGHT-left branch (~25° west of north -> node 5) and a HARD-left branch
+    /// (~65° west of north -> node 6) at an unsignalized node. The slight branch is
+    /// a benign bear-left that crosses no oncoming flow; the hard branch is a real
+    /// unprotected left. Both branches carry a normal `lanes` tag so the hard left
+    /// resolves a real oncoming count.
+    private func forkGraph() -> RoadGraph {
+        buildGraph(
+            node(1, 34.0000, -117.0000),
+            node(3, 33.9985, -117.0000),               // south approach
+            node(5, 34.001359, -117.000765),           // ~25° west of north (slight left)
+            node(6, 34.000634, -117.001640),           // ~65° west of north (hard left)
+            way(10, [3, 1], tags: ["highway": "secondary"]),
+            way(11, [1, 5], tags: ["highway": "secondary", "lanes": "2"]),
+            way(12, [1, 6], tags: ["highway": "secondary", "lanes": "2"])
+        )
+    }
+
+    @Test("Slight-left penalty is far below the full unprotected-left penalty")
+    func slightLeftCheaperThanLeft() {
+        let g = forkGraph()
+        let incoming = edge(in: g, from: 3, to: 1)!
+        let slightOut = edge(in: g, from: 1, to: 5)!
+        let hardOut = edge(in: g, from: 1, to: 6)!
+        let node = g.nodes[Int(g.osmToIndex[1]!)]
+
+        // Self-validate the fixture: the branches really classify slight vs hard.
+        #expect(DefaultCostModel.classifyTurn(from: incoming, to: slightOut, in: g) == .slightLeft)
+        #expect(DefaultCostModel.classifyTurn(from: incoming, to: hardOut, in: g) == .left)
+
+        let weights = CostWeights.default
+        let model = DefaultCostModel(weights: weights)
+        let slightCost = model.turnCost(from: incoming, to: slightOut, at: node, in: g)
+        let hardCost = model.turnCost(from: incoming, to: hardOut, at: node, in: g)
+
+        // The slight-left fork must NOT be billed the full unprotected-left cost.
+        #expect(slightCost < hardCost)
+        #expect(slightCost == weights.slightLeftPenalty)
+        // The full unprotected-left penalty is preserved for the real (≥40°) left.
+        #expect(hardCost >= weights.unprotectedLeftBase)
+    }
+
+    @Test("A slight-left fork is not avoided like a hard unprotected left")
+    func slightLeftForkNotAvoided() {
+        let g = forkGraph()
+        let incoming = edge(in: g, from: 3, to: 1)!
+        let slightOut = edge(in: g, from: 1, to: 5)!
+        let node = g.nodes[Int(g.osmToIndex[1]!)]
+
+        // Even with the unprotected-left penalty cranked sky-high (the UPS signal),
+        // a benign slight-left fork stays cheap — it isn't dragged up with hard lefts.
+        var weights = CostWeights.default
+        weights.unprotectedLeftBase = 500
+        weights.unprotectedLeftPerOncomingLane = 50
+        let model = DefaultCostModel(weights: weights)
+        let slightCost = model.turnCost(from: incoming, to: slightOut, at: node, in: g)
+
+        // A right turn is the cheap baseline the router would otherwise prefer; the
+        // slight-left fork must stay within a hair of it, not balloon toward the
+        // 500+ hard-left cost that would make the router detour around it.
+        #expect(slightCost <= weights.rightTurnPenalty + weights.slightLeftPenalty)
+        #expect(slightCost < weights.unprotectedLeftBase)
+    }
 }
 
 // MARK: - Edge cost: preferences, rush hour
