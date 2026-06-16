@@ -56,8 +56,14 @@ struct AdvancedHapticsView: View {
                 Button {
                     HapticService.shared.preview(event)
                 } label: {
+                    // Floor the icon-only Try button at the 44pt HIG hit target the
+                    // rest of the app pins (matches LocationCardView's in-row icon
+                    // button + the SettingsView accent swatches). Glyph size is
+                    // unchanged; only the tappable region grows.
                     Image(systemName: "hand.tap.fill")
                         .foregroundStyle(SteddiTheme.accent)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
                 .disabled(intensity == 0)
