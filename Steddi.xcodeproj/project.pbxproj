@@ -59,6 +59,7 @@
 		3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */; };
 		389C5498B6C852FD1ECFC8E6 /* RouteProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4804C43D26E852AC0742468A /* RouteProvider.swift */; };
 		3C6ECCF87073C9F5713AC231 /* PendingCommuteStartStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FE9F1E95BC1F9738DBC186 /* PendingCommuteStartStoreTests.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* PhoneSceneDelegateDeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E6F708192A3B4C5D6E7F80 /* PhoneSceneDelegateDeepLinkTests.swift */; };
 		3DB94822B333E0DBE312BE9F /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335291BA198DC1134B9072E8 /* LocationPickerView.swift */; };
 		43C4CC9A502866B2BE5E5A35 /* ThemeRevisionTrait.swift in Sources */ = {isa = PBXBuildFile; fileRef = 215AC6B630C3D2703154A4A7 /* ThemeRevisionTrait.swift */; };
 		441AC263D0497D1AA6E95964 /* SteddiLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3E40D17055A5C5BC9F3E94BE /* SteddiLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -475,6 +476,7 @@
 		E0F16028B16E55D125568971 /* DefaultCostModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultCostModelTests.swift; sourceTree = "<group>"; };
 		E319751B2B97D0465371DA38 /* ZoneBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneBadgeView.swift; sourceTree = "<group>"; };
 		E3FE9F1E95BC1F9738DBC186 /* PendingCommuteStartStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingCommuteStartStoreTests.swift; sourceTree = "<group>"; };
+		D5E6F708192A3B4C5D6E7F80 /* PhoneSceneDelegateDeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSceneDelegateDeepLinkTests.swift; sourceTree = "<group>"; };
 		E4948500BFF4831029CD8477 /* PreferenceLearnerInvariantHardeningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceLearnerInvariantHardeningTests.swift; sourceTree = "<group>"; };
 		E5719A06C4184264DD9348E5 /* RerouteMidDriveDeletionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteMidDriveDeletionTests.swift; sourceTree = "<group>"; };
 		E64DED98F409553C18FBECB6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -676,6 +678,7 @@
 				3380F79E0670137420A0A6AC /* OSMSpeedLimitServiceTests.swift */,
 				1DF2357BC61FE13D4126E3D0 /* OSMTagParsingTests.swift */,
 				E3FE9F1E95BC1F9738DBC186 /* PendingCommuteStartStoreTests.swift */,
+				D5E6F708192A3B4C5D6E7F80 /* PhoneSceneDelegateDeepLinkTests.swift */,
 				7D8DB6F60416DA34EB0E0951 /* PersistedEnumFallbackTests.swift */,
 				3B70B7427245EDC2DFDCA33F /* POIDiscoveryTests.swift */,
 				3FC74E8EC55C2247F0F8E068 /* PolylineEncoderTests.swift */,
@@ -1332,6 +1335,7 @@
 				1B70D80153C16FE9D1D1C8C8 /* OneShotLocationTests.swift in Sources */,
 				0B4B8A0683044E51CD7D29AE /* POIDiscoveryTests.swift in Sources */,
 				3C6ECCF87073C9F5713AC231 /* PendingCommuteStartStoreTests.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* PhoneSceneDelegateDeepLinkTests.swift in Sources */,
 				58B6CA47C48CD5134BB34AD0 /* PersistedEnumFallbackTests.swift in Sources */,
 				44B354B0A8F491B772A9C25C /* PolylineEncoderTests.swift in Sources */,
 				1FE6CCB15A3CE08B8026FB33 /* PreferenceLearnerInvariantHardeningTests.swift in Sources */,
