@@ -437,19 +437,17 @@ struct ModelStoreLocatorRecoveryTests {
         return defaults
     }
 
-    /// A schema that omits entities the full app schema has, so SwiftData treats a
-    /// store written under it as "needs migration" when opened under the full
-    /// schema and the open throws — the reliable way to manufacture an
-    /// unopenable-under-`schema` store on disk.
-    private var mismatchedSchema: Schema {
-        Schema([
-            PinnedLocation.self,
-            Commute.self,
-            Route.self,
-            DriveRecord.self,
-            NoGoZone.self,
-            CommuteTrip.self
-        ])
+    /// Plant a store file at `url` that `ModelContainer(url:)` CANNOT open: a
+    /// *directory* sitting where the SQLite store file is expected (the on-disk
+    /// shape of a corrupt / interrupted / schema-incompatible migration copy — the
+    /// open throws while `fileExists(atPath:)` still reports the path as present, so
+    /// `selectStoreURL` returns `.group`). Deterministic across environments,
+    /// unlike a schema mismatch (an additive read-write open migrates rather than
+    /// throwing). A `.store-shape` marker child confirms the planted item, not a
+    /// real store, is what gets quarantined.
+    private func plantUnopenableStore(at url: URL) throws {
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try Data("planted".utf8).write(to: url.appendingPathComponent(".store-shape"))
     }
 
     @Test("Unopenable copied group store with intact legacy recovers to the legacy data")
@@ -475,17 +473,8 @@ struct ModelStoreLocatorRecoveryTests {
         }
 
         // A group store file is already present (a copy that landed on an earlier
-        // launch) but it is UNOPENABLE under the full app schema — written under a
-        // mismatched schema so opening it under `ModelStoreLocator.schema` throws.
-        do {
-            let suspect = try ModelContainer(
-                for: mismatchedSchema,
-                configurations: [ModelConfiguration(url: groupURL)]
-            )
-            let ctx = ModelContext(suspect)
-            ctx.insert(Commute(name: "should-not-survive-open"))
-            try ctx.save()
-        }
+        // launch) but it is UNOPENABLE — opening it under the app schema throws.
+        try plantUnopenableStore(at: groupURL)
 
         // The group store was never established (the app never opened/wrote it).
         let defaults = try freshDefaults()
@@ -580,13 +569,7 @@ struct ModelStoreLocatorRecoveryTests {
         // Group store present but unopenable, AND marked established (the app has
         // written to it before): it is the source of truth, so reverting to legacy
         // would lose newer writes. Recovery must warn (in-memory), not revert.
-        do {
-            let suspect = try ModelContainer(
-                for: mismatchedSchema,
-                configurations: [ModelConfiguration(url: groupURL)]
-            )
-            try ModelContext(suspect).save()
-        }
+        try plantUnopenableStore(at: groupURL)
         let defaults = try freshDefaults()
         defaults.set(true, forKey: ModelStoreLocator.groupStoreEstablishedKey)
 
