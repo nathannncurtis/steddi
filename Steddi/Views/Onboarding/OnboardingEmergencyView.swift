@@ -85,7 +85,12 @@ struct OnboardingEmergencyView: View {
                 } label: {
                     Text("Choose a different contact")
                         .font(.subheadline)
-                        .foregroundStyle(coordinator.selectedAccent.color)
+                        // Secondary "go back" link on the frosted card. The raw
+                        // brand accent fails AA on this lighter frosted panel in
+                        // every accent; use the fixed-white secondary tier the
+                        // rest of the card copy uses — matching the "Not now"
+                        // secondary in OnboardingPermissionsView.
+                        .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                 }
             }
         }
