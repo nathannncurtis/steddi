@@ -159,6 +159,27 @@ final class NavigationStateManager {
     @ObservationIgnored
     private var lastWidgetETAMinutes: Int?
 
+    /// Wall-clock time of the last `reloadTimelines` forced during an active
+    /// drive's per-minute sync. WidgetKit budgets app-initiated timeline reloads
+    /// (only a few dozen/day); a 40-60 min commute that reloaded on every
+    /// whole-minute ETA tick could alone consume the whole day's budget, after
+    /// which even the idle "next commute" widget stops refreshing. So during
+    /// active nav we coarsen the forced reload to at most one per
+    /// `liveReloadMinInterval` — the App Group defaults are still rewritten every
+    /// minute (so the widget shows fresh data whenever iOS refreshes it on its
+    /// own ~15-min timeline cadence), we just stop *forcing* a reload each minute.
+    /// The live ETA is already surfaced minute-by-minute by the phone UI / Live
+    /// Activity / CarPlay, so the home-screen widget doesn't need it. Session
+    /// start, arrival, and end still force an immediate reload (those go through
+    /// writeWidgetSession / the arrival branch / clearWidgetSession). Reset at
+    /// session start/end.
+    @ObservationIgnored
+    private var lastWidgetReloadAt: Date?
+
+    /// Minimum spacing between drive-time forced widget reloads. Coarse enough
+    /// that a long commute spends a handful of reloads, not one per minute.
+    static let liveReloadMinInterval: TimeInterval = 180 // 3 min
+
     // MARK: - Observation
 
     func startObserving(
@@ -508,7 +529,16 @@ final class NavigationStateManager {
 
     /// Copy one tick of engine state into the manager's published properties.
     /// CarPlay reads these instead of touching the engine directly.
-    func syncFromEngine(_ engine: NavigationEngine) {
+    ///
+    /// `now` and `reload` are injectable for tests (the production polling task
+    /// calls `syncFromEngine(engine)` with the live clock and `WidgetCenter`).
+    /// The `reload` sink lets a test count how often the timeline is actually
+    /// reloaded across a simulated multi-minute drive.
+    func syncFromEngine(
+        _ engine: NavigationEngine,
+        now: Date = Date(),
+        reload: (String) -> Void = { WidgetCenter.shared.reloadTimelines(ofKind: $0) }
+    ) {
         instruction = engine.instruction
         stepDistance = engine.stepDistance
         stepDistanceRaw = engine.stepDistanceRaw
@@ -544,14 +574,35 @@ final class NavigationStateManager {
         // displayed ETA only changes on a whole-minute boundary, so writing
         // kETAMinutes + restamping kETAUpdatedAt every 500ms is pure churn the
         // widget can't observe (the freshness stamp would also tick needlessly).
-        // Only write the ETA + restamp + reload when the minute actually changes,
-        // matching the timeline-reload gate.
+        // Only write the ETA + restamp when the minute actually changes.
+        //
+        // We ALWAYS rewrite the App Group defaults on a minute change, so the
+        // widget shows fresh data whenever iOS refreshes it on its own ~15-min
+        // timeline cadence. But we do NOT force a `reloadTimelines` every minute:
+        // a long commute would fire ~40-60 app-initiated reloads and can blow
+        // through WidgetKit's daily reload budget, after which even the idle
+        // widget stops updating. The live minute-by-minute ETA is already
+        // surfaced by the phone UI / Live Activity / CarPlay, so the home-screen
+        // widget doesn't need a per-minute push. Instead, during active nav we
+        // force a reload at most once per `liveReloadMinInterval` (session start,
+        // arrival, and end still force immediate reloads via their own paths).
         widgetDefaults?.set(engine.isNavigating, forKey: Self.kIsNavigating)
         if engine.etaMinutes != lastWidgetETAMinutes {
             lastWidgetETAMinutes = engine.etaMinutes
             widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
-            widgetDefaults?.set(Date().timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
-            WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
+            widgetDefaults?.set(now.timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
+
+            // Throttle drive-time forced reloads to a coarse cadence. First
+            // minute-change of a session (lastWidgetReloadAt nil) reloads
+            // immediately so the widget reflects the live drive promptly; after
+            // that, only once per interval.
+            let dueForReload = lastWidgetReloadAt.map {
+                now.timeIntervalSince($0) >= Self.liveReloadMinInterval
+            } ?? true
+            if dueForReload {
+                lastWidgetReloadAt = now
+                reload(Self.widgetKind)
+            }
         }
     }
 
@@ -655,6 +706,10 @@ final class NavigationStateManager {
     private func writeWidgetSession(commute: Commute?, direction: CommuteDirection?, destinationName: String?) {
         // New session — force the next sync to push a fresh ETA to the widget.
         lastWidgetETAMinutes = nil
+        // New session — clear the drive-time reload throttle so the first
+        // minute-change of the new drive forces an immediate reload (and this
+        // session-start reload below seeds the cadence implicitly).
+        lastWidgetReloadAt = nil
         let resolvedDestination = destinationName ?? Self.commuteEndpointName(commute: commute, direction: direction)
 
         if let commuteName = commute?.name {
@@ -686,6 +741,7 @@ final class NavigationStateManager {
     /// labels that the next idle update overwrites.
     private func clearWidgetSession() {
         lastWidgetETAMinutes = nil
+        lastWidgetReloadAt = nil
         widgetDefaults?.set(false, forKey: Self.kIsNavigating)
         // Drop the terminal live ETA + its stamp (widget renders 0 as "No ETA
         // yet"); do NOT leave the finished drive's remaining minutes posing as
