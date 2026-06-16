@@ -857,6 +857,39 @@ struct OSMSpeedLimitLookupTests {
         #expect(service.speedLimit(at: coord(0.0005, 0.00045), heading: nil)?.mph == 45)
     }
 
+    @Test("Driver leaving onto a tightly-parallel road eventually updates the limit")
+    func staleWayAgesOutWhenDriverLeaves() {
+        let service = makeOfflineService()
+        // Way A (25 mph) and way B (45 mph) run parallel ~7.8m apart — close
+        // enough that B never gets more than the 5m hysteresis margin nearer
+        // than A. The fast streak can never accrue here, so before the age-out
+        // rule the readout would pin to A's 25 forever.
+        service.loadWays([
+            makeWay(id: 1, mph: 25, coords: [(0, 0), (0.0020, 0)]),
+            makeWay(id: 2, mph: 45, coords: [(0, 0.00007), (0.0020, 0.00007)]),
+        ], routeKey: "r")
+
+        // Lock onto way A: sitting right on it (0m to A, 7.8m to B).
+        #expect(service.speedLimit(at: coord(0.0002, 0), heading: nil)?.mph == 25)
+
+        // Driver crosses onto way B and drives along it: B is now ~2.2m vs A's
+        // ~5.6m (B strictly nearer, but only ~3.3m — inside the 5m margin).
+        // Sustained, the driver has clearly left A; the readout must update to
+        // B's 45 rather than staying pinned to the stale way.
+        let onWayB = coord(0.0004, 0.00005)
+        var switched = false
+        // Generously more lookups than the (private) age-out threshold of 8.
+        for _ in 0..<15 {
+            if service.speedLimit(at: onWayB, heading: nil)?.mph == 45 {
+                switched = true
+                break
+            }
+        }
+        #expect(switched)
+        // And it stays on B afterward.
+        #expect(service.speedLimit(at: onWayB, heading: nil)?.mph == 45)
+    }
+
     @Test("Bearing delta folds across 180 degrees")
     func bearingDeltaFolds() {
         #expect(OSMSpeedLimitService.bearingDelta(0, 180) == 0)
