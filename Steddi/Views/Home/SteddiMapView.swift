@@ -194,12 +194,29 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
             width: view.bounds.width + insets.left + insets.right,
             height: view.bounds.height + insets.top // no bottom extension
         )
-        // Position recenter button bottom-right above the nav bar
+        // Position the recenter chip so it never collides with the nav overlay's
+        // floating control cluster (compass / voice / view / report).
+        //
+        // In PORTRAIT that cluster is pinned top-TRAILING (SteddiNavOverlay
+        // `floatingClusterTopOffset` + .padding(.trailing,16)), and on a short
+        // device (e.g. 4.7" SE, 667pt) its bottom button reaches down into the
+        // same trailing column the recenter chip used to share — overlapping the
+        // hazard-report control mid-drive. So in portrait the chip moves to the
+        // LEADING side, a column the portrait overlay never occupies.
+        //
+        // In LANDSCAPE the overlay's control cluster + ETA bar live bottom-LEADING
+        // instead, so the chip stays on the TRAILING side there. Either way it sits
+        // above the bottom bar (height-200) and inside the horizontal safe area.
+        let recenterSize: CGFloat = 44
+        let isLandscape = view.bounds.width > view.bounds.height
+        let recenterX: CGFloat = isLandscape
+            ? view.bounds.width - insets.right - 16 - recenterSize
+            : insets.left + 16
         recenterButton?.frame = CGRect(
-            x: view.bounds.width - 60,
+            x: recenterX,
             y: view.bounds.height - 200,
-            width: 44,
-            height: 44
+            width: recenterSize,
+            height: recenterSize
         )
     }
 
