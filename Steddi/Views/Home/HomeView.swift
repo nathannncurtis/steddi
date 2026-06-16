@@ -1424,10 +1424,38 @@ struct HomeView: View {
         }
     }
 
+    /// Whether a suggested route's `@Model` handle is still safe to switch onto.
+    /// The reroute loop vets liveness only at set-time (NavigationStateManager
+    /// re-resolves the winner via `fetchLiveRoute` before assigning
+    /// `rerouteSuggestion`); the card then displays for up to 30s. If the
+    /// commute/route is deleted in that window (CommuteDetailView delete, Settings
+    /// "delete all data"), the cached handle on the card is invalidated and
+    /// reading its persisted properties (`encodedPolyline`/`name`/…) in
+    /// `navigateWithSavedRoute` traps. Mirrors NavigationStateManager.isLive — a
+    /// deleted SwiftData model has `isDeleted == true` and/or a nil `modelContext`.
+    /// Pure + static so the switch-time liveness gate is unit-testable without a
+    /// UI host; `nonisolated` since it touches no actor state.
+    nonisolated static func isSwitchableRoute(_ route: Route) -> Bool {
+        !route.isDeleted && route.modelContext != nil
+    }
+
     /// Switch the active commute onto a suggested faster/fallback route. Shared
     /// by the on-phone nav overlay's reroute card and the CarPlay phone-companion
     /// reroute card so both surfaces perform the identical route swap.
     private func switchToRoute(_ route: Route) {
+        // The reroute card holds a cached @Model Route and can display for up to
+        // 30s. If the commute/route was deleted in that window, the handed-in
+        // handle is invalidated — decoding its polyline/name in
+        // navigateWithSavedRoute would trap. Re-validate liveness and re-resolve a
+        // fresh live handle by id (the card was already dismissed by the caller);
+        // if it's gone, dismiss gracefully — no teardown, no navigation, no crash.
+        guard Self.isSwitchableRoute(route),
+              let liveRoute = NavigationStateManager.fetchLiveRoute(id: route.id, in: modelContext) else {
+            print("[STEDDI-NAV] switchToRoute: suggested route deleted before Switch — dismissing")
+            navStateManager.rerouteSuggestion = nil
+            return
+        }
+
         // Reroute to the fallback
         let target: PinnedLocation? = activeDirection == .originToDestination ? activeCommute?.destination : activeCommute?.origin
         guard let target else { return }
@@ -1437,7 +1465,7 @@ struct HomeView: View {
         navStateManager.stopObserving()
         isNavigating = false
         navigationRoute = nil
-        navigateWithSavedRoute(route, to: target)
+        navigateWithSavedRoute(liveRoute, to: target)
     }
 
     /// Navigate using a saved route's polyline with custom turn-by-turn logic.
@@ -2172,9 +2200,21 @@ struct HomeView: View {
         activeCommute = navStateManager.activeCommute
         activeDirection = navStateManager.activeDirection
         activeTrip = navStateManager.activeTrip
-        if !navStateManager.activeRouteCoords.isEmpty {
-            activeSavedPolyline = navStateManager.activeRouteCoords
-        }
+        // `navigatedSavedRoute` (set only by beginCustomNavigation) is the ONLY
+        // field that distinguishes a saved-route drive from an ad-hoc search-nav
+        // drive — `activeRouteCoords` is populated for BOTH. Restore it FIRST so
+        // the activeSavedPolyline restore below can branch on it.
+        navigatedSavedRoute = navStateManager.navigatedSavedRoute
+        // Restore activeSavedPolyline ONLY for a saved-route drive. For an ad-hoc
+        // drive (beginNavigation: navigationRoute=MKRoute, activeSavedPolyline=nil)
+        // it MUST stay nil — otherwise a later off-route event in handleOffRoute
+        // would take the saved-route splice/recovery branch (recoverOntoSavedRoute
+        // onto the ad-hoc polyline) instead of the correct Apple-Maps reroute,
+        // silently diverging from the same drive's pre-rebuild behavior.
+        activeSavedPolyline = Self.reAdoptedSavedPolyline(
+            isSavedRouteDrive: navigatedSavedRoute != nil,
+            activeRouteCoords: navStateManager.activeRouteCoords
+        )
         // Restore the per-trip recovery budget from the shared manager — this
         // view's @State reset to 0/nil on the rebuild, but the manager kept the
         // running count (and last-recovery time) across it, so the 3-recovery cap
@@ -2191,7 +2231,6 @@ struct HomeView: View {
         // Re-derive conditions fresh from the live store rather than caching an
         // @Model array on the manager, so any conditions edited mid-drive are
         // reflected (and a mid-drive route delete safely yields []).
-        navigatedSavedRoute = navStateManager.navigatedSavedRoute
         if let route = navigatedSavedRoute {
             activeRoadConditions = RoadConditionService.shared.fetchConditionsOnRoute(route)
         } else {
@@ -2228,6 +2267,24 @@ struct HomeView: View {
         isAdvancingLeg: Bool
     ) -> Bool {
         !managerNavigating && viewNavigating && !isAdvancingLeg
+    }
+
+    /// The `activeSavedPolyline` a rebuilt HomeView should restore on re-adoption.
+    /// The shared `activeRouteCoords` is populated for BOTH saved-route and ad-hoc
+    /// search-nav drives, so restoring it unconditionally would set a non-nil
+    /// saved polyline for an ad-hoc drive — making a later off-route event take the
+    /// saved-route splice/recovery branch (handleOffRoute's `if let savedPolyline`)
+    /// instead of the correct ad-hoc Apple-Maps reroute, silently diverging from
+    /// the same drive's pre-rebuild behavior. Only a saved-route drive (the sole
+    /// thing that sets `navigatedSavedRoute`) carries a saved polyline; an ad-hoc
+    /// drive must keep it nil. Pure + static so this discrimination is unit-testable
+    /// without a UI host; `nonisolated` since it touches no actor state.
+    nonisolated static func reAdoptedSavedPolyline(
+        isSavedRouteDrive: Bool,
+        activeRouteCoords: [CLLocationCoordinate2D]
+    ) -> [CLLocationCoordinate2D]? {
+        guard isSavedRouteDrive, !activeRouteCoords.isEmpty else { return nil }
+        return activeRouteCoords
     }
 
     /// Tear down this view's navigation @State after the SHARED manager already
