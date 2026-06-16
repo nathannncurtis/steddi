@@ -67,6 +67,11 @@ struct OnboardingEmergencyView: View {
                     .font(.body)
                     .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                     .multilineTextAlignment(.center)
+                    // At the largest accessibility text sizes this paragraph would
+                    // otherwise rely entirely on the card's outer ScrollView. Let it
+                    // shrink modestly so the copy degrades gracefully instead of
+                    // forcing the whole card to scroll on first read.
+                    .minimumScaleFactor(0.7)
             }
 
             if !hasContact {
@@ -80,8 +85,11 @@ struct OnboardingEmergencyView: View {
                         // brand accents fails WCAG AA; `contrastingGlyph` is the
                         // in-flight accent's luminance-correct on-fill color.
                         .foregroundStyle(coordinator.selectedAccent.contrastingGlyph)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
+                        // 17pt headline + 4pt vpad left the glass capsule ~30pt
+                        // tall — under the 44pt HIG floor. Pin a 44pt minimum so
+                        // the primary CTA clears it without changing the layout.
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Capsule())
                 }
                 // In-flight accent glass fill + luminance-correct label instead
                 // of `.glassProminent` (which forces an AA-failing white label).
@@ -102,6 +110,10 @@ struct OnboardingEmergencyView: View {
                         // matching the "Not now" secondary in
                         // OnboardingPermissionsView.
                         .foregroundStyle(SteddiTheme.onboardingTextSecondary)
+                        // Bare ~22pt text button — expand to the 44pt HIG hit
+                        // target the rest of the app enforces (text unchanged).
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
             }
         }
