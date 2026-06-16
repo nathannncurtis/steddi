@@ -381,6 +381,75 @@ enum SteddiTheme {
         })
     }
 
+    // MARK: - Speed-camera banner surface (kind-tinted glass legibility)
+
+    /// The effective surface the speed-camera heads-up banner's title + distance
+    /// sit on, so each can pick an AA-correct foreground via
+    /// `contrastingForeground(on:)`.
+    ///
+    /// THE DARK-THEME WASHOUT FIX (4th visit — measured to end it). The banner
+    /// tints its glass with the camera's SEMANTIC KIND color (amber speed camera /
+    /// warmRed red-light / accent mobile trap) — that tint conveys the camera type
+    /// and must STAY. Prior rounds drew the title/distance in
+    /// `contrastingForeground(on: kind.kindRGB)` — i.e. contrasting the RAW kind
+    /// hue. Every kind's solid color is light/mid-tone (luminance > the 0.179
+    /// flip), so that always resolved near-BLACK. In LIGHT theme that's correct
+    /// (the surface really is the light kind tint). But in DARK theme the ACTUAL
+    /// rendered surface is the kind tint composited over the near-opaque dark
+    /// `mapGlassScrim` (0.9) over a dark map — a DARK surface (modelled luminance
+    /// ~0.03) — so near-black text on it measures ~1.3:1, far below even the 3:1
+    /// large floor. This is the same tinted-glass-over-dark-scrim mismatch the
+    /// reroute card / theme beat hit; here we keep the tint and contrast the REAL
+    /// composite instead.
+    ///
+    /// The model BRANCHES on glass + theme, all conservative (worst-case) bounds —
+    /// mirroring `ThemeBeatSurface.cardShell`:
+    ///   • glass ON, LIGHT theme: the RAW kind hue — the DARKEST plausible tinted
+    ///     surface (the OS frost only LIGHTENS the live glass, which only raises the
+    ///     near-black foreground's contrast). All kinds are light/mid-tone, so
+    ///     `contrastingForeground` → near-black at ≥4.8:1.
+    ///   • glass ON, DARK theme: the near-opaque dark `mapGlassScrim`
+    ///     (`onboardingCardFallbackFillRGB` at 0.9) source-over the LIGHTEST
+    ///     plausible kind-tinted glass (the kind mixed halfway toward a light
+    ///     neutral frost — the light extreme the live glass never exceeds), so the
+    ///     composite is reliably DARK and `contrastingForeground` → near-WHITE
+    ///     (~12.6:1) for every kind, white-on-dark.
+    ///   • glass OFF (Reduce Transparency / high contrast): `steddiGlass` discards
+    ///     the tint and paints the solid `surfacePrimary` fallback (near-white in
+    ///     light, near-dark in dark), so contrasting that flips the foreground the
+    ///     right way in both themes.
+    static func cameraBannerSurface(kind: RGBColor, glassAvailable: Bool) -> RGBColor {
+        guard glassAvailable else { return ThemeEngine.snapshot.surfacePrimary }
+        guard prefersDarkChrome else { return kind }
+        // Dark scrim source-over the lightest-plausible kind-tinted glass — the
+        // same conservative composite `ThemeBeatSurface.cardShell` uses, so the
+        // modelled surface is no DARKER (and thus the near-white ratio no lower)
+        // than the real, darker render. Scrim opacity matches `mapGlassScrim` in
+        // dark theme (0.9).
+        let lightestTint = ThemeBeatSurface.tintedGlassLightest(accent: kind)
+        let scrim = onboardingCardFallbackFillRGB
+        let a = mapGlassScrimOpacity(highContrast: false) // 0.9 in dark theme
+        return RGBColor(scrim.r * a + lightestTint.r * (1 - a),
+                        scrim.g * a + lightestTint.g * (1 - a),
+                        scrim.b * a + lightestTint.b * (1 - a))
+    }
+
+    /// AA-correct foreground (title + distance) for the speed-camera banner,
+    /// contrasted against the ACTUAL `cameraBannerSurface` for the kind. Near-black
+    /// on the light kind-tinted glass (LIGHT theme), near-white on the dark
+    /// scrim-over-tint composite (DARK theme) — ≥4.5:1 body in both themes for
+    /// every kind, while the kind tint stays as the camera-type identity. Dynamic
+    /// so it re-resolves on accent / theme bumps (the mobile-trap kind tracks the
+    /// live accent).
+    static func cameraBannerForeground(kind: RGBColor, glassAvailable: Bool) -> Color {
+        Color(UIColor { traitCollection in
+            _ = traitCollection.themeRevision
+            return ContrastRatio.contrastingForeground(
+                on: cameraBannerSurface(kind: kind, glassAvailable: glassAvailable)
+            ).uiColor
+        })
+    }
+
     /// Build a dynamic SwiftUI color whose UIKit provider (a) reads the live
     /// `ThemeEngine.snapshot` so the value is always current, and (b) touches
     /// `traitCollection.themeRevision` so the provider registers a dependency on

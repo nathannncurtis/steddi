@@ -104,6 +104,20 @@ struct SteddiNavOverlay: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
+    /// Dependency-only: touching this re-resolves `glassAvailable` (and therefore
+    /// the speed-camera banner's foreground) when Reduce Transparency / Increase
+    /// Contrast toggles mid-drive, exactly like `steddiGlass` / `mapGlassScrim`.
+    @Environment(\.glassRevision) private var glassRevision
+
+    /// Whether Liquid Glass renders (vs. the solid fallback). Read imperatively —
+    /// the `glassRevision` dependency above keeps it re-resolving on a
+    /// Reduce-Transparency / Increase-Contrast toggle so the camera-banner
+    /// foreground and the actual banner surface can never disagree.
+    private var glassAvailable: Bool {
+        _ = glassRevision
+        return SteddiGlass.isAvailable
+    }
+
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
         let _ = (isPassengerMode, isAccessibilityMode) // re-render on display mode change
@@ -513,6 +527,11 @@ struct SteddiNavOverlay: View {
                 Text(engine.stepDistance)
                     .font(SteddiTheme.mono(34 * textScale))
                     .foregroundStyle(SteddiTheme.textPrimary)
+                    // The shared soft per-glyph shadow every other HUD readout over
+                    // the map carries (the sibling instruction below, the landscape
+                    // distance twin) — this large distance value was the only one
+                    // missing it, so it now matches.
+                    .legibleOverMap()
                     .minimumScaleFactor(0.7)
 
                 // Instruction — the safety-critical maneuver words. This is the
@@ -657,19 +676,25 @@ struct SteddiNavOverlay: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 // The glass is tinted with the camera's KIND color, so the title +
-                // distance sit on a semantically-COLORED surface — not the neutral
-                // surface the textPrimary/textSecondary tokens are tuned for, where
-                // they can fall low-contrast on the colored tint. Draw them in the
-                // same on-fill treatment the glyph uses (`contrastingForeground(on:)`
-                // picks the legible near-black/white per kind fill), so the heads-up
-                // reads against its own colored banner in every theme.
+                // distance sit on a semantically-COLORED surface. Drawing them in
+                // `contrastingForeground(on: kind.kindRGB)` (contrasting the RAW kind
+                // hue) was correct in LIGHT theme but WRONG in DARK: the ACTUAL
+                // rendered surface there is the kind tint composited over the
+                // near-opaque dark `mapGlassScrim`, a DARK surface — so the near-black
+                // the raw hue resolved to measured ~1.3:1 (the recurring
+                // tinted-glass-over-dark-scrim mismatch). `cameraBannerForeground`
+                // contrasts the REAL composite surface per theme (keeping the kind
+                // tint), resolving near-black on the light tint and near-white on the
+                // dark composite — ≥4.5:1 body in both themes for every kind. The
+                // glyph chip above is unchanged: it sits on the SOLID kind fill, so
+                // `contrastingForeground(on: kind.kindRGB)` is the right surface there.
                 Text("\(camera.kind.displayName) ahead")
                     .font(SteddiTheme.body(15 * textScale, highContrast: highContrast))
-                    .foregroundStyle(SteddiTheme.contrastingForeground(on: camera.kind.kindRGB))
+                    .foregroundStyle(SteddiTheme.cameraBannerForeground(kind: camera.kind.kindRGB, glassAvailable: glassAvailable))
                     .legibleOverMap()
                 Text(formatDistance(camera.distanceMeters))
                     .font(SteddiTheme.mono(13 * textScale))
-                    .foregroundStyle(SteddiTheme.contrastingForeground(on: camera.kind.kindRGB))
+                    .foregroundStyle(SteddiTheme.cameraBannerForeground(kind: camera.kind.kindRGB, glassAvailable: glassAvailable))
                     .legibleOverMap()
             }
 
