@@ -81,6 +81,82 @@ struct TurnClassificationTests {
         #expect(DefaultCostModel.signedTurnAngle(from: incoming, to: edge(in: g, from: 1, to: 4)!, in: g) > 0)
         #expect(DefaultCostModel.signedTurnAngle(from: incoming, to: edge(in: g, from: 1, to: 5)!, in: g) < 0)
     }
+
+    @Test("Duplicate consecutive geometry points do not corrupt turn classification")
+    func degenerateGeometryDoesNotCorruptTurn() {
+        // An E-W through-road crossing a N-S road at the junction node 1. The
+        // straight-through maneuver is 2 -> 1 -> 3 (heading WEST the whole way), so
+        // the correct classification is `.straight`.
+        //
+        // The E-W way carries an INTERIOR through-node 6 whose coordinates exactly
+        // duplicate the junction node 1's (a real OSM digitizing artifact —
+        // RoadGraphBuilder de-dups nothing). That makes the LAST segment of the
+        // incoming edge 2->1 zero-length. `RouteGeometry.bearing` of two identical
+        // points is a false due-north (0); reading it as the approach bearing would
+        // turn the true WEST (~270) approach into a 270 vs west(270) departure that
+        // wrongly classifies the straight-through as a hard LEFT and charges a
+        // spurious turn penalty. The fix skips the degenerate segment and uses the
+        // nearest distinct pair, so the approach reads WEST and the turn stays
+        // straight — matching the clean-geometry reference exactly.
+        let degenerate = buildGraph(
+            node(1, 34.0000, -117.0000),               // junction
+            node(2, 34.0000, -116.9980),               // east endpoint
+            node(3, 34.0000, -117.0020),               // west endpoint
+            node(4, 34.0010, -117.0000),               // north (crossing road)
+            node(5, 33.9990, -117.0000),               // south (crossing road)
+            node(6, 34.0000, -117.0000),               // through-point DUPLICATING node 1
+            way(10, [2, 6, 1, 3], tags: ["highway": "secondary"]),  // E-W with dup node before the junction
+            way(11, [4, 1, 5], tags: ["highway": "secondary"])      // N-S crossing road
+        )
+        // Reference graph: identical layout WITHOUT the duplicate node.
+        let clean = buildGraph(
+            node(1, 34.0000, -117.0000),
+            node(2, 34.0000, -116.9980),
+            node(3, 34.0000, -117.0020),
+            node(4, 34.0010, -117.0000),
+            node(5, 33.9990, -117.0000),
+            way(10, [2, 1, 3], tags: ["highway": "secondary"]),
+            way(11, [4, 1, 5], tags: ["highway": "secondary"])
+        )
+
+        // Sanity: the incoming edge's final geometry segment really is degenerate.
+        let dIncomingIdx = Int(directedEdgeIndex(in: degenerate, from: 2, to: 1)!)
+        let dCoords = Array(degenerate.geometry(of: Int32(dIncomingIdx)))
+        #expect(dCoords.count >= 3)
+        #expect(RouteGeometry.haversineDistance(from: dCoords[dCoords.count - 2], to: dCoords[dCoords.count - 1]) == 0,
+                "fixture should produce a zero-length trailing segment")
+
+        let dIn = edge(in: degenerate, from: 2, to: 1)!
+        let dOut = edge(in: degenerate, from: 1, to: 3)!
+        let cIn = edge(in: clean, from: 2, to: 1)!
+        let cOut = edge(in: clean, from: 1, to: 3)!
+
+        // The degenerate approach must NOT read as a spurious north bearing: it
+        // matches the clean reference and stays straight.
+        #expect(DefaultCostModel.classifyTurn(from: dIn, to: dOut, in: degenerate) == .straight,
+                "duplicate-point geometry misclassified a straight-through as a turn")
+        #expect(DefaultCostModel.classifyTurn(from: dIn, to: dOut, in: degenerate)
+                == DefaultCostModel.classifyTurn(from: cIn, to: cOut, in: clean))
+
+        // The signed angle agrees with the clean reference (both ~0), proving the
+        // degenerate segment was skipped rather than read as 0/north.
+        let dAngle = DefaultCostModel.signedTurnAngle(from: dIn, to: dOut, in: degenerate)
+        let cAngle = DefaultCostModel.signedTurnAngle(from: cIn, to: cOut, in: clean)
+        #expect(abs(dAngle - cAngle) < 1.0)
+        #expect(abs(dAngle) < 12.0)   // genuinely straight, not a ~90 phantom turn
+
+        // And the turn cost is the straight penalty, not a turn/U-turn penalty.
+        let node1 = degenerate.nodes[Int(degenerate.osmToIndex[1]!)]
+        let turnCost = DefaultCostModel().turnCost(from: dIn, to: dOut, at: node1, in: degenerate)
+        #expect(turnCost == CostWeights.default.straightPenalty)
+    }
+
+    /// Directed edge index by its (fromOSM -> toOSM) node ids, for geometry checks.
+    private func directedEdgeIndex(in graph: RoadGraph, from a: Int64, to b: Int64) -> EdgeIndex? {
+        guard let fromIdx = graph.osmToIndex[a], let toIdx = graph.osmToIndex[b] else { return nil }
+        for e in graph.outEdgeRange(of: fromIdx) where graph.edges[Int(e)].to == toIdx { return e }
+        return nil
+    }
 }
 
 // MARK: - Protected vs unprotected left

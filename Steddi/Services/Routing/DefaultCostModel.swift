@@ -408,9 +408,19 @@ struct DefaultCostModel: SearchCost {
     /// Heading change from the incoming edge's approach bearing (into the node) to
     /// the outgoing edge's departure bearing (out of the node), normalized to
     /// (-180, 180]. Positive = clockwise = right; negative = left.
+    ///
+    /// Returns 0 (a straight, no-turn angle) when either bearing is undefined —
+    /// i.e. the relevant edge is wholly degenerate (every geometry point coincides),
+    /// so no real heading exists. A zero-length boundary segment must NOT be read as
+    /// a due-north bearing: that would misclassify a straight-through as a hard turn
+    /// and charge a spurious turn penalty. `approachBearing`/`departureBearing`
+    /// already skip degenerate segments and pick the nearest non-degenerate pair;
+    /// nil only when the WHOLE edge collapses to a point.
     static func signedTurnAngle(from incoming: GraphEdge, to outgoing: GraphEdge, in graph: RoadGraph) -> Double {
-        let approach = approachBearing(of: incoming, in: graph)
-        let depart = departureBearing(of: outgoing, in: graph)
+        guard let approach = approachBearing(of: incoming, in: graph),
+              let depart = departureBearing(of: outgoing, in: graph) else {
+            return 0
+        }
         var delta = depart - approach
         while delta > 180 { delta -= 360 }
         while delta <= -180 { delta += 360 }
@@ -426,22 +436,50 @@ struct DefaultCostModel: SearchCost {
         return m < 40 ? .slightLeft : .left
     }
 
-    /// Bearing over the last geometry segment of `edge` (direction of travel into
-    /// the destination node).
-    static func approachBearing(of edge: GraphEdge, in graph: RoadGraph) -> Double {
+    /// Bearing over the final NON-DEGENERATE geometry segment of `edge` (direction
+    /// of travel into the destination node). Walks inward from the last vertex past
+    /// any zero-length (duplicate-coordinate) segments — OSM ways are not de-duped
+    /// at build time, so the trailing segment can coincide — to the first pair of
+    /// distinct points. `RouteGeometry.bearing` of two identical points is a false
+    /// due-north (atan2(0,0)=0); using it would misclassify the turn. nil when the
+    /// whole edge collapses to a single point (no heading exists).
+    static func approachBearing(of edge: GraphEdge, in graph: RoadGraph) -> Double? {
         let coords = geometry(of: edge, in: graph)
         let pts = Array(coords)
-        guard pts.count >= 2 else { return 0 }
-        return RouteGeometry.bearing(from: pts[pts.count - 2], to: pts[pts.count - 1])
+        guard pts.count >= 2 else { return nil }
+        // Last vertex is the node we travel INTO; scan backward for the nearest
+        // earlier vertex that is genuinely distinct from it.
+        let end = pts[pts.count - 1]
+        var i = pts.count - 2
+        while i >= 0 {
+            if RouteGeometry.haversineDistance(from: pts[i], to: end) > 0 {
+                return RouteGeometry.bearing(from: pts[i], to: end)
+            }
+            i -= 1
+        }
+        return nil
     }
 
-    /// Bearing over the first geometry segment of `edge` (direction of travel out
-    /// of the origin node).
-    static func departureBearing(of edge: GraphEdge, in graph: RoadGraph) -> Double {
+    /// Bearing over the first NON-DEGENERATE geometry segment of `edge` (direction
+    /// of travel out of the origin node). Walks outward from the first vertex past
+    /// any zero-length (duplicate-coordinate) segments to the first distinct point,
+    /// for the same reason `approachBearing` does. nil when the whole edge collapses
+    /// to a single point.
+    static func departureBearing(of edge: GraphEdge, in graph: RoadGraph) -> Double? {
         let coords = geometry(of: edge, in: graph)
         let pts = Array(coords)
-        guard pts.count >= 2 else { return 0 }
-        return RouteGeometry.bearing(from: pts[0], to: pts[1])
+        guard pts.count >= 2 else { return nil }
+        // First vertex is the node we travel OUT of; scan forward for the nearest
+        // later vertex that is genuinely distinct from it.
+        let begin = pts[0]
+        var i = 1
+        while i < pts.count {
+            if RouteGeometry.haversineDistance(from: begin, to: pts[i]) > 0 {
+                return RouteGeometry.bearing(from: begin, to: pts[i])
+            }
+            i += 1
+        }
+        return nil
     }
 
     // MARK: - Edge geometry resolution
