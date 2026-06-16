@@ -72,6 +72,25 @@ final class VoiceGuidanceService: NSObject, AVSpeechSynthesizerDelegate {
     private var isEnabled = true
     private var currentVoice: AVSpeechSynthesisVoice?
 
+    /// Monotonic utterance generation. Bumped in `speak()` BEFORE we cancel the
+    /// in-flight utterance and start the new one, and stamped onto the new
+    /// utterance (`utteranceGeneration[id]`). When an utterance finishes/cancels
+    /// the delegate compares its stamp against `currentGeneration`: an older stamp
+    /// means a newer `speak()` has already superseded it (e.g. the `didCancel`
+    /// fired for the utterance we just interrupted), so its un-duck MUST be
+    /// suppressed — the newer utterance has re-activated the duck and the stale
+    /// deactivate would race that activate, un-ducking media mid-prompt. Only the
+    /// LATEST generation's natural finish (or an explicit `stop()`) releases the
+    /// duck. See `shouldReleaseDuck(finishedGeneration:current:isSpeaking:)`.
+    private var currentGeneration: UInt64 = 0
+
+    /// Maps each live `AVSpeechUtterance` to the generation it was issued under.
+    /// Identity-keyed (utterances are reference types) so the delegate can recover
+    /// the stamp without subclassing AVSpeechUtterance. Entries are pruned the
+    /// moment their utterance finishes/cancels, so this holds at most the handful
+    /// of utterances briefly in flight across a back-to-back interrupt.
+    private var utteranceGeneration: [ObjectIdentifier: UInt64] = [:]
+
     private override init() {
         let savedId = UserDefaults.standard.string(forKey: "steddi.voiceIdentifier") ?? VoiceOption.ava.rawValue
         let option = VoiceOption(rawValue: savedId) ?? .ava
@@ -103,6 +122,14 @@ final class VoiceGuidanceService: NSObject, AVSpeechSynthesizerDelegate {
     func speak(_ text: String) {
         guard isEnabled, !text.isEmpty else { return }
 
+        // Bump the generation BEFORE cancelling: the `didCancel` that
+        // `stopSpeaking` triggers for the old utterance will now see its stamp is
+        // stale (< currentGeneration) and skip its un-duck, so the duck stays held
+        // continuously across the interrupt instead of being torn down under the
+        // new utterance we're about to start.
+        currentGeneration &+= 1
+        let generation = currentGeneration
+
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
@@ -113,12 +140,65 @@ final class VoiceGuidanceService: NSObject, AVSpeechSynthesizerDelegate {
         utterance.pitchMultiplier = 1.0
         utterance.volume = 1.0
         utterance.preUtteranceDelay = 0.2
+        utteranceGeneration[ObjectIdentifier(utterance)] = generation
 
         // Duck media (respecting the voice-nav-ducking toggle) and activate the
         // session before speaking. Both this method and AudioDuckingService are
         // @MainActor, so this is a direct, compiler-checked main-actor call.
         AudioDuckingService.shared.activateForVoiceGuidance()
         synthesizer.speak(utterance)
+    }
+
+    /// Whether a finished/cancelled utterance should release the voice duck.
+    ///
+    /// Pure decision (so it's unit-testable without driving the synthesizer): an
+    /// utterance only releases the duck when it is the LATEST generation issued
+    /// (`finishedGeneration == current`) AND the synthesizer is not still
+    /// speaking. An older generation means a newer `speak()` already superseded
+    /// this utterance and re-activated the duck — releasing here would race that
+    /// activate and un-duck media mid-prompt, the bug this guards.
+    nonisolated static func shouldReleaseDuck(
+        finishedGeneration: UInt64?,
+        current: UInt64,
+        isSpeaking: Bool
+    ) -> Bool {
+        guard !isSpeaking else { return false }
+        guard let finishedGeneration else { return false }
+        return finishedGeneration == current
+    }
+
+    #if DEBUG
+    /// Test seam: the generation an utterance would be stamped with right now.
+    /// Lets duck-race tests register a synthetic utterance under the current
+    /// generation (mirroring what `speak()` does) and then drive
+    /// `handleUtteranceEnd` deterministically — without depending on the real
+    /// synthesizer actually speaking (the simulator's voice DB is often broken).
+    var currentGenerationForTesting: UInt64 { currentGeneration }
+
+    /// Test seam: bump the generation and stamp `utterance` under it, exactly as
+    /// `speak()` does for the utterance it issues. Returns the stamped generation.
+    @discardableResult
+    func registerUtteranceForTesting(_ utterance: AVSpeechUtterance) -> UInt64 {
+        currentGeneration &+= 1
+        utteranceGeneration[ObjectIdentifier(utterance)] = currentGeneration
+        return currentGeneration
+    }
+    #endif
+
+    /// MainActor handler shared by `didFinish`/`didCancel`: prune the utterance's
+    /// stamp, then release the duck only if this was the final, un-superseded
+    /// utterance. Returns whether it released (for tests).
+    @MainActor
+    @discardableResult
+    func handleUtteranceEnd(_ utterance: AVSpeechUtterance) -> Bool {
+        let stamp = utteranceGeneration.removeValue(forKey: ObjectIdentifier(utterance))
+        guard Self.shouldReleaseDuck(
+            finishedGeneration: stamp,
+            current: currentGeneration,
+            isSpeaking: synthesizer.isSpeaking
+        ) else { return false }
+        AudioDuckingService.shared.deactivateVoiceGuidance()
+        return true
     }
 
     /// Speak with distance prefix (e.g. "In 500 feet, turn left onto Main Street")
@@ -151,6 +231,14 @@ final class VoiceGuidanceService: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func stop() {
+        // Bump the generation so the `didCancel` that `stopSpeaking` fires for the
+        // in-flight utterance sees a stale stamp and does NOT release the duck —
+        // this method releases it explicitly below. Without the bump, both the
+        // stale cancel and this call would deactivate (harmless today, but it keeps
+        // the single-owner release invariant), and any utterance still queued is
+        // abandoned: clear the stamp map so it can't later release.
+        currentGeneration &+= 1
+        utteranceGeneration.removeAll()
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
@@ -159,19 +247,22 @@ final class VoiceGuidanceService: NSObject, AVSpeechSynthesizerDelegate {
 
     // MARK: - AVSpeechSynthesizerDelegate
 
-    /// Speech finished naturally — un-duck media (unless an alert still holds
-    /// the duck). AVSpeechSynthesizer USUALLY fires delegate callbacks on the main
-    /// queue, but that is not contractually guaranteed (interruption/route-change
-    /// paths can deliver off-main), so hop explicitly — `assumeIsolated` would
-    /// FATAL-TRAP an off-main delivery mid-drive.
+    /// Speech finished naturally — un-duck media (unless this utterance was
+    /// superseded by a newer prompt, or an alert still holds the duck; see
+    /// `handleUtteranceEnd`). AVSpeechSynthesizer USUALLY fires delegate callbacks
+    /// on the main queue, but that is not contractually guaranteed
+    /// (interruption/route-change paths can deliver off-main), so hop explicitly —
+    /// `assumeIsolated` would FATAL-TRAP an off-main delivery mid-drive.
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in AudioDuckingService.shared.deactivateVoiceGuidance() }
+        Task { @MainActor in self.handleUtteranceEnd(utterance) }
     }
 
-    /// Speech was cancelled (e.g. a newer prompt interrupted it). If another
-    /// utterance is starting it will re-activate; otherwise this restores media.
+    /// Speech was cancelled (e.g. a newer prompt interrupted it). The interrupt
+    /// path bumps the generation in `speak()` BEFORE cancelling, so this cancelled
+    /// utterance's stamp is now stale and `handleUtteranceEnd` suppresses its
+    /// un-duck — the new utterance keeps the duck held. Only a cancel of the
+    /// genuinely-last utterance with nothing speaking releases media.
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        guard !synthesizer.isSpeaking else { return }
-        Task { @MainActor in AudioDuckingService.shared.deactivateVoiceGuidance() }
+        Task { @MainActor in self.handleUtteranceEnd(utterance) }
     }
 }
