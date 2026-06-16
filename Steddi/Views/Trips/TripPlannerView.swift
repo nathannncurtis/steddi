@@ -70,16 +70,19 @@ struct TripPlannerView: View {
             VStack {
                 // Top bar
                 HStack {
-                    // Keep the compact capsule visuals but expand each hit region
-                    // to the 44pt minimum (contentShape so the padded area still
-                    // takes the tap) — these float over the tap-to-add-stop map, so
-                    // a sub-44pt near-miss would otherwise fall through and drop an
-                    // unwanted stop. Matches this view's own 44pt zoom buttons.
+                    // Keep the compact capsule visuals but route each control through
+                    // the shared `steddiGlass` treatment (SOLID surface fallback
+                    // under Reduce Transparency / Increase Contrast so the map can't
+                    // bleed through the labels) and expand each hit region to the
+                    // 44pt minimum (contentShape so the padded area still takes the
+                    // tap) — these float over the tap-to-add-stop map, so a sub-44pt
+                    // near-miss would otherwise fall through and drop an unwanted
+                    // stop. Matches this view's own 44pt zoom buttons / NoGoZone.
                     Button("Cancel") { dismiss() }
                         .font(.body.weight(.medium))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .padding(10)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                        .steddiGlass(interactive: true, in: Capsule())
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Capsule())
 
@@ -90,7 +93,7 @@ struct TripPlannerView: View {
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                        .steddiGlass(in: Capsule())
 
                     Spacer()
 
@@ -98,7 +101,7 @@ struct TripPlannerView: View {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(canSave ? SteddiTheme.accent : SteddiTheme.textMuted)
                         .padding(10)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                        .steddiGlass(interactive: true, in: Capsule())
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Capsule())
                         .disabled(!canSave)
@@ -124,7 +127,11 @@ struct TripPlannerView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(SteddiTheme.textPrimary)
                 .frame(width: 44, height: 44)
-                .background(SteddiTheme.surfacePrimary.opacity(0.88), in: RoundedRectangle(cornerRadius: 12))
+                // Floats over the live tap-to-add-stop map — shared glass treatment
+                // so it falls back to a SOLID surface under Reduce Transparency /
+                // Increase Contrast instead of a translucent fill the cartography
+                // bleeds through.
+                .steddiGlass(interactive: true, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
@@ -137,6 +144,11 @@ struct TripPlannerView: View {
     }
 
     // MARK: - Bottom Card
+
+    /// Top-rounded shape shared by the bottom card's glass surface and its clip.
+    private var bottomCardShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
+    }
 
     private var bottomCard: some View {
         VStack(spacing: 12) {
@@ -193,11 +205,15 @@ struct TripPlannerView: View {
             }
         }
         .padding(16)
-        .background(
-            SteddiTheme.surfacePrimary.opacity(0.95)
-                .shadow(color: .black.opacity(0.3), radius: 16, y: -4)
-        )
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
+        .frame(maxWidth: .infinity)
+        // Floats over the live map — shared glass treatment so the card falls back
+        // to a SOLID surface under Reduce Transparency / Increase Contrast instead
+        // of a translucent fill the cartography bleeds through.
+        .steddiGlass(in: bottomCardShape)
+        .clipShape(bottomCardShape)
+        // Lift the card off the map (kept from the prior look). Applied outside the
+        // glass so the shadow sits behind the surface, not on top of its content.
+        .shadow(color: .black.opacity(0.3), radius: 16, y: -4)
     }
 
     /// Draggable, editable stop list — order here is trip order.

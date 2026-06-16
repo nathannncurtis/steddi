@@ -136,6 +136,15 @@ struct RoutePreviewView: View {
                     }
                 }
                 .padding(24)
+                // Scrim under the glass — the shared over-map protection the nav
+                // banners / reroute card use, so this confirm card's near-white
+                // ETA/distance readouts and destination name hold against the
+                // dark-theme preview map instead of washing out on the light frost
+                // that neutral `.regular` glass composites to over a dark map (same
+                // shape as the glass; skipped when glass is off — the fallback is
+                // already opaque). In DARK theme this is a near-opaque luminance-
+                // fixed dark fill that makes the adaptive glass render dark.
+                .mapGlassScrim(in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24))
                 // Single neutral glass layer replaces the material+surface double
                 // background — the card is information-dense, so no tint.
                 .steddiGlass(

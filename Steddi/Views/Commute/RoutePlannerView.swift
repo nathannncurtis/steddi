@@ -57,7 +57,11 @@ struct RoutePlannerView: View {
             )
             .ignoresSafeArea()
 
-            // Zoom buttons — right side
+            // Zoom buttons — right side. Float over the live tap-to-add-waypoint
+            // map, so route through the shared `steddiGlass` treatment (like the
+            // NoGoZone editor / nav HUD): translucent Liquid Glass normally, but a
+            // SOLID surface fallback under Reduce Transparency / Increase Contrast
+            // so the cartography can't bleed through behind the glyph.
             VStack(spacing: 8) {
                 Button {
                     guard let mv = plannerMapView else { return }
@@ -70,7 +74,7 @@ struct RoutePlannerView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .frame(width: 44, height: 44)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.88), in: RoundedRectangle(cornerRadius: 12))
+                        .steddiGlass(interactive: true, in: RoundedRectangle(cornerRadius: 12))
                 }
 
                 Button {
@@ -84,7 +88,7 @@ struct RoutePlannerView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .frame(width: 44, height: 44)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.88), in: RoundedRectangle(cornerRadius: 12))
+                        .steddiGlass(interactive: true, in: RoundedRectangle(cornerRadius: 12))
                 }
             }
             .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
@@ -95,11 +99,21 @@ struct RoutePlannerView: View {
             // Top bar
             VStack {
                 HStack {
+                    // Keep the compact capsule visuals but route each control through
+                    // the shared `steddiGlass` treatment (SOLID surface fallback
+                    // under Reduce Transparency / Increase Contrast so the map can't
+                    // bleed through the labels) and expand each hit region to Apple's
+                    // 44pt minimum (contentShape so the padded area still takes the
+                    // tap) — these float over the tap-to-add-waypoint map, so a
+                    // sub-44pt near-miss would otherwise fall through and add an
+                    // unwanted waypoint. Matches the NoGoZone editor / TripPlanner.
                     Button("Cancel") { dismiss() }
                         .font(.body.weight(.medium))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .padding(10)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                        .steddiGlass(interactive: true, in: Capsule())
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Capsule())
 
                     Spacer()
 
@@ -121,7 +135,9 @@ struct RoutePlannerView: View {
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                        .steddiGlass(interactive: true, in: Capsule())
+                        .frame(minHeight: 44)
+                        .contentShape(Capsule())
                     }
 
                     Spacer()
@@ -130,7 +146,9 @@ struct RoutePlannerView: View {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(calculatedPolyline != nil ? SteddiTheme.accent : SteddiTheme.textMuted)
                         .padding(10)
-                        .background(SteddiTheme.surfacePrimary.opacity(0.85), in: Capsule())
+                        .steddiGlass(interactive: true, in: Capsule())
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Capsule())
                         .disabled(calculatedPolyline == nil)
                 }
                 .padding(.horizontal, 16)
@@ -142,13 +160,15 @@ struct RoutePlannerView: View {
                 bottomCard
             }
 
-            // Loading overlay
+            // Loading overlay — floats over the live map, so the shared glass
+            // treatment (SOLID fallback under Reduce Transparency / Increase
+            // Contrast) instead of a translucent fill the cartography bleeds through.
             if isCalculating {
                 ProgressView()
                     .tint(SteddiTheme.accent)
                     .scaleEffect(x: 1.2, y: 1.2)
                     .frame(width: 56, height: 56)
-                    .background(SteddiTheme.surfacePrimary.opacity(0.85), in: RoundedRectangle(cornerRadius: 14))
+                    .steddiGlass(in: RoundedRectangle(cornerRadius: 14))
             }
         }
         .preferredColorScheme(resolvedColorScheme)
@@ -156,6 +176,11 @@ struct RoutePlannerView: View {
     }
 
     // MARK: - Bottom Card
+
+    /// Top-rounded shape shared by the bottom card's glass surface and its clip.
+    private var bottomCardShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
+    }
 
     private var bottomCard: some View {
         VStack(spacing: 12) {
@@ -222,7 +247,9 @@ struct RoutePlannerView: View {
                 }
             }
 
-            // Toggle details / undo waypoints
+            // Toggle details / undo waypoints. Compact 13pt labels, floored to the
+            // 44pt minimum height (contentShape so the whole row takes the tap) —
+            // Apple's minimum tap target.
             HStack {
                 if !waypoints.isEmpty {
                     Button {
@@ -232,6 +259,8 @@ struct RoutePlannerView: View {
                         Label("Undo", systemImage: "arrow.uturn.backward")
                             .font(SteddiTheme.body(13))
                             .foregroundStyle(SteddiTheme.textSecondary)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                 }
 
@@ -243,15 +272,21 @@ struct RoutePlannerView: View {
                     Text(showDetails ? "Less" : "More options")
                         .font(SteddiTheme.body(13))
                         .foregroundStyle(SteddiTheme.accent)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
             }
         }
         .padding(16)
-        .background(
-            SteddiTheme.surfacePrimary.opacity(0.95)
-                .shadow(color: .black.opacity(0.3), radius: 16, y: -4)
-        )
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
+        .frame(maxWidth: .infinity)
+        // Floats over the live map — shared glass treatment so the card falls back
+        // to a SOLID surface under Reduce Transparency / Increase Contrast instead
+        // of a translucent fill the cartography bleeds through.
+        .steddiGlass(in: bottomCardShape)
+        .clipShape(bottomCardShape)
+        // Lift the card off the map (kept from the prior look). Applied outside the
+        // glass so the shadow sits behind the surface, not on top of its content.
+        .shadow(color: .black.opacity(0.3), radius: 16, y: -4)
     }
 
     // MARK: - Calculate Route
