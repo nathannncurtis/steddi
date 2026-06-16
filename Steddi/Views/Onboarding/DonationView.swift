@@ -47,10 +47,25 @@ struct DonationView: View {
     private var sheetTextSecondary: Color {
         fromOnboarding ? SteddiTheme.onboardingTextSecondary : SteddiTheme.textSecondary
     }
+    /// Opacity of the white wash that forms the onboarding tip row over the dark
+    /// sheet surface. Single source of truth shared by the rendered `tipRowFill`
+    /// and the `sheetPriceColor` contrast math, so the two can't drift.
+    private static let onboardingTipWash = 0.1
     /// Tip-row fill: a faint light wash on the dark onboarding surface (matching
     /// the onboarding cards), the adaptive elevated surface elsewhere.
     private var tipRowFill: Color {
-        fromOnboarding ? Color.white.opacity(0.1) : SteddiTheme.surfaceSecondary
+        fromOnboarding ? Color.white.opacity(Self.onboardingTipWash) : SteddiTheme.surfaceSecondary
+    }
+    /// The composited onboarding tip-row surface as an `RGBColor` — the `tipRowFill`
+    /// white wash drawn source-over `sheetSurface` (the fixed-dark
+    /// `onboardingCardFallbackFill`). Derived from the SAME tokens the row is drawn
+    /// with (`onboardingCardFallbackFillRGB` + `onboardingTipWash`) so the price
+    /// contrast math is pinned to the actual render and can't desync if either
+    /// token is retuned.
+    private var onboardingTipRowFillRGB: RGBColor {
+        let f = Self.onboardingTipWash
+        let base = SteddiTheme.onboardingCardFallbackFillRGB
+        return RGBColor(f + (1 - f) * base.r, f + (1 - f) * base.g, f + (1 - f) * base.b)
     }
     /// Accent for the large decorative icons (header cup, thank-you heart). On the
     /// fixed-dark onboarding sheet use the raw brand hue (`accentBrand`) — `accent`
@@ -72,13 +87,13 @@ struct DonationView: View {
     /// adaptive `accent` already sits on the live theme surface, so reuse it.
     private var sheetPriceColor: Color {
         guard fromOnboarding else { return SteddiTheme.accent }
-        // Composite the row fill (0.1 white) over the dark sheet fill, source-over,
-        // matching `tipRowFill` + `sheetSurface` above. The base mirrors
-        // `SteddiTheme.onboardingCardFallbackFill` (0.12, 0.12, 0.13).
-        let f = 0.1
-        let base = RGBColor(0.12, 0.12, 0.13)
-        let row = RGBColor(f + (1 - f) * base.r, f + (1 - f) * base.g, f + (1 - f) * base.b)
-        return SteddiTheme.legibleText(SteddiTheme.currentAccentOption.rgb, onSurface: row).color
+        // Size the price against the SAME composited row it actually sits on
+        // (`tipRowFill` over `sheetSurface`), derived from the shared tokens so it
+        // can't drift if `onboardingCardFallbackFill` or the wash is retuned.
+        return SteddiTheme.legibleText(
+            SteddiTheme.currentAccentOption.rgb,
+            onSurface: onboardingTipRowFillRGB
+        ).color
     }
 
     var body: some View {
