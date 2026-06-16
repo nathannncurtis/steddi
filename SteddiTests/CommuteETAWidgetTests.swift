@@ -38,6 +38,9 @@ struct CommuteETAWidgetStalenessTests {
     /// THE BUG: navigating flag still set, but the last live ETA write is old —
     /// the session was killed mid-drive and never torn down. It must be treated
     /// as NOT live (no "Navigating" pill) without waiting for the next app launch.
+    /// The core guarantee is `isLiveNavigating == false`; a write a few minutes
+    /// old (past the navigating window but still inside the broader idle freshness
+    /// window) is no longer presented as a live drive.
     @Test("Stale navigating entry (old ETA write) is treated as not-live")
     func staleNavigatingIsNotLive() {
         let entry = CommuteETAEntry(
@@ -46,11 +49,26 @@ struct CommuteETAWidgetStalenessTests {
             etaMinutes: 1,                              // frozen near-arrival ETA
             destinationName: "Office",
             isNavigating: true,
-            etaUpdatedAt: now.addingTimeInterval(-10 * 60)   // 10 min ago — dead
+            etaUpdatedAt: now.addingTimeInterval(-10 * 60)   // 10 min ago — dead session
         )
         #expect(entry.isLiveNavigating == false)
-        // It also falls through to the normal staleness path rather than being
-        // presented as a live current ETA.
+    }
+
+    /// A navigating flag whose last write is older than the broader freshness
+    /// window is BOTH not-live AND stale — it falls through the live-nav guard to
+    /// the normal staleness path and is labeled last-known rather than presented
+    /// as a live current ETA.
+    @Test("Long-stale navigating entry is not-live and stale")
+    func longStaleNavigatingIsStale() {
+        let entry = CommuteETAEntry(
+            date: now,
+            commuteName: "Work",
+            etaMinutes: 1,
+            destinationName: "Office",
+            isNavigating: true,
+            etaUpdatedAt: now.addingTimeInterval(-40 * 60)   // 40 min — past freshness too
+        )
+        #expect(entry.isLiveNavigating == false)
         #expect(entry.isStale == true)
     }
 
