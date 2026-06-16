@@ -52,6 +52,17 @@ enum RoadGraphBuilder {
             switch element.type {
             case "node":
                 guard let lat = element.lat, let lon = element.lon else { continue }
+                // A malformed Overpass node with a non-finite or out-of-WGS-84-
+                // range lat/lon (e.g. NaN, ±∞, or a huge finite value) would flow
+                // through to `buildSnapIndex`, where `cellRange`/`cellIndex`'s
+                // `Int(floor(...))` conversion traps — an uncatchable crash on a
+                // path the architecture intends to degrade gracefully to MapKit.
+                // Drop the bad node (mirroring the serializer's range rejection
+                // and the `continue` already used for missing coords) so the
+                // build can never trap on third-party data.
+                guard GraphSpatialIndex.isIndexable(
+                    CLLocationCoordinate2D(latitude: lat, longitude: lon)
+                ) else { continue }
                 let tags = element.tags ?? [:]
                 let highway = tags["highway"]?.lowercased()
                 nodeAcc[element.id] = NodeAccumulator(
