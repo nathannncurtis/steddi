@@ -113,6 +113,16 @@ final class NavigationStateManager {
     static var rerouteInitialDelay: Duration = .seconds(30)
     static var rerouteSteadyInterval: Duration = .seconds(300)
 
+    /// Short retry interval used while the prompt-first evaluation still hasn't
+    /// completed a full candidate comparison — e.g. no GPS fix yet at the initial
+    /// delay, or the baseline ETA fetch threw (transient OSRM 429/timeout). Without
+    /// this the loop would fall straight to the 5-minute steady cadence after a
+    /// single early bail, defeating the prompt-first design on exactly the short
+    /// commute it exists for. We keep retrying on this short interval until the
+    /// first real evaluation lands, THEN settle to the steady interval. `var` so
+    /// tests can shrink it.
+    static var rerouteRetryInterval: Duration = .seconds(15)
+
     /// Test-only instrumentation: counts how many times the reroute loop has
     /// woken from its sleep and reached the candidate-evaluation phase. Lets a
     /// test confirm the FIRST evaluation happens promptly after nav starts
@@ -271,20 +281,42 @@ final class NavigationStateManager {
         // whole first leg. The first sleep is shortened to let GPS/EWMA settle
         // and a valid currentCoordinate appear; subsequent sleeps use the full
         // interval to avoid spamming the network/UI.
+        //
+        // The prompt-first budget is NOT consumed by a cycle that bails before a
+        // real comparison: if the first cycle can't run a full evaluation (no GPS
+        // fix yet at the initial delay, or the baseline ETA fetch throws on a
+        // transient OSRM 429/timeout), the loop retries on the SHORT retry
+        // interval rather than dropping to the 5-minute steady cadence — which
+        // would silently kill the feature for a short commute. Only once the first
+        // full candidate evaluation has landed (baseline fetched) does it settle
+        // to the steady interval.
         if let commute, let direction {
             rerouteTask = Task { @MainActor [weak self] in
                 let directionsService = DirectionsService()
                 let initialDelay = Self.rerouteInitialDelay
+                let retryInterval = Self.rerouteRetryInterval
                 let steadyInterval = Self.rerouteSteadyInterval
+                // Has a full candidate evaluation (successful baseline fetch) run
+                // yet? Until it has, the loop stays on the prompt-first cadence.
+                var firstEvaluationLanded = false
                 var isFirstCycle = true
 
                 while !Task.isCancelled {
                     guard let self else { break }
                     guard !self.hasArrived else { break }
 
-                    // Short settle delay before the FIRST evaluation (let GPS /
-                    // EWMA warm up), full interval between subsequent cycles.
-                    let delay = isFirstCycle ? initialDelay : steadyInterval
+                    // Short settle delay before the FIRST attempt (let GPS / EWMA
+                    // warm up). While the first full evaluation still hasn't
+                    // landed, retry on the short interval; only settle to the full
+                    // steady interval once it has.
+                    let delay: Duration
+                    if isFirstCycle {
+                        delay = initialDelay
+                    } else if firstEvaluationLanded {
+                        delay = steadyInterval
+                    } else {
+                        delay = retryInterval
+                    }
                     isFirstCycle = false
                     try? await Task.sleep(for: delay)
                     guard !Task.isCancelled else { break }
@@ -340,9 +372,16 @@ final class NavigationStateManager {
                     } catch {
                         // Couldn't get a comparable baseline this cycle — skip
                         // rather than fall back to a non-path-aware estimate and
-                        // compare incomparable numbers.
+                        // compare incomparable numbers. The prompt-first budget is
+                        // NOT spent (firstEvaluationLanded stays false), so the next
+                        // cycle retries on the short interval instead of the steady
+                        // one — a single transient fetch failure can't push the
+                        // first real evaluation out to ~5 min on a short commute.
                         continue
                     }
+                    // First full candidate comparison reached — from here the loop
+                    // may settle to the steady interval.
+                    firstEvaluationLanded = true
                     let remainingETA = baseline.duration
 
                     // The fetch awaited; bail if the session changed underneath.

@@ -1100,6 +1100,56 @@ struct NavigationStateManagerRerouteCadenceTests {
         manager.stopObserving()
         engine.stopNavigation()
     }
+
+    /// Regression guard for the prompt-first retry: when the first cycle can't run
+    /// a full evaluation (here the engine has no GPS fix yet, so the loop bails
+    /// before the baseline fetch), the loop must KEEP retrying on the SHORT retry
+    /// interval rather than dropping to the 5-minute steady cadence. We shrink the
+    /// initial + retry delays to a few ms and KEEP the steady interval at its full
+    /// 5 minutes, then assert the evaluation count climbs past 1 quickly. Pre-fix,
+    /// `isFirstCycle` was spent on the first sleep regardless of whether an
+    /// evaluation landed, so the SECOND cycle slept the full 300s — the count
+    /// would stick at 1 here and this would time out.
+    @Test("Prompt-first eval retries on the short interval until it lands, not the 5-min cadence")
+    func promptFirstRetriesUntilLanded() async {
+        let savedInitial = NavigationStateManager.rerouteInitialDelay
+        let savedRetry = NavigationStateManager.rerouteRetryInterval
+        let savedSteady = NavigationStateManager.rerouteSteadyInterval
+        defer {
+            NavigationStateManager.rerouteInitialDelay = savedInitial
+            NavigationStateManager.rerouteRetryInterval = savedRetry
+            NavigationStateManager.rerouteSteadyInterval = savedSteady
+        }
+        // Tiny initial + retry delays; FULL steady interval so reaching a SECOND
+        // evaluation promptly can only come from the short-retry path (the first
+        // cycle bails with no GPS fix, never landing a full evaluation).
+        NavigationStateManager.rerouteInitialDelay = .milliseconds(5)
+        NavigationStateManager.rerouteRetryInterval = .milliseconds(5)
+        NavigationStateManager.rerouteSteadyInterval = .seconds(300)
+
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        // NOTE: no updateLocation — engine.currentCoordinate is nil, so every
+        // cycle bails before the baseline fetch and `firstEvaluationLanded` never
+        // flips. The loop must therefore retry on the short interval indefinitely.
+        manager.startObserving(
+            engine: engine,
+            commute: Commute(name: "Work"),
+            direction: .originToDestination
+        )
+
+        // Poll for at least TWO evaluations within a generous ceiling (~2s) that
+        // is still FAR under the 5-minute steady floor.
+        var reachedTwo = false
+        for _ in 0..<200 {
+            if manager.rerouteEvaluationCount >= 2 { reachedTwo = true; break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(reachedTwo, "the loop must keep retrying on the short interval, not fall to the 5-min cadence")
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
 }
 
 // MARK: - Active Trip Teardown Tests
