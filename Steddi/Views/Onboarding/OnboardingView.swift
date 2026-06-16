@@ -242,8 +242,8 @@ struct OnboardingView: View {
                         // persisted until completion, so `SteddiTheme.onAccent`
                         // would lag a beat behind the live recolor).
                         .foregroundStyle(coordinator.selectedAccent.contrastingGlyph)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Capsule())
                 }
                 // The genuine primary CTA: a glass fill in the IN-FLIGHT brand
                 // hue (so it glows the user's chosen color live from the delight
@@ -268,6 +268,12 @@ struct OnboardingView: View {
                     // dark in Light and fail AA on the dark backdrop. Match the
                     // hero copy's near-white (mirrors `skipIntroButton`).
                     .foregroundStyle(.white.opacity(0.85))
+                    // The ~20pt subheadline label leaves the bare button far under
+                    // the 44pt HIG hit-target floor the rest of the app enforces.
+                    // Expand the tappable region to 44pt (visual text unchanged),
+                    // matching the floors HomeView / the sheet tabs already pin.
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                     .disabled(coordinator.isTransitioning)
                     .accessibilityHint("Skips the rest of setup and goes to the app")
             }
@@ -299,7 +305,12 @@ struct OnboardingView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                // The ~20pt label + 8pt vpad landed the hit target at ~36pt, under
+                // the 44pt HIG floor the app enforces everywhere else. Pin a 44pt
+                // hit region (visual text unchanged) BEFORE the outer edge insets
+                // that position it in the top-trailing corner.
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
                 .padding(.top, 8)
                 .padding(.trailing, 12)
                 .disabled(coordinator.isTransitioning)
