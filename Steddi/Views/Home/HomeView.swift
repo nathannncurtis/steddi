@@ -1544,6 +1544,11 @@ struct HomeView: View {
             // route or a fallback the driver switched to.
             routeID: route?.id
         )
+        // Mirror the route-scoped state onto the shared manager AFTER startObserving
+        // (which clears it). A forced subtree re-identity mid-drive resets this
+        // view's @State; reAdoptActiveSessionIfNeeded restores navigatedSavedRoute
+        // and re-derives the conditions from here, the same as activeRouteCoords.
+        navStateManager.navigatedSavedRoute = navigatedSavedRoute
         // Next leg is now observed (manager.isNavigating true again) — close the
         // leg-handoff window so a later genuine external teardown is honored.
         isAdvancingLeg = false
@@ -2166,6 +2171,22 @@ struct HomeView: View {
         // holds across the WHOLE trip instead of silently re-arming.
         recoveriesThisTrip = navStateManager.recoveriesThisTrip
         lastRecoveryAt = navStateManager.lastRecoveryAt
+
+        // Restore the route-scoped road-condition state the rebuild dropped. The
+        // engine's per-fix provider/voice/haptic closures live on the engine and
+        // survive the rebuild, but this view's `navigatedSavedRoute` (nil) and
+        // `activeRoadConditions` ([]) do not — without restoring them the
+        // post-arrival reconfirm (guards on navigatedSavedRoute) no-ops and the
+        // in-drive conditions markers render empty for the rest of the drive.
+        // Re-derive conditions fresh from the live store rather than caching an
+        // @Model array on the manager, so any conditions edited mid-drive are
+        // reflected (and a mid-drive route delete safely yields []).
+        navigatedSavedRoute = navStateManager.navigatedSavedRoute
+        if let route = navigatedSavedRoute {
+            activeRoadConditions = RoadConditionService.shared.fetchConditionsOnRoute(route)
+        } else {
+            activeRoadConditions = []
+        }
 
         // Resume guidance: feed restarts GPS → engine.updateLocation and the
         // periodic Live Activity updateActivity, and reveals the overlay.
@@ -2993,10 +3014,14 @@ struct HomeView: View {
 
     // MARK: - Category Migration
 
-    /// One-time backfill: pins created before the `category` field existed
-    /// arrive with an empty category. Infer one from the pin's icon, defaulting
-    /// to "other". Idempotent — only empty categories are touched, so it's a
-    /// no-op on subsequent launches.
+    /// One-time backfill: pins persisted before the `category` field existed are
+    /// stamped with the property's declared default by SwiftData's lightweight
+    /// migration. That default is "" (see `PinnedLocation.category`) precisely so
+    /// this `.isEmpty` trigger is reachable — a non-empty default would migrate
+    /// legacy pins to a concrete category and silently defeat the backfill. Infer
+    /// a category from each empty pin's icon (falling back to "other"). Idempotent:
+    /// once backfilled a pin's category is non-empty, so subsequent launches — and
+    /// any category the user set themselves — are left untouched.
     private func migrateExistingPinsToCategories() {
         var changed = false
         for pin in pinnedLocations where pin.category.isEmpty {

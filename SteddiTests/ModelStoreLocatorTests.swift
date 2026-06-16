@@ -792,3 +792,134 @@ struct SteddiSchemaMigrationTests {
         #expect(try ctx.fetch(FetchDescriptor<MigParent>()).isEmpty)
     }
 }
+
+// MARK: - PinnedLocation.category Backfill Migration Test
+
+/// Proves the `PinnedLocation.category` backfill is actually reachable end to end,
+/// against a real on-disk store round-trip.
+///
+/// The bug this guards against: `migrateExistingPinsToCategories()` backfills only
+/// pins whose `category.isEmpty`. SwiftData lightweight migration stamps a new
+/// non-optional attribute's *declared default* onto rows persisted before the
+/// column existed. The fix makes that declared default "" (uncategorized) precisely
+/// so the `.isEmpty` trigger is reachable; the prior non-empty default ("other")
+/// would have been stamped instead, the trigger would never match, and the
+/// icon-inference backfill would be dead — a house.fill "Home" pin would render
+/// under "Other" forever.
+///
+/// We can't strip the `category` attribute off the live `PinnedLocation` schema to
+/// simulate the pre-column store: registering the same entity name under two
+/// attribute shapes in one process, OR reading a non-optional attribute absent from
+/// the backing store, aborts the whole test process (the same duplicate-entity /
+/// missing-column hazard the MigParent/MigChild note above documents). Instead this
+/// pins the behavioral contract the fix relies on, against a real persisted store:
+/// a pin whose `category` is "" (the value lightweight migration produces under the
+/// fixed default) round-trips through disk as "" — NOT silently coerced to a
+/// concrete category — so the `.isEmpty` backfill trigger fires, infers the icon's
+/// category, and is idempotent thereafter. The migration-stamps-the-declared-default
+/// mechanic itself is empirically established; this guards the app-side contract
+/// (default "", `.isEmpty` trigger, icon inference, idempotence, no clobber) that a
+/// future change to the default or the trigger would silently break.
+@Suite("PinnedLocation.category backfill is reachable for uncategorized legacy pins")
+struct PinnedLocationCategoryMigrationTests {
+
+    private func makeTempStoreURL() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PinnedLocationCategoryMigrationTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("Pins.store")
+    }
+
+    @Test("An empty-category pin round-trips through disk as \"\" and the backfill infers its icon")
+    func emptyCategoryPinBackfillsByIcon() throws {
+        let url = try makeTempStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        // 1. Persist a pin whose `category` is "" — the exact value lightweight
+        //    migration produces for a pre-column row under the fixed "" default —
+        //    carrying a house.fill icon, then close the store.
+        let pinID: UUID
+        do {
+            let container = try ModelContainer(
+                for: Schema([PinnedLocation.self]),
+                configurations: [ModelConfiguration(url: url)]
+            )
+            let ctx = ModelContext(container)
+            let pin = PinnedLocation(name: "Home", latitude: 37.33, longitude: -122.03,
+                                     icon: "house.fill", category: "")
+            ctx.insert(pin)
+            try ctx.save()
+            pinID = pin.id
+        }
+
+        // 2. Reopen the store from disk.
+        let reopened = try ModelContainer(
+            for: Schema([PinnedLocation.self]),
+            configurations: [ModelConfiguration(url: url)]
+        )
+        let ctx = ModelContext(reopened)
+        let pins = try ctx.fetch(FetchDescriptor<PinnedLocation>())
+        #expect(pins.count == 1)
+        let legacy = try #require(pins.first { $0.id == pinID })
+
+        // (i) The empty category survives the disk round-trip as "" — it is NOT
+        //     silently coerced to "other" on the way out. This is what keeps
+        //     migrateExistingPinsToCategories()'s `.isEmpty` trigger reachable.
+        //     resolvedCategory still reads .other so nothing renders blank meanwhile.
+        #expect(legacy.category == "")
+        #expect(legacy.category.isEmpty)
+        #expect(legacy.resolvedCategory == .other)
+
+        // (ii) Running the backfill (the exact body of migrateExistingPinsToCategories)
+        //      now matches this uncategorized pin and infers its category from the icon.
+        var changed = false
+        for pin in pins where pin.category.isEmpty {
+            pin.category = PinnedLocationCategoryMigration.inferredKey(forIcon: pin.icon)
+            changed = true
+        }
+        if changed { try ctx.save() }
+        #expect(changed)
+        #expect(legacy.category == PlaceCategory.home.key)
+        #expect(legacy.resolvedCategory == .home)
+
+        // (iii) Idempotent: a second pass touches nothing (the pin is no longer
+        //       empty), so re-running on later launches never re-infers, and a
+        //       category the user set themselves would never be clobbered.
+        var changedAgain = false
+        let refetched = try ctx.fetch(FetchDescriptor<PinnedLocation>())
+        for pin in refetched where pin.category.isEmpty {
+            pin.category = PinnedLocationCategoryMigration.inferredKey(forIcon: pin.icon)
+            changedAgain = true
+        }
+        #expect(!changedAgain)
+    }
+
+    @Test("A freshly created pin is never backfilled (its category is non-empty from init)")
+    func freshPinNotBackfilled() throws {
+        let container = try ModelContainer(
+            for: Schema([PinnedLocation.self]),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        let ctx = ModelContext(container)
+        // A pin added today through the normal initializer gets an explicit
+        // category (init parameter default .other.key), so it must NOT look like a
+        // legacy pin — even though the STORED column default is now "".
+        let fresh = PinnedLocation(name: "Cafe", latitude: 1, longitude: 1, icon: "cup.and.saucer.fill")
+        ctx.insert(fresh)
+        try ctx.save()
+
+        #expect(!fresh.category.isEmpty)
+        #expect(fresh.category == PlaceCategory.other.key)
+
+        let pins = try ctx.fetch(FetchDescriptor<PinnedLocation>())
+        var changed = false
+        for pin in pins where pin.category.isEmpty {
+            pin.category = PinnedLocationCategoryMigration.inferredKey(forIcon: pin.icon)
+            changed = true
+        }
+        // No empty categories → backfill is a no-op, the creation-time category is
+        // preserved, never overwritten by the icon guess.
+        #expect(!changed)
+        #expect(fresh.category == PlaceCategory.other.key)
+    }
+}

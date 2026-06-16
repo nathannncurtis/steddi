@@ -11,11 +11,19 @@ final class PinnedLocation {
     var address: String?
     var icon: String // SF Symbol name
     /// Category key (see `PlaceCategory`). Stored as a String so the category
-    /// set can grow without a SwiftData migration. Default "other"; existing
-    /// pins are backfilled by `HomeView.migrateExistingPinsToCategories()`.
-    /// SwiftData supplies "" for pins persisted before this property existed —
-    /// that empty value is the migration's trigger.
-    var category: String = PlaceCategory.other.key
+    /// set can grow without a SwiftData migration.
+    ///
+    /// The STORED default is "" (uncategorized), NOT a concrete category. This is
+    /// load-bearing: SwiftData's automatic lightweight migration stamps the
+    /// *declared* default onto rows persisted before this property existed, so a
+    /// non-empty default ("other") would migrate every legacy pin to "other" and
+    /// the `.isEmpty` backfill trigger in `HomeView.migrateExistingPinsToCategories()`
+    /// would never match — the icon-inference backfill would be dead. Declaring ""
+    /// keeps that trigger reachable: legacy pins migrate to "", the backfill infers
+    /// a category from their icon, and `resolvedCategory` maps any residual "" to
+    /// `.other` so nothing ever renders uncategorized. New pins are created with an
+    /// explicit non-empty category (see `init`), so they are never re-backfilled.
+    var category: String = ""
     var createdAt: Date
     var sortOrder: Int
 
@@ -49,7 +57,9 @@ final class PinnedLocation {
         self.sortOrder = sortOrder
     }
 
-    /// Resolved category enum for this pin (falls back to `.other`).
+    /// Resolved category enum for this pin. Unknown or uncategorized ("") keys
+    /// fall back to `.other` (see `PlaceCategory.category(for:)`), so a legacy pin
+    /// whose backfill hasn't run yet still renders as Other rather than blank.
     var resolvedCategory: PlaceCategory {
         PlaceCategory.category(for: category)
     }

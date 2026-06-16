@@ -27,8 +27,10 @@ import SwiftData
 ///
 ///   * `Commute.notificationsEnabled` / `quietHoursStart` / `quietHoursEnd` /
 ///     `notificationLeadMinutes` — new properties with defaults.
-///   * `PinnedLocation.category` — new property with a default ("" for pre-existing
-///     rows, which `HomeView.migrateExistingPinsToCategories()` backfills).
+///   * `PinnedLocation.category` — new property whose declared default is "" so
+///     lightweight migration stamps "" onto pre-existing rows, which
+///     `HomeView.migrateExistingPinsToCategories()` then backfills by icon (a
+///     non-empty default would stamp a concrete category and defeat that backfill).
 ///   * `DriveRecord.totalDurationSeconds` / `maxSpeedMps` / `averageSpeedMps` /
 ///     `trafficDurationSeconds` — new optional properties (nil for old rows).
 ///   * The `Commute.driveRecords` ↔ `DriveRecord.associatedCommute` **inverse
