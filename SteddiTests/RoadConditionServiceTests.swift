@@ -220,9 +220,10 @@ struct RoadConditionProximityTests {
 
     @Test("Empty condition list returns nil")
     func emptyListReturnsNil() {
+        let empty: [RoadCondition] = []
         let hit = RoadConditionService.checkProximityToConditions(
             currentCoord: downtown,
-            routeConditions: [],
+            routeConditions: empty,
             proximityThresholdMeters: 100
         )
         #expect(hit == nil)
@@ -572,5 +573,144 @@ struct RoadConditionAdversarialTests {
         ])
         #expect(index.occupiedCellCount == 1)
         #expect(index.candidates(near: coord).count == 3)
+    }
+}
+
+// MARK: - Mid-drive deletion safety (Finding 1)
+
+/// The navigation engine's `roadConditionProvider` is retained for the WHOLE
+/// drive and invoked every GPS fix. It used to capture the @Model
+/// `RoadCondition` objects directly and read their persisted properties
+/// (`status`, `coordinate`) per fix; if the route/conditions were deleted
+/// mid-drive (Settings "delete all data", route/commute deletion on a
+/// CarPlay-only drive that never tore down), the next fix dereferenced an
+/// invalidated SwiftData model and trapped.
+///
+/// The fix captures the conditions into `Sendable` `RoadConditionSnapshot`s at
+/// wire time (while the @Model graph is valid) and the provider operates on
+/// THOSE — never the relationship. These tests exercise that contract over an
+/// in-memory store, simulating the deletion, and assert the snapshot path keeps
+/// answering proximity queries without touching the deleted models.
+@Suite("RoadCondition mid-drive deletion safety")
+@MainActor
+struct RoadConditionMidDriveDeletionTests {
+
+    private func makeService() throws -> (RoadConditionService, ModelContext) {
+        let container = try inMemoryContainer()
+        let service = RoadConditionService(now: { Date() })
+        service.configure(container: container)
+        let context = try #require(service.testContext)
+        return (service, context)
+    }
+
+    @Test("Snapshots capture active conditions as detached Sendable values")
+    func snapshotCapturesActive() throws {
+        let (service, context) = try makeService()
+        let route = Route(rank: 0, encodedPolyline: "abc", name: "Main St")
+        context.insert(route)
+        let condition = try #require(service.createCondition(
+            kind: .pothole, coordinate: north(of: downtown, meters: 40), route: route
+        ))
+
+        let snapshots = RoadConditionService.conditionSnapshots(on: route)
+        #expect(snapshots.count == 1)
+        #expect(snapshots.first?.id == condition.id)
+        #expect(snapshots.first?.kind == .pothole)
+        #expect(snapshots.first?.routeName == "Main St")
+    }
+
+    @Test("Snapshot-based proximity finds the condition within range")
+    func snapshotProximityFires() throws {
+        let (service, context) = try makeService()
+        let route = Route(rank: 0, encodedPolyline: "abc")
+        context.insert(route)
+        let condition = try #require(service.createCondition(
+            kind: .pothole, coordinate: north(of: downtown, meters: 40), route: route
+        ))
+
+        let snapshots = RoadConditionService.conditionSnapshots(on: route)
+        let hit = RoadConditionService.checkProximityToConditions(
+            currentCoord: downtown,
+            routeConditions: snapshots,
+            proximityThresholdMeters: 100
+        )
+        #expect(hit?.id == condition.id)
+    }
+
+    @Test("Snapshots taken before deletion stay readable AFTER the models are deleted — no crash")
+    func snapshotSurvivesConditionDeletion() throws {
+        let (service, context) = try makeService()
+        let route = Route(rank: 0, encodedPolyline: "abc", name: "Main St")
+        context.insert(route)
+        let condition = try #require(service.createCondition(
+            kind: .pothole, coordinate: north(of: downtown, meters: 40), route: route
+        ))
+        let conditionID = condition.id
+
+        // Capture at wire time (as wireRoadConditions does).
+        let snapshots = RoadConditionService.conditionSnapshots(on: route)
+
+        // Now the condition is deleted out from under the live drive.
+        context.delete(condition)
+        try context.save()
+
+        // The already-captured value snapshot is still safe to read AND query —
+        // it holds plain UUID/kind/coordinate/routeName, not the invalidated
+        // @Model. The provider runs exactly this every fix, so a mid-drive delete
+        // can't trap it.
+        let hit = RoadConditionService.checkProximityToConditions(
+            currentCoord: downtown,
+            routeConditions: snapshots,
+            proximityThresholdMeters: 100
+        )
+        #expect(hit?.id == conditionID)
+        #expect(hit?.routeName == "Main St")
+    }
+
+    @Test("Driving the engine's road-condition provider after a mid-drive delete does not crash")
+    func engineProviderSurvivesDeletion() throws {
+        let (service, context) = try makeService()
+        // A short straight route running north through `downtown`.
+        let polyline = (0..<20).map { north(of: downtown, meters: Double($0) * 30) }
+        let route = Route(rank: 0, encodedPolyline: PolylineEncoder.encode(polyline, precision: 6))
+        context.insert(route)
+        let condition = try #require(service.createCondition(
+            kind: .pothole, coordinate: north(of: downtown, meters: 120), route: route
+        ))
+
+        // Wire the engine exactly as HomeView.wireRoadConditions does: snapshot
+        // the conditions up front, capture only the snapshots in the long-lived
+        // provider closure.
+        let snapshots = RoadConditionService.conditionSnapshots(on: route)
+        let engine = NavigationEngine()
+        var announced: [UUID] = []
+        engine.roadConditionProvider = { coordinate in
+            RoadConditionService.checkProximityToConditions(
+                currentCoord: coordinate,
+                routeConditions: snapshots,
+                proximityThresholdMeters: 100
+            )
+        }
+        engine.onRoadConditionApproaching = { snapshot in announced.append(snapshot.id) }
+
+        let steps = polyline.map {
+            NavStep(instruction: "Continue", distance: 30, coordinate: $0, maneuverSymbol: "arrow.up")
+        }
+        engine.startNavigation(polyline: polyline, steps: steps)
+
+        // DELETE the route+conditions mid-drive — Settings "delete all data".
+        context.delete(condition)
+        context.delete(route)
+        try context.save()
+
+        // Now drive through the corridor. Every fix runs the provider; if it
+        // touched the deleted @Model it would trap here. It must complete and
+        // still announce the (snapshotted) condition exactly once.
+        for coord in polyline {
+            let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            engine.updateLocation(loc)
+        }
+
+        #expect(announced == [condition.id], "Snapshot path announces the pre-deletion condition once, no crash")
     }
 }

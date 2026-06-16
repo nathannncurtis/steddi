@@ -710,17 +710,29 @@ struct HomeView: View {
         activeRoadConditions = conditions
         guard !conditions.isEmpty else { return }
 
+        // Capture the conditions as Sendable value snapshots NOW, while the
+        // @Model graph is valid. The provider/approaching closures below are
+        // retained on the engine for the WHOLE drive and run every fix; if they
+        // held the @Model RoadConditions (or reached through condition.route),
+        // a mid-drive delete (Settings "delete all data", route/commute deletion
+        // on a CarPlay-only drive that never tore down) would invalidate those
+        // models and the next per-fix lookup would trap reading their persisted
+        // properties. Operating on the detached snapshots makes that impossible —
+        // the exact RerouteSnapshot pattern the reroute loop already uses.
+        let snapshots = RoadConditionService.conditionSnapshots(on: route)
+        guard !snapshots.isEmpty else { return }
+
         engine.roadConditionProvider = { coordinate in
             RoadConditionService.checkProximityToConditions(
                 currentCoord: coordinate,
-                routeConditions: conditions,
+                routeConditions: snapshots,
                 proximityThresholdMeters: 100
             )
         }
-        engine.onRoadConditionApproaching = { condition in
+        engine.onRoadConditionApproaching = { snapshot in
             HapticService.shared.fire(.roadConditionAlert)
-            let road = condition.route?.name.map { " on \($0)" } ?? ""
-            VoiceGuidanceService.shared.speak("\(condition.kind.spokenName) ahead\(road)")
+            let road = snapshot.routeName.map { " on \($0)" } ?? ""
+            VoiceGuidanceService.shared.speak("\(snapshot.kind.spokenName) ahead\(road)")
         }
     }
 
