@@ -851,6 +851,10 @@ struct NavigationStateManagerWidgetFreshnessTests {
         engine.etaMinutes = 3
         manager.syncFromEngine(engine, now: now, reload: { _ in })
         #expect(defaults.bool(forKey: "widget.isNavigating") == true)
+        // The last live write left the near-arrival remaining minutes in the
+        // App Group (the value that, left behind, would masquerade as the next
+        // commute's ETA).
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 3)
 
         // Arrival: engine latches hasArrived, keeps isNavigating true, zeroes ETA.
         engine.hasArrived = true
@@ -859,6 +863,11 @@ struct NavigationStateManagerWidgetFreshnessTests {
 
         // The widget must see an idle session, not a live 0-min "Navigating" card.
         #expect(defaults.bool(forKey: "widget.isNavigating") == false)
+        // The stale near-arrival ETA must NOT survive to pose as the next-commute
+        // value, and its fresh stamp must be dropped so a real idle refresh can
+        // repopulate it (and so isStale can't be held false by the recent stamp).
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 0)
+        #expect(defaults.double(forKey: "widget.etaUpdatedAt") == 0)
 
         let entry = CommuteETAEntry(
             date: now.addingTimeInterval(1),
@@ -869,6 +878,66 @@ struct NavigationStateManagerWidgetFreshnessTests {
             etaUpdatedAt: Date(timeIntervalSince1970: defaults.double(forKey: "widget.etaUpdatedAt"))
         )
         #expect(entry.isLiveNavigating == false, "no phantom live pill during the arrival linger")
+        // With the ETA zeroed there is no ~1-min near-arrival value to render as
+        // the fresh "Next Commute" ETA.
+        #expect(entry.etaMinutes == 0, "the stale near-arrival ETA must not show as the next-commute ETA")
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// Finding 3 regression: a prior round set kIsNavigating=false on arrival but
+    /// left the stale near-arrival kETAMinutes (~1 min) plus a fresh stamp in the
+    /// App Group. With kIsNavigating false the widget falls through to the idle
+    /// "Next Commute" reading, where the recent stamp keeps isStale FALSE — so the
+    /// finished drive's terminal ~1 min was presented as the fresh upcoming-commute
+    /// ETA. The arrival branch must now clear that value so the idle reading shows
+    /// no ETA (and isStale flips true) until a real idle refresh repopulates it.
+    @Test("After arrival the widget does not show the stale near-arrival ETA as the next commute")
+    func arrivalClearsStaleNearArrivalETA() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        // Final pre-arrival live tick: ~1 min remaining, freshly stamped.
+        engine.etaMinutes = 1
+        manager.syncFromEngine(engine, now: now, reload: { _ in })
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 1)
+        #expect(defaults.double(forKey: "widget.etaUpdatedAt") > 0)
+
+        // Arrival linger: hasArrived latches, isNavigating stays true, ETA zeroes.
+        engine.hasArrived = true
+        engine.etaMinutes = 0
+        var arrivalReloads = 0
+        manager.syncFromEngine(engine, now: now.addingTimeInterval(1), reload: { _ in arrivalReloads += 1 })
+
+        // The stale 1-min value + its stamp are gone; session is idle.
+        #expect(defaults.bool(forKey: "widget.isNavigating") == false)
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 0)
+        #expect(defaults.double(forKey: "widget.etaUpdatedAt") == 0)
+        // The correction is pushed to the widget once on the arrival transition.
+        #expect(arrivalReloads == 1, "arrival forces exactly one reload to retire the pill / clear the ETA")
+
+        // The idle widget reading no longer carries a fresh ~1-min ETA: with the
+        // stamp dropped, the entry is stale (no live "Next Commute" minutes shown).
+        let entry = CommuteETAEntry(
+            date: now.addingTimeInterval(2),
+            commuteName: "Work",
+            etaMinutes: defaults.integer(forKey: "widget.etaMinutes"),
+            destinationName: "Office",
+            isNavigating: defaults.bool(forKey: "widget.isNavigating"),
+            etaUpdatedAt: defaults.double(forKey: "widget.etaUpdatedAt") > 0
+                ? Date(timeIntervalSince1970: defaults.double(forKey: "widget.etaUpdatedAt"))
+                : nil
+        )
+        #expect(entry.etaMinutes == 0)
+        #expect(entry.isStale == true, "no recent stamp should keep a stale near-arrival ETA presented as fresh")
+
+        // The linger keeps polling; further ticks must NOT spam reloads.
+        manager.syncFromEngine(engine, now: now.addingTimeInterval(2), reload: { _ in arrivalReloads += 1 })
+        #expect(arrivalReloads == 1, "the arrival reload is one-shot for the linger")
 
         manager.stopObserving()
         engine.stopNavigation()
