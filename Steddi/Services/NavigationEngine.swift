@@ -78,6 +78,33 @@ final class NavigationEngine {
     var speedLimitMph: Double? = nil
     var speedLimitIsEstimated = false
 
+    // MARK: - Unit-aware speed readout
+    //
+    // Speed stays internally in mph: OSM `maxspeed` is mph-canonical and the
+    // over-limit / camera comparisons all reason in mph. These accessors are the
+    // single conversion point for *display*, honoring the user's distance-unit
+    // preference (mph for miles, km/h for kilometers) so the HUD speedometer and
+    // speed-limit readout aren't pinned to imperial for a kilometers user.
+
+    /// Current GPS speed as a whole number in the user's velocity unit.
+    var currentSpeedValue: Int { MeasurementUnit.current.speedValue(mph: currentSpeedMph) }
+
+    /// Posted/estimated speed limit as a whole number in the user's velocity
+    /// unit, or nil when no limit is known.
+    var speedLimitValue: Int? { speedLimitMph.map { MeasurementUnit.current.speedValue(mph: $0) } }
+
+    /// The velocity-unit abbreviation to label the speedometer with (mph / km/h).
+    var speedUnitLabel: String { MeasurementUnit.current.speedAbbreviation }
+
+    /// Spoken velocity unit for the speedometer accessibility label
+    /// ("miles per hour" / "kilometers per hour").
+    var spokenSpeedUnit: String {
+        switch MeasurementUnit.current {
+        case .miles: return "miles per hour"
+        case .kilometers: return "kilometers per hour"
+        }
+    }
+
     /// The enforcement camera currently being approached, for the overlay banner.
     /// Set when `checkSpeedCameraProximity` first detects a camera ahead, cleared
     /// once the driver passes it (no longer in range). Observable so the overlay
