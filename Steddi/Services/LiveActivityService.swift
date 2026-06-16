@@ -64,6 +64,19 @@ final class LiveActivityService {
         self.tripContext = tripContext
         // Fresh session — clear the prior session's end latch so updates flow.
         self.sessionEnded = false
+
+        // Mirror the user's chosen accent into the shared App Group so the Live
+        // Activity (a separate extension target that can't see SteddiTheme) can
+        // tint its maneuver glyph / trip-leg label to match the in-app HUD
+        // instead of a hardcoded lavender. Written at session start, so the
+        // Activity reads the accent that's current for this drive. The accent
+        // lives in UserDefaults.standard (@AppStorage), which the extension
+        // can't read — only the App Group is shared.
+        UserDefaults(suiteName: "group.to.nathancurtis.steddi")?.set(
+            SteddiTheme.currentAccentOption.rawValue,
+            forKey: "accentColor"
+        )
+
         let attributes = NavigationAttributes(destinationName: destinationName)
 
         // Seed from the route's expected travel time / total distance so the very
