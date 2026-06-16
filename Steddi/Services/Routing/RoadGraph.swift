@@ -222,6 +222,12 @@ struct RoadGraph: Sendable {
         headingToleranceDegrees: Double = 50
     ) -> GraphSnap? {
         guard !edges.isEmpty else { return nil }
+        // A non-finite (NaN/infinite) coordinate — bad GPS, an uninitialized
+        // coord, or `kCLLocationCoordinate2DInvalid` — would trap in
+        // `cellIndex` (`Int(floor(NaN))` fatal-errors). Fail clean instead so
+        // the caller falls back to MapKit routing rather than crashing the
+        // drive (CustomRouter's "never strands a drive" contract).
+        guard coord.latitude.isFinite, coord.longitude.isFinite else { return nil }
         let centerLat = GraphSpatialIndex.cellIndex(coord.latitude)
         let centerLon = GraphSpatialIndex.cellIndex(coord.longitude)
         let radius = GraphSpatialIndex.cellSearchRadius(
