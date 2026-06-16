@@ -35,7 +35,6 @@ targets:
           - audio
           - location
           - fetch
-          - processing
         BGTaskSchedulerPermittedIdentifiers:
           - to.nathancurtis.steddi.commutecheck
         UIApplicationSceneManifest:
