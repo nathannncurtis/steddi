@@ -580,10 +580,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             return
         }
 
-        let distanceMiles = route.distance / 1609.34
-        let distanceText = distanceMiles < 10
-            ? String(format: "%.1f mi", distanceMiles)
-            : "\(Int(distanceMiles)) mi"
+        let distanceText = MeasurementUnit.current.formatDistance(meters: route.distance)
         let etaMinutes = Int(ceil(route.expectedTravelTime / 60))
 
         let routeInfo = CPListItem(text: "\(etaMinutes) min", detailText: distanceText)
