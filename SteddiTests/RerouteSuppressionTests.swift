@@ -459,6 +459,83 @@ struct RerouteSuppressionTests {
         #expect(!manager.isRerouteSuppressed(routeID: r.id, savingsSeconds: 999, now: Date()))
     }
 
+    @Test("A recovery splice suppresses the abandoned route from reroute suggestions")
+    func recoverySpliceSuppressesAbandonedRoute() {
+        let manager = NavigationStateManager()
+        let abandoned = route("Preferred (abandoned)")
+        let now = Date()
+
+        // Nothing suppressed before the splice.
+        #expect(!manager.isRerouteSuppressed(routeID: abandoned.id, savingsSeconds: 999, now: now))
+
+        // The recovery engine committed a rejoin splice onto the route the driver
+        // had deviated from. HomeView informs NSM of the abandoned route id.
+        manager.suppressRerouteAfterRecovery(abandonedRouteID: abandoned.id, at: now)
+
+        // Within the recovery cooldown the abandoned route is suppressed even at a
+        // large savings — the loop must not contest the recovery it just performed.
+        #expect(manager.isRerouteSuppressed(
+            routeID: abandoned.id, savingsSeconds: 999,
+            now: now.addingTimeInterval(60)
+        ))
+    }
+
+    @Test("A recovery splice suppresses ALL reroute candidates during the cooldown")
+    func recoverySpliceSuppressesAllCandidatesInCooldown() {
+        let manager = NavigationStateManager()
+        let abandoned = route("Preferred (abandoned)")
+        let alternate = route("Alternate B")
+        let now = Date()
+
+        manager.suppressRerouteAfterRecovery(abandonedRouteID: abandoned.id, at: now)
+
+        // The blanket recovery cooldown suppresses even an unrelated alternate, so
+        // the loop can't pop "switch to B" mid-recovery.
+        #expect(manager.isRerouteSuppressed(
+            routeID: alternate.id, savingsSeconds: 999,
+            now: now.addingTimeInterval(60)
+        ))
+    }
+
+    @Test("Recovery suppression lapses after the recovery cooldown window")
+    func recoverySuppressionLapsesAfterCooldown() {
+        let manager = NavigationStateManager()
+        let abandoned = route("Preferred (abandoned)")
+        let now = Date()
+
+        manager.suppressRerouteAfterRecovery(abandonedRouteID: abandoned.id, at: now)
+
+        // 6 minutes later (> the 5-min recovery cooldown) the loop is live again:
+        // the driver is back on the saved corridor, so its baseline is meaningful.
+        #expect(!manager.isRerouteSuppressed(
+            routeID: abandoned.id, savingsSeconds: 999,
+            now: now.addingTimeInterval(360)
+        ))
+    }
+
+    @Test("A nil abandoned route id records no recovery suppression")
+    func recoveryWithNilRouteSuppressesNothing() {
+        let manager = NavigationStateManager()
+        let some = route("Alternate")
+        let now = Date()
+
+        manager.suppressRerouteAfterRecovery(abandonedRouteID: nil, at: now)
+        #expect(!manager.isRerouteSuppressed(routeID: some.id, savingsSeconds: 999, now: now.addingTimeInterval(60)))
+    }
+
+    @Test("stopObserving clears the recovery suppression")
+    func stopObservingClearsRecoverySuppression() {
+        let manager = NavigationStateManager()
+        let abandoned = route("Preferred (abandoned)")
+        let now = Date()
+        manager.suppressRerouteAfterRecovery(abandonedRouteID: abandoned.id, at: now)
+        #expect(manager.isRerouteSuppressed(routeID: abandoned.id, savingsSeconds: 999, now: now.addingTimeInterval(60)))
+
+        manager.stopObserving()
+        // A fresh session must not inherit a stale recovery cooldown.
+        #expect(!manager.isRerouteSuppressed(routeID: abandoned.id, savingsSeconds: 999, now: now.addingTimeInterval(60)))
+    }
+
     @Test("stopObserving clears the declined-route memory")
     func stopObservingClearsDecline() {
         let manager = NavigationStateManager()
@@ -617,5 +694,53 @@ struct RerouteSuppressionAcrossAwaitTests {
 
         let suggestion = try #require(best, "An unsuppressed faster route must surface")
         #expect(suggestion.routeID == candidate.id)
+    }
+
+    /// End-to-end through the real candidate evaluator: after a recovery splice,
+    /// the post-splice snapshot must make `bestReroute` return nil for a genuinely
+    /// faster candidate during the recovery cooldown — so the loop can't contest
+    /// the recovery it just performed. This is the suppression the splice records.
+    @Test("A recovery splice suppresses bestReroute suggestions during the cooldown")
+    func recoverySpliceSuppressesBestReroute() async throws {
+        let manager = NavigationStateManager()
+        let abandoned = route("Preferred (abandoned)")
+        let candidate = route("Faster alternate")
+        let spliceTime = Date()
+
+        // The recovery engine committed a splice onto the abandoned route.
+        manager.suppressRerouteAfterRecovery(abandonedRouteID: abandoned.id, at: spliceTime)
+        let suppression = manager.rerouteSuppressionSnapshot()
+
+        let currentCoord = CLLocationCoordinate2D(latitude: 33.0, longitude: -117.0)
+        // A clearly faster candidate (840s vs 1200s baseline = 30% > 20% threshold)
+        // that would surface absent suppression.
+        let baseline = RouteETA(duration: 1200, isPathAware: true)
+        let best = await NavigationStateManager.bestReroute(
+            candidates: [fasterCandidate(id: candidate.id)],
+            currentCoord: currentCoord,
+            baseline: baseline,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            suppression: suppression,
+            // 1 minute after the splice — inside the recovery cooldown.
+            now: spliceTime.addingTimeInterval(60),
+            fetchETA: { _, _ in RouteETA(duration: 840, isPathAware: true) }
+        )
+
+        #expect(best == nil, "Within the recovery cooldown, the loop must not contest the just-committed splice")
+
+        // After the cooldown lapses, the same faster candidate surfaces again.
+        let after = await NavigationStateManager.bestReroute(
+            candidates: [fasterCandidate(id: candidate.id)],
+            currentCoord: currentCoord,
+            baseline: baseline,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            suppression: suppression,
+            now: spliceTime.addingTimeInterval(360), // > 5-min cooldown
+            fetchETA: { _, _ in RouteETA(duration: 840, isPathAware: true) }
+        )
+        let surfaced = try #require(after, "Past the recovery cooldown a faster route must surface again")
+        #expect(surfaced.routeID == candidate.id)
     }
 }

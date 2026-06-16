@@ -941,6 +941,7 @@ struct HomeView: View {
                         .mapGlassScrim(in: .circle)
                         .steddiGlass(tint: nil, interactive: true, in: .circle)
                 }
+                .accessibilityLabel("Settings")
             }
         }
         .padding(.horizontal, 16)
@@ -2386,7 +2387,12 @@ struct HomeView: View {
                     // filling with accent would be onAccent-on-text-safe-accent,
                     // a ~3:1 dark-on-darkened pairing in light theme.
                     .background(SteddiTheme.accentBrand, in: Capsule())
+                    // 13pt label + 2x7pt padding is ~31pt tall; floor the hit area
+                    // to the 44pt minimum (matches the New Commute pill).
+                    .frame(minHeight: 44)
+                    .contentShape(Capsule())
             }
+            .accessibilityLabel("Resume trip")
 
             Button {
                 dismissedResumeBanners.insert(trip.id)
@@ -2671,6 +2677,16 @@ struct HomeView: View {
             if spliced {
                 recoveriesThisTrip += 1
                 persistRecoveryBudget()
+                // The splice restarted the engine onto combined detour+saved-tail
+                // geometry, but the reroute loop's candidate snapshot/activeRouteID
+                // still reflect the pre-splice session — it would now measure the
+                // active baseline along the new spliced geometry while its candidate
+                // set still holds the alternates, and could pop a "faster route"
+                // card seconds after we announced and committed this recovery,
+                // contesting it. Cool down the reroute loop for the recovery window
+                // so it doesn't fight the recovery it just performed; record the
+                // abandoned saved route the splice is rejoining.
+                navStateManager.suppressRerouteAfterRecovery(abandonedRouteID: navigatedSavedRoute?.id)
             } else {
                 engine.clearOffRouteRecovery()
             }
@@ -3106,7 +3122,13 @@ private struct ExpandedSearchView: View {
                     Image(systemName: "arrow.left")
                         .font(.body.weight(.medium))
                         .foregroundStyle(SteddiTheme.accent)
+                        // Icon-only glyph is ~22pt; expand the hit area to the
+                        // 44pt minimum while keeping the glyph's size (matches the
+                        // clear button below). This is the only way out of search.
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Close search")
 
                 TextField("Search an address", text: $query)
                     .font(SteddiTheme.body(17))
@@ -3192,8 +3214,14 @@ private struct ExpandedSearchView: View {
                                         Image(systemName: "mappin.circle.fill")
                                             .font(.title3)
                                             .foregroundStyle(SteddiTheme.accent)
+                                            // Icon-only glyph is ~20pt; expand the
+                                            // hit area to the 44pt minimum so it's
+                                            // tappable next to the row's own action.
+                                            .frame(width: 44, height: 44)
+                                            .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel("Pin location")
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)

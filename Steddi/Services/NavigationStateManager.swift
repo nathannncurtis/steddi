@@ -98,6 +98,30 @@ final class NavigationStateManager {
     @ObservationIgnored
     private var dismissedSavingsSeconds: TimeInterval = 0
 
+    /// The route the driver was navigating when the off-route RECOVERY engine
+    /// last committed a rejoin splice, plus when. After a splice the engine is
+    /// restarted onto combined detour+tail geometry but the reroute loop's
+    /// candidate snapshot and `activeRouteID` still reflect the pre-splice
+    /// session, so the loop — now measuring the active baseline along the new
+    /// spliced geometry while its candidate set still holds the alternates — can
+    /// pop a "faster route" card seconds after the app just announced and committed
+    /// the recovery, contradicting itself. While inside the recovery cooldown the
+    /// loop suppresses reroute suggestions entirely so it never contests the
+    /// recovery it just performed; the abandoned route id is recorded so the
+    /// suppression is attributable (and unit-testable) and survives into the
+    /// `Sendable` snapshot the nonisolated loop reads. Set by
+    /// `suppressRerouteAfterRecovery`; cleared at session start/end.
+    @ObservationIgnored
+    private var recoveryAbandonedRouteID: UUID?
+    @ObservationIgnored
+    private var recoverySplicedAt: Date?
+
+    /// How long the reroute loop is suppressed after a recovery splice, so it
+    /// doesn't immediately contest the recovery it just committed. Generous enough
+    /// to outlast the spliced detour itself (after which the driver is back on the
+    /// saved corridor and the loop's baseline is meaningful again).
+    private static let rerouteRecoveryCooldown: TimeInterval = 300 // 5 min
+
     /// How long a just-declined route stays suppressed after "Stay".
     private static let rerouteDismissCooldown: TimeInterval = 600 // 10 min
     /// A re-suggestion within the cooldown is only allowed if the new savings
@@ -494,16 +518,44 @@ final class NavigationStateManager {
         let dismissedRouteID: UUID?
         let dismissedAt: Date?
         let dismissedSavingsSeconds: TimeInterval
+        /// The route abandoned at the last recovery splice, and when the splice
+        /// committed. While inside the recovery cooldown the loop suppresses ALL
+        /// reroute suggestions so it doesn't contest the recovery it just performed.
+        let recoveryAbandonedRouteID: UUID?
+        let recoverySplicedAt: Date?
 
-        /// Nothing declined — suppresses nothing. The state at session start and
-        /// after `clearDismissedReroute`; also the obvious test default.
-        static let none = RerouteSuppression(dismissedRouteID: nil, dismissedAt: nil, dismissedSavingsSeconds: 0)
+        /// Nothing declined or recovered — suppresses nothing. The state at session
+        /// start and after `clearDismissedReroute`; also the obvious test default.
+        static let none = RerouteSuppression(
+            dismissedRouteID: nil,
+            dismissedAt: nil,
+            dismissedSavingsSeconds: 0,
+            recoveryAbandonedRouteID: nil,
+            recoverySplicedAt: nil
+        )
 
-        /// Whether a candidate is suppressed by a prior "Stay" at evaluation time
-        /// `now`. Suppressed only while the same route is still inside the cooldown
-        /// window, unless the new savings beats the rejected savings by a material
-        /// margin. Pure (no actor access) — safe to call from the nonisolated loop.
+        /// Whether the reroute loop is inside the post-recovery cooldown at `now`.
+        /// A recently committed splice suppresses ALL reroute suggestions for the
+        /// cooldown window so the loop never pops a "faster route" card contesting
+        /// the recovery it just performed (the active baseline is measured along
+        /// the fresh spliced geometry while the candidate snapshot is still the
+        /// pre-splice one, so its comparison is not yet meaningful).
+        func isWithinRecoveryCooldown(now: Date) -> Bool {
+            guard let recoverySplicedAt else { return false }
+            return now.timeIntervalSince(recoverySplicedAt) < NavigationStateManager.rerouteRecoveryCooldown
+        }
+
+        /// Whether a candidate is suppressed at evaluation time `now`. Suppressed
+        /// when EITHER:
+        /// - a recovery splice committed within the recovery cooldown (suppresses
+        ///   every candidate — including the abandoned route the splice rejoins —
+        ///   so the loop doesn't fight the recovery), OR
+        /// - this same route was just declined ("Stay") and is still inside its
+        ///   dismiss cooldown, unless the new savings beats the rejected savings by
+        ///   a material margin.
+        /// Pure (no actor access) — safe to call from the nonisolated loop.
         func isSuppressed(routeID: UUID, savingsSeconds: TimeInterval, now: Date) -> Bool {
+            if isWithinRecoveryCooldown(now: now) { return true }
             guard routeID == dismissedRouteID, let dismissedAt else { return false }
             guard now.timeIntervalSince(dismissedAt) < NavigationStateManager.rerouteDismissCooldown else { return false }
             return savingsSeconds < dismissedSavingsSeconds + NavigationStateManager.rerouteResuggestMargin
@@ -816,8 +868,28 @@ final class NavigationStateManager {
         RerouteSuppression(
             dismissedRouteID: dismissedRouteID,
             dismissedAt: dismissedAt,
-            dismissedSavingsSeconds: dismissedSavingsSeconds
+            dismissedSavingsSeconds: dismissedSavingsSeconds,
+            recoveryAbandonedRouteID: recoveryAbandonedRouteID,
+            recoverySplicedAt: recoverySplicedAt
         )
+    }
+
+    /// The off-route recovery engine just committed a rejoin splice onto combined
+    /// detour+saved-tail geometry. The reroute loop's candidate snapshot and
+    /// `activeRouteID` still reflect the PRE-splice session, so without this it can
+    /// immediately surface a "faster route" card — contesting the recovery it just
+    /// announced and committed, the route the driver effectively abandoned by
+    /// deviating. HomeView calls this right after a successful `splice` with the id
+    /// of the route being driven (the abandoned saved route). It records the
+    /// abandoned route id and the splice time so the reroute loop suppresses
+    /// suggestions for a short cooldown (`rerouteRecoveryCooldown`) — mirroring the
+    /// "Stay" dismissed-route suppression, but blanket for the recovery window.
+    /// No-op when `routeID` is nil (the recovery wasn't on an identifiable saved
+    /// route), since there's then no reroute loop to contest anyway.
+    func suppressRerouteAfterRecovery(abandonedRouteID routeID: UUID?, at now: Date = Date()) {
+        guard let routeID else { return }
+        recoveryAbandonedRouteID = routeID
+        recoverySplicedAt = now
     }
 
     /// Whether a candidate route is currently suppressed because the driver just
@@ -834,6 +906,8 @@ final class NavigationStateManager {
         dismissedRouteID = nil
         dismissedAt = nil
         dismissedSavingsSeconds = 0
+        recoveryAbandonedRouteID = nil
+        recoverySplicedAt = nil
     }
 
     func stopObserving() {
