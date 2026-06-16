@@ -299,15 +299,15 @@ struct DefaultCostModel: SearchCost {
 
         var time = Double(edge.lengthMeters) / speed   // free-flow seconds (the floor)
 
-        // Hard/soft no-go zones need the edge's geometry, which costs an O(fan-out)
-        // edge-index resolution + slice. In the common path (no zones configured)
-        // skip it entirely — edgeCost is the single hottest function in A*, and
-        // resolving geometry only to discard it would scale search latency with
-        // node degree, undoing the dense-CSR design. Resolved once and shared by
-        // the hard- and soft-zone checks below.
+        // Hard/soft no-go zones need the edge's geometry. The `GraphEdge` already
+        // carries its own `geometryRange`, so the slice is O(1) directly off the
+        // flat coord pool — no edge-index relookup. In the common path (no zones
+        // configured) skip it entirely: edgeCost is the single hottest function
+        // in A*, and even the O(1) slice is wasted work when nothing reads it.
+        // Resolved once and shared by the hard- and soft-zone checks below.
         let geom: ArraySlice<CLLocationCoordinate2D>?
         if !context.hardZones.isEmpty || !context.softZones.isEmpty {
-            geom = graph.geometry(of: edgeIndexForCost(edge, in: graph))
+            geom = Self.geometry(of: edge, in: graph)
         } else {
             geom = nil
         }
@@ -429,7 +429,7 @@ struct DefaultCostModel: SearchCost {
     /// Bearing over the last geometry segment of `edge` (direction of travel into
     /// the destination node).
     static func approachBearing(of edge: GraphEdge, in graph: RoadGraph) -> Double {
-        let coords = graph.geometry(of: edgeIndex(of: edge, in: graph))
+        let coords = geometry(of: edge, in: graph)
         let pts = Array(coords)
         guard pts.count >= 2 else { return 0 }
         return RouteGeometry.bearing(from: pts[pts.count - 2], to: pts[pts.count - 1])
@@ -438,7 +438,7 @@ struct DefaultCostModel: SearchCost {
     /// Bearing over the first geometry segment of `edge` (direction of travel out
     /// of the origin node).
     static func departureBearing(of edge: GraphEdge, in graph: RoadGraph) -> Double {
-        let coords = graph.geometry(of: edgeIndex(of: edge, in: graph))
+        let coords = geometry(of: edge, in: graph)
         let pts = Array(coords)
         guard pts.count >= 2 else { return 0 }
         return RouteGeometry.bearing(from: pts[0], to: pts[1])
@@ -446,22 +446,18 @@ struct DefaultCostModel: SearchCost {
 
     // MARK: - Edge geometry resolution
 
-    /// Locate an edge's index so its geometry slice can be read. Edges don't carry
-    /// their own index, so resolve by the (from, to, geometryRange) identity over
-    /// the from-node's out-edges (CSR adjacency, small fan-out).
-    private static func edgeIndex(of edge: GraphEdge, in graph: RoadGraph) -> EdgeIndex {
-        let range = graph.outEdgeRange(of: edge.from)
-        for e in range {
-            let candidate = graph.edges[Int(e)]
-            if candidate.to == edge.to && candidate.geometryRange == edge.geometryRange {
-                return e
-            }
-        }
-        // Fallback: first out-edge (degenerate; geometry lookups tolerate it).
-        return range.lowerBound
-    }
-
-    private func edgeIndexForCost(_ edge: GraphEdge, in graph: RoadGraph) -> EdgeIndex {
-        Self.edgeIndex(of: edge, in: graph)
+    /// An edge's geometry slice, in travel direction — read in O(1) directly from
+    /// the edge's own `geometryRange` against the flat coord pool, with no
+    /// edge-index relookup. The previous identity scan over the from-node's
+    /// out-edges was O(node-degree) and ran per `edgeCost` call whenever a no-go
+    /// zone was configured, quietly turning each A* node expansion quadratic in
+    /// degree; the `GraphEdge` already carries the range, so the scan was pure
+    /// waste. Mirrors `RoadGraph.geometry(of:)`'s bounds guards so an out-of-range
+    /// or inverted range yields an empty slice rather than trapping.
+    static func geometry(of edge: GraphEdge, in graph: RoadGraph) -> ArraySlice<CLLocationCoordinate2D> {
+        let range = edge.geometryRange
+        guard range.lowerBound >= 0, range.upperBound <= Int32(graph.geometry.count),
+              range.lowerBound <= range.upperBound else { return ArraySlice() }
+        return graph.geometry[Int(range.lowerBound)..<Int(range.upperBound)]
     }
 }
