@@ -155,7 +155,9 @@ final class RoadConditionService {
         on route: Route
     ) -> [RoadCondition] {
         let index = indexFor(route)
-        return index.candidates(near: coordinate)
+        // Pass the query radius so the ring scan covers it at any latitude — a
+        // fixed 3×3 block would silently truncate any radius beyond one cell width.
+        return index.candidates(near: coordinate, radiusMeters: radiusMeters)
             .filter { RouteGeometry.haversineDistance(from: coordinate, to: $0.coordinate) <= radiusMeters }
             .sorted { lhs, rhs in
                 RouteGeometry.haversineDistance(from: coordinate, to: lhs.coordinate)
@@ -195,7 +197,9 @@ final class RoadConditionService {
         proximityThresholdMeters: CLLocationDistance
     ) -> RoadCondition? {
         let index = indexFor(route)
-        let nearby = index.candidates(near: currentCoord)
+        // Size the ring to the proximity threshold so a hit near a longitudinal
+        // cell boundary at high latitude isn't dropped before the distance filter.
+        let nearby = index.candidates(near: currentCoord, radiusMeters: proximityThresholdMeters)
         return Self.checkProximityToConditions(
             currentCoord: currentCoord,
             routeConditions: nearby,
@@ -253,9 +257,15 @@ final class RoadConditionService {
 /// found within the proximity radius. Immutable once built — the service throws
 /// it away and rebuilds on mutation rather than mutating in place.
 struct RoadConditionGridIndex {
-    /// Degrees per cell. ~0.002° ≈ 222m N/S, which comfortably exceeds the 100m
-    /// proximity threshold so the center-plus-neighbors search can't miss a hit.
+    /// Degrees per cell. ~0.002° ≈ 222m N/S. Cells are narrowest in longitude
+    /// (`cos(lat)` shrinks east-west spacing), so a fixed 3×3 block can miss an
+    /// in-radius condition at high latitude — `candidates(near:radiusMeters:)`
+    /// sizes its ring against the radius instead.
     static let cellSizeDegrees = 0.002
+
+    /// Default query radius when a caller doesn't specify one. Matches the 100m
+    /// nav-time proximity threshold used by `checkProximityToConditions`.
+    static let defaultRadiusMeters: CLLocationDistance = 100
 
     private let conditions: [RoadCondition]
     private let grid: [GridKey: [Int]]
@@ -270,19 +280,49 @@ struct RoadConditionGridIndex {
         self.grid = grid
     }
 
-    /// Conditions in the cell containing `coordinate` and its 8 neighbors.
-    func candidates(near coordinate: CLLocationCoordinate2D) -> [RoadCondition] {
+    /// Conditions in the cell containing `coordinate` plus a square ring of
+    /// neighbors sized to cover `radiusMeters`. A query point can sit anywhere in
+    /// its cell, so a fixed 3×3 block only guarantees coverage to ONE cell width —
+    /// and the cell is narrowest in longitude (`cos(lat)` shrinks east-west
+    /// spacing), so a condition within the proximity radius could be dropped at
+    /// high latitude. The ring radius is therefore derived from `radiusMeters`
+    /// against the conservative longitude axis (mirrors `SpeedCameraGridIndex` and
+    /// `GraphSpatialIndex.cellSearchRadius`).
+    func candidates(
+        near coordinate: CLLocationCoordinate2D,
+        radiusMeters: CLLocationDistance = RoadConditionGridIndex.defaultRadiusMeters
+    ) -> [RoadCondition] {
         let centerLat = Self.cellIndex(coordinate.latitude)
         let centerLon = Self.cellIndex(coordinate.longitude)
+        let ring = Self.cellSearchRadius(forMaxDistanceMeters: radiusMeters, atLatitude: coordinate.latitude)
         var result: [RoadCondition] = []
-        for dLat in -1...1 {
-            for dLon in -1...1 {
+        for dLat in -ring...ring {
+            for dLon in -ring...ring {
                 if let indices = grid[GridKey(lat: centerLat + dLat, lon: centerLon + dLon)] {
                     for i in indices { result.append(conditions[i]) }
                 }
             }
         }
         return result
+    }
+
+    /// The neighbor-cell ring radius needed for `candidates` to cover
+    /// `maxDistanceMeters` at `latitude`. A query point can sit anywhere in its
+    /// cell, so the guaranteed distance from the point to the outer edge of a
+    /// radius-`r` ring is `r` whole cells (worst case: the point sits on the near
+    /// boundary). The ring must therefore span at least
+    /// `ceil(maxDistanceMeters / metersPerCell)` cells. Cells are narrowest in
+    /// longitude (`cos(lat)`), so size against that conservative axis. Always ≥ 1
+    /// to preserve the original 3×3 behavior.
+    static func cellSearchRadius(forMaxDistanceMeters maxDistanceMeters: Double, atLatitude latitude: Double) -> Int {
+        guard maxDistanceMeters > 0 else { return 1 }
+        let metersPerDegreeLat = 111_320.0
+        // Clamp the cosine to a small floor so an extreme/garbage latitude can't
+        // blow the radius up.
+        let cosLat = max(0.1, cos(latitude * .pi / 180))
+        let metersPerCell = cellSizeDegrees * metersPerDegreeLat * cosLat
+        guard metersPerCell > 0 else { return 1 }
+        return max(1, Int(ceil(maxDistanceMeters / metersPerCell)))
     }
 
     /// Number of occupied cells — exposed for tests asserting index shape.

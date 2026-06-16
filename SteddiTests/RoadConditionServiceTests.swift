@@ -17,6 +17,13 @@ private func north(of base: CLLocationCoordinate2D, meters: Double) -> CLLocatio
     CLLocationCoordinate2D(latitude: base.latitude + meters / 111_320.0, longitude: base.longitude)
 }
 
+/// A coordinate offset roughly `meters` east of a base point, accounting for the
+/// `cos(lat)` shrink of longitudinal spacing toward the poles.
+private func east(of base: CLLocationCoordinate2D, meters: Double) -> CLLocationCoordinate2D {
+    let metersPerDegLon = 111_320.0 * cos(base.latitude * .pi / 180)
+    return CLLocationCoordinate2D(latitude: base.latitude, longitude: base.longitude + meters / metersPerDegLon)
+}
+
 private let downtown = CLLocationCoordinate2D(latitude: 34.0522, longitude: -118.2437)
 
 private func makeCondition(
@@ -87,6 +94,64 @@ struct RoadConditionGridIndexTests {
         #expect(RoadConditionGridIndex.cellIndex(-118.2437) == -59122)
         #expect(RoadConditionGridIndex.cellIndex(0.0) == 0)
         #expect(RoadConditionGridIndex.cellIndex(0.0021) == 1)
+    }
+
+    @Test("A condition within the radius due east is found at a high latitude")
+    func findsHighLatitudeEastCondition() {
+        // Anchorage (~61°N): a 0.002° cell is only ~108m wide E/W, so a fixed 3×3
+        // scan guarantees coverage to just ~108m — under the 100m radius once the
+        // query point sits near the cell's east edge. A condition ~90m due east
+        // must still surface via the latitude-robust ring.
+        let anchorage = CLLocationCoordinate2D(latitude: 61.2181, longitude: -149.9003)
+        let cond = makeCondition(at: east(of: anchorage, meters: 90))
+        // Sanity: it really is inside the 100m radius.
+        #expect(RouteGeometry.haversineDistance(from: anchorage, to: cond.coordinate) <= 100)
+        let index = RoadConditionGridIndex(conditions: [cond])
+        let found = index.candidates(near: anchorage, radiusMeters: 100)
+        #expect(found.contains { $0.id == cond.id })
+    }
+
+    @Test("High-latitude condition near a cell boundary surfaces from the worst-case offset")
+    func findsHighLatitudeBoundaryCondition() {
+        // Pin the query point hard against the eastern edge of its cell — the
+        // worst case for the ring — then a condition ~95m further east must still
+        // be reachable.
+        let baseLat = 61.0
+        let cellWidthLon = RoadConditionGridIndex.cellSizeDegrees
+        let cellLon = floor(-150.0 / cellWidthLon)
+        let query = CLLocationCoordinate2D(
+            latitude: baseLat,
+            longitude: (cellLon + 1) * cellWidthLon - 0.0000001
+        )
+        let cond = makeCondition(at: east(of: query, meters: 95))
+        #expect(RouteGeometry.haversineDistance(from: query, to: cond.coordinate) <= 100)
+        let index = RoadConditionGridIndex(conditions: [cond])
+        #expect(index.candidates(near: query, radiusMeters: 100).contains { $0.id == cond.id })
+    }
+
+    @Test("cellSearchRadius grows with latitude to keep the radius covered")
+    func cellSearchRadiusLatitudeRobust() {
+        let r = 100.0
+        let socal = RoadConditionGridIndex.cellSearchRadius(forMaxDistanceMeters: r, atLatitude: 34.0)
+        let anchorage = RoadConditionGridIndex.cellSearchRadius(forMaxDistanceMeters: r, atLatitude: 61.0)
+        // Always at least the original 3×3 behavior, and never shrinking as the
+        // cell narrows toward the pole.
+        #expect(socal >= 1)
+        #expect(anchorage >= socal)
+        // The guaranteed-covered distance (ring cells × E/W meters-per-cell) must
+        // reach the radius at the high latitude.
+        let metersPerCellAnchorage = RoadConditionGridIndex.cellSizeDegrees * 111_320.0 * cos(61.0 * .pi / 180)
+        #expect(Double(anchorage) * metersPerCellAnchorage >= r)
+    }
+
+    @Test("A far-away high-latitude condition is still excluded by the ring")
+    func excludesFarHighLatitudeCondition() {
+        // The radius-aware ring must not over-collect: a condition ~5km east is
+        // far outside a 100m radius and must not be a candidate.
+        let anchorage = CLLocationCoordinate2D(latitude: 61.2181, longitude: -149.9003)
+        let far = makeCondition(at: east(of: anchorage, meters: 5_000))
+        let index = RoadConditionGridIndex(conditions: [far])
+        #expect(index.candidates(near: anchorage, radiusMeters: 100).isEmpty)
     }
 }
 
