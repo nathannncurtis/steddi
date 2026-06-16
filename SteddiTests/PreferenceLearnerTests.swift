@@ -202,6 +202,58 @@ struct PrefLearnerInvariantTests {
         #expect(w.unprotectedLeftBase >= 0)
     }
 
+    @Test("Turn even-share denominator counts BROAD buckets, not raw sub-categories")
+    func turnPenaltyEvenShareUsesBroadBuckets() {
+        // Driver makes equal LEFT and RIGHT maneuvers (50/50), but the LEFT total is
+        // split across two raw sub-categories (.left + .slightLeft) while RIGHT is a
+        // single .right bucket. Aggregated to the broad buckets the penalties model
+        // there are exactly TWO kinds (left, right) each at a 0.5 share == the even
+        // share, so NEITHER side reveals a preference: every turn penalty must stay
+        // at its seed.
+        //
+        // The old buggy code counted 3 raw kinds (evenShare 0.333): the aggregated
+        // left share (0.5) would read as favoured (discount) while right (0.5) would
+        // also read as favoured — both moving OFF seed for a perfectly balanced
+        // driver. This asserts the like-for-like fix.
+        let u = usage(metersByClass: [.tertiary: 1000],
+                      turns: [.left: 25, .slightLeft: 25, .right: 50])
+        let seed = CostWeights.default
+        let w = PrefLearner.weights(from: u, seed: seed)
+        #expect(abs(w.rightTurnPenalty - seed.rightTurnPenalty) < 1e-9)
+        #expect(abs(w.protectedLeftPenalty - seed.protectedLeftPenalty) < 1e-9)
+        #expect(abs(w.unprotectedLeftBase - seed.unprotectedLeftBase) < 1e-9)
+    }
+
+    @Test("Learned turn penalty distributes correctly: favoured side down, shunned side up")
+    func turnPenaltyDistributesAcrossKinds() {
+        // Two broad buckets used (left, right). The driver strongly FAVOURS right
+        // (share 0.8 > even 0.5 ⇒ affinity +) and AVOIDS left (share 0.2 < 0.5 ⇒
+        // affinity −). The right penalty must drop below seed; both left penalties
+        // must rise above seed. The .slightRight/.right split must NOT change the
+        // outcome vs. a single .right of the same total (broad-bucket aggregation).
+        let seed = CostWeights.default
+        let split = usage(metersByClass: [.tertiary: 1000],
+                          turns: [.right: 40, .slightRight: 40, .left: 20])
+        let w = PrefLearner.weights(from: split, seed: seed)
+
+        // Favoured right ⇒ discounted toward 0; shunned left ⇒ penalised upward.
+        #expect(w.rightTurnPenalty < seed.rightTurnPenalty)
+        #expect(w.protectedLeftPenalty > seed.protectedLeftPenalty)
+        #expect(w.unprotectedLeftBase > seed.unprotectedLeftBase)
+        // Invariants preserved.
+        #expect(w.rightTurnPenalty >= 0)
+        #expect(w.protectedLeftPenalty >= 0)
+
+        // Aggregation invariance: collapsing the split right into one .right bucket
+        // of the same total yields the SAME learned penalties.
+        let merged = usage(metersByClass: [.tertiary: 1000],
+                           turns: [.right: 80, .left: 20])
+        let wMerged = PrefLearner.weights(from: merged, seed: seed)
+        #expect(abs(w.rightTurnPenalty - wMerged.rightTurnPenalty) < 1e-9)
+        #expect(abs(w.protectedLeftPenalty - wMerged.protectedLeftPenalty) < 1e-9)
+        #expect(abs(w.unprotectedLeftBase - wMerged.unprotectedLeftBase) < 1e-9)
+    }
+
     @Test("A favoured class can't be discounted past its clamp")
     func discountClamped() {
         let u = usage(metersByClass: [.tertiary: 9000, .primary: 1000])
