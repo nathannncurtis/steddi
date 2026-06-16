@@ -581,9 +581,54 @@ struct RoadGraphBuilderDegenerateTests {
             nodeJSON(2, 0.0, 0.001),
             wayElementJSON(100, nodes: [1, 1, 2], tags: ["highway": "residential"])
         )
-        // Node 1 is the start endpoint; the repeated 1 raises its refCount so it
-        // is promoted, but a 1→1 segment is guarded out. A valid 1→2 pair stands.
+        // Node 1 is the start endpoint so it is promoted regardless; a 1→1
+        // segment is guarded out. A valid 1→2 pair stands. The repeated 1 does
+        // NOT inflate node 1's distinct-way count (it is still one way), so node
+        // 1 is not an intersection.
         #expect(graph.edges.allSatisfy { $0.from != $0.to })
         #expect(graph.edges.contains { $0.lengthMeters > 0 })
+        #expect(!graph.nodes[Int(graph.osmToIndex[1]!)].isIntersection)
+    }
+
+    /// A single self-touching way (a closed loop returning to its start, e.g. a
+    /// cul-de-sac ring or roundabout drawn as one way) references its start node
+    /// twice. Because only ONE way passes through it, that node must NOT be
+    /// flagged `isIntersection` — intersection means ≥2 DISTINCT ways meet.
+    @Test("Self-touching loop node from one way is not an intersection")
+    func selfTouchingLoopIsNotIntersection() {
+        // One way 1-2-3-1: a triangular loop. Node 1 appears twice (start + end)
+        // but is touched by a single way, so it is an endpoint graph node yet
+        // not an intersection.
+        let graph = buildGraph(
+            nodeJSON(1, 0.0, 0.0),
+            nodeJSON(2, 0.0, 0.001),
+            nodeJSON(3, 0.001, 0.0005),
+            wayElementJSON(100, nodes: [1, 2, 3, 1], tags: ["highway": "residential"])
+        )
+        // Node 1 is promoted (it is the way's endpoint) but is NOT an
+        // intersection: only one distinct way references it.
+        let idx1 = Int(graph.osmToIndex[1]!)
+        #expect(!graph.nodes[idx1].isIntersection)
+        // No node in this single-way graph is an intersection.
+        #expect(graph.nodes.allSatisfy { !$0.isIntersection })
+    }
+
+    /// Contrast: when a SECOND distinct way also references the loop's node, the
+    /// node genuinely has ≥2 ways through it and IS an intersection — proving
+    /// the distinct-way count, not raw references, drives the flag.
+    @Test("Loop node shared by a second way is an intersection")
+    func loopNodeSharedBySecondWayIsIntersection() {
+        // Way A 1-2-3-1 loops through node 1 twice. Way B 1-4 also touches node
+        // 1, making it a true junction of two distinct ways.
+        let graph = buildGraph(
+            nodeJSON(1, 0.0, 0.0),
+            nodeJSON(2, 0.0, 0.001),
+            nodeJSON(3, 0.001, 0.0005),
+            nodeJSON(4, -0.001, 0.0),
+            wayElementJSON(100, nodes: [1, 2, 3, 1], tags: ["highway": "residential"]),
+            wayElementJSON(101, nodes: [1, 4], tags: ["highway": "residential"])
+        )
+        let idx1 = Int(graph.osmToIndex[1]!)
+        #expect(graph.nodes[idx1].isIntersection)
     }
 }
