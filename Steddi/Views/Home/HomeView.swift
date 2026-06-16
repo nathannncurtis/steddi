@@ -3483,6 +3483,16 @@ private struct AddLocationSheet: View {
             icon: selectedIcon,
             category: selectedCategory.key
         ))
+        // Persist explicitly so the new pin is durable the moment the user
+        // commits — relying on SwiftData autosave can lose it to suspension or
+        // an OOM kill before the next run-loop tick. Matches the explicit save
+        // for the same PinnedLocation type in LocationPickerView and the
+        // other write paths in this view.
+        do {
+            try modelContext.save()
+        } catch {
+            print("[STEDDI] failed to save PinnedLocation: \(error.localizedDescription)")
+        }
     }
 }
 
