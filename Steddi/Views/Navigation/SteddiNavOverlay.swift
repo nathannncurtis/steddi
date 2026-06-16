@@ -638,9 +638,19 @@ struct SteddiNavOverlay: View {
         HStack(spacing: 12) {
             Image(systemName: camera.kind.icon)
                 .font(.system(size: 18 * iconScale, weight: .semibold))
-                .foregroundStyle(camera.kind.color)
+                // The glyph sits ON a chip filled with the kind's own color, so it
+                // must contrast that FILL — drawing it in the same color family
+                // washed it out on a same-hue fill in light/dynamic-day themes
+                // (~1.2:1 amber, ~2.0:1 warmRed). `contrastingForeground(on:)`
+                // picks the legible near-black/white per fill, clearing the 3:1
+                // glyph floor in every theme — the established on-fill rule (see
+                // RoadConditionKind.selectedChipForeground). The chip carries the
+                // full kind color so contrast is carried by the fill, and the
+                // soft shadow matches the banner's sibling labels.
+                .foregroundStyle(SteddiTheme.contrastingForeground(on: camera.kind.kindRGB))
                 .frame(width: 34 * iconScale, height: 34 * iconScale)
-                .background(camera.kind.color.opacity(0.16), in: RoundedRectangle(cornerRadius: 10))
+                .background(camera.kind.color, in: RoundedRectangle(cornerRadius: 10))
+                .legibleOverMap()
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(camera.kind.displayName) ahead")
