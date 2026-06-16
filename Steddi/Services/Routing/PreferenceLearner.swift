@@ -293,9 +293,21 @@ enum PrefLearner {
         // tolerance for it ⇒ lower its penalty (toward 0); one they shun ⇒ raise
         // it. We compare each maneuver's observed share against an even share over
         // the maneuver types the driver actually made.
-        let turnTotal = usage.turnCounts.values.reduce(0, +)
+        //
+        // The penalties model BROAD buckets — one "right" (slightRight+right), one
+        // "left" (slightLeft+left), plus straight/uTurn (`DefaultCostModel.turnCost`
+        // collapses the slight/sharp variants into a single penalty). So the
+        // even-share denominator must be counted over those SAME broad buckets, or
+        // numerator and denominator are computed over mismatched groupings: a driver
+        // who makes both .left and .slightLeft turns would otherwise inflate the
+        // kind count (smaller even share) while their aggregated left count is
+        // measured against it, skewing the learned penalty (the share could even
+        // flip sign). Collapse to broad buckets BEFORE computing usedKinds/turnTotal
+        // so the comparison is like-for-like with `adjustedTurnPenalty`'s numerator.
+        let broadTurnCounts = broadTurnBuckets(usage.turnCounts)
+        let turnTotal = broadTurnCounts.values.reduce(0, +)
         if turnTotal > 0 {
-            let usedKinds = usage.turnCounts.filter { $0.value > 0 }.count
+            let usedKinds = broadTurnCounts.filter { $0.value > 0 }.count
             let evenTurnShare = usedKinds > 0 ? 1.0 / Double(usedKinds) : 0
             tuned.rightTurnPenalty = adjustedTurnPenalty(
                 seed.rightTurnPenalty, kind: .right, usage: usage,
@@ -309,6 +321,25 @@ enum PrefLearner {
         }
 
         return tuned
+    }
+
+    /// Collapse raw `TurnDirection` counts into the BROAD maneuver buckets the
+    /// turn penalties actually model: one aggregated "right" (slightRight+right),
+    /// one aggregated "left" (slightLeft+left), and straight/uTurn unchanged. Both
+    /// the even-share denominator (number of broad buckets used) and the affinity
+    /// numerator (`adjustedTurnPenalty`'s aggregated count) are derived from this
+    /// SAME grouping so the per-turn share is computed like-for-like. Keyed by a
+    /// representative `TurnDirection` (.right / .left for the aggregates).
+    private static func broadTurnBuckets(_ counts: [TurnDirection: Int]) -> [TurnDirection: Int] {
+        var broad: [TurnDirection: Int] = [:]
+        for (kind, n) in counts where n > 0 {
+            switch kind {
+            case .right, .slightRight: broad[.right, default: 0] += n
+            case .left, .slightLeft: broad[.left, default: 0] += n
+            default: broad[kind, default: 0] += n
+            }
+        }
+        return broad
     }
 
     /// Move one turn penalty toward 0 (if the driver tolerates the maneuver) or up
