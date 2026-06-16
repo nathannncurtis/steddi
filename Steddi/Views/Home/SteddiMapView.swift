@@ -206,15 +206,30 @@ class SteddiMapContainer: UIViewController, UIGestureRecognizerDelegate {
         //
         // In LANDSCAPE the overlay's control cluster + ETA bar live bottom-LEADING
         // instead, so the chip stays on the TRAILING side there. Either way it sits
-        // above the bottom bar (height-200) and inside the horizontal safe area.
+        // above the bottom bar and inside the horizontal safe area.
         let recenterSize: CGFloat = 44
         let isLandscape = view.bounds.width > view.bounds.height
         let recenterX: CGFloat = isLandscape
             ? view.bounds.width - insets.right - 16 - recenterSize
             : insets.left + 16
+        // Anchor the chip dynamically above the bottom bar + safe area instead of
+        // a fixed `height - 200`. The nav overlay's bottom bar scales with the
+        // user's icon scale (speedometer = 64*iconScale framed in 14pt vertical
+        // padding, mirroring SteddiNavOverlay.bottomBar), so at large Dynamic
+        // Type / Accessibility icon scale a fixed 200pt line fell INSIDE the bar
+        // (and the reroute/camera banners that stack above it), hiding the only
+        // mid-drive exit from free-look back to follow mode. Derive the clearance
+        // from the actual scaled bar height + the home-indicator safe area, with
+        // the original 200pt as a never-lower-than floor so this only ever lifts
+        // the chip at large scales, never drops it below where it sat before.
+        let iconScale = CGFloat(DisplayModeService.shared.iconScale)
+        let scaledBottomBarHeight = 64 * iconScale + 28      // speedometer + 14*2 vpad
+        let clearance: CGFloat = 24                          // gap above the bar
+        let dynamicBottomOffset = insets.bottom + scaledBottomBarHeight + clearance
+        let recenterY = view.bounds.height - max(200, dynamicBottomOffset + recenterSize)
         recenterButton?.frame = CGRect(
             x: recenterX,
-            y: view.bounds.height - 200,
+            y: recenterY,
             width: recenterSize,
             height: recenterSize
         )
