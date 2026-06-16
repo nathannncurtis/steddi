@@ -92,11 +92,17 @@ struct NoGoZoneEditorView: View {
             // a sub-44pt near-miss would otherwise fall through and drop a point
             // or pan. Matches the 44pt convention used by the zoom buttons here
             // and the HomeView gear / Settings swatches.
+            // These controls float over the live tap-to-draw map, so they route
+            // through the shared `steddiGlass` treatment (like the nav HUD / home
+            // search pill): translucent Liquid Glass normally, but a SOLID
+            // surface fallback under Reduce Transparency / Increase Contrast
+            // (`!SteddiGlass.isAvailable`) so the map cartography can't bleed
+            // through behind the labels for a user who asked for opaque chrome.
             Button("Cancel") { dismiss() }
                 .font(.body.weight(.medium))
                 .foregroundStyle(SteddiTheme.textPrimary)
                 .padding(10)
-                .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Capsule())
+                .steddiGlass(interactive: true, in: Capsule())
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Capsule())
 
@@ -107,7 +113,7 @@ struct NoGoZoneEditorView: View {
                     .font(.body.weight(.medium))
                     .foregroundStyle(SteddiTheme.accent)
                     .padding(10)
-                    .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Circle())
+                    .steddiGlass(interactive: true, in: Circle())
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Circle())
             }
@@ -118,7 +124,7 @@ struct NoGoZoneEditorView: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(canSave ? SteddiTheme.accent : SteddiTheme.textMuted)
                 .padding(10)
-                .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Capsule())
+                .steddiGlass(interactive: true, in: Capsule())
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Capsule())
                 .disabled(!canSave)
@@ -138,7 +144,10 @@ struct NoGoZoneEditorView: View {
             modeButton(.namedRoad, "Road", "signpost.right.fill")
         }
         .padding(10)
-        .background(SteddiTheme.surfacePrimary.opacity(0.9), in: RoundedRectangle(cornerRadius: 14))
+        // Floats over the live map — shared glass treatment so it falls back to a
+        // SOLID surface under Reduce Transparency / Increase Contrast instead of a
+        // translucent fill the cartography bleeds through.
+        .steddiGlass(in: RoundedRectangle(cornerRadius: 14))
         .padding(.horizontal, 16)
         .padding(.top, 10)
     }
@@ -156,6 +165,11 @@ struct NoGoZoneEditorView: View {
     }
 
     // MARK: - Bottom card
+
+    /// Top-rounded shape shared by the bottom card's glass surface and its clip.
+    private var bottomCardShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge)
+    }
 
     private var bottomControlCard: some View {
         VStack(spacing: 14) {
@@ -184,11 +198,15 @@ struct NoGoZoneEditorView: View {
             }
         }
         .padding(16)
-        .background(
-            SteddiTheme.surfacePrimary.opacity(0.95)
-                .shadow(color: .black.opacity(0.3), radius: 16, y: -4)
-        )
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: SteddiTheme.radiusLarge, topTrailingRadius: SteddiTheme.radiusLarge))
+        .frame(maxWidth: .infinity)
+        // Floats over the live map — shared glass treatment so the card falls back
+        // to a SOLID surface under Reduce Transparency / Increase Contrast instead
+        // of a translucent fill the cartography bleeds through.
+        .steddiGlass(in: bottomCardShape)
+        .clipShape(bottomCardShape)
+        // Lift the card off the map (kept from the prior look). Applied outside the
+        // glass so the shadow sits behind the surface, not on top of its content.
+        .shadow(color: .black.opacity(0.3), radius: 16, y: -4)
     }
 
     private var radiusSlider: some View {
