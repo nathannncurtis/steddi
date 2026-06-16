@@ -1151,9 +1151,24 @@ extension View {
     /// wash out. Skipped when glass is off (the fallback is already opaque), and
     /// drawn *behind* the glass so the Liquid Glass aesthetic stays on top.
     /// Apply this immediately before `.steddiGlass(…)` with the SAME shape.
-    @ViewBuilder
     func mapGlassScrim(in shape: some Shape) -> some View {
-        self.background {
+        modifier(MapGlassScrimModifier(shape: shape))
+    }
+}
+
+/// Backs `mapGlassScrim`. Reads `\.glassRevision` for the same reason
+/// ``SteddiGlassModifier`` does: `SteddiGlass.isAvailable` is an imperative read,
+/// so the scrim's presence must re-resolve in lockstep with the glass surface
+/// when Reduce Transparency / Increase Contrast toggles — otherwise a mid-drive
+/// toggle could leave the faint scrim showing behind the now-solid fallback.
+private struct MapGlassScrimModifier<ClipShape: Shape>: ViewModifier {
+    let shape: ClipShape
+    @Environment(\.glassRevision) private var glassRevision
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let _ = glassRevision
+        content.background {
             if SteddiGlass.isAvailable {
                 shape.fill(SteddiTheme.surfacePrimary.opacity(0.22))
             }
