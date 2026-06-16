@@ -1766,6 +1766,53 @@ struct NavigationEngineETATests {
         #expect(delta < 0.10)
         engine.stopNavigation()
     }
+
+    /// Regression: the EWMA used to be SEEDED from the very first moving fix's raw
+    /// instantaneous speed. A GPS speed glitch on that first fix (a documented
+    /// CoreLocation behavior at trip start / tunnel exits / urban canyons) would
+    /// anchor the average sky-high, collapsing the live ETA for the ~20s the EWMA
+    /// needs to decay. The seed is now median-of-the-first-few clamped fixes, so a
+    /// lone first-fix spike can't anchor it — and the per-fix clamp caps any glitch
+    /// at a plausible driving ceiling. The ETA must reflect the SUSTAINED pace, not
+    /// the spike.
+    @Test("A single spike on the first moving fix does not collapse the ETA")
+    func firstFixSpikeDoesNotCollapseETA() {
+        let polyline = longRoute()
+
+        // Reference engine: a clean drive at a sustained 20 m/s from the very
+        // first fix. This is the ETA the driver should see.
+        let clean = NavigationEngine()
+        clean.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+        var tc = 0.0
+        for _ in 0..<10 {
+            clean.updateLocation(fix(at: polyline[1], speed: 20, t: tc)); tc += 1
+        }
+        let cleanETA = clean.etaSeconds
+        #expect(cleanETA > 0)
+        clean.stopNavigation()
+
+        // Spiked engine: the FIRST moving fix is a wild glitch (80 m/s), then the
+        // same sustained 20 m/s drive. With direct first-fix seeding the average
+        // would anchor at ~80 m/s and the ETA would crater to a small fraction of
+        // the true value; the median seed (and the clamp) reject the lone spike.
+        let spiked = NavigationEngine()
+        spiked.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+        var ts = 0.0
+        spiked.updateLocation(fix(at: polyline[1], speed: 80, t: ts)); ts += 1   // glitch
+        for _ in 0..<9 {
+            spiked.updateLocation(fix(at: polyline[1], speed: 20, t: ts)); ts += 1
+        }
+        let spikedETA = spiked.etaSeconds
+        #expect(spikedETA > 0)
+
+        // The spiked drive's ETA must be essentially the clean one — the first-fix
+        // glitch must not have collapsed it. Allow a small margin for the spike's
+        // residual EWMA influence, but it must be nowhere near the ~4x-too-low
+        // value direct seeding at 80 m/s would have produced.
+        let ratio = spikedETA / cleanETA
+        #expect(ratio > 0.85)
+        spiked.stopNavigation()
+    }
 }
 
 // MARK: - Arrival progress gate
