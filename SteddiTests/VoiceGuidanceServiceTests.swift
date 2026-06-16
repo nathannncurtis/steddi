@@ -98,3 +98,89 @@ struct VoiceGuidanceIsolationTests {
         #expect(Bool(true))
     }
 }
+
+// MARK: - Duck-release generation gate (interrupt race)
+
+/// The pure release decision that backs the interrupt-race fix: a finished /
+/// cancelled utterance only un-ducks media when it is the LATEST generation AND
+/// the synthesizer isn't still speaking. An interrupting prompt bumps the
+/// generation before cancelling the old one, so the old utterance's `didCancel`
+/// sees a stale stamp and must NOT release the duck the new prompt just took.
+@Suite("VoiceGuidanceService.shouldReleaseDuck")
+struct VoiceGuidanceDuckGateTests {
+
+    @Test("a superseded (older-generation) utterance does NOT release the duck")
+    func staleGenerationDoesNotRelease() {
+        // speak()=gen 1, then interrupt -> speak()=gen 2. The gen-1 utterance's
+        // didCancel arrives with finishedGeneration 1 while current is 2.
+        #expect(!VoiceGuidanceService.shouldReleaseDuck(
+            finishedGeneration: 1, current: 2, isSpeaking: false))
+    }
+
+    @Test("the final, un-superseded utterance releases the duck when speech ends")
+    func latestGenerationReleasesWhenIdle() {
+        #expect(VoiceGuidanceService.shouldReleaseDuck(
+            finishedGeneration: 2, current: 2, isSpeaking: false))
+    }
+
+    @Test("the latest generation still does NOT release while speech is in flight")
+    func latestGenerationHoldsWhileSpeaking() {
+        // Guards the second arm: even the current generation must not tear the
+        // session down while the synthesizer is mid-utterance.
+        #expect(!VoiceGuidanceService.shouldReleaseDuck(
+            finishedGeneration: 2, current: 2, isSpeaking: true))
+    }
+
+    @Test("an unstamped utterance (no generation) never releases")
+    func unstampedNeverReleases() {
+        #expect(!VoiceGuidanceService.shouldReleaseDuck(
+            finishedGeneration: nil, current: 2, isSpeaking: false))
+    }
+}
+
+// Drives the real VoiceGuidanceService end-handler through synthetic utterances
+// (the simulator's voice DB is often broken, so we don't rely on the synthesizer
+// actually speaking — we register utterances under generations exactly as speak()
+// does and fire the end-handler the delegate would). Asserts the interrupt does
+// not release the duck and the duck releases only after the LAST utterance ends.
+@Suite("VoiceGuidanceService interrupt holds the duck", .serialized)
+@MainActor
+struct VoiceGuidanceInterruptDuckTests {
+
+    @Test("interrupt keeps the duck; only the final utterance releases it")
+    func interruptHoldsDuckUntilFinalUtterance() {
+        let service = VoiceGuidanceService.shared
+        let duck = AudioDuckingService.shared
+
+        // Clean slate: no class should be holding the session.
+        service.stop()
+        #expect(!duck.activeClasses.contains(.voice))
+
+        // First prompt: activate the duck and stamp utterance A under gen N.
+        duck.activateForVoiceGuidance()
+        let first = AVSpeechUtterance(string: "In 500 feet, turn left onto Main Street")
+        service.registerUtteranceForTesting(first)
+        #expect(duck.activeClasses.contains(.voice))
+
+        // A newer prompt interrupts: it re-activates the duck and stamps utterance
+        // B under gen N+1 — mirroring speak()'s bump-before-cancel ordering.
+        duck.activateForVoiceGuidance()
+        let second = AVSpeechUtterance(string: "Then turn right onto 2nd Avenue")
+        service.registerUtteranceForTesting(second)
+
+        // The interrupted utterance A now reports didCancel. Its stamp is stale,
+        // so the end-handler must NOT release the duck — media stays ducked under
+        // the new prompt instead of popping back to full mid-instruction.
+        let releasedOnCancel = service.handleUtteranceEnd(first)
+        #expect(!releasedOnCancel)
+        #expect(duck.activeClasses.contains(.voice), "interrupt must not un-duck media mid-prompt")
+
+        // The final utterance B finishes naturally: it is the latest generation
+        // and nothing is speaking, so NOW the duck releases and media restores.
+        let releasedOnFinish = service.handleUtteranceEnd(second)
+        #expect(releasedOnFinish)
+        #expect(!duck.activeClasses.contains(.voice), "duck must release once the last utterance ends")
+
+        service.stop()
+    }
+}
