@@ -23,6 +23,43 @@ struct OnboardingThemeView: View {
         (.light, "sun.max.fill", "Light", "Always light", false),
     ]
 
+    // MARK: - On-surface legible foreground (the theme beat has no dark scrim)
+    //
+    // The theme beat is the one showcase beat that keeps its glass ACCENT-TINTED
+    // (the delight peak — a swatch tap recolors the card live), so it is exempt
+    // from the deterministic dark scrim every other beat uses. That left the
+    // fixed-white copy sitting directly on a bright accent surface, failing AA on
+    // the light accents (gold subtitle 2.26:1; selected 'Light' description
+    // 1.92:1 — the worst string in the flow). Instead of forcing the copy white,
+    // every label / description / icon / 'Recommended' chip on this beat resolves
+    // its color from `SteddiTheme.contrastingForeground(on:)` against the ACTUAL
+    // surface it sits on — so on light accents (gold/sage/light) it becomes
+    // near-black and clears AA, and on a dark accent it would stay near-white.
+    // (`contrastingForeground` flips at WCAG luminance 0.179; every current accent
+    // sits well above it, so the copy resolves near-black at ≥5.3:1 on the worst
+    // accent. Verified for every accent in `ThemeContrastTests.onboardingTheme*`.)
+
+    /// The card-shell surface the bare copy (header, section titles/subtitles)
+    /// sits on: the live accent tint.
+    private var cardSurface: RGBColor { ThemeBeatSurface.cardShell(accent: coordinator.selectedAccent.rgb) }
+
+    /// Foreground for copy drawn directly on the accent-tinted card shell.
+    private var onCardPrimary: Color { SteddiTheme.contrastingForeground(on: cardSurface) }
+
+    /// Foreground for a theme-selection card row, contrasted against THAT card's
+    /// own composited surface. The row draws a white wash over the accent shell
+    /// (`.opacity(0.18)` selected / `.opacity(0.08)` deselected), which only
+    /// LIGHTENS the surface, so the label/description must contrast with this
+    /// composite — not the bare shell, and not a global assumption.
+    private func onThemeCard(selected: Bool) -> Color {
+        SteddiTheme.contrastingForeground(on: themeCardSurface(selected: selected))
+    }
+
+    /// The composited surface of a theme-selection card row.
+    private func themeCardSurface(selected: Bool) -> RGBColor {
+        ThemeBeatSurface.themeCard(accent: coordinator.selectedAccent.rgb, selected: selected)
+    }
+
     var body: some View {
         // No inner ScrollView: the showpiece card (OnboardingShowpieceCard) now
         // hosts a single outer ScrollView that scrolls the whole card when its
@@ -56,19 +93,17 @@ struct OnboardingThemeView: View {
         VStack(spacing: 8) {
             Image(systemName: "paintpalette.fill")
                 .font(.system(size: 56))
-                // Fixed light, NOT the accent: on the theme beat the card is
-                // tinted to the chosen accent, so an accent glyph was the same
-                // hue as the card behind it and dissolved into an invisible
-                // ghost. White reads on every accent tint (same rule the swatch
-                // ring/check and the title beneath already follow).
-                .foregroundStyle(SteddiTheme.onboardingTextPrimary)
+                // On-surface legible, NOT fixed white: the card shell is tinted to
+                // the chosen accent, so on the light accents white collapsed to
+                // ~2.3:1. `onCardPrimary` resolves near-black on light accents
+                // (and would stay white on a dark one), so the glyph reads on every
+                // tint — the same on-surface rule the copy below follows.
+                .foregroundStyle(onCardPrimary)
             Text("Make it yours")
                 .font(.title.weight(.bold))
-                // Fixed light-on-dark: the theme beat (like every showpiece beat)
-                // floats on the dark cinematic backdrop in every theme, so its
-                // copy must stay light. A theme `textPrimary` resolves near-black
-                // in Light and would vanish here.
-                .foregroundStyle(SteddiTheme.onboardingTextPrimary)
+                // On-surface legible against the accent-tinted shell (see
+                // `onCardPrimary`): fixed white failed AA on the light accents.
+                .foregroundStyle(onCardPrimary)
         }
     }
 
@@ -76,10 +111,17 @@ struct OnboardingThemeView: View {
         VStack(spacing: 2) {
             Text(title)
                 .font(.headline)
-                .foregroundStyle(SteddiTheme.onboardingTextPrimary)
+                .foregroundStyle(onCardPrimary)
             Text(subtitle)
                 .font(.subheadline)
-                .foregroundStyle(SteddiTheme.onboardingTextSecondary)
+                // The subtitle sits on the same accent shell; resolve it on-surface
+                // (was fixed white-.92, the worst bare-glass string — gold 2.26:1).
+                // Kept at full opacity, NOT dimmed: a body-size subheadline must
+                // clear the 4.5 AA floor, and on the conservative raw-accent model
+                // a dimmed near-black would dip below it (ocean/slate ~4.2). The
+                // smaller, regular-weight font already ranks it below the headline
+                // title.
+                .foregroundStyle(onCardPrimary)
         }
     }
 
@@ -160,78 +202,120 @@ struct OnboardingThemeView: View {
                 coordinator.selectedTheme = card.mode
             }
         } label: {
+            // Foreground for everything in this row, contrasted against the row's
+            // OWN composited surface (the white wash over the accent shell), so it
+            // reads near-black on light accents and would stay near-white on a dark
+            // one — see `onThemeCard`. The whole row shares one resolved color.
+            let rowForeground = onThemeCard(selected: isSelected)
             HStack(spacing: 14) {
                 Image(systemName: card.icon)
                     .font(.title2)
                     .frame(width: 32)
-                    // Fixed light glyph regardless of selection. On the theme
-                    // beat the whole card is accent-tinted, so an accent icon on
-                    // the SELECTED card was accent-on-accent and near-invisible —
-                    // inverting the affordance (the chosen row's glyph hardest to
-                    // see). Selection is already signaled by the white wash +
-                    // border + checkmark, so the icon just needs to read clearly:
-                    // primary white for the selected row, the dimmer secondary
-                    // tier for deselected rows.
-                    .foregroundStyle(isSelected ? SteddiTheme.onboardingTextPrimary : SteddiTheme.onboardingTextSecondary)
+                    // On-surface legible glyph regardless of selection. Fixed white
+                    // failed AA on the light accents; an accent glyph on the tinted
+                    // card was accent-on-accent and near-invisible. Selection is
+                    // signaled by the wash + border + checkmark, so the icon just
+                    // needs to read: full strength selected, dimmed deselected.
+                    .foregroundStyle(isSelected ? rowForeground : rowForeground.opacity(0.7))
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(card.label)
                             .font(.headline)
-                            .foregroundStyle(SteddiTheme.onboardingTextPrimary)
+                            .foregroundStyle(rowForeground)
                         if card.recommended {
-                            Text("Recommended")
-                                .font(.caption2.weight(.semibold))
-                                // White text on a fixed DARK pill — self-contained
-                                // and accent-independent. A translucent-WHITE wash
-                                // (the prior fix) composited light over the
-                                // accent-tinted, already-white-washed selected
-                                // card, so white-on-white-wash was the
-                                // least-legible string on the beat (~2.4:1). A
-                                // near-opaque dark capsule makes white read on
-                                // EVERY accent tint (white on black.opacity(0.35)
-                                // over the dark card clears AA with margin), the
-                                // same on-fill rule the swatch ring/check follow.
-                                .foregroundStyle(SteddiTheme.onboardingTextPrimary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.black.opacity(0.35), in: Capsule())
+                            recommendedChip(over: themeCardSurface(selected: isSelected))
                         }
                     }
                     Text(card.description)
                         .font(.caption)
-                        .foregroundStyle(SteddiTheme.onboardingTextSecondary)
+                        .foregroundStyle(rowForeground)
                 }
 
                 Spacer()
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(SteddiTheme.onboardingTextPrimary)
+                        .foregroundStyle(rowForeground)
                         .font(.title3)
                         .transition(.opacity)
                 }
             }
             .padding(14)
             .background(
-                // The deselected card fill must be a fixed light-on-dark wash,
-                // not the adaptive `surfaceSecondary` (which is near-WHITE in the
-                // Light theme and would render a light box on the dark backdrop,
-                // fighting the fixed-white labels). A faint white wash keeps the
-                // card dark and legible in every theme; the selected card's accent
-                // tint already contrasts the backdrop.
-                // Selection shown with a fixed-light wash + white border, not the
-                // accent (which matched the accent-tinted card and made the
-                // selected card indistinguishable from the deselected ones).
+                // A white wash over the accent shell distinguishes the selected row
+                // (0.18) from deselected (0.08). The wash LIGHTENS the surface, so
+                // the row copy contrasts against this composite via `onThemeCard`
+                // (the `themeCardSurface` model is exactly this fill over the
+                // accent). Selection is reinforced by the on-surface border below
+                // and the checkmark.
                 RoundedRectangle(cornerRadius: 14)
                     .fill(isSelected ? Color.white.opacity(0.18) : Color.white.opacity(0.08))
             )
             .overlay(
+                // Selected border in the row's on-surface foreground (near-black on
+                // light accents, near-white on dark) so the affordance reads on
+                // every tint — a fixed-white border washed out on the light accents.
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? Color.white.opacity(0.7) : .clear, lineWidth: 2)
+                    .stroke(isSelected ? onThemeCard(selected: true).opacity(0.8) : .clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
+    }
+
+    /// The "Recommended" chip. Its background is SELF-CONTAINED and accent-
+    /// independent: the prior `Color.black.opacity(0.35)` capsule was translucent,
+    /// so over the bright accent card it stayed light and white text on it fell to
+    /// ~2.95:1 (the comment claimed ~8:1, which only held over a dark card — and
+    /// the theme beat has no dark card). Instead the capsule is filled with a SOLID
+    /// contrasting tone for the card surface (`contrastingForeground(on: surface)`
+    /// → near-black on light accents, near-white on dark) and the text is the
+    /// contrasting tone for THAT capsule fill — so text-on-chip is a fixed
+    /// black/white pairing at ~17:1 on every accent, well clear of AA for the small
+    /// caption2 label.
+    private func recommendedChip(over surface: RGBColor) -> some View {
+        let capsuleFill = SteddiTheme.contrastingForeground(on: surface)
+        // The capsule fill is one of the two near-pure endpoints; pick the other
+        // for the text. `contrastingForeground` resolves it from the fill's
+        // luminance, giving a guaranteed >=17:1 black/white pairing.
+        let capsuleFillRGB = ContrastRatio.contrastingForeground(on: surface)
+        return Text("Recommended")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(SteddiTheme.contrastingForeground(on: capsuleFillRGB))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(capsuleFill, in: Capsule())
+    }
+}
+
+/// Deterministic, UIKit-free model of the surfaces the theme beat's copy sits on,
+/// so the on-surface foreground choice (`contrastingForeground`) is computed
+/// against the same pinned values the unit tests assert — no live-glass guessing.
+///
+/// The theme beat keeps its glass ACCENT-TINTED (the delight peak), exempt from
+/// the dark scrim the other beats use, so its copy must contrast the accent rather
+/// than assume a dark card. These pure functions are the single source of truth
+/// the view's `cardSurface` / `themeCardSurface` delegate to, and that
+/// `ThemeContrastTests.onboardingTheme*` measure the per-accent contrast against.
+enum ThemeBeatSurface {
+    /// The card-shell surface the bare copy (header, section titles/subtitles)
+    /// sits on. Modelled as the RAW accent hue — the DARKEST plausible surface,
+    /// since the OS frost only LIGHTENS the live glass, and for the near-black
+    /// foreground these light accents resolve to a lighter surface only raises
+    /// contrast. So the modelled ratio is a conservative lower bound the real card
+    /// beats, the same way the showcase beats pin `OnboardingShowcaseFrost.surface`.
+    static func cardShell(accent: RGBColor) -> RGBColor { accent }
+
+    /// The composited surface of a theme-selection card row: white at the row's
+    /// wash opacity over the accent shell (`.opacity(0.18)` selected /
+    /// `.opacity(0.08)` deselected). Source-over, matching the
+    /// `RoundedRectangle.fill(Color.white.opacity(...))` the view draws.
+    static func themeCard(accent: RGBColor, selected: Bool) -> RGBColor {
+        let a = selected ? 0.18 : 0.08
+        let s = cardShell(accent: accent)
+        return RGBColor(1 * a + s.r * (1 - a),
+                        1 * a + s.g * (1 - a),
+                        1 * a + s.b * (1 - a))
     }
 }
 
