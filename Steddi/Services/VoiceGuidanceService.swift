@@ -201,27 +201,51 @@ final class VoiceGuidanceService: NSObject, AVSpeechSynthesizerDelegate {
         return true
     }
 
-    /// Speak with distance prefix (e.g. "In 500 feet, turn left onto Main Street")
+    /// Speak with distance prefix (e.g. "In 500 feet, turn left onto Main Street").
+    /// Spoken units follow the user's persisted preference (miles+feet or
+    /// kilometers+meters).
     func speakWithDistance(_ instruction: String, distance: Double) {
         guard isEnabled else { return }
         speak("\(Self.distancePhrase(meters: distance)), \(instruction)")
     }
 
-    /// The spoken distance prefix for a maneuver at `meters` away (e.g. "In 500
-    /// feet" / "In 0.3 miles" / "In 11 miles"). Pure and `nonisolated` so the
+    /// The spoken distance prefix for a maneuver at `meters` away, in the user's
+    /// unit ("In 500 feet" / "In 0.3 miles" / "In 11 miles", or "In 150 meters" /
+    /// "In 0.3 kilometers" / "In 11 kilometers"). Pure and `nonisolated` so the
     /// rounding contract is unit-testable without driving the synthesizer.
-    nonisolated static func distancePhrase(meters distance: Double) -> String {
-        if distance < 160 {
-            return "In \(Int(distance * 3.281)) feet"
-        }
-        let miles = distance / 1609.34
-        if miles < 0.15 {
-            return "In \(Int(distance * 3.281)) feet"
-        } else if miles < 1 {
-            return String(format: "In %.1f miles", miles)
-        } else {
-            // Round, don't truncate: 10.95 mi announces "In 11 miles", not 10.
-            return "In \(Int(miles.rounded())) miles"
+    /// `unit` defaults to the persisted preference so the live call site is
+    /// preference-driven; tests pin it explicitly.
+    nonisolated static func distancePhrase(
+        meters distance: Double,
+        unit: MeasurementUnit = .current
+    ) -> String {
+        switch unit {
+        case .miles:
+            if distance < 160 {
+                return "In \(Int(distance * 3.281)) feet"
+            }
+            let miles = distance / unit.metersPerUnit
+            if miles < 0.15 {
+                return "In \(Int(distance * 3.281)) feet"
+            } else if miles < 1 {
+                return String(format: "In %.1f miles", miles)
+            } else {
+                // Round, don't truncate: 10.95 mi announces "In 11 miles", not 10.
+                return "In \(Int(miles.rounded())) miles"
+            }
+        case .kilometers:
+            // Metric mirror: speak whole meters in the short range, then
+            // one-decimal kilometers under 1 km, then whole kilometers — the same
+            // sub-unit / decimal / whole-number band structure as imperial.
+            let km = distance / unit.metersPerUnit
+            if km < 0.25 {
+                return "In \(Int(distance.rounded())) meters"
+            } else if km < 1 {
+                return String(format: "In %.1f kilometers", km)
+            } else {
+                // Round, don't truncate: 10.95 km announces "In 11 kilometers".
+                return "In \(Int(km.rounded())) kilometers"
+            }
         }
     }
 
