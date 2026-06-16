@@ -241,12 +241,15 @@ struct SteddiNavOverlay: View {
     }
 
     /// Top offset for the portrait floating-control cluster, derived from the
-    /// banner column's actual scaled height so the controls always start below
-    /// the tallest banner stack. The banners scale with iconScale/textScale; a
+    /// FULL stacked column's actual scaled height so the controls always start
+    /// below the tallest stack. The elements scale with iconScale/textScale; a
     /// fixed offset (the old hardcoded 270) overlapped them once the type grew.
-    /// Mirrors the banner geometry: top inset (60) + top banner (72*iconScale
-    /// icon + 40 padding) + the optional trip-leg and follow-on banners that are
-    /// actually present, plus a small gap.
+    /// Mirrors the portrait stack geometry exactly (lines 146-185): top inset
+    /// (60) + top banner + the optional trip-leg / follow-on banners + the
+    /// optional street-name capsule, route-preference badge, and the full-width
+    /// NowPlaying mini-bar — each only when actually present, with its own top
+    /// spacing — plus a small gap, so the right cluster never lands on top of the
+    /// mini-bar / badge / capsule when those are showing.
     private var floatingClusterTopOffset: CGFloat {
         let topInset: CGFloat = 60
         // Top banner: 72*iconScale icon framed inside 20pt padding all round.
@@ -261,7 +264,21 @@ struct SteddiNavOverlay: View {
             // +6 spacing above.
             height += 6 + (28 * iconScale + 20)
         }
-        // Small gap below the banner column before the controls begin. Never sit
+        if !engine.roadName.isEmpty {
+            // Street-name capsule: 14pt label in 7pt vertical padding, +10 above.
+            height += 10 + (14 * textScale + 14)
+        }
+        if !activePreferenceLabels.isEmpty {
+            // Route-pref badge: 12pt label in 6pt vertical padding, +10 above.
+            height += 10 + (12 * textScale + 12)
+        }
+        if showNowPlayingBar && nowPlaying.hasNowPlaying {
+            // NowPlaying mini-bar: fixed 52pt full-width card, +8 spacing above.
+            // Full-width, so its right edge sits directly under the cluster —
+            // the decisive element this offset must clear.
+            height += 8 + 52
+        }
+        // Small gap below the stacked column before the controls begin. Never sit
         // higher than the original hand-tuned 270 in the unscaled default state.
         return max(270, height + 12)
     }
@@ -434,10 +451,16 @@ struct SteddiNavOverlay: View {
                     .foregroundStyle(SteddiTheme.textPrimary)
                     .minimumScaleFactor(0.7)
 
-                // Instruction — clear and readable
+                // Instruction — the safety-critical maneuver words. This is the
+                // single most important readout in the HUD, so it gets the
+                // strongest treatment: textPrimary (near-black, like the distance
+                // line above) at semibold weight plus the soft shadow the compass
+                // uses — so it holds against any tile, never the mid-grey
+                // textSecondary that is only AA-proven on solid surfaces.
                 Text(displayInstruction)
-                    .font(SteddiTheme.body(18 * textScale, highContrast: highContrast))
-                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                    .font(SteddiTheme.body(18 * textScale, highContrast: highContrast).weight(.semibold))
+                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .minimumScaleFactor(0.7)
@@ -446,8 +469,16 @@ struct SteddiNavOverlay: View {
             Spacer()
         }
         .padding(20)
-        // Single neutral glass layer replaces the old material+surface double
-        // background — legibility over the map matters more than tint here.
+        // Neutral glass with a faint opaque scrim underneath. The scrim lifts the
+        // glass off bright/varied cartography so the safety-critical instruction
+        // never washes out, while keeping the Liquid Glass aesthetic on top. The
+        // scrim is skipped when glass is off (the fallback is already opaque).
+        .background {
+            if SteddiGlass.isAvailable {
+                SteddiGlass.cardShape
+                    .fill(SteddiTheme.surfacePrimary.opacity(0.22))
+            }
+        }
         .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.cardShape)
     }
 
@@ -462,18 +493,21 @@ struct SteddiNavOverlay: View {
                 .foregroundStyle(SteddiTheme.accent)
 
             Text("Leg \(trip.legIndex) of \(trip.totalLegs) · \(trip.nextStopName)")
-                .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                .font(SteddiTheme.body(13 * textScale, highContrast: highContrast).weight(.medium))
                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
                 .lineLimit(1)
 
             Spacer()
 
             if let summary = trip.remainingSummary {
-                // Meaningful readout over translucent nav glass — textSecondary,
-                // not textMuted (which is only AA-guaranteed on solid surfaces).
+                // Meaningful readout over translucent nav glass — textSecondary
+                // (not textMuted, AA-guaranteed only on solid surfaces) with the
+                // compass's soft shadow so it holds against any tile.
                 Text(summary)
                     .font(SteddiTheme.mono(12 * textScale))
                     .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
             }
         }
         .padding(.horizontal, 14)
@@ -491,10 +525,14 @@ struct SteddiNavOverlay: View {
                 .frame(width: 28 * iconScale, height: 28 * iconScale)
 
             // The follow-on maneuver is real driving info over translucent nav
-            // glass — textSecondary, not textMuted (AA-guaranteed only on solids).
+            // glass. Secondary to the main instruction, so it stays on the
+            // textSecondary tier — but at medium weight + the compass's soft
+            // shadow so the words separate from any tile (textSecondary's AA is
+            // only proven on solid surfaces, not glass over a moving map).
             Text("Then: \(displayFollowOnInstruction)")
-                .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
+                .font(SteddiTheme.body(14 * textScale, highContrast: highContrast).weight(.medium))
                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
                 .lineLimit(1)
 
             Spacer()
@@ -508,8 +546,12 @@ struct SteddiNavOverlay: View {
 
     private var streetNameCapsule: some View {
         Text(engine.roadName)
-            .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
+            // The current street name rides neutral glass over the moving map —
+            // medium weight + the compass's soft shadow so it holds against any
+            // tile (textSecondary's AA is only proven on solid surfaces).
+            .font(SteddiTheme.body(14 * textScale, highContrast: highContrast).weight(.medium))
             .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
             .padding(.horizontal, 16)
             .padding(.vertical, 7)
             .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.25)
