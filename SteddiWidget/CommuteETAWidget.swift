@@ -14,6 +14,19 @@ private enum WidgetKeys {
 /// glance rather than a clearly-stale last-known value (seconds).
 private let etaFreshnessWindow: TimeInterval = 30 * 60
 
+/// How long a "navigating" entry may go without a fresh live ETA write before
+/// the widget stops presenting it as a live drive (seconds).
+///
+/// A live nav session writes a new ETA on a tight cadence (every GPS update /
+/// live sync), so a navigating flag whose last ETA timestamp is older than this
+/// means the session almost certainly died (OOM / watchdog kill) without running
+/// any teardown path — the App Group still says `isNavigating == true` with a
+/// frozen near-arrival ETA. The writer only reconciles this at the next app
+/// launch (NavigationStateManager.reconcileWidgetSessionAtLaunch); until then the
+/// widget would render a phantom "Navigating" pill with a dead ETA. Bounding it
+/// here caps that window to a couple of minutes instead of "until next launch".
+private let navigatingStalenessWindow: TimeInterval = 3 * 60
+
 /// Data for the commute ETA widget
 struct CommuteETAEntry: TimelineEntry {
     let date: Date
@@ -25,6 +38,22 @@ struct CommuteETAEntry: TimelineEntry {
     /// value written by an earlier drive/check isn't shown as if it were live.
     let etaUpdatedAt: Date?
 
+    /// Whether this entry represents a *live* navigation session — the navigating
+    /// flag is set AND the last live ETA write is recent enough to trust.
+    ///
+    /// A live drive writes a fresh ETA on a tight cadence, so a navigating flag
+    /// whose last timestamp is missing or older than `navigatingStalenessWindow`
+    /// is a dead session: the app was killed mid-drive (OOM / watchdog) before any
+    /// teardown ran, leaving `isNavigating == true` with a frozen ETA, and the
+    /// next-launch reconcile (NavigationStateManager.reconcileWidgetSessionAtLaunch)
+    /// hasn't run yet. The widget must NOT present that as a live drive, so it
+    /// independently bounds the staleness here rather than trusting the flag.
+    var isLiveNavigating: Bool {
+        guard isNavigating else { return false }
+        guard let updated = etaUpdatedAt else { return false }
+        return date.timeIntervalSince(updated) <= navigatingStalenessWindow
+    }
+
     /// The ETA is considered stale (worth labeling as last-known) when it isn't
     /// a live navigation value and isn't a verifiably-fresh idle value.
     ///
@@ -34,7 +63,11 @@ struct CommuteETAEntry: TimelineEntry {
     /// false — that terminal value must NOT be presented as the upcoming-commute
     /// ETA. The writer side clears/recomputes the idle ETA on nav end; the widget
     /// must stay correct regardless of exactly how it does so. So:
-    /// - While navigating: never stale (the live ETA is authoritative).
+    /// - Live-navigating (flag set AND ETA write recent): never stale (the live
+    ///   ETA is authoritative).
+    /// - A stuck navigating flag (set but the ETA write is old/missing) is a dead
+    ///   session — fall through to the timestamp checks below so it's labeled
+    ///   stale instead of presented as a live drive.
     /// - Not navigating with no timestamp: treat as stale — we can't prove the
     ///   value is a fresh pre-drive computation, so label it rather than imply it
     ///   is a live current ETA.
@@ -42,7 +75,7 @@ struct CommuteETAEntry: TimelineEntry {
     /// A cleared ETA (see `etaMinutes`) renders as "No ETA yet" and never reaches
     /// the stale path.
     var isStale: Bool {
-        if isNavigating { return false }
+        if isLiveNavigating { return false }
         guard let updated = etaUpdatedAt else { return true }
         return date.timeIntervalSince(updated) > etaFreshnessWindow
     }
@@ -66,17 +99,25 @@ struct CommuteETAProvider: TimelineProvider {
         let entry = currentEntry()
         var entries = [entry]
 
-        // The freshness label is a time-based state transition, but it's computed
-        // against each entry's own `date`. With a single entry frozen at `now`, an
-        // ETA that crosses the 30-min freshness boundary mid-cycle wouldn't flip to
-        // "as of …" until the next ~15-min reload (up to ~15 min late). Emit a
-        // second entry dated exactly at the staleness-crossing instant so the
-        // widget re-renders right when the value goes stale.
-        if !entry.isNavigating, let updated = entry.etaUpdatedAt {
-            let staleAt = updated.addingTimeInterval(etaFreshnessWindow)
-            if staleAt > now {
+        // The freshness/liveness labels are time-based state transitions, but
+        // they're computed against each entry's own `date`. With a single entry
+        // frozen at `now`, a value that crosses a staleness boundary mid-cycle
+        // wouldn't flip until the next ~15-min reload (up to ~15 min late). Emit a
+        // second entry dated exactly at the next crossing instant so the widget
+        // re-renders right when the state changes.
+        //
+        // - Navigating: the crossing is when a stuck flag from an OOM/watchdog
+        //   kill stops being "live" (etaUpdatedAt + navigatingStalenessWindow), so
+        //   the phantom "Navigating" pill is retired without waiting for an app
+        //   launch.
+        // - Idle: the crossing is when a fresh idle ETA goes stale
+        //   (etaUpdatedAt + etaFreshnessWindow) and flips to the "as of …" label.
+        if let updated = entry.etaUpdatedAt {
+            let window = entry.isNavigating ? navigatingStalenessWindow : etaFreshnessWindow
+            let crossingAt = updated.addingTimeInterval(window)
+            if crossingAt > now {
                 entries.append(CommuteETAEntry(
-                    date: staleAt,
+                    date: crossingAt,
                     commuteName: entry.commuteName,
                     etaMinutes: entry.etaMinutes,
                     destinationName: entry.destinationName,
@@ -228,7 +269,10 @@ struct CommuteETAView: View {
 
             // Right: destination and status
             VStack(alignment: .trailing, spacing: 8) {
-                if entry.isNavigating {
+                // Only show the live "Navigating" pill for a session whose ETA is
+                // still being written; a stuck flag from an OOM/watchdog kill is
+                // NOT live (see CommuteETAEntry.isLiveNavigating).
+                if entry.isLiveNavigating {
                     Text("Navigating")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769))
