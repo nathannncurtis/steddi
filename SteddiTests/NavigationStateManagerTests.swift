@@ -1596,6 +1596,58 @@ struct NavigationStateManagerReAdoptionTests {
         manager.stopObserving()
         engine.stopNavigation()
     }
+
+    /// Regression guard for the off-route mis-routing bug. The shared
+    /// `activeRouteCoords` is populated for BOTH saved-route and ad-hoc
+    /// search-nav drives, so a rebuilt HomeView that restored `activeSavedPolyline`
+    /// from it unconditionally would set a NON-nil saved polyline for what was an
+    /// ad-hoc drive. handleOffRoute branches on `if let savedPolyline =
+    /// activeSavedPolyline` — a non-nil value drives the saved-route splice
+    /// (recoverOntoSavedRoute onto the ad-hoc polyline) instead of the correct
+    /// ad-hoc Apple-Maps reroute. The fix gates the restore on the only field that
+    /// distinguishes the two (navigatedSavedRoute, set only by
+    /// beginCustomNavigation): an ad-hoc drive must end re-adoption with
+    /// activeSavedPolyline == nil. These pin HomeView.reAdoptedSavedPolyline, the
+    /// pure discriminator reAdoptActiveSessionIfNeeded now uses.
+    @Test("Ad-hoc drive rebuilt mid-trip restores NO saved polyline (off-route stays on the ad-hoc reroute branch)")
+    func adHocRebuildDoesNotRestoreSavedPolyline() {
+        // An ad-hoc drive's manager state: activeRouteCoords IS populated (engine
+        // polyline mirrored at beginNavigation), but navigatedSavedRoute is nil
+        // (only beginCustomNavigation sets it).
+        let adHocCoords = (0...5).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+
+        let restored = HomeView.reAdoptedSavedPolyline(
+            isSavedRouteDrive: false,
+            activeRouteCoords: adHocCoords
+        )
+
+        // Must be nil despite non-empty coords — so handleOffRoute's
+        // `if let savedPolyline = activeSavedPolyline` is FALSE and the drive takes
+        // the ad-hoc Apple-Maps reroute branch, NOT recoverOntoSavedRoute.
+        #expect(restored == nil, "An ad-hoc drive must not adopt a saved polyline, or off-route recovery mis-routes onto the splice path")
+    }
+
+    @Test("Saved-route drive rebuilt mid-trip DOES restore the saved polyline (splice branch preserved)")
+    func savedRouteRebuildRestoresSavedPolyline() {
+        let coords = (0...5).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+
+        let restored = HomeView.reAdoptedSavedPolyline(
+            isSavedRouteDrive: true,
+            activeRouteCoords: coords
+        )
+
+        // A genuine saved-route drive keeps its splice geometry, so a post-rebuild
+        // off-route still recovers onto the saved route exactly as before.
+        let unwrapped = try? #require(restored)
+        #expect(unwrapped?.count == coords.count)
+        #expect(unwrapped?.first?.latitude == coords.first?.latitude)
+    }
+
+    @Test("Empty activeRouteCoords restores nil even for a saved-route drive")
+    func emptyCoordsRestoreNil() {
+        #expect(HomeView.reAdoptedSavedPolyline(isSavedRouteDrive: true, activeRouteCoords: []) == nil)
+        #expect(HomeView.reAdoptedSavedPolyline(isSavedRouteDrive: false, activeRouteCoords: []) == nil)
+    }
 }
 
 // MARK: - Session Generation Tests

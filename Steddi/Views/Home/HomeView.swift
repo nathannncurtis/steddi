@@ -2200,9 +2200,21 @@ struct HomeView: View {
         activeCommute = navStateManager.activeCommute
         activeDirection = navStateManager.activeDirection
         activeTrip = navStateManager.activeTrip
-        if !navStateManager.activeRouteCoords.isEmpty {
-            activeSavedPolyline = navStateManager.activeRouteCoords
-        }
+        // `navigatedSavedRoute` (set only by beginCustomNavigation) is the ONLY
+        // field that distinguishes a saved-route drive from an ad-hoc search-nav
+        // drive — `activeRouteCoords` is populated for BOTH. Restore it FIRST so
+        // the activeSavedPolyline restore below can branch on it.
+        navigatedSavedRoute = navStateManager.navigatedSavedRoute
+        // Restore activeSavedPolyline ONLY for a saved-route drive. For an ad-hoc
+        // drive (beginNavigation: navigationRoute=MKRoute, activeSavedPolyline=nil)
+        // it MUST stay nil — otherwise a later off-route event in handleOffRoute
+        // would take the saved-route splice/recovery branch (recoverOntoSavedRoute
+        // onto the ad-hoc polyline) instead of the correct Apple-Maps reroute,
+        // silently diverging from the same drive's pre-rebuild behavior.
+        activeSavedPolyline = Self.reAdoptedSavedPolyline(
+            isSavedRouteDrive: navigatedSavedRoute != nil,
+            activeRouteCoords: navStateManager.activeRouteCoords
+        )
         // Restore the per-trip recovery budget from the shared manager — this
         // view's @State reset to 0/nil on the rebuild, but the manager kept the
         // running count (and last-recovery time) across it, so the 3-recovery cap
@@ -2219,7 +2231,6 @@ struct HomeView: View {
         // Re-derive conditions fresh from the live store rather than caching an
         // @Model array on the manager, so any conditions edited mid-drive are
         // reflected (and a mid-drive route delete safely yields []).
-        navigatedSavedRoute = navStateManager.navigatedSavedRoute
         if let route = navigatedSavedRoute {
             activeRoadConditions = RoadConditionService.shared.fetchConditionsOnRoute(route)
         } else {
@@ -2256,6 +2267,24 @@ struct HomeView: View {
         isAdvancingLeg: Bool
     ) -> Bool {
         !managerNavigating && viewNavigating && !isAdvancingLeg
+    }
+
+    /// The `activeSavedPolyline` a rebuilt HomeView should restore on re-adoption.
+    /// The shared `activeRouteCoords` is populated for BOTH saved-route and ad-hoc
+    /// search-nav drives, so restoring it unconditionally would set a non-nil
+    /// saved polyline for an ad-hoc drive — making a later off-route event take the
+    /// saved-route splice/recovery branch (handleOffRoute's `if let savedPolyline`)
+    /// instead of the correct ad-hoc Apple-Maps reroute, silently diverging from
+    /// the same drive's pre-rebuild behavior. Only a saved-route drive (the sole
+    /// thing that sets `navigatedSavedRoute`) carries a saved polyline; an ad-hoc
+    /// drive must keep it nil. Pure + static so this discrimination is unit-testable
+    /// without a UI host; `nonisolated` since it touches no actor state.
+    nonisolated static func reAdoptedSavedPolyline(
+        isSavedRouteDrive: Bool,
+        activeRouteCoords: [CLLocationCoordinate2D]
+    ) -> [CLLocationCoordinate2D]? {
+        guard isSavedRouteDrive, !activeRouteCoords.isEmpty else { return nil }
+        return activeRouteCoords
     }
 
     /// Tear down this view's navigation @State after the SHARED manager already
