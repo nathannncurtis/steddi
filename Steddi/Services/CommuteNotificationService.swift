@@ -186,13 +186,34 @@ final class CommuteNotificationService {
         // Always re-arm so coverage continues even if this run is cut short.
         scheduleBackgroundRefresh()
 
+        // BGTask.setTaskCompleted must be called exactly once. The work Task and
+        // the expirationHandler race to finish the same task, so guard completion
+        // with an actor-isolated one-shot flag: whichever path runs first wins,
+        // the other becomes a no-op. The actor serializes the check-and-set so the
+        // two paths can never both call setTaskCompleted.
+        let completion = BGTaskCompletionGuard()
         let work = Task {
             await runNotificationPass()
-            task.setTaskCompleted(success: true)
+            await completion.complete(task, success: true)
         }
         task.expirationHandler = {
+            // iOS gives BGAppRefreshTask only seconds; on expiration cancel the
+            // in-flight pass (runNotificationPass honors Task.isCancelled and
+            // short-circuits) and finish the task as a timeout.
             work.cancel()
-            task.setTaskCompleted(success: false)
+            Task { await completion.complete(task, success: false) }
+        }
+    }
+
+    /// One-shot guard so a BGTask is completed exactly once across the racing
+    /// work-completion and expiration-handler paths. An actor serializes the
+    /// `completed` check-and-set so the two paths can't both call setTaskCompleted.
+    private actor BGTaskCompletionGuard {
+        private var completed = false
+        func complete(_ task: BGAppRefreshTask, success: Bool) {
+            guard !completed else { return }
+            completed = true
+            task.setTaskCompleted(success: success)
         }
     }
 
@@ -293,6 +314,12 @@ final class CommuteNotificationService {
         }
 
         for snapshot in snapshots {
+            // Honor cooperative cancellation: when the BGTask expiration handler
+            // fires it cancels this work, and the constrained background window is
+            // already spent — stop dispatching rather than running every remaining
+            // commute's ETA/weather work (which would be discarded and could land
+            // an alert after the task is reported timed-out).
+            if Task.isCancelled { return }
             await evaluateAndDispatch(
                 snapshot: snapshot,
                 now: now,
@@ -413,6 +440,11 @@ final class CommuteNotificationService {
             now: now,
             destinationName: snapshot.destinationName
         )
+
+        // The ETA + WeatherKit awaits above can outlast the BGTask budget; if the
+        // expiration handler cancelled this pass mid-flight, don't dispatch an
+        // alert for a run the scheduler has already reported as timed-out.
+        if Task.isCancelled { return }
 
         let decision = CommuteNotificationDecisionEngine.evaluate(input)
         switch decision {

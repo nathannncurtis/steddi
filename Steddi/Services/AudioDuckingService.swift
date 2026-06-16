@@ -46,6 +46,23 @@ enum DuckingPolicy {
         }
     }
 
+    /// Combined session options for every currently-active sound class: the UNION
+    /// of each class's `sessionOptions`. Because `setCategory` replaces the whole
+    /// option set, concurrent duckers must merge their options or the later
+    /// activation clobbers the earlier one — e.g. a non-ducking alert firing mid
+    /// voice-prompt would otherwise un-duck media the user asked to duck. An empty
+    /// set yields no options (the caller deactivates instead of re-setting).
+    static func combinedSessionOptions(
+        for soundClasses: Set<DuckingSoundClass>,
+        voiceEnabled: Bool,
+        alertEnabled: Bool
+    ) -> AVAudioSession.CategoryOptions {
+        soundClasses.reduce(into: AVAudioSession.CategoryOptions()) { options, soundClass in
+            let duck = shouldDuck(for: soundClass, voiceEnabled: voiceEnabled, alertEnabled: alertEnabled)
+            options.formUnion(sessionOptions(for: soundClass, shouldDuck: duck))
+        }
+    }
+
     /// Whether the shared session can be deactivated once `ending` finishes,
     /// given whether the *other* sound class is still active. We only tear the
     /// session down (and thus restore media volume) when nothing else Steddi is
@@ -117,23 +134,44 @@ final class AudioDuckingService {
     // MARK: - Core
 
     private func activate(_ soundClass: DuckingSoundClass) {
-        let duck = DuckingPolicy.shouldDuck(for: soundClass, voiceEnabled: voiceEnabled, alertEnabled: alertEnabled)
-        let options = DuckingPolicy.sessionOptions(for: soundClass, shouldDuck: duck)
-
-        // playback + voicePrompt keeps us audible over the ringer switch and
-        // routes prompts the way iOS expects for navigation.
-        try? session.setCategory(.playback, mode: .voicePrompt, options: options)
-        try? session.setActive(true)
+        // Track first, then derive the category options from the UNION over every
+        // currently-active class. setCategory replaces the whole option set, so
+        // deriving from the new class alone would strip the other active class's
+        // options for the overlap (e.g. an alert mid-voice-prompt dropping voice's
+        // .interruptSpokenAudioAndMixWithOthers, or un-ducking media the user
+        // asked to duck). The union keeps every active ducker's behaviour intact.
         activeClasses.insert(soundClass)
+        applyCombinedOptions()
+        try? session.setActive(true)
     }
 
     private func deactivate(_ soundClass: DuckingSoundClass) {
         activeClasses.remove(soundClass)
         let otherActive = !activeClasses.isEmpty
-        guard DuckingPolicy.canDeactivate(ending: soundClass, otherClassActive: otherActive) else { return }
+        guard DuckingPolicy.canDeactivate(ending: soundClass, otherClassActive: otherActive) else {
+            // A class is still ducking — re-apply the surviving classes' combined
+            // options so the ended class's contribution (e.g. an alert's
+            // .duckOthers) is dropped without clobbering what remains.
+            applyCombinedOptions()
+            return
+        }
 
         // notifyOthersOnDeactivation: tells the OS our sound is done so it can
         // restore the ducked media to full volume cleanly.
         try? session.setActive(false, options: [.notifyOthersOnDeactivation])
+    }
+
+    /// Set the shared session category to the union of every active class's
+    /// options, so concurrent duck reasons don't clobber each other. No-op when
+    /// nothing is active (the deactivate path tears the session down instead).
+    private func applyCombinedOptions() {
+        guard !activeClasses.isEmpty else { return }
+        let options = DuckingPolicy.combinedSessionOptions(
+            for: activeClasses, voiceEnabled: voiceEnabled, alertEnabled: alertEnabled
+        )
+
+        // playback + voicePrompt keeps us audible over the ringer switch and
+        // routes prompts the way iOS expects for navigation.
+        try? session.setCategory(.playback, mode: .voicePrompt, options: options)
     }
 }

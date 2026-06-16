@@ -20,6 +20,12 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var mapTemplate: CPMapTemplate?
     private var navigationSession: CPNavigationSession?
     private var isShowingNavigation = false
+    /// True while the route-preview "Start Navigation / Cancel" CPAlertTemplate is
+    /// presented modally. A modal alert is NOT on the navigation stack, so
+    /// popToRootTemplate won't remove it — only dismissTemplate does. Tracked so
+    /// nav start can tear it down (and so we never call dismissTemplate when no
+    /// modal is up, which would log a spurious warning).
+    private var isShowingRoutePreviewAlert = false
     private var modelContainer: ModelContainer?
     private var liveUpdateTask: Task<Void, Never>?
     private var phoneNavWatchTask: Task<Void, Never>?
@@ -324,6 +330,14 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         carplayLog.info("CarPlay: showNavigationUI starting")
         isShowingNavigation = true
 
+        // Navigation can start from an independent path (phone-side Start Commute,
+        // a deep link, a smart-commute alert) while the driver is still looking at
+        // the route-preview alert. That alert is presented modally, so the
+        // popToRootTemplate below won't remove it — dismiss it explicitly first so
+        // a stale "Start Navigation" can't sit pinned over the live nav map and
+        // hijack the active drive to the old destination.
+        dismissRoutePreviewAlert(animated: false)
+
         // Pop any pushed templates (commutes list, etc.) back to map root
         // Must provide completion handler — CarPlay throws if there's nothing to pop and no handler is set
         interfaceController?.popToRootTemplate(animated: false) { _, _ in }
@@ -373,6 +387,9 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             return
         }
         carplayLog.info("CarPlay: restartNavigationSession for new leg")
+
+        // A new leg is also a nav-start path — clear any lingering preview modal.
+        dismissRoutePreviewAlert(animated: false)
 
         let routeCoords = stateManager.activeRouteCoords
         if !routeCoords.isEmpty {
@@ -550,23 +567,38 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let previewTemplate = CPListTemplate(title: "Route to \(name)", sections: [section])
 
         let startAction = CPAlertAction(title: "Start Navigation", style: .default) { [weak self] _ in
+            self?.isShowingRoutePreviewAlert = false
             self?.interfaceController?.dismissTemplate(animated: true) { _, _ in }
             self?.interfaceController?.popToRootTemplate(animated: false) { _, _ in }
             self?.startNavigation(to: name, coordinate: coordinate)
         }
 
         let cancelAction = CPAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+            self?.isShowingRoutePreviewAlert = false
             self?.interfaceController?.dismissTemplate(animated: true) { _, _ in }
             self?.interfaceController?.popToRootTemplate(animated: true) { _, _ in }
         }
 
-        interfaceController.pushTemplate(previewTemplate, animated: true) { _, _ in
+        interfaceController.pushTemplate(previewTemplate, animated: true) { [weak self] _, _ in
             let alert = CPAlertTemplate(
                 titleVariants: ["\(etaMinutes) min to \(name) (\(distanceText))"],
                 actions: [startAction, cancelAction]
             )
-            interfaceController.presentTemplate(alert, animated: true) { _, _ in }
+            interfaceController.presentTemplate(alert, animated: true) { [weak self] success, _ in
+                if success { self?.isShowingRoutePreviewAlert = true }
+            }
         }
+    }
+
+    /// Dismiss the modally-presented route-preview alert if one is up. A no-op
+    /// when no preview alert is showing, so it never logs a dismiss-with-no-modal
+    /// warning. Called when navigation starts so the stale alert can't linger over
+    /// the live nav UI.
+    @MainActor
+    private func dismissRoutePreviewAlert(animated: Bool) {
+        guard isShowingRoutePreviewAlert else { return }
+        isShowingRoutePreviewAlert = false
+        interfaceController?.dismissTemplate(animated: animated) { _, _ in }
     }
 
     /// Start navigation to a coordinate from the CarPlay route preview.

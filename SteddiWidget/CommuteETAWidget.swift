@@ -62,11 +62,34 @@ struct CommuteETAProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<CommuteETAEntry>) -> Void) {
+        let now = Date.now
         let entry = currentEntry()
+        var entries = [entry]
+
+        // The freshness label is a time-based state transition, but it's computed
+        // against each entry's own `date`. With a single entry frozen at `now`, an
+        // ETA that crosses the 30-min freshness boundary mid-cycle wouldn't flip to
+        // "as of …" until the next ~15-min reload (up to ~15 min late). Emit a
+        // second entry dated exactly at the staleness-crossing instant so the
+        // widget re-renders right when the value goes stale.
+        if !entry.isNavigating, let updated = entry.etaUpdatedAt {
+            let staleAt = updated.addingTimeInterval(etaFreshnessWindow)
+            if staleAt > now {
+                entries.append(CommuteETAEntry(
+                    date: staleAt,
+                    commuteName: entry.commuteName,
+                    etaMinutes: entry.etaMinutes,
+                    destinationName: entry.destinationName,
+                    isNavigating: entry.isNavigating,
+                    etaUpdatedAt: entry.etaUpdatedAt
+                ))
+            }
+        }
+
         // Refresh every 15 minutes so the freshness label/relative age advances
         // even when the app doesn't write new defaults in between.
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: .now) ?? .now.addingTimeInterval(900)
-        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: now) ?? now.addingTimeInterval(900)
+        let timeline = Timeline(entries: entries, policy: .after(nextUpdate))
         completion(timeline)
     }
 
