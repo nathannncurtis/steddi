@@ -38,11 +38,15 @@ import SwiftData
 ///     new `driveRecords` to-many is empty/nil for every existing row, so opening a
 ///     pre-inverse store under the current schema requires no data transformation.
 ///
-/// `SteddiMigrationPlanTests` proves the inverse-relationship case end to end: it
-/// writes a store under a frozen *pre-inverse* snapshot of the model graph, reopens
-/// it under the current schema, and asserts the store opens with its data intact
-/// and that the `.nullify` rule then works (deleting a Commute nulls the drive's
-/// `associatedCommute` while the historical DriveRecord survives).
+/// `SteddiSchemaMigrationTests` (in `SteddiTests/ModelStoreLocatorTests.swift`)
+/// proves the inverse-relationship case end to end: it writes a store under a
+/// derived *pre-inverse* snapshot of a twin model graph (`MigParent`/`MigChild`,
+/// the shape `DriveRecord.associatedCommute` had before the inverse was added),
+/// reopens the same file under the current (inverse + `.nullify`) schema with no
+/// `SchemaMigrationPlan`, and asserts the store opens via automatic lightweight
+/// migration with its data intact and the `.nullify` rule then live. The live
+/// `Commute`/`DriveRecord` delete-nullify behavior is additionally covered by
+/// `CommuteDriveRecordRelationshipTests` in the same file.
 ///
 /// ## When a real plan WILL be needed
 ///
