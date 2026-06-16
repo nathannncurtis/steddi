@@ -483,17 +483,14 @@ enum ThemeBeatSurface {
 extension SteddiTheme.AccentOption {
     /// A checkmark/glyph color that contrasts the accent fill. Steddi's accents
     /// are all light pastels, so a hard-coded white check is illegible on them
-    /// (gold ~2.4:1, worst). Choose a near-black glyph on light accents and white
-    /// on dark ones, keyed off the accent's relative luminance (Rec. 709). A dark
-    /// glyph gives 6–9:1 across the whole palette. Shared by the onboarding and
-    /// Settings accent pickers.
+    /// (gold ~2.4:1, worst). Delegate to the project's canonical on-fill picker
+    /// (`ContrastRatio.contrastingForeground`, the same chooser behind `onAccent`)
+    /// so the black/white decision is the WCAG relative-luminance one used
+    /// app-wide, not a bespoke 0.5-on-gamma threshold that can disagree with it for
+    /// some accents. Picks a near-black glyph on these light accents (6–9:1 across
+    /// the palette) and near-white on any future dark accent. Shared by the
+    /// onboarding and Settings accent pickers.
     var contrastingGlyph: Color {
-        let c = uiColor
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        c.getRed(&r, green: &g, blue: &b, alpha: &a)
-        let luminance = 0.2126 * Double(r) + 0.7152 * Double(g) + 0.0722 * Double(b)
-        // Near-black (not pure black) on light accents reads as a deliberate glyph
-        // rather than a hole; white on the (currently none) dark accents.
-        return luminance > 0.5 ? Color(red: 0.10, green: 0.09, blue: 0.08) : .white
+        ContrastRatio.contrastingForeground(on: rgb).color
     }
 }
