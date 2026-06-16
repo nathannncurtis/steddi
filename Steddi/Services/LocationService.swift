@@ -42,6 +42,17 @@ final class LocationService {
                 // dedupes by fix timestamp, so the navigation loop forwarding
                 // the same fix is harmless.
                 TunnelDetectionService.shared.updateLocation(location)
+                // Theming: every fix also refreshes weather so the weather and
+                // temperature theme layers actually move. Only while dynamic
+                // theming is active — a fixed Dark/Light/Grey theme ignores
+                // these inputs, so there's no reason to spend WeatherKit quota
+                // on them. The service's own budget guard (10-min min spacing +
+                // 60/day cap) throttles the per-fix call rate down to at most a
+                // handful of fetches an hour; refresh() is async so we hop into
+                // a child task rather than block the fix delivery.
+                if ThemeEngine.shared.isDynamicTheming {
+                    Task { await WeatherKitService.shared.refresh(at: location) }
+                }
                 if self.isRecording, location.horizontalAccuracy <= 20 {
                     self.recordedPoints.append(GPSPoint(from: location))
                 }
