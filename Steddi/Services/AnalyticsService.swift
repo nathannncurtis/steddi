@@ -169,6 +169,9 @@ final class AnalyticsService {
     /// Guards against spawning overlapping backfill passes when loadAnalytics is
     /// called repeatedly (appear + window changes) before the first one drains.
     private var backfillInFlight = false
+    /// Guards against spawning overlapping weekly-aggregate rebuilds when the
+    /// 1Y/All window is (re)loaded repeatedly before a rebuild finishes.
+    private var rebuildInFlight = false
 
     /// How many drives the list section shows.
     static let recentDriveLimit = 50
@@ -216,8 +219,15 @@ final class AnalyticsService {
             applyTrends(Self.computeTrends(samples: samples, now: now, calendar: calendar))
 
         case .oneYear, .all:
+            // The weekly-aggregate rebuild does an unbounded historical fetch +
+            // context.save() — too heavy for the MainActor on the hottest
+            // analytics path. When the cache is stale, drain the rebuild on a
+            // background ModelContext and re-aggregate when it lands (mirrors
+            // scheduleBackfill); paint cache-first NOW with whatever buckets
+            // already exist so the first frame is never blocked. The cache-first
+            // read self-corrects once the background rebuild re-aggregates.
             if Self.aggregatesNeedRebuild(context: context, now: now, calendar: calendar) {
-                Self.rebuildAggregates(context: context, now: now, calendar: calendar)
+                scheduleRebuild(container: context.container)
             }
             aggregateStats = Self.cacheFirstStats(
                 context: context, windowStart: windowStart, now: now, calendar: calendar
@@ -264,17 +274,50 @@ final class AnalyticsService {
         }
     }
 
+    /// Rebuilds the stale weekly aggregate buckets on a detached background
+    /// context, then re-aggregates the current window on the MainActor so the
+    /// cache-first stats pick up the freshly-written buckets. At most one
+    /// rebuild runs at a time; repeated 1Y/All loads while one is in flight are
+    /// coalesced. The heavy unbounded fetch + save never touches the main thread.
+    private func scheduleRebuild(container: ModelContainer) {
+        guard !rebuildInFlight else { return }
+        rebuildInFlight = true
+
+        // Pin the rebuild clock to the load that triggered it, so the open-week
+        // boundary the background rebuild uses matches the cache-first read.
+        let clock = lastLoad?.now ?? Date()
+        Task.detached(priority: .utility) {
+            // Fresh background context on the same container — NOT the view's
+            // MainActor context — so the unbounded historical fetch + save runs
+            // entirely off the main thread. Mirrors backfillMissingSummaries.
+            let ctx = ModelContext(container)
+            Self.rebuildAggregates(context: ctx, now: clock)
+
+            await MainActor.run {
+                self.rebuildInFlight = false
+                guard let last = self.lastLoad else { return }
+                // Re-aggregate into the SAME context the view passed to
+                // loadAnalytics (stashed in lastLoad), which now sees the buckets
+                // persisted by the background context. Safe to reuse the
+                // non-Sendable context here: this block runs on the MainActor, the
+                // same actor that wrote lastLoad, so it never crosses actors.
+                self.aggregate(window: last.window, context: last.context, now: last.now)
+            }
+        }
+    }
+
     private func applyTrends(_ result: (insights: [TrendInsight], gateMessage: String?)) {
         trendInsights = result.insights
         trendGateMessage = result.gateMessage
     }
 
-    /// Builds the detail payload for one drive. The only code path that
-    /// decodes a GPS blob on behalf of the UI.
-    nonisolated static func buildDriveDetail(for record: DriveRecord) -> DriveDetail {
-        let points = record.rawGPSPoints
-        let speedPoints = buildSpeedChart(points: points)
-        return DriveDetail(
+    /// Captures everything `buildDriveDetail` needs from a (non-Sendable)
+    /// DriveRecord into a Sendable snapshot. MUST run on the MainActor — it
+    /// faults the GPS blob and the `associatedCommute` relationship — so the
+    /// detached decode never touches the @Model off-actor.
+    @MainActor
+    static func snapshot(of record: DriveRecord) -> DriveRecordSnapshot {
+        DriveRecordSnapshot(
             id: record.id,
             title: record.associatedCommute?.name ?? "Drive",
             startedAt: record.startedAt,
