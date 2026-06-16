@@ -393,20 +393,25 @@ struct SteddiNavOverlay: View {
                             Text("\(engine.etaMinutes)")
                                 .font(SteddiTheme.mono(22 * textScale))
                                 .foregroundStyle(SteddiTheme.textPrimary)
+                                .legibleOverMap()
                             Text("min")
                                 .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
                                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                                .legibleOverMap()
                         }
                         // Meaningful readouts over translucent nav glass on a
                         // moving map — textSecondary, not textMuted (whose AA
-                        // guarantee is only against the solid surface tokens).
+                        // guarantee is only against the solid surface tokens) —
+                        // plus the shared soft shadow so they hold against any tile.
                         HStack(spacing: 6) {
                             Text(engine.distanceRemaining)
                                 .font(SteddiTheme.mono(12 * textScale))
                                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                                .legibleOverMap()
                             Text(engine.arrivalTime)
                                 .font(SteddiTheme.mono(12 * textScale))
                                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                                .legibleOverMap()
                         }
                     }
 
@@ -423,6 +428,9 @@ struct SteddiNavOverlay: View {
                         .buttonStyle(.steddiDestructive)
                 }
                 .padding(12)
+                // Faint scrim under the glass (same shape) like the bottom bar,
+                // so the ETA / distance / arrival readouts hold against any tile.
+                .mapGlassScrim(in: SteddiGlass.mediumShape)
                 .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.mediumShape, fallbackStrokeOpacity: 0.08)
             }
             .padding(.leading, 50) // clear notch
@@ -434,6 +442,10 @@ struct SteddiNavOverlay: View {
                 Text(engine.roadName)
                     .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
                     .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                    // Street name rides neutral glass over the moving map — the
+                    // shared soft shadow so it holds against any tile, matching
+                    // the portrait street-name capsule.
+                    .legibleOverMap()
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
                     .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.25)
@@ -1083,6 +1095,9 @@ struct SteddiNavOverlay: View {
                 // staying thin, fixed-size while the rest of the chrome promotes.
                 .font(SteddiTheme.body(15 * textScale, highContrast: highContrast))
                 .foregroundStyle(SteddiTheme.textPrimary)
+                // Rides neutral glass over the map — the shared soft shadow keeps
+                // the confirmation legible on any tile, like the sibling readouts.
+                .legibleOverMap()
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
