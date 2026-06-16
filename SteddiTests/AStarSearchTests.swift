@@ -463,6 +463,88 @@ struct AStarSearchTests {
                 "zero-length route must report ~0 travel time, not a full-edge duration")
     }
 
+    @Test("destination near the A-end of a long two-way edge, approached from the B-end: no full-edge overshoot + double-back")
+    func midEdgeDestinationApproachedFromWrongEnd() {
+        // A long two-way edge A(1) <-> B(2) (~445 m). A short two-way connector
+        // C(3) <-> B(2) feeds the ORIGIN into the street at the B-end. The ORIGIN is
+        // node C, so its single out-edge C->B is deterministic; the DESTINATION snaps
+        // mid-edge at ~fraction 0.2 from A (i.e. ~0.8 of the edge AWAY from B). The
+        // origin is NOT on the A<->B road, so the same-road fast path does NOT fire —
+        // plain A* runs against a mid-edge destination on a long two-way edge.
+        //
+        // Pre-fix, resolveDestination modelled the mid-edge end as a SINGLE goal:
+        // reach `edge.from` (= A) then drive fraction 0.2 forward. Coming from B,
+        // A* had to traverse the WHOLE A<->B edge in reverse to reach A, then the
+        // trailing partial drove 0.2 back toward B — overshooting the destination and
+        // doubling back (~1.2 edge-lengths, with a U-turn at A, for a point only 0.8
+        // of an edge away). The fix offers the reverse-orientation arrival: stop at B
+        // and take the short 0.8 reverse partial straight to the destination.
+        let graph = buildGraph(
+            node(1, 0.0, 0.0),        // A
+            node(2, 0.0, 0.004),      // B  (~445 m east of A)
+            node(3, 0.0009, 0.004),   // C  (~100 m north of B)
+            way(100, [1, 2], tags: ["highway": "primary", "maxspeed": "45 mph"]),  // A<->B long two-way
+            way(101, [2, 3], tags: ["highway": "primary", "maxspeed": "45 mph"])   // B<->C connector
+        )
+        // Origin at node C — enters the A<->B street at the B-end via C->B.
+        let originNode = NodeIndex(graph.osmToIndex[3]!)
+        let origin = graph.nodes[Int(originNode)].coordinate
+        // Destination at ~fraction 0.2 from A along the long edge.
+        let dest = CLLocationCoordinate2D(latitude: 0.000005, longitude: 0.0008)
+
+        guard let destSnap = graph.snap(dest, maxDistanceMeters: 200) else {
+            Issue.record("destination snap failed"); return
+        }
+        // Snapped onto the long A<->B edge, near the A-end (geometry-based so the
+        // check is independent of which directed orientation snap happened to pick).
+        let nodeA = graph.nodes[Int(graph.osmToIndex[1]!)].coordinate
+        let nodeB = graph.nodes[Int(graph.osmToIndex[2]!)].coordinate
+        #expect(RouteGeometry.haversineDistance(from: destSnap.snapped, to: nodeA)
+                < RouteGeometry.haversineDistance(from: destSnap.snapped, to: nodeB),
+                "destination should snap nearer the A-end than the B-end")
+        let longEdge = graph.edges[Int(destSnap.edge)]
+        let longEdgeLen = Double(longEdge.lengthMeters)
+
+        guard let result = search.search(from: .node(originNode), to: .coordinate(dest), in: graph, cost: cost) else {
+            Issue.record("no path"); return
+        }
+
+        // The synthesized route must END at the destination point (within snap
+        // noise), NOT a block past it at node A.
+        guard let synth = StepSynthesizer.synthesize(result, in: graph) else {
+            Issue.record("synthesis failed"); return
+        }
+        let endPoint = synth.coordinates.last!
+        #expect(RouteGeometry.haversineDistance(from: endPoint, to: destSnap.snapped) < 2.0,
+                "route should end at the destination, ended \(RouteGeometry.haversineDistance(from: endPoint, to: destSnap.snapped)) m away")
+
+        // No overshoot + double-back: the drawn route travels essentially the
+        // straight-line origin->dest distance, NOT a full edge plus a 0.2 backtrack.
+        // Straight-line origin->dest is ~connector + 0.8 of the long edge. A full
+        // overshoot would add ~2 * 0.2 * edgeLen of pointless extra distance.
+        let drawnLength = RouteGeometry.cumulativeDistances(synth.coordinates).last ?? .infinity
+        let straight = RouteGeometry.haversineDistance(from: destSnap.snapped, to: origin)
+        #expect(drawnLength < straight + 0.25 * longEdgeLen,
+                "route length \(drawnLength) m overshoots straight-line \(straight) m by more than a fifth of the edge (\(longEdgeLen) m)")
+
+        // No U-turn maneuver — the overshoot bug emitted a turn back at node A.
+        #expect(!synth.steps.contains { $0.instruction.lowercased().contains("u-turn") })
+
+        // The route must not traverse the long edge and then re-traverse part of it
+        // in the opposite direction: the long edge's two directed orientations must
+        // not BOTH appear in the path (that is the overshoot signature).
+        let forwardLong = result.edgePath.contains { e in
+            let ge = graph.edges[Int(e)]
+            return ge.osmWayID == longEdge.osmWayID && ge.from == longEdge.from && ge.to == longEdge.to
+        }
+        let reverseLong = result.edgePath.contains { e in
+            let ge = graph.edges[Int(e)]
+            return ge.osmWayID == longEdge.osmWayID && ge.from == longEdge.to && ge.to == longEdge.from
+        }
+        #expect(!(forwardLong && reverseLong),
+                "route traverses the long edge in BOTH directions — full-edge overshoot + double-back")
+    }
+
     // MARK: - Boundary snap (endpoint projects exactly onto a graph node)
 
     /// A straight 3-edge chain 1-2-3-4 along the equator, each ~111 m primary —
