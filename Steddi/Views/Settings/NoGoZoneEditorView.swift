@@ -102,6 +102,11 @@ struct NoGoZoneEditorView: View {
                 .font(.body.weight(.medium))
                 .foregroundStyle(SteddiTheme.textPrimary)
                 .padding(10)
+                // Theme-aware over-map scrim behind the glass (same shape), like the
+                // nav HUD — in DARK theme the light frost would otherwise wash the
+                // label out over the map. Drawn before `.steddiGlass` so the glass
+                // sits on top; suppressed when glass is off (the fallback is opaque).
+                .mapGlassScrim(in: Capsule())
                 .steddiGlass(interactive: true, in: Capsule())
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Capsule())
@@ -113,6 +118,7 @@ struct NoGoZoneEditorView: View {
                     .font(.body.weight(.medium))
                     .foregroundStyle(SteddiTheme.accent)
                     .padding(10)
+                    .mapGlassScrim(in: Circle())
                     .steddiGlass(interactive: true, in: Circle())
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Circle())
@@ -124,6 +130,7 @@ struct NoGoZoneEditorView: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(canSave ? SteddiTheme.accent : SteddiTheme.textMuted)
                 .padding(10)
+                .mapGlassScrim(in: Capsule())
                 .steddiGlass(interactive: true, in: Capsule())
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Capsule())
@@ -146,7 +153,10 @@ struct NoGoZoneEditorView: View {
         .padding(10)
         // Floats over the live map — shared glass treatment so it falls back to a
         // SOLID surface under Reduce Transparency / Increase Contrast instead of a
-        // translucent fill the cartography bleeds through.
+        // translucent fill the cartography bleeds through. The theme-aware over-map
+        // scrim (same shape, behind the glass) keeps the picker from washing out in
+        // DARK theme, matching the nav HUD.
+        .mapGlassScrim(in: RoundedRectangle(cornerRadius: 14))
         .steddiGlass(in: RoundedRectangle(cornerRadius: 14))
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -201,7 +211,10 @@ struct NoGoZoneEditorView: View {
         .frame(maxWidth: .infinity)
         // Floats over the live map — shared glass treatment so the card falls back
         // to a SOLID surface under Reduce Transparency / Increase Contrast instead
-        // of a translucent fill the cartography bleeds through.
+        // of a translucent fill the cartography bleeds through. The theme-aware
+        // over-map scrim (same shape, behind the glass) stops the card content from
+        // washing out in DARK theme, exactly like the nav HUD / route-preview.
+        .mapGlassScrim(in: bottomCardShape)
         .steddiGlass(in: bottomCardShape)
         .clipShape(bottomCardShape)
         // Lift the card off the map (kept from the prior look). Applied outside the
@@ -307,7 +320,9 @@ struct NoGoZoneEditorView: View {
         // Floats over the live map — shared glass treatment so it falls back to a
         // SOLID surface under Reduce Transparency / Increase Contrast instead of the
         // translucent fill the cartography bled through (matching topBar /
-        // modePickerBar / bottomControlCard).
+        // modePickerBar / bottomControlCard). The theme-aware over-map scrim (same
+        // shape, behind the glass) keeps it from washing out in DARK theme.
+        .mapGlassScrim(in: Capsule())
         .steddiGlass(in: Capsule())
         .padding(.bottom, 8)
     }
@@ -318,7 +333,10 @@ struct NoGoZoneEditorView: View {
             .foregroundStyle(SteddiTheme.warmRedText)
             .padding(.horizontal, 16).padding(.vertical, 10)
             // Shared glass treatment so the banner goes opaque under Reduce
-            // Transparency / Increase Contrast (was a raw translucent surface).
+            // Transparency / Increase Contrast (was a raw translucent surface),
+            // plus the theme-aware over-map scrim (same shape, behind the glass) so
+            // it doesn't wash out in DARK theme.
+            .mapGlassScrim(in: Capsule())
             .steddiGlass(in: Capsule())
             .padding(.bottom, 8)
     }
@@ -350,7 +368,10 @@ struct NoGoZoneEditorView: View {
             .padding(12)
             // Shared glass treatment so the search field goes opaque under Reduce
             // Transparency / Increase Contrast (was a raw translucent surface the
-            // map bled through), matching the other floating editor chrome.
+            // map bled through), matching the other floating editor chrome. The
+            // theme-aware over-map scrim (same shape, behind the glass) keeps the
+            // field legible in DARK theme over the map.
+            .mapGlassScrim(in: RoundedRectangle(cornerRadius: 12))
             .steddiGlass(in: RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -390,7 +411,10 @@ struct NoGoZoneEditorView: View {
                 }
                 .frame(maxHeight: 200)
                 // Same shared glass treatment for the results list, so it goes
-                // opaque under Reduce Transparency / Increase Contrast too.
+                // opaque under Reduce Transparency / Increase Contrast too, plus the
+                // theme-aware over-map scrim (same shape, behind the glass) so the
+                // results don't wash out in DARK theme over the map.
+                .mapGlassScrim(in: RoundedRectangle(cornerRadius: 12))
                 .steddiGlass(in: RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 16)
                 .padding(.top, 4)

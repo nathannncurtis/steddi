@@ -656,13 +656,20 @@ struct SteddiNavOverlay: View {
                 .legibleOverMap()
 
             VStack(alignment: .leading, spacing: 2) {
+                // The glass is tinted with the camera's KIND color, so the title +
+                // distance sit on a semantically-COLORED surface — not the neutral
+                // surface the textPrimary/textSecondary tokens are tuned for, where
+                // they can fall low-contrast on the colored tint. Draw them in the
+                // same on-fill treatment the glyph uses (`contrastingForeground(on:)`
+                // picks the legible near-black/white per kind fill), so the heads-up
+                // reads against its own colored banner in every theme.
                 Text("\(camera.kind.displayName) ahead")
                     .font(SteddiTheme.body(15 * textScale, highContrast: highContrast))
-                    .foregroundStyle(SteddiTheme.textPrimary)
+                    .foregroundStyle(SteddiTheme.contrastingForeground(on: camera.kind.kindRGB))
                     .legibleOverMap()
                 Text(formatDistance(camera.distanceMeters))
                     .font(SteddiTheme.mono(13 * textScale))
-                    .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                    .foregroundStyle(SteddiTheme.contrastingForeground(on: camera.kind.kindRGB))
                     .legibleOverMap()
             }
 
@@ -874,7 +881,11 @@ struct SteddiNavOverlay: View {
 
             // ETA block — center
             VStack(spacing: 4) {
-                HStack(spacing: 4) {
+                // Baseline-align "min" to the ETA number via `.firstTextBaseline`
+                // so it tracks the digits' baseline as both scale under Dynamic
+                // Type. The old hardcoded `.padding(.top, 8)` was hand-tuned for the
+                // default size and drifted/misaligned once the type grew.
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(engine.etaMinutes)")
                         .font(SteddiTheme.mono(32 * textScale))
                         .foregroundStyle(SteddiTheme.textPrimary)
@@ -883,7 +894,6 @@ struct SteddiNavOverlay: View {
                         .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
                         .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                         .legibleOverMap()
-                        .padding(.top, 8)
                 }
 
                 HStack(spacing: 8) {
