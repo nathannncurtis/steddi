@@ -460,7 +460,7 @@ struct SteddiNavOverlay: View {
                 Text(displayInstruction)
                     .font(SteddiTheme.body(18 * textScale, highContrast: highContrast).weight(.semibold))
                     .foregroundStyle(SteddiTheme.textPrimary)
-                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+                    .legibleOverMap()
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .minimumScaleFactor(0.7)
@@ -469,16 +469,11 @@ struct SteddiNavOverlay: View {
             Spacer()
         }
         .padding(20)
-        // Neutral glass with a faint opaque scrim underneath. The scrim lifts the
-        // glass off bright/varied cartography so the safety-critical instruction
-        // never washes out, while keeping the Liquid Glass aesthetic on top. The
-        // scrim is skipped when glass is off (the fallback is already opaque).
-        .background {
-            if SteddiGlass.isAvailable {
-                SteddiGlass.cardShape
-                    .fill(SteddiTheme.surfacePrimary.opacity(0.22))
-            }
-        }
+        // Neutral glass with the shared faint scrim underneath. The scrim lifts
+        // the glass off bright/varied cartography so the safety-critical
+        // instruction never washes out, while keeping the Liquid Glass aesthetic
+        // on top (skipped when glass is off — the fallback is already opaque).
+        .mapGlassScrim(in: SteddiGlass.cardShape)
         .steddiGlass(tint: nil, interactive: false, in: SteddiGlass.cardShape)
     }
 
@@ -495,7 +490,7 @@ struct SteddiNavOverlay: View {
             Text("Leg \(trip.legIndex) of \(trip.totalLegs) · \(trip.nextStopName)")
                 .font(SteddiTheme.body(13 * textScale, highContrast: highContrast).weight(.medium))
                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
-                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+                .legibleOverMap()
                 .lineLimit(1)
 
             Spacer()
@@ -507,7 +502,7 @@ struct SteddiNavOverlay: View {
                 Text(summary)
                     .font(SteddiTheme.mono(12 * textScale))
                     .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
-                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+                    .legibleOverMap()
             }
         }
         .padding(.horizontal, 14)
@@ -532,7 +527,7 @@ struct SteddiNavOverlay: View {
             Text("Then: \(displayFollowOnInstruction)")
                 .font(SteddiTheme.body(14 * textScale, highContrast: highContrast).weight(.medium))
                 .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
-                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+                .legibleOverMap()
                 .lineLimit(1)
 
             Spacer()
@@ -551,7 +546,7 @@ struct SteddiNavOverlay: View {
             // tile (textSecondary's AA is only proven on solid surfaces).
             .font(SteddiTheme.body(14 * textScale, highContrast: highContrast).weight(.medium))
             .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
-            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+            .legibleOverMap()
             .padding(.horizontal, 16)
             .padding(.vertical, 7)
             .steddiGlass(tint: nil, interactive: false, in: Capsule(), fallbackStrokeOpacity: 0.25)
@@ -601,7 +596,7 @@ struct SteddiNavOverlay: View {
             // promoted like the sibling nav readouts) plus a soft shadow so it
             // separates from bright/varied cartography on every theme.
             .foregroundStyle(SteddiTheme.textPrimary.opacity(compassSector == nil ? 0.35 : 1))
-            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+            .legibleOverMap()
             .frame(width: 44 * iconScale, height: 44 * iconScale)
             // Neutral glass readout — not a toggle, so no accent tint.
             .steddiGlass(tint: nil, interactive: false, in: .circle)
@@ -698,7 +693,7 @@ struct SteddiNavOverlay: View {
             // See compassIndicator: textPrimary + soft shadow guarantees the
             // readout over a moving map, rather than the surface-sized accent.
             .foregroundStyle(SteddiTheme.textPrimary.opacity(compassSector == nil ? 0.35 : 1))
-            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+            .legibleOverMap()
             .frame(width: 50 * iconScale, height: 50 * iconScale)
             .steddiGlass(tint: nil, interactive: false, in: .circle)
     }
@@ -1074,6 +1069,41 @@ struct SteddiNavOverlay: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: arrival)
+    }
+}
+
+// MARK: - Legible-over-map treatment
+
+/// The single, shared protection every nav readout that rides translucent nav
+/// glass over the moving map gets, so the treatment can never drift between
+/// sites and any future readout inherits it by adopting these two modifiers.
+///
+/// The portrait top banner — the safety-critical maneuver — established this
+/// pattern (textPrimary/textSecondary + soft shadow + a faint scrim under the
+/// glass), precisely because the surface-token AA guarantee holds only against
+/// the *solid* surfaces, NOT against Liquid Glass over bright/varied cartography
+/// where the map tile bleeds through. These two modifiers are that pattern,
+/// extracted verbatim so the bottom bar, speedometer, landscape instruction
+/// card, and floating-control glyphs all share exactly the same hardening.
+extension View {
+    /// Soft drop shadow that separates a glass-borne readout from any map tile.
+    /// Matches the compass / top-banner / street-name shadow used across the HUD.
+    func legibleOverMap() -> some View {
+        self.shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+    }
+
+    /// Back a translucent-glass panel with the faint opaque scrim the top banner
+    /// uses, lifting the glass off bright cartography so the readouts on it never
+    /// wash out. Skipped when glass is off (the fallback is already opaque), and
+    /// drawn *behind* the glass so the Liquid Glass aesthetic stays on top.
+    /// Apply this immediately before `.steddiGlass(…)` with the SAME shape.
+    @ViewBuilder
+    func mapGlassScrim(in shape: some Shape) -> some View {
+        self.background {
+            if SteddiGlass.isAvailable {
+                shape.fill(SteddiTheme.surfacePrimary.opacity(0.22))
+            }
+        }
     }
 }
 
