@@ -12,6 +12,12 @@ struct TripArrivalCard: View {
 
     private var isComplete: Bool { nextStopName == nil }
 
+    /// Same display-mode source as the nav HUD / reroute card so this over-map
+    /// card grows (textScale) and thickens/promotes (highContrast) in
+    /// accessibility / passenger mode alongside the rest of the floating chrome.
+    private var textScale: Double { DisplayModeService.shared.textScale }
+    private var highContrast: Bool { DisplayModeService.shared.useHighContrast }
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 14) {
@@ -21,19 +27,19 @@ struct TripArrivalCard: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(isComplete ? "Trip complete" : "Arrived at \(stopName)")
-                        .font(SteddiTheme.heading(16))
+                        .font(SteddiTheme.heading(16 * textScale))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .legibleOverMap()
 
                     if let nextStopName {
                         Text("Next: \(nextStopName)")
-                            .font(SteddiTheme.body(13))
-                            .foregroundStyle(SteddiTheme.textSecondary)
+                            .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                            .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                             .legibleOverMap()
                     } else {
                         Text("Arrived at \(stopName)")
-                            .font(SteddiTheme.body(13))
-                            .foregroundStyle(SteddiTheme.textSecondary)
+                            .font(SteddiTheme.body(13 * textScale, highContrast: highContrast))
+                            .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                             .legibleOverMap()
                     }
                 }

@@ -19,6 +19,11 @@ struct RoutePreviewView: View {
 
     private var activeRoute: MKRoute { selectedRoute ?? route }
 
+    /// Same display-mode source as the nav HUD / reroute card so the captions
+    /// and unselected-chip labels promote in weight + contrast under the app's
+    /// high-contrast (Accessibility / system Increase Contrast) mode.
+    private var highContrast: Bool { DisplayModeService.shared.useHighContrast }
+
     /// A presented cover gets its own presentation context and does not reliably
     /// inherit the presenter's `.preferredColorScheme`, so pin the app theme here
     /// too — otherwise this cover renders in the device appearance and mismatches
@@ -46,8 +51,8 @@ struct RoutePreviewView: View {
                     // pushing the fixed card up under the map controls at large
                     // Dynamic Type.
                     Text(destinationName)
-                        .font(SteddiTheme.body(16))
-                        .foregroundStyle(SteddiTheme.textSecondary)
+                        .font(SteddiTheme.body(16, highContrast: highContrast))
+                        .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .minimumScaleFactor(0.7)
@@ -63,8 +68,8 @@ struct RoutePreviewView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                             Text("min")
-                                .font(SteddiTheme.body(14))
-                                .foregroundStyle(SteddiTheme.textSecondary)
+                                .font(SteddiTheme.body(14, highContrast: highContrast))
+                                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
                         }
@@ -80,8 +85,8 @@ struct RoutePreviewView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                             Text("distance")
-                                .font(SteddiTheme.body(14))
-                                .foregroundStyle(SteddiTheme.textSecondary)
+                                .font(SteddiTheme.body(14, highContrast: highContrast))
+                                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
                         }
@@ -174,15 +179,16 @@ struct RoutePreviewView: View {
             Image(systemName: indicator.symbol)
                 .font(.system(size: 12, weight: .semibold))
             Text(indicator.label)
-                .font(SteddiTheme.body(13))
+                .font(SteddiTheme.body(13, highContrast: highContrast))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
         // Active chip's label+icon sit on accentSubtle (accent@15%); raw accent
         // as text there fails AA in every theme (1.4–4.6:1, same as the route
         // chip), so use textPrimary — the accent identity stays in the fill +
-        // stroke. Mirrors routeChip's treatment.
-        .foregroundStyle(isActive ? SteddiTheme.textPrimary : SteddiTheme.textSecondary)
+        // stroke. Mirrors routeChip's treatment. The inactive label promotes to
+        // full contrast under high contrast like the rest of nav.
+        .foregroundStyle(isActive ? SteddiTheme.textPrimary : SteddiTheme.textSecondary(highContrast: highContrast))
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(
@@ -201,7 +207,7 @@ struct RoutePreviewView: View {
         } label: {
             VStack(spacing: 4) {
                 Text(label)
-                    .font(SteddiTheme.body(12))
+                    .font(SteddiTheme.body(12, highContrast: highContrast))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text("\(Int(ceil(route.expectedTravelTime / 60))) min")
@@ -212,7 +218,9 @@ struct RoutePreviewView: View {
             // Selected label sits on accentSubtle (accent@15%); accent-on-accent
             // fails AA in every theme (1.4–4.6:1), so use textPrimary which
             // clears it everywhere. The accent identity stays in the fill + stroke.
-            .foregroundStyle(isSelected ? SteddiTheme.textPrimary : SteddiTheme.textMuted)
+            // The unselected label promotes one tier (muted->secondary) under
+            // high contrast like the rest of nav.
+            .foregroundStyle(isSelected ? SteddiTheme.textPrimary : SteddiTheme.textMuted(highContrast: highContrast))
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(

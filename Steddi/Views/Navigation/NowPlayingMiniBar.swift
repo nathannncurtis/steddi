@@ -14,6 +14,13 @@ struct NowPlayingMiniBar: View {
     /// the bottom-left button column without crowding the ETA bar.
     var compact: Bool = false
 
+    /// Display-mode treatment threaded from the nav overlay (same source as the
+    /// other readouts: DisplayModeService) so the title/artist promote in
+    /// weight (highContrast) and grow in size (textScale) alongside the rest of
+    /// the HUD in accessibility / passenger mode instead of staying thin/small.
+    var textScale: Double = 1
+    var highContrast: Bool = false
+
     @State private var isSeeking = false
 
     private var artSize: CGFloat { compact ? 30 : 36 }
@@ -76,19 +83,19 @@ struct NowPlayingMiniBar: View {
         VStack(alignment: .leading, spacing: 1) {
             if service.hasReliableMetadata {
                 Text(service.nowPlayingTitle)
-                    .font(SteddiTheme.body(compact ? 13 : 14).weight(.semibold))
+                    .font(SteddiTheme.body((compact ? 13 : 14) * textScale, highContrast: highContrast).weight(.semibold))
                     .foregroundStyle(SteddiTheme.textPrimary)
                     .lineLimit(1)
                 if !service.nowPlayingArtist.isEmpty {
                     Text(service.nowPlayingArtist)
-                        .font(SteddiTheme.body(compact ? 11 : 12))
-                        .foregroundStyle(SteddiTheme.textSecondary)
+                        .font(SteddiTheme.body((compact ? 11 : 12) * textScale, highContrast: highContrast))
+                        .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                         .lineLimit(1)
                 }
             } else {
                 // Honest generic placeholder for apps we can't read.
                 Text("Now Playing")
-                    .font(SteddiTheme.body(compact ? 13 : 14).weight(.semibold))
+                    .font(SteddiTheme.body((compact ? 13 : 14) * textScale, highContrast: highContrast).weight(.semibold))
                     .foregroundStyle(SteddiTheme.textPrimary)
                     .lineLimit(1)
             }
