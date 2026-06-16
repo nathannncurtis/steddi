@@ -32,7 +32,52 @@ final class LiveActivityService {
     /// `private(set)` so tests can observe the latch (writes stay internal).
     private(set) var sessionEnded = false
 
-    private init() {}
+    /// App Group shared with the Live Activity extension. The extension can't read
+    /// `UserDefaults.standard` (where `@AppStorage("accentColor")` lives), so the
+    /// accent is mirrored here for the extension to read live on each render.
+    private static let appGroupSuite = "group.to.nathancurtis.steddi"
+    private static let accentColorKey = "accentColor"
+
+    /// Observer that keeps the App Group accent in sync with the user's choice.
+    private var accentObserver: NSObjectProtocol?
+
+    private init() {
+        // The Live Activity extension reads the App Group `accentColor` LIVE on
+        // every render, but the app only WROTE it at session start — so changing
+        // the accent mid-drive left the running activity tinted to the old accent
+        // until the next session. Observe the accent-change broadcast (posted by
+        // Settings / Onboarding when the user picks an accent) and re-mirror the
+        // current accent into the App Group, so the live-reading activity adopts
+        // the new tint on its next system-driven render. We only refresh the
+        // shared value — no ActivityKit push — so this can't cause an update storm.
+        // The notification is posted on the main thread (UI), matching this
+        // MainActor type. Self-contained: registered here, torn down in deinit.
+        accentObserver = NotificationCenter.default.addObserver(
+            forName: .steddiAccentColorChanged,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { LiveActivityService.shared.mirrorAccentToAppGroup() }
+        }
+    }
+
+    deinit {
+        if let accentObserver {
+            NotificationCenter.default.removeObserver(accentObserver)
+        }
+    }
+
+    /// Mirror the user's chosen accent into the shared App Group so the Live
+    /// Activity (a separate extension target that can't see SteddiTheme or
+    /// `UserDefaults.standard`) can tint its accent elements to match the in-app
+    /// HUD. Written at session start AND whenever the accent changes, so a
+    /// mid-drive accent change reaches the live-reading activity.
+    private func mirrorAccentToAppGroup() {
+        UserDefaults(suiteName: Self.appGroupSuite)?.set(
+            SteddiTheme.currentAccentOption.rawValue,
+            forKey: Self.accentColorKey
+        )
+    }
 
     /// Append an ActivityKit mutation to the serial lifecycle chain. Each op runs
     /// on the MainActor and awaits the prior op's completion, so update/end ordering
@@ -74,14 +119,11 @@ final class LiveActivityService {
         // Mirror the user's chosen accent into the shared App Group so the Live
         // Activity (a separate extension target that can't see SteddiTheme) can
         // tint its maneuver glyph / trip-leg label to match the in-app HUD
-        // instead of a hardcoded lavender. Written at session start, so the
-        // Activity reads the accent that's current for this drive. The accent
-        // lives in UserDefaults.standard (@AppStorage), which the extension
-        // can't read — only the App Group is shared.
-        UserDefaults(suiteName: "group.to.nathancurtis.steddi")?.set(
-            SteddiTheme.currentAccentOption.rawValue,
-            forKey: "accentColor"
-        )
+        // instead of a hardcoded lavender. The accent observer (see init) keeps
+        // this fresh across mid-drive accent changes too; this seeds it for the
+        // session start. The accent lives in UserDefaults.standard (@AppStorage),
+        // which the extension can't read — only the App Group is shared.
+        mirrorAccentToAppGroup()
 
         let attributes = NavigationAttributes(destinationName: destinationName)
 
