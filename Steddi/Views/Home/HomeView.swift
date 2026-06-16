@@ -771,6 +771,7 @@ struct HomeView: View {
         // off-route on the new leg's geometry.
         lastRecoveryAt = nil
         isRecoveryInFlight = false
+        persistRecoveryBudget()
         let engine = NavigationEngine()
         engine.startNavigation(route: route)
         self.navigationEngine = engine
@@ -1404,6 +1405,7 @@ struct HomeView: View {
         // off-route (see beginNavigation for the full rationale).
         lastRecoveryAt = nil
         isRecoveryInFlight = false
+        persistRecoveryBudget()
 
         let engine = NavigationEngine()
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
@@ -1783,6 +1785,7 @@ struct HomeView: View {
         // every leg instead of re-arming each leg. advanceTripLeg never passes
         // through here, so continuing legs keep the running count.
         recoveriesThisTrip = 0
+        persistRecoveryBudget()
         try? modelContext.save()
         beginTripLeg(to: stop, trip: trip)
     }
@@ -1969,6 +1972,15 @@ struct HomeView: View {
         activeTrip = nil
     }
 
+    /// Mirror this view's per-trip recovery budget into the shared manager so it
+    /// survives a SwiftUI view rebuild (reAdoptActiveSessionIfNeeded restores from
+    /// it). Called after every mutation of `recoveriesThisTrip` / `lastRecoveryAt`
+    /// so the durable copy never lags the working @State.
+    private func persistRecoveryBudget() {
+        navStateManager.recoveriesThisTrip = recoveriesThisTrip
+        navStateManager.lastRecoveryAt = lastRecoveryAt
+    }
+
     /// Re-adopt an in-progress navigation session after this view was rebuilt
     /// with fresh @State while the SHARED manager is still navigating.
     ///
@@ -2015,6 +2027,12 @@ struct HomeView: View {
         if !navStateManager.activeRouteCoords.isEmpty {
             activeSavedPolyline = navStateManager.activeRouteCoords
         }
+        // Restore the per-trip recovery budget from the shared manager — this
+        // view's @State reset to 0/nil on the rebuild, but the manager kept the
+        // running count (and last-recovery time) across it, so the 3-recovery cap
+        // holds across the WHOLE trip instead of silently re-arming.
+        recoveriesThisTrip = navStateManager.recoveriesThisTrip
+        lastRecoveryAt = navStateManager.lastRecoveryAt
 
         // Resume guidance: feed restarts GPS → engine.updateLocation and the
         // periodic Live Activity updateActivity, and reveals the overlay.
@@ -2312,6 +2330,7 @@ struct HomeView: View {
         }
         isRecoveryInFlight = true
         lastRecoveryAt = Date()
+        persistRecoveryBudget()
         defer { isRecoveryInFlight = false }
 
         HapticService.shared.fire(.rerouteSuggestion)
@@ -2450,6 +2469,7 @@ struct HomeView: View {
             // on a geometry bail-out it does not, so re-arm here to avoid a freeze.
             if spliced {
                 recoveriesThisTrip += 1
+                persistRecoveryBudget()
             } else {
                 engine.clearOffRouteRecovery()
             }

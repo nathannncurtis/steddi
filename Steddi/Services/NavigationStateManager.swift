@@ -111,6 +111,23 @@ final class NavigationStateManager {
     /// Route coordinates for map rendering
     var activeRouteCoords: [CLLocationCoordinate2D] = []
 
+    /// Durable home for the off-route recovery budget so it survives a SwiftUI
+    /// view rebuild mid-trip. The cap (RouteRecoveryEngine abandons to
+    /// destination once `recoveriesThisTrip >= 3`) is meant to hold across a
+    /// WHOLE trip; HomeView used to keep this only in its own @State, which a
+    /// forced subtree re-identity (scene reconnect, etc.) resets to 0 — re-arming
+    /// the cap mid-trip. HomeView mirrors its working copy here on every change
+    /// and restores from here in reAdoptActiveSessionIfNeeded, the same way it
+    /// restores activeCommute/activeTrip/activeRouteCoords. `lastRecoveryAt` is
+    /// kept alongside so the 30s request cooldown survives the rebuild too.
+    /// These live OUTSIDE startObserving/stopObserving's reset because the budget
+    /// must persist across the begin*/startObserving boundary that runs on every
+    /// trip leg; HomeView owns when to reset it (RecoveryBudget.shouldReset).
+    @ObservationIgnored
+    var recoveriesThisTrip: Int = 0
+    @ObservationIgnored
+    var lastRecoveryAt: Date?
+
     // MARK: - Task Storage
 
     private var pollingTask: Task<Void, Never>?
