@@ -664,6 +664,70 @@ struct StepSynthesizerTests {
         }
     }
 
+    @Test("degenerate-geometry edge is bridged with node coordinates, never a silent teleport")
+    func degenerateEdgeBridgesContinuously() {
+        // A graph whose MIDDLE edge has degenerate (empty) geometry — the corrupt-
+        // blob shape the serializer now rejects, but which `stitchedPolyline` must
+        // still handle defensively. The degenerate edge spans ~1 km (N1 -> N2), so
+        // silently dropping it (the old behavior) would TELEPORT the drawn route
+        // across that step; bridging with the edge's endpoint node coordinates keeps
+        // the polyline continuous and reaches the true endpoint.
+        let graph = degenerateMiddleEdgeGraph()
+        // edgePath = [E0 (N0->N1), E1 (N1->N2, degenerate), E2 (N2->N3)].
+        let result = SearchResult(
+            nodePath: [0, 1, 2, 3],
+            edgePath: [0, 1, 2],
+            totalCost: 0,
+            startFraction: 0,
+            endFraction: 1
+        )
+        let poly = StepSynthesizer.stitchedPolyline(result, in: graph)
+        #expect(poly.count >= 2)
+
+        // CONTINUITY: no segment may exceed the longest real edge span (~1 km here,
+        // the bridged N1->N2 leg). A silent drop would leave the SAME or a LARGER
+        // jump, so the real assertion is that the destination is reached AND the
+        // bridge node coordinates are present (no missing intermediate vertex).
+        let n1 = graph.nodes[1].coordinate
+        let n2 = graph.nodes[2].coordinate
+        let n3 = graph.nodes[3].coordinate
+
+        // The destination node N3 must be the final drawn coordinate — a dropped
+        // edge that happened to be terminal would truncate the route short of it.
+        #expect(RouteGeometry.haversineDistance(from: poly.last!, to: n3) < 1.0)
+        // The bridged endpoints N1 and N2 must both appear in the polyline so the
+        // line walks N1 -> N2 explicitly rather than skipping the degenerate step.
+        #expect(poly.contains { RouteGeometry.haversineDistance(from: $0, to: n1) < 1.0 })
+        #expect(poly.contains { RouteGeometry.haversineDistance(from: $0, to: n2) < 1.0 })
+        // No teleport: every consecutive gap is at most the bridged leg's own span.
+        let maxLeg = RouteGeometry.haversineDistance(from: n1, to: n2) + 1.0
+        for i in 0..<(poly.count - 1) {
+            #expect(RouteGeometry.haversineDistance(from: poly[i], to: poly[i + 1]) <= maxLeg)
+        }
+    }
+
+    @Test("degenerate TRAILING edge is bridged so the route reaches its destination")
+    func degenerateTrailingEdgeReachesDestination() {
+        // A degenerate edge in the LAST position is the case a silent drop most
+        // clearly breaks: dropping it ends the polyline at the prior node, ~1 km
+        // short of the destination, with no detection. Bridging extends to the
+        // destination node so the drawn route actually arrives.
+        let graph = degenerateMiddleEdgeGraph()
+        // edgePath = [E0 (N0->N1), E1 (N1->N2, degenerate)]; N2 is the destination.
+        let result = SearchResult(
+            nodePath: [0, 1, 2],
+            edgePath: [0, 1],
+            totalCost: 0,
+            startFraction: 0,
+            endFraction: 1
+        )
+        let poly = StepSynthesizer.stitchedPolyline(result, in: graph)
+        #expect(poly.count >= 2)
+        let n2 = graph.nodes[2].coordinate
+        // The destination must be reached; a dropped trailing edge would stop at N1.
+        #expect(RouteGeometry.haversineDistance(from: poly.last!, to: n2) < 1.0)
+    }
+
     @Test("single-edge route trims the sub-segment [startFraction, endFraction] in one pass")
     func singleEdgeTrimComposesCorrectly() {
         // One straight primary edge from node 1 to node 2. A same-edge route (both
@@ -781,6 +845,50 @@ private func singleEdgeGraph() -> RoadGraph {
         p5node(2, 0.0, 0.0005),   // interior geometry node (referenced once)
         p5node(3, 0.0, 0.0010),
         p5way(100, [1, 2, 3], tags: ["highway": "primary", "maxspeed": "35 mph"])
+    )
+}
+
+/// A hand-built graph (NOT via the builder, which never emits this) whose MIDDLE
+/// edge has DEGENERATE geometry — an empty `geometryRange` — to exercise
+/// `stitchedPolyline`'s defensive node-coordinate bridging. Nodes are colinear so
+/// the only correct continuous geometry across the degenerate edge is the straight
+/// chord between its endpoint nodes.
+///   N0 (0,0) --E0[real]--> N1 (0,0.001) --E1[degenerate]--> N2 (0,0.010) --E2[real]--> N3 (0,0.011)
+/// N1 -> N2 is ~1 km, so a silent drop of E1 would teleport across that span.
+private func degenerateMiddleEdgeGraph() -> RoadGraph {
+    let coords = [
+        CLLocationCoordinate2D(latitude: 0, longitude: 0),       // N0  (geometry 0)
+        CLLocationCoordinate2D(latitude: 0, longitude: 0.001),   // N1  (geometry 1)
+        CLLocationCoordinate2D(latitude: 0, longitude: 0.010),   // N2  (geometry 2)
+        CLLocationCoordinate2D(latitude: 0, longitude: 0.011),   // N3  (geometry 3)
+    ]
+    func node(_ i: Int) -> GraphNode {
+        GraphNode(
+            osmID: Int64(i), coordinate: coords[i],
+            firstEdge: 0, edgeCount: 0,
+            isIntersection: false, hasTrafficSignal: false, hasStopSign: false
+        )
+    }
+    func edge(_ from: Int32, _ to: Int32, _ range: Range<Int32>, _ id: Int64) -> GraphEdge {
+        let len = RouteGeometry.haversineDistance(from: coords[Int(from)], to: coords[Int(to)])
+        return GraphEdge(
+            from: from, to: to, geometryRange: range,
+            lengthMeters: len, freeFlowSpeedMPS: 15,
+            osmWayID: id, roadClass: .primary, attrs: [], oncomingLanes: 0
+        )
+    }
+    let edges = [
+        edge(0, 1, 0..<2, 100),   // E0: real geometry [N0, N1]
+        edge(1, 2, 2..<2, 101),   // E1: DEGENERATE empty range (count == 0)
+        edge(2, 3, 2..<4, 102),   // E2: real geometry [N2, N3]
+    ]
+    return RoadGraph(
+        nodes: [node(0), node(1), node(2), node(3)],
+        edges: edges,
+        geometry: coords,
+        osmToIndex: [:],
+        snapIndex: GraphSpatialIndex(grid: [:]),
+        graphMaxSpeedMPS: 15
     )
 }
 

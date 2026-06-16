@@ -95,7 +95,21 @@ enum StepSynthesizer {
 
         for (i, edgeIndex) in result.edgePath.enumerated() {
             var coords = Array(graph.geometry(of: edgeIndex))
-            guard coords.count >= 2 else { continue }
+            // Degenerate/empty edge geometry (a corrupt blob slips a <2-coord slice
+            // past the serializer, or a hand-built graph in a test): the cost was
+            // already charged by A*, so silently dropping this edge would leave a
+            // GAP — the polyline would teleport from the previous edge's end node
+            // straight to the next edge's start node, defeating the route's
+            // connectivity guarantee with no detection. Bridge the gap with the
+            // edge's own endpoint NODE coordinates so the line stays continuous
+            // across the step. The append's <1 m dedup (below) collapses the `from`
+            // vertex into the prior edge's terminal vertex, so this contributes only
+            // the missing `to` node when stitched after another edge. Fail (drop)
+            // only when a node coordinate genuinely can't be resolved.
+            if coords.count < 2 {
+                guard let bridge = nodeBridge(for: edgeIndex, in: graph) else { continue }
+                coords = bridge
+            }
 
             // A partial trim applies only for a strictly-interior fraction. A
             // boundary fraction (start==0 / end==1, including a node endpoint
@@ -393,6 +407,26 @@ enum StepSynthesizer {
         }
         out.append(endPoint)
         return out
+    }
+
+    /// The two endpoint NODE coordinates of `edgeIndex` — `[from, to]` in travel
+    /// direction — used to BRIDGE an edge whose stored geometry is degenerate
+    /// (`< 2` coords) so `stitchedPolyline` stays continuous instead of teleporting
+    /// across the missing step. Returns `nil` (so the caller drops the edge as a
+    /// true gap) when an index is out of bounds or a coordinate is non-finite —
+    /// there is no usable substitute geometry to draw.
+    private static func nodeBridge(for edgeIndex: EdgeIndex, in graph: RoadGraph) -> [CLLocationCoordinate2D]? {
+        guard edgeIndex >= 0, Int(edgeIndex) < graph.edges.count else { return nil }
+        let edge = graph.edges[Int(edgeIndex)]
+        let fromIdx = Int(edge.from)
+        let toIdx = Int(edge.to)
+        guard fromIdx >= 0, fromIdx < graph.nodes.count,
+              toIdx >= 0, toIdx < graph.nodes.count else { return nil }
+        let from = graph.nodes[fromIdx].coordinate
+        let to = graph.nodes[toIdx].coordinate
+        guard from.latitude.isFinite, from.longitude.isFinite,
+              to.latitude.isFinite, to.longitude.isFinite else { return nil }
+        return [from, to]
     }
 
     private static func interpolate(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D, _ t: Double) -> CLLocationCoordinate2D {
