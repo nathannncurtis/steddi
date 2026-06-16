@@ -26,8 +26,16 @@ import UIKit
 /// is asserted against `SteddiTheme.mapGlassDarkScrimSurface` — the conservative
 /// (no-lighter-than) composite of the dark scrim over a dark map tile — and an
 /// `ImageRenderer` test confirms that rendered composite really is dark.
+///
+/// THE REROUTE CARD also gets a LIGHT-theme seam here: it is the one HUD panel
+/// that keeps its glass ACCENT-tinted in light theme (the delight peak), so its
+/// text can't ride the surface-adaptive tokens (they're sized on `surfacePrimary`
+/// and wash out on the saturated tint). It draws every readout in
+/// `SteddiTheme.rerouteCardForeground` — `contrastingForeground` against the
+/// actual tinted surface — and the tests below assert AA on every accent in light
+/// and on the dark scrim in dark, plus document the old sub-AA tokens.
 @MainActor
-@Suite("Nav HUD frost measurement (dark theme over-map legibility)")
+@Suite("Nav HUD frost measurement (over-map legibility)")
 struct NavHUDFrostMeasurementTests {
 
     // MARK: - ImageRenderer: the dark-scrim composite really renders dark
@@ -140,19 +148,72 @@ struct NavHUDFrostMeasurementTests {
         #expect(mph >= ContrastRatio.aaLarge, "dark speedometer mph textSecondary/frost = \(mph), want >= 3.0")
     }
 
-    @Test("reroute card heading (textPrimary) + 'Save ~N min' (sageText) clear AA on the dark scrim")
-    func rerouteCardAA() {
-        // In dark theme the card drops the lavender tint (neutral glass) and rides
-        // the same dark scrim, so the heading (textPrimary, near-white) and the
-        // glanceable green value (sageText, which lightens toward white in dark)
-        // both read white-on-dark.
-        let heading = ContrastRatio.ratio(dark.textPrimary, frost)
-        #expect(heading >= ContrastRatio.aaBody, "dark reroute heading textPrimary/frost = \(heading), want >= 4.5")
-        // sageText resolves via the live theme; model it against the dark surface
-        // the same way the token does (lightens toward white on a dark surface).
-        let sageText = SteddiTheme.legibleText(SteddiTheme.sageRGB, onSurface: dark.surfacePrimary)
-        let value = ContrastRatio.ratio(sageText, frost)
-        #expect(value >= ContrastRatio.aaLarge, "dark reroute sageText/frost = \(value), want >= 3.0")
+    // MARK: - Reroute card on-surface foreground (BOTH themes, every accent)
+
+    /// Every brand accent — the reroute card keeps its glass accent-TINTED in LIGHT
+    /// theme, so the card text must contrast each of these.
+    private let accents: [(name: String, rgb: RGBColor)] = SteddiTheme.AccentOption.allCases.map {
+        ($0.rawValue, $0.rgb)
+    }
+
+    @Test("reroute card foreground clears AA on the accent-tinted glass in LIGHT theme (every accent)")
+    func rerouteCardLightThemeAA() {
+        // THE LIGHT-THEME FIX. In light theme the card surface is the raw accent
+        // (the darkest plausible tinted-glass bound), and every readout draws in
+        // `contrastingForeground(on: accent)` (the same value `rerouteCardForeground`
+        // resolves to). That is near-black on the light accents and must clear the
+        // AA body floor on EVERY brand accent — the savings value, subtitles,
+        // percentage, and countdown digit all use it.
+        for (name, accent) in accents {
+            let fg = ContrastRatio.contrastingForeground(on: accent)
+            let r = ContrastRatio.ratio(fg, accent)
+            #expect(r >= ContrastRatio.aaBody,
+                    "light reroute on-card foreground on \(name) accent = \(r), want >= 4.5 (body)")
+        }
+    }
+
+    @Test("the OLD sageText/textSecondary tokens FAILED AA on the lavender tint (documents the light bug)")
+    func rerouteCardLightThemeOldTokensRegression() {
+        // The recurring bug: the savings value (sageText) and the subtitles/digit
+        // (light textSecondary) are sized against the near-white surfacePrimary, so
+        // on the saturated accent tint they collapsed sub-AA — even sub-3:1.
+        let lavender = SteddiTheme.AccentOption.lavender.rgb
+        let light = ThemePalette.light
+
+        let sageText = SteddiTheme.legibleText(SteddiTheme.sageRGB, onSurface: light.surfacePrimary)
+        let sageOnTint = ContrastRatio.ratio(sageText, lavender)
+        #expect(sageOnTint < ContrastRatio.aaBody,
+                "old sageText on the lavender tint was \(sageOnTint) — documents the sub-AA savings value")
+
+        let secondaryOnTint = ContrastRatio.ratio(light.textSecondary, lavender)
+        #expect(secondaryOnTint < ContrastRatio.aaBody,
+                "old textSecondary on the lavender tint was \(secondaryOnTint) — documents the sub-AA subtitles/digit")
+
+        // The new on-card foreground clears AA on that same tint.
+        let fg = ContrastRatio.contrastingForeground(on: lavender)
+        #expect(ContrastRatio.ratio(fg, lavender) >= ContrastRatio.aaBody,
+                "new on-card foreground on lavender clears AA (the fix)")
+    }
+
+    @Test("reroute card foreground clears AA on the dark scrim in DARK theme (no regression of the dark fix)")
+    func rerouteCardDarkThemeAA() {
+        // In dark theme the card drops the tint (neutral glass) over the near-opaque
+        // dark scrim, so `contrastingForeground(on: mapGlassDarkScrimSurface)` is
+        // near-WHITE — exactly the prior dark-theme behaviour, white-on-dark.
+        let fg = ContrastRatio.contrastingForeground(on: SteddiTheme.mapGlassDarkScrimSurface)
+        let r = ContrastRatio.ratio(fg, SteddiTheme.mapGlassDarkScrimSurface)
+        #expect(r >= ContrastRatio.aaBody,
+                "dark reroute on-card foreground on the dark scrim = \(r), want >= 4.5")
+    }
+
+    @Test("rerouteCardSurface branches correctly on glass + theme")
+    func rerouteCardSurfaceModel() {
+        // Glass OFF → the solid surfacePrimary fallback (so the foreground flips the
+        // right way in each theme); glass ON in dark → the dark scrim. (The live
+        // light-glass branch returns the current accent, exercised by the AA tests.)
+        let offSurface = SteddiTheme.rerouteCardSurface(glassAvailable: false)
+        #expect(offSurface == ThemeEngine.snapshot.surfacePrimary,
+                "glass-off reroute surface should be the solid surfacePrimary fallback")
     }
 
     // MARK: - Regression: document the old light-frost washout

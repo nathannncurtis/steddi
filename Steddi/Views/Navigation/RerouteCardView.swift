@@ -15,8 +15,30 @@ struct RerouteCardView: View {
     @State private var didSpringIn = false
     @State private var secondsRemaining = RerouteCardView.countdownSeconds
 
+    /// Dependency-only: touching this re-resolves `glassAvailable` (and therefore
+    /// every readout's foreground) when Reduce Transparency / Increase Contrast
+    /// toggles, exactly like `steddiGlass` / `mapGlassScrim`.
+    @Environment(\.glassRevision) private var glassRevision
+
     /// Fires once a second to advance the countdown ring.
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    /// Whether Liquid Glass renders for the card (vs. the solid fallback). Read
+    /// imperatively — the `glassRevision` dependency above keeps it re-resolving on
+    /// a Reduce-Transparency / Increase-Contrast toggle so the foreground and the
+    /// actual card surface can never disagree.
+    private var glassAvailable: Bool {
+        _ = glassRevision
+        return SteddiGlass.isAvailable
+    }
+
+    /// AA-correct foreground for EVERY text/value/digit on the card, contrasted
+    /// against the ACTUAL card surface (the accent-tinted glass in LIGHT theme, the
+    /// dark scrim in DARK theme, the solid fallback when glass is off). Replaces the
+    /// surface-adaptive `sageText`/`textSecondary` tokens, which were sized against
+    /// `surfacePrimary` and washed out on the lavender tint. See
+    /// `SteddiTheme.rerouteCardSurface`.
+    private var onCard: Color { SteddiTheme.rerouteCardForeground(glassAvailable: glassAvailable) }
 
     // Display modes — passenger/accessibility grow text and the Stay/Switch
     // touch targets (the passenger is the one working this card)
@@ -45,7 +67,11 @@ struct RerouteCardView: View {
                     VStack(spacing: 6) {
                         Text("Faster route available")
                             .font(SteddiTheme.heading(17 * textScale))
-                            .foregroundStyle(SteddiTheme.textPrimary)
+                            // Contrast-adaptive against the ACTUAL card surface
+                            // (accent-tinted glass in light, dark scrim in dark) —
+                            // not the surface-token `textPrimary`, which the
+                            // lavender tint washed out in light theme.
+                            .foregroundStyle(onCard)
                             // Rides accent-tinted translucent glass over the
                             // moving map — same soft per-glyph shadow the nav
                             // banners use so the heading holds against any tile.
@@ -54,7 +80,7 @@ struct RerouteCardView: View {
                         if !routeName.isEmpty {
                             Text(routeName)
                                 .font(SteddiTheme.body(14 * textScale, highContrast: highContrast))
-                                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                                .foregroundStyle(onCard)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -67,17 +93,20 @@ struct RerouteCardView: View {
                 HStack(spacing: 6) {
                     Text("Save ~\(timeSavingsMinutes) min")
                         .font(SteddiTheme.heading(22 * textScale))
-                        // Surface-adaptive legible green — the raw sage hue is
-                        // ~2.30:1 on the light/dynamic-day accent glass and fails
-                        // even the 3:1 large-text floor for this glanceable value.
-                        .foregroundStyle(SteddiTheme.sageText)
-                        // The glanceable green value over the moving map gets the
-                        // shared soft shadow too, like the sibling nav readouts.
+                        // The single most glanceable value on the card. Drawn in
+                        // the contrast-adaptive on-card foreground (NOT `sageText`):
+                        // sage is a mid-tone green that washes out to ~2–3:1 on the
+                        // lavender/gold tint and can't be hue-shifted to AA there
+                        // (no luminance headroom). The on-card color guarantees
+                        // ≥4.5:1 on the actual tinted surface in both themes.
+                        .foregroundStyle(onCard)
+                        // The glanceable value over the moving map gets the shared
+                        // soft shadow too, like the sibling nav readouts.
                         .legibleOverMap()
 
                     Text("(\(percentageSavings)%)")
                         .font(SteddiTheme.mono(14 * textScale))
-                        .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                        .foregroundStyle(onCard)
                 }
 
                 // Action buttons
@@ -112,13 +141,16 @@ struct RerouteCardView: View {
             // luminance-fixed dark fill that makes the adaptive glass render dark.
             .mapGlassScrim(in: SteddiGlass.cardShape)
             // Glass tint. In LIGHT theme: the accent FILL (`accentBrand`, the
-            // unshifted brand hue) — a delight/suggestion moment, where the
-            // near-BLACK textPrimary/textSecondary labels have ample headroom on
-            // the light lavender frost (~9:1). In DARK theme: NEUTRAL glass (no
-            // tint), so the dark scrim above dominates and the near-WHITE dark-
-            // theme labels read white-on-dark. (textPrimary is near-black only in
-            // LIGHT theme; in DARK theme it resolves near-white — a light lavender
-            // frost would wash it to ~1.5:1, the washout this fix removes.)
+            // unshifted brand hue) — a delight/suggestion moment. The tint stays;
+            // every readout instead draws in `onCard`
+            // (`rerouteCardForeground`), which contrasts the ACTUAL tinted surface
+            // and resolves near-BLACK on the light accent (5.3–7.6:1 across the
+            // palette). In DARK theme: NEUTRAL glass (no tint), so the dark scrim
+            // above dominates and `onCard` resolves near-WHITE (~15.6:1),
+            // white-on-dark — preserving the prior dark-theme fix. (The earlier
+            // comment claimed the surface tokens had ~9:1 headroom on the lavender
+            // frost; they did NOT — sageText/textSecondary are sized on
+            // `surfacePrimary` and washed to ~1.7–3.1:1 here. `onCard` fixes that.)
             .steddiGlass(
                 tint: SteddiTheme.prefersDarkChrome ? nil : SteddiTheme.accentBrand,
                 interactive: false,
@@ -159,7 +191,9 @@ struct RerouteCardView: View {
 
             Text("\(secondsRemaining)")
                 .font(SteddiTheme.mono(14 * textScale))
-                .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
+                // On-card contrast-adaptive, like every other card readout — the
+                // grey `textSecondary` washed out on the lavender tint in light.
+                .foregroundStyle(onCard)
                 .monospacedDigit()
         }
         .frame(width: 38 * controlScale, height: 38 * controlScale)

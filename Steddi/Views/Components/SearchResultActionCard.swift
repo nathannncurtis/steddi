@@ -74,8 +74,12 @@ struct SearchResultActionCard: View {
                 Text("Cancel")
                     .font(SteddiTheme.body(14))
                     .foregroundStyle(SteddiTheme.textMuted)
-                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
+                    // Bare text link is only ~29pt tall; expand the hit area to the
+                    // 44pt minimum tap target without changing the type, matching
+                    // the New Commute / Add Place inline-link pattern in HomeView.
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }

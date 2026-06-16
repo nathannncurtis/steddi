@@ -878,6 +878,12 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
+                    // Over-map scrim behind the glass — the shared nav-chrome
+                    // hardening (theme-aware: near-opaque dark in dark theme, faint
+                    // wash in light) so the near-white "Where to?" label never
+                    // washes out on a bright/snow tile, matching the maneuver
+                    // banner and street-name capsule that carry the same scrim.
+                    .mapGlassScrim(in: Capsule())
                     // Neutral glass — the accent lives in the leading icon. Soft
                     // per-glyph shadow so the pill copy holds over bright cartography,
                     // matching the floating nav glyphs in the same over-map cluster.
@@ -983,6 +989,10 @@ struct HomeView: View {
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 10)
+                                // Over-map scrim behind the glass — same nav-chrome
+                                // hardening as the portrait pill, so the "Where to?"
+                                // label holds over any tile in landscape too.
+                                .mapGlassScrim(in: Capsule())
                                 .steddiGlass(
                                     tint: nil,
                                     interactive: true,
@@ -3096,9 +3106,22 @@ private struct ExpandedSearchView: View {
                 .frame(maxHeight: 360)
                 .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
             } else if !query.isEmpty {
+                // The empty-state string floats over the live map, so back it with
+                // the same surface the results card uses (surfacePrimary wash +
+                // hairline stroke + soft shadow) and draw it in textSecondary, which
+                // clears AA on that solid surface — textMuted alone over bare
+                // cartography washed out on bright tiles.
                 Text("No results")
                     .font(SteddiTheme.body(14))
-                    .foregroundStyle(SteddiTheme.textMuted)
+                    .foregroundStyle(SteddiTheme.textSecondary)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .background {
+                        RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                            .fill(SteddiTheme.surfacePrimary.opacity(0.95))
+                            .overlay(RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium).stroke(SteddiTheme.accent.opacity(0.08), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+                    }
                     .padding(.top, 24)
             }
         }
