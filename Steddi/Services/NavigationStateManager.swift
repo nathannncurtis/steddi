@@ -59,7 +59,6 @@ final class NavigationStateManager {
     var activeTrip: Trip? = nil
 
     var rerouteSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)? = nil
-    var currentRemainingETA: TimeInterval = 0
 
     /// The id of the route the driver is actually navigating, set at session
     /// start. The reroute loop excludes THIS route from candidates by identity
@@ -420,16 +419,12 @@ final class NavigationStateManager {
                     // First full candidate comparison reached — from here the loop
                     // may settle to the steady interval.
                     firstEvaluationLanded = true
-                    let remainingETA = baseline.duration
-
                     // The fetch awaited; bail if the session changed underneath.
                     guard !Task.isCancelled,
                           let liveEngine = self.activeEngine,
                           liveEngine === engine,
                           liveEngine.isNavigating,
                           !self.hasArrived else { break }
-
-                    self.currentRemainingETA = remainingETA
 
                     // Snapshot the "Stay" suppression state HERE, on the main
                     // actor, into a Sendable value — BEFORE bestReroute's awaits.
@@ -961,7 +956,6 @@ final class NavigationStateManager {
         rerouteInputs = nil
         rerouteModelContext = nil
         rerouteSuggestion = nil
-        currentRemainingETA = 0
         upcomingSteps = []
         clearDismissedReroute()
     }

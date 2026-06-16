@@ -378,7 +378,6 @@ struct NavigationStateManagerStateTests {
         #expect(manager.activeCommute == nil)
         #expect(manager.activeDirection == nil)
         #expect(manager.rerouteSuggestion == nil)
-        #expect(manager.currentRemainingETA == 0)
         #expect(manager.upcomingSteps.isEmpty)
     }
 
@@ -403,7 +402,6 @@ struct NavigationStateManagerStateTests {
         manager.speedLimitMph = 55.0
         manager.headingDegrees = 180.0
         manager.hasArrived = false
-        manager.currentRemainingETA = 900
 
         manager.stopObserving()
 
@@ -426,7 +424,6 @@ struct NavigationStateManagerStateTests {
         #expect(manager.activeCommute == nil)
         #expect(manager.activeDirection == nil)
         #expect(manager.rerouteSuggestion == nil)
-        #expect(manager.currentRemainingETA == 0)
         #expect(manager.upcomingSteps.isEmpty)
     }
 
