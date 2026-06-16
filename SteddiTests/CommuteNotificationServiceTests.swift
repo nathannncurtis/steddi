@@ -515,10 +515,6 @@ struct ServiceIdleETAExtractionTests {
     @Test("Idle refresh still pushes the widget ETA when notifications are disabled")
     @MainActor
     func idleRefreshRunsWithNotificationsDisabled() async throws {
-        // Can't assert the widget write while a live nav session is in flight
-        // (updateIdleCommuteETA no-ops then); this fresh test process is idle.
-        guard !NavigationStateManager.shared.isNavigating else { return }
-
         let container = try inMemoryContainer()
         let context = ModelContext(container)
         _ = try fixture(context, typicalSeconds: 1500)   // 25 min
@@ -526,18 +522,32 @@ struct ServiceIdleETAExtractionTests {
         // Notifications globally OFF — the path that USED to be frozen.
         let defaults = freshDefaults()
         defaults.set(false, forKey: CommuteNotificationService.globalEnabledKey)
-        let svc = CommuteNotificationService(modelContainer: container, defaults: defaults)
-        #expect(!svc.globallyEnabled)
 
-        let widgetDefaults = try #require(UserDefaults(suiteName: "group.to.nathancurtis.steddi"))
-        let before = Date().timeIntervalSince1970
+        // Capture the pushed ETA via an injected sink, isolated from the
+        // process-wide App Group defaults the singleton writes — parallel suites
+        // call `clearIdleCommuteETA` (sets kETAMinutes = 0) and would stomp a
+        // shared-defaults assertion mid-read. The sink makes this deterministic.
+        final class ETACapture: @unchecked Sendable {
+            var minutes: Int?
+            var commuteName: String?
+        }
+        let capture = ETACapture()
+        let svc = CommuteNotificationService(
+            modelContainer: container,
+            defaults: defaults,
+            idleETASink: { name, _, minutes in
+                capture.commuteName = name
+                capture.minutes = minutes
+            }
+        )
+        #expect(!svc.globallyEnabled)
 
         // No location fix → typical duration (1500s ⇒ 25 min) flows to the widget.
         await svc.refreshIdleCommuteETA(now: try at(hour: 7))
 
         // The widget received a fresh ETA despite notifications being disabled.
-        #expect(widgetDefaults.integer(forKey: NavigationStateManager.kETAMinutes) == 25)
-        #expect(widgetDefaults.double(forKey: NavigationStateManager.kETAUpdatedAt) >= before)
+        #expect(capture.minutes == 25)
+        #expect(capture.commuteName != nil)
     }
 }
 

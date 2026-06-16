@@ -55,6 +55,13 @@ final class CommuteNotificationService {
     /// default supplies the lock-guarded process-wide `LastKnownLocation`.
     private let locationProvider: @Sendable () -> CLLocationCoordinate2D?
     private let defaults: UserDefaults
+    /// Sink for a freshly-derived idle commute ETA → the home-screen widget.
+    /// Defaults to the main-actor `NavigationStateManager` (which owns the
+    /// no-op-while-navigating guard + the widget timeline reload). Injectable so
+    /// tests assert the pushed ETA in isolation instead of racing the
+    /// process-wide App Group defaults the shared singleton writes (parallel
+    /// suites call `clearIdleCommuteETA`, stomping the shared key mid-assertion).
+    private let idleETASink: @MainActor @Sendable (_ commuteName: String, _ destinationName: String, _ etaMinutes: Int) -> Void
 
     // MARK: Observable State
 
@@ -67,7 +74,12 @@ final class CommuteNotificationService {
         notificationCenter: CommuteNotificationCenter = .shared,
         directionsService: DirectionsService = DirectionsService(),
         locationProvider: @escaping @Sendable () -> CLLocationCoordinate2D? = { nil },
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        idleETASink: @escaping @MainActor @Sendable (String, String, Int) -> Void = {
+            NavigationStateManager.shared.updateIdleCommuteETA(
+                commuteName: $0, destinationName: $1, etaMinutes: $2
+            )
+        }
     ) {
         self.modelContainer = modelContainer
         self.weatherService = weatherService
@@ -75,6 +87,7 @@ final class CommuteNotificationService {
         self.directionsService = directionsService
         self.locationProvider = locationProvider
         self.defaults = defaults
+        self.idleETASink = idleETASink
     }
 
     // MARK: - Settings Accessors
@@ -612,11 +625,7 @@ final class CommuteNotificationService {
         guard let etaSeconds, etaSeconds > 0 else { return }
         let minutes = max(1, Int((etaSeconds / 60).rounded()))
         await MainActor.run {
-            NavigationStateManager.shared.updateIdleCommuteETA(
-                commuteName: commuteName,
-                destinationName: destinationName,
-                etaMinutes: minutes
-            )
+            self.idleETASink(commuteName, destinationName, minutes)
         }
     }
 
