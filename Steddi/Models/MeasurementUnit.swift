@@ -32,6 +32,8 @@ enum MeasurementUnit: String, CaseIterable, Identifiable {
         if value < 10 {
             return String(format: "%.1f %@", value, abbreviation)
         }
-        return "\(Int(value)) \(abbreviation)"
+        // Round, don't truncate: 10.95 -> "11 mi", not "10 mi" (an up-to-1-unit
+        // understatement of the distance).
+        return "\(Int(value.rounded())) \(abbreviation)"
     }
 }

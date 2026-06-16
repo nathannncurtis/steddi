@@ -114,22 +114,25 @@ final class VoiceGuidanceService: NSObject, AVSpeechSynthesizerDelegate {
     /// Speak with distance prefix (e.g. "In 500 feet, turn left onto Main Street")
     func speakWithDistance(_ instruction: String, distance: Double) {
         guard isEnabled else { return }
+        speak("\(Self.distancePhrase(meters: distance)), \(instruction)")
+    }
 
-        let distText: String
+    /// The spoken distance prefix for a maneuver at `meters` away (e.g. "In 500
+    /// feet" / "In 0.3 miles" / "In 11 miles"). Pure and `nonisolated` so the
+    /// rounding contract is unit-testable without driving the synthesizer.
+    nonisolated static func distancePhrase(meters distance: Double) -> String {
         if distance < 160 {
-            distText = "In \(Int(distance * 3.281)) feet"
-        } else {
-            let miles = distance / 1609.34
-            if miles < 0.15 {
-                distText = "In \(Int(distance * 3.281)) feet"
-            } else if miles < 1 {
-                distText = String(format: "In %.1f miles", miles)
-            } else {
-                distText = "In \(Int(miles)) miles"
-            }
+            return "In \(Int(distance * 3.281)) feet"
         }
-
-        speak("\(distText), \(instruction)")
+        let miles = distance / 1609.34
+        if miles < 0.15 {
+            return "In \(Int(distance * 3.281)) feet"
+        } else if miles < 1 {
+            return String(format: "In %.1f miles", miles)
+        } else {
+            // Round, don't truncate: 10.95 mi announces "In 11 miles", not 10.
+            return "In \(Int(miles.rounded())) miles"
+        }
     }
 
     /// Announce arrival

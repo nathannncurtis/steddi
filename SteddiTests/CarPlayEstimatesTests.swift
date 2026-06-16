@@ -80,4 +80,26 @@ struct MeasurementUnitFormatTests {
         #expect(MeasurementUnit.miles.formatDistance(meters: meters) != MeasurementUnit.kilometers.formatDistance(meters: meters))
         #expect(MeasurementUnit.kilometers.formatDistance(meters: meters) == "5.0 km")
     }
+
+    // Rounding (not truncation) above 10 units: Int(10.95) truncated to "10",
+    // understating the distance by nearly a unit. .rounded() fixes it.
+    @Test("Miles: 10.95 mi rounds up to 11 mi (not truncated to 10)")
+    func milesRoundsUp() {
+        #expect(MeasurementUnit.miles.formatDistance(meters: 10.95 * 1609.34) == "11 mi")
+    }
+
+    @Test("Miles: 10.4 mi rounds down to 10 mi")
+    func milesRoundsDown() {
+        #expect(MeasurementUnit.miles.formatDistance(meters: 10.4 * 1609.34) == "10 mi")
+    }
+
+    @Test("Kilometers: 10.95 km rounds up to 11 km")
+    func kmRoundsUp() {
+        #expect(MeasurementUnit.kilometers.formatDistance(meters: 10_950) == "11 km")
+    }
+
+    @Test("Kilometers: 10.4 km rounds down to 10 km")
+    func kmRoundsDown() {
+        #expect(MeasurementUnit.kilometers.formatDistance(meters: 10_400) == "10 km")
+    }
 }

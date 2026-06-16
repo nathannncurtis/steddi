@@ -121,6 +121,11 @@ struct SymmetricRerouteETATests {
         )
     }
 
+    /// `bestReroute` now consumes `Sendable` value snapshots, not `@Model`s.
+    private func candidate(_ route: Route) -> NavigationStateManager.RerouteCandidate {
+        NavigationStateManager.RerouteCandidate(id: route.id, encodedPolyline: route.encodedPolyline)
+    }
+
     /// A genuinely faster alternative (shorter ahead-geometry) yields positive
     /// savings — and crucially, the savings reflect only the geometry AHEAD of
     /// the driver, computed symmetrically for both sides.
@@ -151,9 +156,9 @@ struct SymmetricRerouteETATests {
             currentCoord, PolylineEncoder.encode(remainingActive, precision: 6)
         ).duration
 
-        let candidate = route(1, candidateCoords, name: "Straight shot")
+        let candidateRoute = route(1, candidateCoords, name: "Straight shot")
         let best = await NavigationStateManager.bestReroute(
-            candidates: [candidate],
+            candidates: [candidate(candidateRoute)],
             currentCoord: currentCoord,
             baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
@@ -163,7 +168,7 @@ struct SymmetricRerouteETATests {
         )
 
         let suggestion = try #require(best, "A clearly faster alternative should be suggested")
-        #expect(suggestion.route.id == candidate.id)
+        #expect(suggestion.routeID == candidateRoute.id)
         #expect(suggestion.savingsMinutes > 0)
         _ = manager // keep the @MainActor harness honest
     }
@@ -183,9 +188,9 @@ struct SymmetricRerouteETATests {
         ).duration
 
         // The candidate IS the same geometry as the active route.
-        let candidate = route(1, coords, name: "Same path")
+        let candidateRoute = route(1, coords, name: "Same path")
         let best = await NavigationStateManager.bestReroute(
-            candidates: [candidate],
+            candidates: [candidate(candidateRoute)],
             currentCoord: currentCoord,
             baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
@@ -222,9 +227,9 @@ struct SymmetricRerouteETATests {
         ).duration
         #expect(abs(candidateETA - remainingETA) < 1.0)
 
-        let candidate = route(1, coords, name: "Same path mid-drive")
+        let candidateRoute = route(1, coords, name: "Same path mid-drive")
         let best = await NavigationStateManager.bestReroute(
-            candidates: [candidate],
+            candidates: [candidate(candidateRoute)],
             currentCoord: currentCoord,
             baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
@@ -268,7 +273,7 @@ struct SymmetricRerouteETATests {
         #expect(candidates.map(\.id) == [preferred.id])
 
         let best = await NavigationStateManager.bestReroute(
-            candidates: candidates,
+            candidates: candidates.map { candidate($0) },
             currentCoord: currentCoord,
             baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
@@ -278,8 +283,8 @@ struct SymmetricRerouteETATests {
         )
 
         let suggestion = try #require(best, "The faster preferred route should be re-offered")
-        #expect(suggestion.route.id == preferred.id)
-        #expect(suggestion.route.id != alt.id, "The route being driven must never be re-suggested")
+        #expect(suggestion.routeID == preferred.id)
+        #expect(suggestion.routeID != alt.id, "The route being driven must never be re-suggested")
     }
 
     /// FALLBACK-PATH asymmetry guard. When a candidate's via-route fetch
@@ -328,9 +333,9 @@ struct SymmetricRerouteETATests {
 
         // Simulate the candidate's via-route transiently failing: its fetch
         // degrades to the direct estimate, tagged NOT path-aware.
-        let candidate = route(1, candidateCoords, name: "Detour (via-route failed)")
+        let candidateRoute = route(1, candidateCoords, name: "Detour (via-route failed)")
         let best = await NavigationStateManager.bestReroute(
-            candidates: [candidate],
+            candidates: [candidate(candidateRoute)],
             currentCoord: currentCoord,
             baseline: baseline,
             basePercentage: 0.20,
@@ -357,10 +362,10 @@ struct SymmetricRerouteETATests {
         // Both baseline and candidate are on the DIRECT basis. Baseline is a
         // long direct estimate; candidate's direct estimate is shorter.
         let baseline = RouteETA(duration: 1200, isPathAware: false)
-        let candidate = route(1, candidateCoords, name: "Faster (both direct)")
+        let candidateRoute = route(1, candidateCoords, name: "Faster (both direct)")
 
         let best = await NavigationStateManager.bestReroute(
-            candidates: [candidate],
+            candidates: [candidate(candidateRoute)],
             currentCoord: currentCoord,
             baseline: baseline,
             basePercentage: 0.20,
@@ -370,7 +375,7 @@ struct SymmetricRerouteETATests {
         )
 
         let suggestion = try #require(best, "Same-basis comparison must still surface a faster route")
-        #expect(suggestion.route.id == candidate.id)
+        #expect(suggestion.routeID == candidateRoute.id)
         #expect(suggestion.savingsMinutes > 0)
     }
 }
