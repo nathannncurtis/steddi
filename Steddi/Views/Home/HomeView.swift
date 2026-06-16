@@ -217,6 +217,19 @@ struct HomeView: View {
                             // never has to decode the GPS blob to backfill it.
                             record.finalizeSummary()
                             modelContext.insert(record)
+                            // Persist NOW — don't trust autosave. End-of-drive is
+                            // exactly when the app is about to be backgrounded /
+                            // locked / suspended, and a default autosave that fires
+                            // on a later run-loop tick can be lost to suspension or
+                            // an OOM kill, silently dropping the completed drive (and
+                            // its GPS trace, which feeds all analytics). An explicit
+                            // save flushes it to disk before teardown — matching the
+                            // discipline at PostArrivalSheet.saveRoute.
+                            do {
+                                try modelContext.save()
+                            } catch {
+                                print("[STEDDI-NAV] failed to save end-of-drive DriveRecord: \(error.localizedDescription)")
+                            }
                             recordedPoints = points
                         }
 
@@ -251,6 +264,15 @@ struct HomeView: View {
                     onReport: { type, coordinate in
                         let report = Report(type: type, latitude: coordinate.latitude, longitude: coordinate.longitude)
                         modelContext.insert(report)
+                        // Explicitly persist this user-contributed report rather
+                        // than relying on autosave, which can be lost if the app is
+                        // suspended/killed before its run-loop tick (same durability
+                        // gap as the end-of-drive DriveRecord above).
+                        do {
+                            try modelContext.save()
+                        } catch {
+                            print("[STEDDI-NAV] failed to save in-drive Report: \(error.localizedDescription)")
+                        }
                     },
                     onReportCamera: { kind, coordinate in
                         // Persist as a CameraReport and rebuild the proximity
