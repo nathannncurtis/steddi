@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import SwiftData
 import CoreLocation
+import AVFoundation
 @testable import Steddi
 
 // MARK: - Helpers
@@ -724,5 +725,67 @@ struct CameraAlertDebounceTests {
         engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
         engine.updateLocation(fix(lat: 33.002, lon: -117.0, t: 10))
         #expect(fireCount == 2)
+    }
+}
+
+// MARK: - Alert tone duck lifecycle
+
+/// Guards the duck lifecycle around the camera tone: a failed playback START
+/// must NOT leave media permanently ducked. `play()` ducks media via
+/// `AudioDuckingService` before starting the player; if the player never starts
+/// (AVAudioPlayer.play() returns false WITHOUT throwing, or the init throws),
+/// neither the AVAudioPlayerDelegate completion nor a thrown error fires, so the
+/// duck has to be released inline. We exercise that by injecting a playback
+/// closure that simulates a failed start and asserting no `.alert` duck lingers.
+@MainActor
+@Suite("SpeedCameraAlertTone duck lifecycle")
+struct SpeedCameraAlertToneTests {
+
+    /// Run `body` with a known-clean alert duck state, restoring the prior state
+    /// afterward so these tests don't bleed into each other or the rest of the
+    /// suite (the ducking service is a shared singleton).
+    private func withCleanDuckState(_ body: () -> Void) {
+        let hadAlert = AudioDuckingService.shared.activeClasses.contains(.alert)
+        AudioDuckingService.shared.deactivateAlert()
+        body()
+        if hadAlert { AudioDuckingService.shared.activateForAlert() }
+        else { AudioDuckingService.shared.deactivateAlert() }
+    }
+
+    @Test("A failed playback start leaves no lingering alert duck")
+    func failedStartUnducks() {
+        withCleanDuckState {
+            // Simulate play() failing to start: the start closure yields no player.
+            let tone = SpeedCameraAlertTone(startPlayback: { _ in nil })
+            #expect(!AudioDuckingService.shared.activeClasses.contains(.alert))
+
+            tone.play()
+
+            // The duck taken inside play() must have been released — the user's
+            // media is not held down forever.
+            #expect(!AudioDuckingService.shared.activeClasses.contains(.alert))
+        }
+    }
+
+    @Test("A successful start holds the duck until the tone ends")
+    func successfulStartHoldsDuck() {
+        withCleanDuckState {
+            // A real (unstarted) player stands in for a started playback.
+            guard let data = SpeedCameraAlertTone.makeChimeWAV(),
+                  let realPlayer = try? AVAudioPlayer(data: data) else {
+                Issue.record("Could not build a stand-in player")
+                return
+            }
+            let tone = SpeedCameraAlertTone(startPlayback: { _ in realPlayer })
+
+            tone.play()
+
+            // Playback "started", so the alert duck is held for the tone's
+            // duration (released later by the AVAudioPlayerDelegate completion).
+            #expect(AudioDuckingService.shared.activeClasses.contains(.alert))
+
+            // Clean up the duck we intentionally held.
+            AudioDuckingService.shared.deactivateAlert()
+        }
     }
 }

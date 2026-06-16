@@ -21,8 +21,42 @@ final class SpeedCameraAlertTone: NSObject {
     /// regenerating per alert would be wasteful.
     private var toneData: Data?
 
-    private override init() {
+    /// Builds + starts an AVAudioPlayer for the given WAV bytes, returning the
+    /// started player or `nil` if it couldn't start (throw OR a `false` `play()`).
+    /// Injectable so the duck lifecycle around a failed start is unit-testable
+    /// without a live audio session. Defaults to the real AVAudioPlayer path.
+    /// The returned player's delegate is wired by `play()`.
+    private let startPlayback: (Data) -> AVAudioPlayer?
+
+    private override convenience init() {
+        self.init(startPlayback: SpeedCameraAlertTone.defaultStartPlayback)
+    }
+
+    /// Designated init. Injected test closures can return a player without
+    /// starting real audio.
+    init(startPlayback: @escaping (Data) -> AVAudioPlayer?) {
+        self.startPlayback = startPlayback
         super.init()
+    }
+
+    /// The production playback path: build an AVAudioPlayer, prepare it, and
+    /// return it only if `play()` actually started. `play()` returns false
+    /// (WITHOUT throwing) when playback fails to start — e.g. session activation
+    /// lost an arbitration race, an active interruption, or an unavailable route.
+    private static func defaultStartPlayback(_ data: Data) -> AVAudioPlayer? {
+        do {
+            let player = try AVAudioPlayer(data: data)
+            player.volume = 0.7 // subtle, not jarring
+            player.prepareToPlay()
+            guard player.play() else {
+                cameraToneLog.error("Camera alert tone failed to start playing")
+                return nil
+            }
+            return player
+        } catch {
+            cameraToneLog.error("Camera alert tone playback failed: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     /// Play the camera chime once, ducking media for its duration. No-op if the
@@ -45,18 +79,16 @@ final class SpeedCameraAlertTone: NSObject {
 
         // Duck media (respecting the alert-ducking toggle) before playing.
         AudioDuckingService.shared.activateForAlert()
-        do {
-            let player = try AVAudioPlayer(data: data)
-            player.delegate = self
-            player.volume = 0.7 // subtle, not jarring
-            player.prepareToPlay()
-            player.play()
-            self.player = player
-        } catch {
-            cameraToneLog.error("Camera alert tone playback failed: \(error.localizedDescription)")
-            // Playback never started — release the duck we just took.
+        // If playback never starts (throw OR a `false` play()), neither the catch
+        // path nor an AVAudioPlayerDelegate completion callback ever fires, so the
+        // alert duck we just took would be held forever and the user's media stays
+        // at reduced volume. Release the duck and don't retain a dead player.
+        guard let player = startPlayback(data) else {
             AudioDuckingService.shared.deactivateAlert()
+            return
         }
+        player.delegate = self
+        self.player = player
     }
 
     // MARK: - Tone synthesis
