@@ -642,6 +642,205 @@ struct NavigationStateManagerWidgetSyncTests {
     }
 }
 
+// MARK: - Widget Reload Throttle Tests
+
+/// During an active drive the per-minute ETA change used to force a
+/// `WidgetCenter.reloadTimelines` on every whole-minute tick. Over a 40-60 min
+/// commute that is ~40-60 app-initiated reloads, which can exhaust WidgetKit's
+/// daily reload budget — after which even the idle "next commute" widget stops
+/// updating. The live minute-by-minute ETA is already surfaced by the phone UI /
+/// Live Activity / CarPlay, so the home-screen widget doesn't need a per-minute
+/// push. The fix coarsens the forced reload to at most one per
+/// `liveReloadMinInterval` while still rewriting the App Group defaults every
+/// minute (so iOS's own ~15-min timeline refresh shows fresh data).
+@Suite("NavigationStateManager widget reload throttle")
+@MainActor
+struct NavigationStateManagerWidgetReloadThrottleTests {
+
+    private static let widgetSuite = "group.to.nathancurtis.steddi"
+
+    private func startedEngine() -> NavigationEngine {
+        let engine = NavigationEngine()
+        let polyline = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        let steps = [
+            NavStep(instruction: "", distance: 1000, coordinate: polyline[0], maneuverSymbol: "arrow.up"),
+            NavStep(instruction: "", distance: 0, coordinate: polyline[10], maneuverSymbol: "flag.fill"),
+        ]
+        engine.startNavigation(polyline: polyline, steps: steps)
+        return engine
+    }
+
+    /// Simulate a 50-minute drive whose whole-minute ETA decrements once a
+    /// minute (50 -> 1). Pre-fix, that would force 50 reloads. With the throttle
+    /// (3-min cadence) it must be WELL under one-per-minute — roughly a reload
+    /// every few minutes plus the session-start one.
+    @Test("Drive-time reloads are throttled well under one per minute")
+    func reloadsThrottledDuringDrive() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        var reloadCount = 0
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        let interval = NavigationStateManager.liveReloadMinInterval
+
+        // 50 one-minute ticks, ETA counting down 50 -> 1 (a whole-minute change
+        // every tick). The polling task itself ticks at 2 Hz; here we drive only
+        // the minute-boundary syncs since the sub-minute ones never reload.
+        let minutes = 50
+        for i in 0..<minutes {
+            engine.etaMinutes = minutes - i // 50, 49, ... 1
+            let now = start.addingTimeInterval(Double(i) * 60.0)
+            manager.syncFromEngine(engine, now: now, reload: { _ in reloadCount += 1 })
+        }
+
+        // One-per-minute would be 50. The throttle must keep it far lower.
+        #expect(reloadCount < 50)
+        // Concretely: ~1 (session-start tick) + ceil(drive / interval) reloads.
+        let expectedCeiling = 2 + Int(ceil(Double(minutes) * 60.0 / interval))
+        #expect(reloadCount <= expectedCeiling)
+        // Sanity: a 50-min drive on a 3-min cadence is on the order of ~17-18.
+        #expect(reloadCount <= 20)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// The very first minute-change of a session must reload immediately so the
+    /// widget reflects the live drive promptly (no waiting a full interval).
+    @Test("First minute-change of a session reloads immediately")
+    func firstMinuteChangeReloadsImmediately() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        var reloadCount = 0
+        engine.etaMinutes = 42
+        manager.syncFromEngine(
+            engine,
+            now: Date(timeIntervalSince1970: 1_750_000_000),
+            reload: { _ in reloadCount += 1 }
+        )
+        #expect(reloadCount == 1)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// Within the throttle interval, subsequent minute-changes must NOT force a
+    /// reload — but they MUST still rewrite the App Group defaults so iOS's own
+    /// timeline refresh shows fresh data.
+    @Test("Minute-changes inside the interval skip the reload but still write defaults")
+    func intraIntervalSkipsReloadButWritesDefaults() throws {
+        let defaults = try #require(UserDefaults(suiteName: Self.widgetSuite))
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        var reloadCount = 0
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+
+        // First minute-change reloads.
+        engine.etaMinutes = 30
+        manager.syncFromEngine(engine, now: start, reload: { _ in reloadCount += 1 })
+        #expect(reloadCount == 1)
+
+        // 60s later, inside the 180s interval: minute changed, but no reload.
+        engine.etaMinutes = 29
+        manager.syncFromEngine(engine, now: start.addingTimeInterval(60), reload: { _ in reloadCount += 1 })
+        #expect(reloadCount == 1)
+        // Defaults still freshened for iOS's own refresh.
+        #expect(defaults.integer(forKey: "widget.etaMinutes") == 29)
+        #expect(defaults.double(forKey: "widget.etaUpdatedAt") == start.addingTimeInterval(60).timeIntervalSince1970)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// Once the interval elapses, the next minute-change forces a fresh reload.
+    @Test("A minute-change after the interval forces a fresh reload")
+    func reloadResumesAfterInterval() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        var reloadCount = 0
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        let interval = NavigationStateManager.liveReloadMinInterval
+
+        engine.etaMinutes = 30
+        manager.syncFromEngine(engine, now: start, reload: { _ in reloadCount += 1 })
+        #expect(reloadCount == 1)
+
+        // Just before the interval: still throttled.
+        engine.etaMinutes = 29
+        manager.syncFromEngine(engine, now: start.addingTimeInterval(interval - 1), reload: { _ in reloadCount += 1 })
+        #expect(reloadCount == 1)
+
+        // At/after the interval: reload resumes.
+        engine.etaMinutes = 28
+        manager.syncFromEngine(engine, now: start.addingTimeInterval(interval), reload: { _ in reloadCount += 1 })
+        #expect(reloadCount == 2)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// Sub-minute ticks (same whole-minute ETA) never reload — the 2 Hz polling
+    /// loop must not churn the timeline between minute boundaries.
+    @Test("Sub-minute ticks with an unchanged ETA never reload")
+    func unchangedEtaNeverReloads() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        var reloadCount = 0
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+
+        engine.etaMinutes = 15
+        // First minute-change reloads once.
+        manager.syncFromEngine(engine, now: start, reload: { _ in reloadCount += 1 })
+        // 10 sub-minute ticks at the SAME ETA (2 Hz over 5s).
+        for i in 1...10 {
+            manager.syncFromEngine(engine, now: start.addingTimeInterval(Double(i) * 0.5), reload: { _ in reloadCount += 1 })
+        }
+        #expect(reloadCount == 1)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// A new session resets the throttle, so the first minute-change of the next
+    /// drive reloads immediately rather than inheriting the previous session's
+    /// throttle window.
+    @Test("Session start resets the reload throttle")
+    func sessionStartResetsThrottle() {
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+
+        // Drive 1: first minute-change reloads, a later in-interval one doesn't.
+        manager.startObserving(engine: engine, destinationName: "Office")
+        var reloads1 = 0
+        engine.etaMinutes = 20
+        manager.syncFromEngine(engine, now: start, reload: { _ in reloads1 += 1 })
+        engine.etaMinutes = 19
+        manager.syncFromEngine(engine, now: start.addingTimeInterval(30), reload: { _ in reloads1 += 1 })
+        #expect(reloads1 == 1)
+
+        // Drive 2 begins immediately after (no interval elapsed): the throttle is
+        // reset, so its first minute-change reloads right away.
+        manager.startObserving(engine: engine, destinationName: "Office")
+        var reloads2 = 0
+        engine.etaMinutes = 25
+        manager.syncFromEngine(engine, now: start.addingTimeInterval(30), reload: { _ in reloads2 += 1 })
+        #expect(reloads2 == 1)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+}
+
 // MARK: - Active Trip Teardown Tests
 
 @Suite("NavigationStateManager active trip teardown")
