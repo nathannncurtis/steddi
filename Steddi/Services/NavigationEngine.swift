@@ -752,6 +752,16 @@ final class NavigationEngine {
             arrivalTime = ""
             followOnInstruction = ""
             followOnManeuverSymbol = ""
+            // Arrived = nothing remaining. updateDistancesAndETA never runs again
+            // after this latch (updateLocation short-circuits on hasArrived), so
+            // zero the RAW fields here too — otherwise the last pre-arrival
+            // etaSeconds/distanceRemainingMeters leak to downstream surfaces that
+            // read the numeric values (CarPlay's trip estimate keeps pushing a
+            // stale non-zero distance/ETA next to "You have arrived" for a commute
+            // whose session stays live until manual End). The string/int fields
+            // above are already cleared; these are their numeric counterparts.
+            etaSeconds = 0
+            distanceRemainingMeters = 0
             return true
         }
         return false
