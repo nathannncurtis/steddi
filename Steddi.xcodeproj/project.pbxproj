@@ -52,6 +52,7 @@
 		2BD970ABAE0354088EDA0519 /* ContrastRatio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EFF4B06D4FB4955CEA5934A /* ContrastRatio.swift */; };
 		2E0E4EAAC2CF23E05AF84496 /* OnboardingPermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */; };
 		30CB8E6B71041BAB79C446E4 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA765EC74CF76F5C912157D4 /* HapticService.swift */; };
+		34193BE942FA81C717D337A4 /* HomeSheetTabTapTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2BEFD1868F40460BE2E0A04 /* HomeSheetTabTapTargetTests.swift */; };
 		35F5485D167737BF995FD280 /* CorridorValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3052F1FB67E6754BA5AE313 /* CorridorValidator.swift */; };
 		37E231EC67E84618C9C36D56 /* CheckCommuteETAIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB8A4F976CE18333497A882 /* CheckCommuteETAIntentTests.swift */; };
 		3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */; };
@@ -401,6 +402,7 @@
 		9A40C80EE68927B82F67E3AC /* CarPlayEstimatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayEstimatesTests.swift; sourceTree = "<group>"; };
 		9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingHeroView.swift; sourceTree = "<group>"; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		A2BEFD1868F40460BE2E0A04 /* HomeSheetTabTapTargetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSheetTabTapTargetTests.swift; sourceTree = "<group>"; };
 		A563FC81AD7AEC2AFCF76C10 /* LearnedWeightsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnedWeightsStore.swift; sourceTree = "<group>"; };
 		A5767C16ED249DBF2B88E3DD /* RouteGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGeometryTests.swift; sourceTree = "<group>"; };
 		A814B57D3AF2BAF2600A6BBE /* SteddiGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteddiGlass.swift; sourceTree = "<group>"; };
@@ -644,6 +646,7 @@
 				7602F7081024CC1CB4B2D4DB /* DisplayModeServiceTests.swift */,
 				DD54F3F4C5DBC6DB03812683 /* GeocodingServiceTests.swift */,
 				08B46BB7337E920209A89889 /* HapticServiceTests.swift */,
+				A2BEFD1868F40460BE2E0A04 /* HomeSheetTabTapTargetTests.swift */,
 				B0B617430B4E4BFF5DDF6277 /* LiveActivityServiceTests.swift */,
 				FE2000CD9239BB50E6449738 /* MapMatchingServiceTests.swift */,
 				E98E2E40D11AD1C3F1686F9E /* ModelStoreLocatorTests.swift */,
@@ -1293,6 +1296,7 @@
 				A24640986534ABA137FE6547 /* DisplayModeServiceTests.swift in Sources */,
 				AF8C07FDFE411CD730E25816 /* GeocodingServiceTests.swift in Sources */,
 				8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */,
+				34193BE942FA81C717D337A4 /* HomeSheetTabTapTargetTests.swift in Sources */,
 				2A460251104319C1DC4A93AF /* LiveActivityServiceTests.swift in Sources */,
 				EC2A22C59A5539845B5C4173 /* MapMatchingServiceTests.swift in Sources */,
 				9DB1FAC850EF2E8EAE59EF5F /* ModelStoreLocatorTests.swift in Sources */,
