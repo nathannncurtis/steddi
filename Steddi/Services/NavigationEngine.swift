@@ -167,6 +167,21 @@ final class NavigationEngine {
     /// while still ignoring single-fix GPS speed jitter, so the ETA tracks
     /// recent conditions without wild swings.
     private let speedEWMAAlpha: Double = 0.05
+    /// Plausible upper bound on a real driving speed (m/s ≈ 134 mph). CoreLocation
+    /// BestForNavigation occasionally reports tens of m/s on the very first fixes,
+    /// at tunnel exits, or in urban canyons (multipath). Every per-fix speed is
+    /// clamped to this ceiling before it touches the EWMA so a wild reading can
+    /// neither seed nor yank the live ETA toward an absurd value.
+    private let maxPlausibleSpeedMPS: Double = 60
+    /// The first few clamped moving fixes are buffered (not used directly) and the
+    /// EWMA is seeded from their MEDIAN once `seedFixCount` have arrived — so a
+    /// lone GPS spike on the first moving fix can't anchor the average and collapse
+    /// the ETA for the ~20s the EWMA needs to decay. A sustained crawl still seeds
+    /// low (all buffered samples are low → low median), preserving stop-and-go
+    /// behavior. Until seeded, the free-flow fraction (the safer estimate) drives
+    /// the ETA.
+    private var seedSpeedBuffer: [Double] = []
+    private let seedFixCount: Int = 3
     private var locationUpdateCount: Int = 0
 
     // Thresholds
@@ -228,6 +243,7 @@ final class NavigationEngine {
         hasArrived = false
         averageSpeedMPS = 0
         speedSampleCount = 0
+        seedSpeedBuffer.removeAll(keepingCapacity: false)
         offRouteCount = 0
         lastOffRouteAlongDistance = nil
         isRecoveringOffRoute = false
@@ -350,6 +366,7 @@ final class NavigationEngine {
         originalExpectedTravelTime = 0
         averageSpeedMPS = 0
         speedSampleCount = 0
+        seedSpeedBuffer.removeAll(keepingCapacity: false)
         offRouteCount = 0
         lastOffRouteAlongDistance = nil
         isRecoveringOffRoute = false
@@ -449,15 +466,24 @@ final class NavigationEngine {
         // Decaying (EWMA) speed estimate: weight recent moving fixes so the ETA
         // tracks current conditions instead of a frozen whole-drive mean. The
         // >1 m/s gate still drops full stops so a red light doesn't drag the
-        // estimate to zero. The first moving sample seeds the average directly
-        // (no warm-up bias toward 0).
+        // estimate to zero. Each fix is first clamped to a plausible driving
+        // ceiling so a GPS glitch can't enter the average at all. The first
+        // `seedFixCount` clamped moving fixes are buffered and the EWMA is seeded
+        // from their MEDIAN — so a lone first-fix spike can't anchor the average
+        // and collapse the ETA, while a sustained crawl still seeds low.
         if speedMPS > 1.0 {
+            let clamped = min(speedMPS, maxPlausibleSpeedMPS)
             if speedSampleCount == 0 {
-                averageSpeedMPS = speedMPS
+                seedSpeedBuffer.append(clamped)
+                if seedSpeedBuffer.count >= seedFixCount {
+                    averageSpeedMPS = Self.median(of: seedSpeedBuffer)
+                    speedSampleCount = seedSpeedBuffer.count
+                    seedSpeedBuffer.removeAll(keepingCapacity: false)
+                }
             } else {
-                averageSpeedMPS += speedEWMAAlpha * (speedMPS - averageSpeedMPS)
+                averageSpeedMPS += speedEWMAAlpha * (clamped - averageSpeedMPS)
+                speedSampleCount += 1
             }
-            speedSampleCount += 1
         }
 
         if checkArrival(location: location, projection: projection) { return }
@@ -933,6 +959,16 @@ final class NavigationEngine {
 
     nonisolated static func haversineDistance(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D) -> Double {
         RouteGeometry.haversineDistance(from: a, to: b)
+    }
+
+    /// Median of a non-empty list. Used to seed the speed EWMA from the first few
+    /// moving fixes so a single outlier (a GPS speed spike) can't anchor it. For
+    /// an even count returns the lower-middle element (a robust low-side estimate;
+    /// the EWMA converges within seconds either way). Returns 0 for an empty list.
+    nonisolated static func median(of values: [Double]) -> Double {
+        guard !values.isEmpty else { return 0 }
+        let sorted = values.sorted()
+        return sorted[(sorted.count - 1) / 2]
     }
 
     nonisolated static func extractCoordinates(from polyline: MKPolyline) -> [CLLocationCoordinate2D] {

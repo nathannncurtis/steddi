@@ -208,6 +208,37 @@ enum RoadGraphSerializer {
             let count = Int(node.edgeCount)
             guard count >= 0, first >= 0, first <= totalEdges, first + count <= totalEdges else { return nil }
         }
+
+        // CSR adjacency consistency: in-bounds alone is not enough. The forward
+        // expansion in AStarSearch trusts `outEdgeRange(of: v)` blindly — it never
+        // re-checks that an out-edge actually originates at `v` — so a corrupt or
+        // format-drifted blob whose offsets/counts stay in bounds but no longer
+        // describe a real CSR layout would stitch a DISCONNECTED route (consecutive
+        // edges whose endpoints don't physically join) and present it as valid
+        // instead of failing into the MapKit fallback. Enforce the two CSR
+        // invariants the builder guarantees:
+        //   (1) the non-empty per-node windows tile `0..<edges.count` exactly, in
+        //       node order, with no gap or overlap (offsets monotonic; every edge
+        //       belongs to exactly one node's window), and
+        //   (2) every edge in node n's window has `.from == n`.
+        // Empty windows (`edgeCount == 0`) carry no offset constraint — the builder
+        // leaves their `firstEdge` at 0 — so they are skipped, not required to
+        // match the running offset. One extra O(E) pass.
+        var runningOffset = 0
+        for (nodeIndex, node) in nodes.enumerated() {
+            let count = Int(node.edgeCount)
+            guard count > 0 else { continue }
+            guard Int(node.firstEdge) == runningOffset else { return nil }
+            let nodeID = NodeIndex(nodeIndex)
+            for e in runningOffset ..< (runningOffset + count) {
+                guard edges[e].from == nodeID else { return nil }
+            }
+            runningOffset += count
+        }
+        // Every edge must be claimed by exactly one node's window. If the windows
+        // tiled a strict prefix (an edge belongs to a zero-window node, or a hole),
+        // the running offset stops short of the edge count → reject.
+        guard runningOffset == totalEdges else { return nil }
         // Re-derive the max edge speed in the same pass that validates edges.
         // The A* heuristic is `h = haversine / graphMaxSpeedMPS` and stays
         // admissible (a true lower bound) only while `graphMaxSpeedMPS` is >=
