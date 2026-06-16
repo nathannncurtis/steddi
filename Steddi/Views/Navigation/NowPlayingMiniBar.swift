@@ -28,6 +28,12 @@ struct NowPlayingMiniBar: View {
         }
         .padding(.horizontal, compact ? 10 : 12)
         .frame(height: height)
+        // Faint scrim under the glass — the shared over-map protection the top
+        // banner / street-name capsule use, so the title/artist hold contrast
+        // against bright/varied cartography instead of washing out (the
+        // translucent glass path has no opaque fill of its own). Same shape as
+        // the glass below; skipped when glass is off (the fallback is opaque).
+        .mapGlassScrim(in: RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium))
         // Route through the centralized glass modifier so Reduce Transparency /
         // high-contrast goes opaque like the rest of the nav chrome instead of
         // leaving the title/artist fighting the moving map underneath.
@@ -87,16 +93,27 @@ struct NowPlayingMiniBar: View {
                     .lineLimit(1)
             }
         }
+        // The track/artist ride translucent glass over the moving map; the soft
+        // per-glyph shadow the sibling nav readouts use keeps them off the tiles
+        // (textSecondary in particular is AA-proven only on solid surfaces).
+        .legibleOverMap()
     }
 
     // MARK: - Play / Pause + long-press seek
 
-    private var playPauseButton: some View {
+    // Internal (not private) so the tap-target test can render it in isolation
+    // and assert the 44pt minimum hit area without booting the full bar.
+    var playPauseButton: some View {
         Image(systemName: isSeeking ? "forward.fill" : (service.isPlaying ? "pause.fill" : "play.fill"))
             .font(.system(size: compact ? 16 : 18, weight: .bold))
             .foregroundStyle(SteddiTheme.accent)
             .frame(width: height - (compact ? 12 : 14), height: height - (compact ? 12 : 14))
             .background(Circle().fill(SteddiTheme.accentSubtle))
+            // Keep the smaller visual circle but expand the hit area to the 44pt
+            // HIG minimum — this is the play/pause control used while driving,
+            // and a near-miss falls through to the bar's tap (launching the
+            // music app out of nav). Matches HomeView's sub-44 glyph pattern.
+            .frame(width: 44, height: 44)
             .contentShape(Circle())
             .onTapGesture {
                 guard !isSeeking else { return }
