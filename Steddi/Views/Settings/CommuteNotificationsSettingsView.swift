@@ -7,6 +7,16 @@ import UserNotifications
 struct CommuteNotificationsSettingsView: View {
     @AppStorage(CommuteNotificationService.globalEnabledKey) private var globalEnabled = true
     @AppStorage(CommuteNotificationService.weatherSensitivityKey) private var sensitivityRaw = WeatherSensitivity.harsh.rawValue
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
+
+    /// A presented sheet gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin the app theme on
+    /// the explainer sheet too — otherwise it renders in the device appearance
+    /// and mismatches the rest of Steddi when the chosen theme differs from the
+    /// device (same fix as ThresholdExplainerView).
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     /// Budget read straight from a weather service instance (UserDefaults-backed).
     @State private var weatherService = CommuteWeatherService()
@@ -163,7 +173,13 @@ struct CommuteNotificationsSettingsView: View {
             .foregroundStyle(.secondary)
             .padding(.bottom, 32)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Back the sheet with the Steddi surface and pin the resolved app color
+        // scheme so the body, `.secondary` copy, and the luminance-shifted accent
+        // bell all render in the Steddi theme rather than the device appearance.
+        .background(SteddiTheme.surfacePrimary)
         .presentationDetents([.medium, .large])
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     // MARK: - Helpers
