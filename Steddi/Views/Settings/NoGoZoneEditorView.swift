@@ -86,11 +86,19 @@ struct NoGoZoneEditorView: View {
 
     private var topBar: some View {
         HStack {
+            // Keep the compact capsule/circle visuals but expand each hit region
+            // to Apple's 44x44 minimum (contentShape so the padded area still
+            // takes the tap) — these controls float over the tap-to-draw map, so
+            // a sub-44pt near-miss would otherwise fall through and drop a point
+            // or pan. Matches the 44pt convention used by the zoom buttons here
+            // and the HomeView gear / Settings swatches.
             Button("Cancel") { dismiss() }
                 .font(.body.weight(.medium))
                 .foregroundStyle(SteddiTheme.textPrimary)
                 .padding(10)
                 .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Capsule())
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Capsule())
 
             Spacer()
 
@@ -100,6 +108,8 @@ struct NoGoZoneEditorView: View {
                     .foregroundStyle(SteddiTheme.accent)
                     .padding(10)
                     .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Circle())
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Circle())
             }
 
             Spacer()
@@ -109,6 +119,8 @@ struct NoGoZoneEditorView: View {
                 .foregroundStyle(canSave ? SteddiTheme.accent : SteddiTheme.textMuted)
                 .padding(10)
                 .background(SteddiTheme.surfacePrimary.opacity(0.88), in: Capsule())
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Capsule())
                 .disabled(!canSave)
         }
         .padding(.horizontal, 16)
@@ -302,7 +314,12 @@ struct NoGoZoneEditorView: View {
                     Button {
                         searchQuery = ""; searchResults = []
                     } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(SteddiTheme.textMuted)
+                        // Compact glyph, 44pt hit region (contentShape so the
+                        // padding takes the tap) — Apple's minimum tap target.
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(SteddiTheme.textMuted)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                 }
             }
@@ -327,6 +344,12 @@ struct NoGoZoneEditorView: View {
                                     Spacer()
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 10)
+                                // A single-line result is ~40pt tall with the
+                                // vertical padding alone; floor the tappable row
+                                // at the 44pt minimum (contentShape so the whole
+                                // row, including the trailing Spacer, takes the tap).
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                             }
                         }
                     }
