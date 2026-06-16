@@ -104,6 +104,53 @@ struct DuckingPolicyTests {
         }
     }
 
+    // MARK: - combinedSessionOptions (concurrent duckers don't clobber)
+
+    @Test("combined options for one class equal that class's own options")
+    func combinedSingleClassMatchesSolo() {
+        let voice = DuckingPolicy.combinedSessionOptions(for: [.voice], voiceEnabled: true, alertEnabled: true)
+        #expect(voice == DuckingPolicy.sessionOptions(for: .voice, shouldDuck: true))
+        let alert = DuckingPolicy.combinedSessionOptions(for: [.alert], voiceEnabled: true, alertEnabled: true)
+        #expect(alert == DuckingPolicy.sessionOptions(for: .alert, shouldDuck: true))
+    }
+
+    @Test("an alert mid voice-prompt keeps voice's spoken-audio interruption (union, not overwrite)")
+    func alertDoesNotStripVoiceOptions() {
+        // Both ducking: the combined set must retain voice's
+        // .interruptSpokenAudioAndMixWithOthers even though alert alone never has
+        // it. This is the core regression: setCategory would otherwise replace the
+        // whole set with the alert's bare .duckOthers.
+        let combined = DuckingPolicy.combinedSessionOptions(
+            for: [.voice, .alert], voiceEnabled: true, alertEnabled: true
+        )
+        #expect(combined.contains(.duckOthers))
+        #expect(combined.contains(.interruptSpokenAudioAndMixWithOthers))
+    }
+
+    @Test("a non-ducking alert mid voice-prompt does not un-duck media")
+    func nonDuckingAlertDoesNotUnduckVoice() {
+        // Mixed-toggle config (voice-duck on, alert-duck off): a speed-camera tone
+        // firing during a voice prompt must NOT drop voice's .duckOthers — media
+        // the user asked to duck must stay ducked for the overlap.
+        let combined = DuckingPolicy.combinedSessionOptions(
+            for: [.voice, .alert], voiceEnabled: true, alertEnabled: false
+        )
+        #expect(combined.contains(.duckOthers))
+        #expect(combined.contains(.interruptSpokenAudioAndMixWithOthers))
+    }
+
+    @Test("combined options union is order-independent")
+    func combinedOrderIndependent() {
+        let a = DuckingPolicy.combinedSessionOptions(for: [.voice, .alert], voiceEnabled: true, alertEnabled: true)
+        let b = DuckingPolicy.combinedSessionOptions(for: [.alert, .voice], voiceEnabled: true, alertEnabled: true)
+        #expect(a == b)
+    }
+
+    @Test("empty active set yields no options")
+    func combinedEmptyIsEmpty() {
+        #expect(DuckingPolicy.combinedSessionOptions(for: [], voiceEnabled: true, alertEnabled: true).isEmpty)
+    }
+
     // MARK: - canDeactivate (conflict matrix)
 
     @Test("can deactivate when no other class is active")
