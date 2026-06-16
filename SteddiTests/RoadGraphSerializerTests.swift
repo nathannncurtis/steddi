@@ -472,4 +472,74 @@ struct RoadGraphSerializerTests {
         let restored = try #require(RoadGraphSerializer.deserialize(tampered))
         #expect(abs(restored.graphMaxSpeedMPS - inflated) < 0.001)
     }
+
+    // MARK: - Edge freeFlowSpeedMPS validation
+
+    /// Byte offset of edge `index`'s `freeFlowSpeedMPS` (F32) field within the
+    /// serialized blob. Same layout as `edgeGeometryRangeOffsets`; within the
+    /// 40-byte edge record the fields are from(4) + to(4) + lower(4) + upper(4) +
+    /// length(8) + speed(4) + …, so `speed` sits 24 bytes into the record.
+    private func edgeSpeedFieldOffset(in data: Data, nodeCount: Int, edgeIndex: Int) -> Int {
+        var reader = ByteReaderProbe(data)
+        reader.skip(5)                          // magic + version
+        let geomCount = reader.readU32LE()
+        for _ in 0..<geomCount {                // two signed varints per coord
+            reader.skipVarint()
+            reader.skipVarint()
+        }
+        reader.skip(4)                          // nodeCount
+        reader.skip(nodeCount * 25)             // node records (fixed 25 bytes each)
+        reader.skip(4)                          // edgeCount
+        let edgesStart = reader.offset
+        return edgesStart + edgeIndex * 40 + 24 // speed field within the record
+    }
+
+    private func writeF32LE(_ data: inout Data, at offset: Int, _ value: Float) {
+        let bits = value.bitPattern
+        for i in 0..<4 {
+            data[data.startIndex + offset + i] = UInt8((bits >> (8 * UInt32(i))) & 0xff)
+        }
+    }
+
+    /// A blob whose edge `freeFlowSpeedMPS` decodes to `+∞` (a real corruption
+    /// mode — `freeFlowSpeedMPS` is read via `Float(bitPattern:)` over arbitrary
+    /// bytes) must be REJECTED on load. An `+∞` speed sails past
+    /// `DefaultCostModel.edgeCost`'s `guard speed > 0` and makes `time =
+    /// lengthMeters / ∞ = 0`, a zero-cost edge A* would greedily route through —
+    /// a nonsense shortest path. The valid blob round-trips (round-trip suite);
+    /// this asserts the corrupt twin falls back to MapKit (nil).
+    @Test("Non-finite (infinite) edge freeFlowSpeedMPS is rejected on load")
+    func infiniteEdgeSpeedRejected() {
+        let graph = buildSampleGraph()
+        #expect(graph.edges.count > 0)
+        let nodeCount = graph.nodes.count
+
+        var data = RoadGraphSerializer.serialize(graph)
+        // Sanity: the untampered blob deserializes (valid round-trip).
+        #expect(RoadGraphSerializer.deserialize(data) != nil)
+
+        // Corrupt edge 0's speed to +∞ → the zero-cost-edge hazard. Must reject.
+        let offset = edgeSpeedFieldOffset(in: data, nodeCount: nodeCount, edgeIndex: 0)
+        writeF32LE(&data, at: offset, .infinity)
+        #expect(RoadGraphSerializer.deserialize(data) == nil)
+    }
+
+    /// NaN and negative edge speeds are likewise corrupt-blob modes the validator
+    /// must reject (NaN would otherwise read as `.infinity`-excluded but is still
+    /// not a real speed; a negative speed is nonsensical) so no degenerate edge
+    /// ever enters the search.
+    @Test("NaN and negative edge freeFlowSpeedMPS are rejected on load")
+    func nanAndNegativeEdgeSpeedRejected() {
+        let graph = buildSampleGraph()
+        let nodeCount = graph.nodes.count
+        let offset = edgeSpeedFieldOffset(in: RoadGraphSerializer.serialize(graph), nodeCount: nodeCount, edgeIndex: 0)
+
+        var nanData = RoadGraphSerializer.serialize(graph)
+        writeF32LE(&nanData, at: offset, .nan)
+        #expect(RoadGraphSerializer.deserialize(nanData) == nil)
+
+        var negData = RoadGraphSerializer.serialize(graph)
+        writeF32LE(&negData, at: offset, -10)
+        #expect(RoadGraphSerializer.deserialize(negData) == nil)
+    }
 }
