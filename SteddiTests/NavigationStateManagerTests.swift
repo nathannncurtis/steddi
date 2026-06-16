@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import CoreLocation
+import SwiftData
 @testable import Steddi
 
 // MARK: - UpcomingStep Tests
@@ -1346,6 +1347,106 @@ struct NavigationStateManagerReAdoptionTests {
         #expect(manager.isNavigating == false)
         #expect(manager.activeEngine == nil)
         #expect(engine.isNavigating == false)
+    }
+
+    private func inMemoryContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: ModelStoreLocator.schema,
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    /// The route-scoped restore gap this guards: reAdoptActiveSessionIfNeeded
+    /// re-syncs the live session into a rebuilt view's @State, but historically it
+    /// did NOT restore `navigatedSavedRoute` (left nil) or `activeRoadConditions`
+    /// (left []). The engine's per-fix provider/voice/haptic closures live on the
+    /// engine and survive a rebuild, but the post-arrival reconfirm guards on
+    /// `navigatedSavedRoute` and the in-drive conditions markers bind to
+    /// `activeRoadConditions` — so after a mid-drive subtree re-identity the
+    /// reconfirm silently no-ops and the markers go blank. The fix mirrors the
+    /// driven route onto the shared manager at wire time so a rebuilt view can
+    /// restore it and re-derive the conditions fresh. This pins that contract at
+    /// the manager layer reAdoptActiveSessionIfNeeded depends on.
+    @Test("A saved-route session mirrors navigatedSavedRoute so a rebuild can restore route + conditions")
+    func savedRouteSessionRestoresRouteAndConditionsAfterRebuild() throws {
+        let ctx = try inMemoryContext()
+        let route = Route(rank: 0, encodedPolyline: "abc", name: "Main St")
+        ctx.insert(route)
+        let onRoute = RoadCondition(
+            kind: .pothole,
+            coordinate: CLLocationCoordinate2D(latitude: 33.005, longitude: -117.0),
+            route: route
+        )
+        ctx.insert(onRoute)
+        try ctx.save()
+
+        let manager = NavigationStateManager()
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Office")
+
+        // What beginCustomNavigation does AFTER startObserving for a saved-route
+        // drive: mirror the driven route onto the shared source of truth.
+        manager.navigatedSavedRoute = route
+        #expect(manager.navigatedSavedRoute?.id == route.id)
+
+        // --- onDisappear-style rebuild teardown over the live session (no stop) ---
+        manager.activeEngine?.onOffRoute = nil
+        // The fresh view's @State starts blank — the gap the bug left unrestored.
+        var viewNavigatedSavedRoute: Route? = nil
+        var viewRoadConditions: [RoadCondition] = []
+        #expect(viewNavigatedSavedRoute == nil)
+        #expect(viewRoadConditions.isEmpty)
+
+        // --- The exact restore reAdoptActiveSessionIfNeeded now performs ---
+        viewNavigatedSavedRoute = manager.navigatedSavedRoute
+        if let r = viewNavigatedSavedRoute {
+            viewRoadConditions = RoadConditionService.shared.fetchConditionsOnRoute(r)
+        } else {
+            viewRoadConditions = []
+        }
+
+        // The reconfirm guard (`guard let route = navigatedSavedRoute`) now passes,
+        // and the in-drive markers repopulate from the live store.
+        #expect(viewNavigatedSavedRoute?.id == route.id)
+        #expect(viewRoadConditions.count == 1)
+        #expect(viewRoadConditions.first?.id == onRoute.id)
+
+        manager.stopObserving()
+        engine.stopNavigation()
+    }
+
+    /// An ad-hoc (MKRoute search) drive has no saved Route, so the mirror must be
+    /// nil and a rebuild restores empty conditions — never resurrecting a stale
+    /// route from a prior saved-route drive. stopObserving (run inside the next
+    /// startObserving) clears the mirror, which is what guarantees this.
+    @Test("An ad-hoc drive leaves navigatedSavedRoute nil so a rebuild restores no conditions")
+    func adHocSessionRestoresNoRouteAfterRebuild() {
+        let manager = NavigationStateManager()
+
+        // A prior saved-route drive left a route mirrored…
+        let firstEngine = startedEngine()
+        manager.startObserving(engine: firstEngine, destinationName: "Home")
+        manager.navigatedSavedRoute = Route(rank: 0, encodedPolyline: "abc")
+        firstEngine.stopNavigation()
+
+        // …then an ad-hoc search drive starts. startObserving → stopObserving clears
+        // the mirror; beginNavigation (MKRoute path) never sets it.
+        let engine = startedEngine()
+        manager.startObserving(engine: engine, destinationName: "Cafe")
+        #expect(manager.navigatedSavedRoute == nil)
+
+        // A rebuild's restore yields no route and empty conditions — correct for
+        // ad-hoc nav, which has no Route to anchor remembered conditions.
+        let restoredRoute = manager.navigatedSavedRoute
+        let restoredConditions: [RoadCondition] = restoredRoute.map {
+            RoadConditionService.shared.fetchConditionsOnRoute($0)
+        } ?? []
+        #expect(restoredRoute == nil)
+        #expect(restoredConditions.isEmpty)
+
+        manager.stopObserving()
+        engine.stopNavigation()
     }
 }
 

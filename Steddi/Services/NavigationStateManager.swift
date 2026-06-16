@@ -138,6 +138,20 @@ final class NavigationStateManager {
     /// Route coordinates for map rendering
     var activeRouteCoords: [CLLocationCoordinate2D] = []
 
+    /// The saved `Route` the driver is navigating, when the session is a saved-route
+    /// drive (nil for ad-hoc MKRoute search nav). Durable home so that a forced
+    /// SwiftUI subtree re-identity mid-drive (scene reconnect, etc.) can restore it:
+    /// HomeView's own `navigatedSavedRoute` @State resets to nil on the rebuild, and
+    /// without this mirror the post-arrival road-condition reconfirm (which guards on
+    /// `navigatedSavedRoute`) and the in-drive conditions banner silently break for
+    /// the rest of the drive. HomeView mirrors here at wire time and restores from
+    /// here in `reAdoptActiveSessionIfNeeded`, re-deriving the route's conditions
+    /// fresh — the same restore-from-shared-source pattern as `activeRouteCoords` and
+    /// the recovery budget. Cleared by `startObserving` (a fresh session may be
+    /// ad-hoc) and `stopObserving`.
+    @ObservationIgnored
+    var navigatedSavedRoute: Route? = nil
+
     /// Durable home for the off-route recovery budget so it survives a SwiftUI
     /// view rebuild mid-trip. The cap (RouteRecoveryEngine abandons to
     /// destination once `recoveriesThisTrip >= 3`) is meant to hold across a
@@ -857,6 +871,7 @@ final class NavigationStateManager {
         activeTrip = nil
         activeEngine = nil
         activeRouteCoords = []
+        navigatedSavedRoute = nil
         activeRouteID = nil
         rerouteInputs = nil
         rerouteModelContext = nil
