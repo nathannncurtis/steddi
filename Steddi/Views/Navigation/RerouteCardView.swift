@@ -46,6 +46,10 @@ struct RerouteCardView: View {
                         Text("Faster route available")
                             .font(SteddiTheme.heading(17 * textScale))
                             .foregroundStyle(SteddiTheme.textPrimary)
+                            // Rides accent-tinted translucent glass over the
+                            // moving map — same soft per-glyph shadow the nav
+                            // banners use so the heading holds against any tile.
+                            .legibleOverMap()
 
                         if !routeName.isEmpty {
                             Text(routeName)
@@ -67,6 +71,9 @@ struct RerouteCardView: View {
                         // ~2.30:1 on the light/dynamic-day accent glass and fails
                         // even the 3:1 large-text floor for this glanceable value.
                         .foregroundStyle(SteddiTheme.sageText)
+                        // The glanceable green value over the moving map gets the
+                        // shared soft shadow too, like the sibling nav readouts.
+                        .legibleOverMap()
 
                     Text("(\(percentageSavings)%)")
                         .font(SteddiTheme.mono(14 * textScale))
@@ -98,8 +105,16 @@ struct RerouteCardView: View {
                 }
             }
             .padding(20)
-            // Accent-tinted glass — this is a delight/suggestion moment.
-            .steddiGlass(tint: SteddiTheme.accent, interactive: false, in: SteddiGlass.cardShape)
+            // Faint scrim under the glass — the shared over-map protection the
+            // nav banners use, so this mid-drive card's text holds against
+            // bright/varied cartography (same shape as the glass; skipped when
+            // glass is off — the fallback is already opaque).
+            .mapGlassScrim(in: SteddiGlass.cardShape)
+            // Accent-tinted glass — this is a delight/suggestion moment. The tint
+            // is a FILL, so it uses the unshifted brand hue (`accentBrand`), not
+            // the darkened text-safe `accent`; this keeps headroom for the
+            // near-black textPrimary/textSecondary labels drawn on it.
+            .steddiGlass(tint: SteddiTheme.accentBrand, interactive: false, in: SteddiGlass.cardShape)
             .padding(.horizontal, 16)
             // Slight Y overshoot on entrance for delight (gated by Reduce Motion).
             .scaleEffect(didSpringIn ? 1.0 : 0.92)
