@@ -28,7 +28,12 @@ struct TripArrivalPromptSheet: View {
                 if let arrivedStopName {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(SteddiTheme.sage)
+                            // Surface-adaptive legible green — raw sage as a small
+                            // meaning-bearing glyph on surfacePrimary is only
+                            // 2.30:1 (light), below the 3:1 floor. Matches the
+                            // "visited" checkmark fix in TripEditorView.
+                            .font(SteddiTheme.body(14))
+                            .foregroundStyle(SteddiTheme.sageText)
                         Text("Arrived at \(arrivedStopName)")
                             .font(SteddiTheme.body(14))
                             .foregroundStyle(SteddiTheme.textSecondary)

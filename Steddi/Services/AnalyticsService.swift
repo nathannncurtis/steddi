@@ -813,6 +813,14 @@ final class AnalyticsService {
     }
 
     /// Most recent drives for the list section, newest first, capped.
+    ///
+    /// Like `fetchSamples`, this projects only the scalar summary columns the row
+    /// card renders (`id`, `startedAt`, `totalDurationSeconds`,
+    /// `trafficDurationSeconds`) via `propertiesToFetch`, so the large inline GPS
+    /// blob is not faulted in for the (up to 50) list rows. The blob and the
+    /// `associatedCommute` relationship fault lazily on access — the row card
+    /// reads only the projected scalars plus the commute name, and the GPS trace
+    /// is decoded only in the detail path (`buildDriveDetail`).
     private func fetchRecentDrives(from windowStart: Date?, context: ModelContext) -> [DriveRecord] {
         var descriptor: FetchDescriptor<DriveRecord>
         if let windowStart {
@@ -826,6 +834,7 @@ final class AnalyticsService {
             )
         }
         descriptor.fetchLimit = Self.recentDriveLimit
+        descriptor.propertiesToFetch = [\.id, \.startedAt, \.totalDurationSeconds, \.trafficDurationSeconds]
         return (try? context.fetch(descriptor)) ?? []
     }
 

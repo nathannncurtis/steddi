@@ -33,20 +33,31 @@ struct RoutePreviewView: View {
                 Spacer()
 
                 VStack(spacing: 16) {
-                    // Destination name
+                    // Destination name — wrap to 2 lines then shrink rather than
+                    // pushing the fixed card up under the map controls at large
+                    // Dynamic Type.
                     Text(destinationName)
                         .font(SteddiTheme.body(16))
                         .foregroundStyle(SteddiTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
 
-                    // ETA and distance
+                    // ETA and distance — the two big mono values shrink-to-fit
+                    // (mirroring the in-nav speedometer digits) so they don't
+                    // collide across the divider at accessibility text sizes.
                     HStack(spacing: 24) {
                         VStack(spacing: 4) {
                             Text("\(Int(ceil(activeRoute.expectedTravelTime / 60)))")
                                 .font(SteddiTheme.mono(36))
                                 .foregroundStyle(SteddiTheme.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
                             Text("min")
                                 .font(SteddiTheme.body(14))
                                 .foregroundStyle(SteddiTheme.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                         }
 
                         Rectangle()
@@ -57,9 +68,13 @@ struct RoutePreviewView: View {
                             Text(NavigationEngine.formatDistance(activeRoute.distance))
                                 .font(SteddiTheme.mono(36))
                                 .foregroundStyle(SteddiTheme.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
                             Text("distance")
                                 .font(SteddiTheme.body(14))
                                 .foregroundStyle(SteddiTheme.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                         }
                     }
 
@@ -150,6 +165,8 @@ struct RoutePreviewView: View {
                 .font(.system(size: 12, weight: .semibold))
             Text(indicator.label)
                 .font(SteddiTheme.body(13))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         // Active chip's label+icon sit on accentSubtle (accent@15%); raw accent
         // as text there fails AA in every theme (1.4–4.6:1, same as the route
@@ -175,8 +192,12 @@ struct RoutePreviewView: View {
             VStack(spacing: 4) {
                 Text(label)
                     .font(SteddiTheme.body(12))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Text("\(Int(ceil(route.expectedTravelTime / 60))) min")
                     .font(SteddiTheme.mono(14))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             // Selected label sits on accentSubtle (accent@15%); accent-on-accent
             // fails AA in every theme (1.4–4.6:1), so use textPrimary which
