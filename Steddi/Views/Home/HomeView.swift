@@ -109,6 +109,15 @@ struct HomeView: View {
     @State private var lastRecoveryAt: Date?
     @State private var recoveriesThisTrip = 0
 
+    // Handles to the in-flight OSM corridor prefetches (speed limits + cameras),
+    // so a route switch / reroute / recovery splice can CANCEL the prior
+    // corridor's prefetch before warming the new one. Without this, rapid route
+    // changes stack concurrent multi-MB Overpass responses against rate-limited
+    // public mirrors. The services treat URLError.cancelled/CancellationError as
+    // a clean abort, so cancelling the handle interrupts the network work.
+    @State private var speedLimitPrefetchTask: Task<Void, Never>?
+    @State private var speedCameraPrefetchTask: Task<Void, Never>?
+
     // When navigation ends with the 30s "You have arrived" linger (the
     // non-immediate endActivity()), the activity stays presented for that window.
     // Record the window end so an incidental onAppear rebuild (e.g. Reduce
@@ -204,6 +213,7 @@ struct HomeView: View {
                         locationService.disableNavigationMode()
                         locationFeedTask?.cancel()
                         locationFeedTask = nil
+                        cancelCorridorPrefetches()
                         navigationEngine?.stopNavigation()
                         navStateManager.stopObserving()
                         endActivityWithArrivalLinger()
@@ -708,7 +718,12 @@ struct HomeView: View {
             String(format: "%.5f,%.5f-%.5f,%.5f",
                    corridor[0].latitude, corridor[0].longitude,
                    corridor[corridor.count - 1].latitude, corridor[corridor.count - 1].longitude)
-        Task {
+        // Cancel the previous corridor's prefetch before warming this one, so a
+        // route switch / reroute / recovery splice doesn't stack concurrent
+        // Overpass fetches. The normal single-route case cancels a nil/finished
+        // task — a harmless no-op.
+        speedLimitPrefetchTask?.cancel()
+        speedLimitPrefetchTask = Task {
             await OSMSpeedLimitService.shared.prefetch(for: corridor, routeKey: key)
         }
     }
@@ -735,9 +750,24 @@ struct HomeView: View {
             String(format: "%.5f,%.5f-%.5f,%.5f",
                    corridor[0].latitude, corridor[0].longitude,
                    corridor[corridor.count - 1].latitude, corridor[corridor.count - 1].longitude)
-        Task {
+        // Cancel the previous corridor's camera prefetch before warming this one
+        // (route switch / reroute / recovery splice) so concurrent Overpass
+        // fetches don't stack. Normal single-route case cancels a nil/finished
+        // task — a harmless no-op.
+        speedCameraPrefetchTask?.cancel()
+        speedCameraPrefetchTask = Task {
             await SpeedCameraService.shared.prefetchOSMCameras(for: corridor, routeKey: key)
         }
+    }
+
+    /// Cancel any in-flight OSM corridor prefetches (speed limits + cameras) at
+    /// navigation teardown so a fetch started for this drive doesn't keep running
+    /// against rate-limited Overpass mirrors after the drive ends.
+    private func cancelCorridorPrefetches() {
+        speedLimitPrefetchTask?.cancel()
+        speedLimitPrefetchTask = nil
+        speedCameraPrefetchTask?.cancel()
+        speedCameraPrefetchTask = nil
     }
 
     /// Hook road-condition memory into the engine: a grid-indexed proximity
@@ -1996,6 +2026,7 @@ struct HomeView: View {
         locationService.disableNavigationMode()
         locationFeedTask?.cancel()
         locationFeedTask = nil
+        cancelCorridorPrefetches()
         navigationEngine?.stopNavigation()
         navStateManager.stopObserving()
         endActivityWithArrivalLinger()
@@ -2019,6 +2050,7 @@ struct HomeView: View {
         locationService.disableNavigationMode()
         locationFeedTask?.cancel()
         locationFeedTask = nil
+        cancelCorridorPrefetches()
         navigationEngine?.stopNavigation()
         navStateManager.stopObserving()
         endActivityWithArrivalLinger()
@@ -2156,6 +2188,7 @@ struct HomeView: View {
         locationService.disableNavigationMode()
         locationFeedTask?.cancel()
         locationFeedTask = nil
+        cancelCorridorPrefetches()
         // The shared engine is already stopped by the manager; sever our
         // reference so nothing keeps feeding or rendering it.
         navigationEngine?.onOffRoute = nil
