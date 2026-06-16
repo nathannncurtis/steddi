@@ -841,18 +841,29 @@ final class NavigationStateManager {
         LiveActivityService.shared.endActivity()
     }
 
-    /// The driver tapped "Stay" (or the card auto-dismissed). Clear the visible
-    /// suggestion AND remember the declined route + its rejected savings so the
-    /// reroute loop won't re-surface the same route on the next cycle within the
-    /// cooldown window unless it becomes materially better. UI should call this
-    /// instead of setting `rerouteSuggestion = nil` directly, so the decline is
-    /// actually recorded.
+    /// The driver DELIBERATELY tapped "Stay". Clear the visible suggestion AND
+    /// remember the declined route + its rejected savings so the reroute loop
+    /// won't re-surface the same route on the next cycle within the cooldown
+    /// window unless it becomes materially better. UI should call this instead of
+    /// setting `rerouteSuggestion = nil` directly, so the decline is recorded.
     func dismissRerouteSuggestion() {
         if let suggestion = rerouteSuggestion {
             dismissedRouteID = suggestion.route.id
             dismissedAt = Date()
             dismissedSavingsSeconds = suggestion.savingsMinutes * 60.0
         }
+        rerouteSuggestion = nil
+    }
+
+    /// The reroute card's countdown elapsed with no driver input. This is NOT a
+    /// decision — a driver keeping eyes on the road for 30s hasn't rejected the
+    /// route — so clear ONLY the visible suggestion WITHOUT recording a decline.
+    /// No suppression cooldown is armed, so a genuinely-faster alternate isn't
+    /// hidden for 10 minutes after one unattended timeout; the loop is free to
+    /// re-surface it next cycle (still gated by the per-cycle re-suggest cadence).
+    /// Clearing the suggestion is required so the loop's `rerouteSuggestion == nil`
+    /// guard re-opens — otherwise a locally-hidden card would wedge it shut.
+    func expireRerouteSuggestion() {
         rerouteSuggestion = nil
     }
 

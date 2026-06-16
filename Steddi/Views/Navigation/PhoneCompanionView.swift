@@ -68,6 +68,11 @@ struct PhoneCompanionView: View {
                         },
                         onStay: {
                             navState.dismissRerouteSuggestion()
+                        },
+                        // Countdown timeout is not a decline: clear without
+                        // arming the 10-minute suppression.
+                        onAutoDismiss: {
+                            navState.expireRerouteSuggestion()
                         }
                     )
                     .padding(.bottom, 100)
