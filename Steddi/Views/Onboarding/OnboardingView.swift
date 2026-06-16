@@ -96,13 +96,26 @@ struct OnboardingView: View {
                     Image(systemName: "magnifyingglass")
                         .font(.body.weight(.medium))
                         .foregroundStyle(coordinator.selectedAccent.color)
+                        .legibleOverMap()
                     Text("Where to?")
                         .font(SteddiTheme.heading(17))
                         .foregroundStyle(SteddiTheme.textPrimary)
+                        .legibleOverMap()
                     Spacer()
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
+                // Mirror the real Home search pill this morphs INTO exactly, so the
+                // morph reads as continuous AND stays legible during the settle. The
+                // settle renders on the FIXED-dark cinematic backdrop, and by now
+                // `persistSelections()` has already set the engine to the user's
+                // pick — so in DARK theme `textPrimary` is near-white and neutral
+                // `.regular` glass over the dark backdrop renders as a LIGHT frost,
+                // collapsing the label to ~1.9:1. The over-map scrim (near-opaque
+                // dark in dark theme) keeps the glass dark, and `legibleOverMap`'s
+                // per-glyph shadow holds the copy — matching Home's pill so the
+                // first morph frames aren't illegible.
+                .mapGlassScrim(in: Capsule())
                 .steddiGlass(tint: nil, interactive: true, in: Capsule(),
                              fallbackFill: SteddiTheme.surfaceSecondary)
                 .glassEffectID("onboarding.beatCard", in: beatCardNamespace)
