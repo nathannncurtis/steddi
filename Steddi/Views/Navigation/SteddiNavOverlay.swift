@@ -390,12 +390,27 @@ struct SteddiNavOverlay: View {
                 GlassEffectContainer(spacing: 12) {
                     HStack(spacing: 10) {
                         landscapeCompassIndicator
-                        landscapeButton(isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill", isActive: isVoiceOn) {
+                        landscapeButton(
+                            isVoiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill",
+                            isActive: isVoiceOn,
+                            accessibilityLabel: "Voice guidance",
+                            accessibilityValue: isVoiceOn ? "On" : "Off"
+                        ) {
                             isVoiceOn.toggle()
                             VoiceGuidanceService.shared.enabled = isVoiceOn
                         }
-                        landscapeButton(is3DView ? "cube" : "square", isActive: is3DView) { is3DView.toggle(); onToggleView(is3DView) }
-                        landscapeButton("exclamationmark.bubble.fill") { showReportSheet = true }
+                        landscapeButton(
+                            is3DView ? "cube" : "square",
+                            isActive: is3DView,
+                            accessibilityLabel: "Map perspective",
+                            accessibilityValue: is3DView ? "3D" : "2D",
+                            accessibilityHint: "Switches between a 3D and overhead 2D map"
+                        ) { is3DView.toggle(); onToggleView(is3DView) }
+                        landscapeButton(
+                            "exclamationmark.bubble.fill",
+                            accessibilityLabel: "Report",
+                            accessibilityHint: "Report a hazard, police, camera, or closure ahead"
+                        ) { showReportSheet = true }
                     }
                 }
 
@@ -669,14 +684,28 @@ struct SteddiNavOverlay: View {
             .frame(width: 44 * iconScale, height: 44 * iconScale)
             // Neutral glass readout — not a toggle, so no accent tint.
             .steddiGlass(tint: nil, interactive: false, in: .circle)
+            // A bare letter ("N"/"NE") is cryptic to VoiceOver — speak the full
+            // cardinal direction as a heading readout instead.
+            .accessibilityLabel("Heading")
+            .accessibilityValue(compassSpokenValue)
     }
 
     private static let compassLabels = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    private static let compassSpokenLabels = [
+        "North", "Northeast", "East", "Southeast",
+        "South", "Southwest", "West", "Northwest"
+    ]
 
     /// Cardinal letter for the engine's travel bearing — dimmed dash until the
     /// first valid bearing arrives.
     private var compassLabel: String {
         compassSector.map { Self.compassLabels[$0] } ?? "–"
+    }
+
+    /// Spoken cardinal direction for VoiceOver — full word, or "Unavailable"
+    /// until the first valid bearing arrives.
+    private var compassSpokenValue: String {
+        compassSector.map { Self.compassSpokenLabels[$0] } ?? "Unavailable"
     }
 
     /// Update the 45-degree compass sector with hysteresis: the letter only
@@ -765,9 +794,17 @@ struct SteddiNavOverlay: View {
             .legibleOverMap()
             .frame(width: 50 * iconScale, height: 50 * iconScale)
             .steddiGlass(tint: nil, interactive: false, in: .circle)
+            // See compassIndicator: speak the full cardinal direction rather than
+            // a cryptic single letter.
+            .accessibilityLabel("Heading")
+            .accessibilityValue(compassSpokenValue)
     }
 
-    private func landscapeButton(_ symbol: String, isActive: Bool = false, rotationDegrees: Double = 0, action: @escaping () -> Void) -> some View {
+    /// Landscape glass control button. A bare SF Symbol derives no meaningful
+    /// VoiceOver name, so the label (and optional on/off value for toggles) is
+    /// threaded in here and applied to the button, mirroring the portrait
+    /// `voiceButton` / `viewToggleButton` / `reportButton` treatment.
+    private func landscapeButton(_ symbol: String, isActive: Bool = false, rotationDegrees: Double = 0, accessibilityLabel: String, accessibilityValue: String? = nil, accessibilityHint: String? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 20 * controlScale, weight: .medium))
@@ -789,6 +826,9 @@ struct SteddiNavOverlay: View {
                 )
         }
         .buttonStyle(.steddiPress)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(accessibilityValue ?? "")
+        .accessibilityHint(accessibilityHint ?? "")
     }
 
     private func floatingButtonCircle(symbol: String, isActive: Bool) -> some View {
@@ -1026,6 +1066,25 @@ struct SteddiNavOverlay: View {
             }
         }
         .frame(width: size + 8, height: size + 8)
+        // The gauge reads as fragmented numbers ("65", "mph", "55") to VoiceOver
+        // — combine the children into a single spoken phrase covering current
+        // speed, the limit, and an over-limit warning.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(speedometerAccessibilityLabel(speedLimitMph: speedLimitMph, overLimit: overLimit))
+    }
+
+    /// Single spoken phrase for the speedometer gauge, e.g.
+    /// "Current speed 65 miles per hour. Speed limit 55. Over the limit."
+    private func speedometerAccessibilityLabel(speedLimitMph: Double?, overLimit: Double) -> String {
+        var phrase = "Current speed \(Int(engine.currentSpeedMph)) miles per hour."
+        if let limit = speedLimitMph {
+            let qualifier = engine.speedLimitIsEstimated ? "Estimated speed limit" : "Speed limit"
+            phrase += " \(qualifier) \(Int(limit))."
+        }
+        if overLimit > 0 {
+            phrase += " Over the limit."
+        }
+        return phrase
     }
 
     // MARK: - Report Sheet
