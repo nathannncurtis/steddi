@@ -6,7 +6,12 @@ import CoreLocation
 /// Same route styling and chase-cam as the phone, optimized for CarPlay.
 class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
-    private var mapView: MKMapView!
+    // Optional, not implicitly-unwrapped: CarPlay can connect into an
+    // ALREADY-ACTIVE drive, which sets this controller as the CPWindow root and
+    // can drive startNavigation/recenter/zoom before UIKit lazily runs
+    // viewDidLoad on the first layout pass. Every access guards `mapView` so a
+    // pre-viewDidLoad call no-ops instead of trapping on a force-unwrap.
+    private var mapView: MKMapView?
     private var isInNavigation = false
     private var isFreeLook = false
     private var navRouteCoords: [CLLocationCoordinate2D] = []
@@ -32,29 +37,39 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        mapView = MKMapView(frame: view.bounds)
-        mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
-        mapView.delegate = self
+        let map = MKMapView(frame: view.bounds)
+        map.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        map.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
+        map.delegate = self
 
-        mapView.preferredConfiguration = SteddiTheme.mapConfiguration(traffic: true, poiFilter: .excludingAll)
+        map.preferredConfiguration = SteddiTheme.mapConfiguration(traffic: true, poiFilter: .excludingAll)
 
-        mapView.showsUserLocation = true
-        mapView.showsCompass = false
-        mapView.showsScale = false
-
-        // Follow user location immediately — don't default to a fixed region
-        mapView.setUserTrackingMode(.follow, animated: false)
+        map.showsUserLocation = true
+        map.showsCompass = false
+        map.showsScale = false
 
         view.backgroundColor = .black
-        view.addSubview(mapView)
+        view.addSubview(map)
+        mapView = map
+
+        // If a drive was already active when CarPlay connected, the controller
+        // may have been asked to start navigation before this view loaded —
+        // those calls no-op'd on the nil mapView. Re-apply the live nav state now
+        // that the map exists so the active route renders instead of staying on
+        // the idle follow camera.
+        if isInNavigation {
+            applyActiveNavigationState()
+        } else {
+            // Follow user location immediately — don't default to a fixed region
+            map.setUserTrackingMode(.follow, animated: false)
+        }
 
         NotificationCenter.default.addObserver(self, selector: #selector(accentColorChanged), name: .steddiAccentColorChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(themeModeChanged), name: .steddiThemeModeChanged, object: nil)
     }
 
     @objc private func themeModeChanged() {
-        mapView.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
+        mapView?.overrideUserInterfaceStyle = SteddiTheme.currentThemeMode.mapInterfaceStyle
     }
 
     @objc private func accentColorChanged() {
@@ -82,7 +97,21 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         lastPoseTimestamp = nil
         startDisplayLink()
 
-        showRouteLine(routeCoords)
+        // The map may not exist yet — CarPlay can connect into an already-active
+        // drive and call this before viewDidLoad runs. The nav STATE above is set
+        // unconditionally so viewDidLoad can render it once the view loads (it
+        // calls applyActiveNavigationState when isInNavigation is already true).
+        applyActiveNavigationState()
+    }
+
+    /// Render the active-navigation map state (route overlay + initial nav
+    /// camera). Safe to call before the view loads — no-ops on a nil mapView and
+    /// is re-invoked from viewDidLoad once the map exists, so an active drive
+    /// adopted at CarPlay connect-time still renders without a force-unwrap trap.
+    private func applyActiveNavigationState() {
+        guard let mapView else { return }
+
+        showRouteLine(navRouteCoords)
 
         // Stop auto-follow — we manage the camera manually during nav
         mapView.setUserTrackingMode(.none, animated: false)
@@ -110,7 +139,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
         removeRouteLine()
 
         // Return to follow mode
-        mapView.setUserTrackingMode(.follow, animated: true)
+        mapView?.setUserTrackingMode(.follow, animated: true)
     }
 
     // MARK: - Free Look & Pan (for CPMapTemplateDelegate)
@@ -120,6 +149,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     }
 
     func panMap(latDelta: CLLocationDegrees, lngDelta: CLLocationDegrees) {
+        guard let mapView else { return }
         let center = mapView.centerCoordinate
         let newCenter = CLLocationCoordinate2D(
             latitude: center.latitude + latDelta,
@@ -190,7 +220,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     }
 
     fileprivate func displayLinkFired(_ link: CADisplayLink) {
-        guard isInNavigation, !isFreeLook else { return }
+        guard isInNavigation, !isFreeLook, let mapView else { return }
         let now = link.timestamp
 
         var maxDistance = Double.greatestFiniteMagnitude
@@ -226,7 +256,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     }
 
     func recenter() {
-        guard let coord = mapView.userLocation.location?.coordinate else { return }
+        guard let mapView, let coord = mapView.userLocation.location?.coordinate else { return }
         isFreeLook = false
         currentZoom = 17.5
         if isInNavigation {
@@ -243,6 +273,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     }
 
     private func applyCameraZoom() {
+        guard let mapView else { return }
         let camera = MKMapCamera(
             lookingAtCenter: mapView.centerCoordinate,
             fromDistance: zoomToDistance(currentZoom),
@@ -255,7 +286,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     // MARK: - Route Line
 
     private func showRouteLine(_ coordinates: [CLLocationCoordinate2D]) {
-        guard !coordinates.isEmpty else { return }
+        guard !coordinates.isEmpty, let mapView else { return }
         let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
         routeOverlay = polyline
         mapView.addOverlay(polyline, level: .aboveRoads)
@@ -263,7 +294,7 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
 
     private func removeRouteLine() {
         if let overlay = routeOverlay {
-            mapView.removeOverlay(overlay)
+            mapView?.removeOverlay(overlay)
             routeOverlay = nil
         }
     }
@@ -296,7 +327,9 @@ class CarPlayMapController: UIViewController, MKMapViewDelegate {
     // MARK: - Helpers
 
     private func zoomToDistance(_ zoom: Double) -> CLLocationDistance {
-        let lat = mapView.centerCoordinate.latitude
+        // Latitude only scales the meters-per-pixel term; 0 (equator) is a safe
+        // fallback if the map isn't loaded yet (callers all guard mapView first).
+        let lat = mapView?.centerCoordinate.latitude ?? 0
         return 156543.03 * cos(lat * .pi / 180) / pow(2, zoom) * 256
     }
 }
