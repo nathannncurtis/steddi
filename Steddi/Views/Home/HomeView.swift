@@ -94,6 +94,14 @@ struct HomeView: View {
     @State private var tripArrivalStop: TripStop?       // stop just arrived at
     @State private var showTripArrivalPrompt = false    // manual mode next-leg prompt
     @State private var tripAutoAdvanceTask: Task<Void, Never>?
+    /// True during a continuous-mode leg handoff (`advanceTripLeg`), from the
+    /// moment the finished leg's manager session is stopped until the next leg's
+    /// session is observed (or the handoff fails). The external-teardown observer
+    /// (`.onChange(of: navStateManager.isNavigating)`) checks this so it doesn't
+    /// mistake the transient manager `isNavigating == false` between legs — which
+    /// persists for the multi-second next-leg route fetch — for a genuine external
+    /// teardown and silently force-end the whole trip mid-advance.
+    @State private var isAdvancingLeg = false
     @State private var dismissedResumeBanners: Set<UUID> = []
 
     // Off-route recovery — single-flight, cooldown, per-trip improvisation count
@@ -425,8 +433,22 @@ struct HomeView: View {
         // teardown to match. The in-view End/pause/endTrip paths flip local
         // `isNavigating` false in the same turn they stop the manager, so this
         // only fires for the genuinely-external case.
+        //
+        // EXCEPT a continuous-trip leg handoff: `advanceTripLeg` stops the
+        // manager (manager.isNavigating -> false) and only re-observes the next
+        // leg AFTER its route fetch resolves (multi-second for a live-routed
+        // stop), all while local `isNavigating` stays true. That transient false
+        // is NOT an external teardown — force-ending here would silently degrade
+        // the trip to a standalone drive mid-advance. `isAdvancingLeg` is set
+        // synchronously at the top of `advanceTripLeg` (before the manager is
+        // stopped) and cleared once the next leg is observed, so we suppress the
+        // teardown for exactly that window and re-target instead.
         .onChange(of: navStateManager.isNavigating) { _, managerNavigating in
-            if !managerNavigating && isNavigating {
+            if Self.shouldHandleExternalTeardown(
+                managerNavigating: managerNavigating,
+                viewNavigating: isNavigating,
+                isAdvancingLeg: isAdvancingLeg
+            ) {
                 handleExternalSessionTeardown()
             }
         }
@@ -815,6 +837,9 @@ struct HomeView: View {
             trip: activeTrip,
             destinationName: destName
         )
+        // Next leg is now observed (manager.isNavigating true again) — close the
+        // leg-handoff window so a later genuine external teardown is honored.
+        isAdvancingLeg = false
 
         startLocationFeed()
 
@@ -1455,6 +1480,9 @@ struct HomeView: View {
             // route or a fallback the driver switched to.
             routeID: route?.id
         )
+        // Next leg is now observed (manager.isNavigating true again) — close the
+        // leg-handoff window so a later genuine external teardown is honored.
+        isAdvancingLeg = false
 
         startLocationFeed()
 
@@ -1889,6 +1917,13 @@ struct HomeView: View {
         tripAutoAdvanceTask = nil
         tripArrivalStop = nil
         showTripArrivalPrompt = false
+        // Enter the leg-handoff window BEFORE stopping the manager below. The
+        // manager.isNavigating dip to false (and the multi-second gap until the
+        // next leg's startObserving re-sets it true) would otherwise trip the
+        // external-teardown observer and silently force-end the trip mid-advance.
+        // Cleared once the next leg is observed (begin*Navigation) or the handoff
+        // fails (handleAutoAdvanceFailure / endTripNavigation).
+        isAdvancingLeg = true
         // Quiesce the FINISHED leg's engine before starting the next one. During
         // the 3s auto-advance window the arrived engine was harmless — the
         // locationFeedTask breaks on hasArrived (startLocationFeed), so no GPS
@@ -1921,6 +1956,9 @@ struct HomeView: View {
     /// path a continuous-mode user gets by tapping the arrival card. The trip
     /// position is already persisted, so this is fully recoverable.
     private func handleAutoAdvanceFailure() {
+        // The handoff didn't reach a new session — close the leg-handoff window
+        // so the external-teardown observer is no longer suppressed.
+        isAdvancingLeg = false
         guard let trip = activeTrip, let stop = trip.currentStop else {
             // Nothing left to navigate to — treat as trip end so we don't strand
             // the user on the calculating overlay.
@@ -1965,6 +2003,8 @@ struct HomeView: View {
     private func endTripNavigation(completed: Bool) {
         tripAutoAdvanceTask?.cancel()
         tripAutoAdvanceTask = nil
+        // The trip is ending — never leave the leg-handoff suppression armed.
+        isAdvancingLeg = false
         _ = locationService.stopRecording()
         locationService.disableNavigationMode()
         locationFeedTask?.cancel()
@@ -2062,6 +2102,32 @@ struct HomeView: View {
         isNavigating = true
     }
 
+    /// Whether the `navStateManager.isNavigating` observer should run the
+    /// external-teardown path. The manager going idle while this view still
+    /// thinks it's navigating normally means the session was ended out from
+    /// under us (the active trip was deleted externally) — tear the local view
+    /// down to match.
+    ///
+    /// The one exception is a continuous-trip leg auto-advance: `advanceTripLeg`
+    /// stops the manager (manager.isNavigating -> false) and only re-observes the
+    /// next leg AFTER its route fetch resolves — a multi-second window for a
+    /// live-routed stop. That transient idle is NOT an external teardown;
+    /// force-ending here would silently degrade the trip to a standalone drive
+    /// mid-advance (lost leg N-of-M context, re-armed recovery budget, no further
+    /// arrival handling). `isAdvancingLeg` flags exactly that window, so the
+    /// handoff re-targets navigation to the next leg instead of ending it.
+    ///
+    /// Pure + static so the leg-advance-vs-genuine-teardown decision is
+    /// unit-testable without instantiating the SwiftUI view. `nonisolated` since
+    /// it touches no actor state — callable from the (non-MainActor) test suite.
+    nonisolated static func shouldHandleExternalTeardown(
+        managerNavigating: Bool,
+        viewNavigating: Bool,
+        isAdvancingLeg: Bool
+    ) -> Bool {
+        !managerNavigating && viewNavigating && !isAdvancingLeg
+    }
+
     /// Tear down this view's navigation @State after the SHARED manager already
     /// ended the session externally (today: the active trip was deleted from the
     /// Trips list/editor via NavigationStateManager.endActiveTripSession). The
@@ -2075,6 +2141,7 @@ struct HomeView: View {
     private func handleExternalSessionTeardown() {
         tripAutoAdvanceTask?.cancel()
         tripAutoAdvanceTask = nil
+        isAdvancingLeg = false
         _ = locationService.stopRecording()
         locationService.disableNavigationMode()
         locationFeedTask?.cancel()
