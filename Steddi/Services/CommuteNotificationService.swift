@@ -343,7 +343,14 @@ final class CommuteNotificationService {
     /// nav session is active (NavigationStateManager also guards this) so it can't
     /// clobber a live ETA.
     func refreshIdleCommuteETA(now: Date = Date()) async {
-        guard globallyEnabled else { return }
+        // Deliberately NOT gated on `globallyEnabled`: the home-screen commute-ETA
+        // widget is a separate feature from smart-commute notifications. Turning
+        // notifications off must not freeze the widget — it would then show
+        // "No ETA yet" (or a stale value past the freshness window) forever. Only
+        // the notification-specific paths (scheduleBackgroundRefresh /
+        // runNotificationPass) honor that master toggle; the widget data refresh
+        // does not. The no-op-while-navigating guard below still stands so this
+        // can't clobber a live ETA.
         if await MainActor.run(body: { NavigationStateManager.shared.isNavigating }) { return }
 
         let context = ModelContext(modelContainer)

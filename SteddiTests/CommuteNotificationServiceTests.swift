@@ -505,6 +505,40 @@ struct ServiceIdleETAExtractionTests {
         // duration (extracted from the model before any await) is used.
         await service(container).refreshIdleCommuteETA(now: try at(hour: 7))
     }
+
+    /// The home-screen ETA widget is a SEPARATE feature from smart-commute
+    /// notifications. With the notification master toggle OFF, the idle widget
+    /// refresh must STILL run and push a fresh ETA — previously it early-returned
+    /// on `guard globallyEnabled`, silently freezing the widget. This asserts the
+    /// widget App Group defaults receive the freshly-computed ETA even though
+    /// notifications are disabled (only no-op'd when actually navigating).
+    @Test("Idle refresh still pushes the widget ETA when notifications are disabled")
+    @MainActor
+    func idleRefreshRunsWithNotificationsDisabled() async throws {
+        // Can't assert the widget write while a live nav session is in flight
+        // (updateIdleCommuteETA no-ops then); this fresh test process is idle.
+        guard !NavigationStateManager.shared.isNavigating else { return }
+
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+        _ = try fixture(context, typicalSeconds: 1500)   // 25 min
+
+        // Notifications globally OFF — the path that USED to be frozen.
+        let defaults = freshDefaults()
+        defaults.set(false, forKey: CommuteNotificationService.globalEnabledKey)
+        let svc = CommuteNotificationService(modelContainer: container, defaults: defaults)
+        #expect(!svc.globallyEnabled)
+
+        let widgetDefaults = try #require(UserDefaults(suiteName: "group.to.nathancurtis.steddi"))
+        let before = Date().timeIntervalSince1970
+
+        // No location fix → typical duration (1500s ⇒ 25 min) flows to the widget.
+        await svc.refreshIdleCommuteETA(now: try at(hour: 7))
+
+        // The widget received a fresh ETA despite notifications being disabled.
+        #expect(widgetDefaults.integer(forKey: NavigationStateManager.kETAMinutes) == 25)
+        #expect(widgetDefaults.double(forKey: NavigationStateManager.kETAUpdatedAt) >= before)
+    }
 }
 
 // MARK: - CommuteTrip Cascade Delete
