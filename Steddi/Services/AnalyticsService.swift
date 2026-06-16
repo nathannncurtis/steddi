@@ -495,7 +495,15 @@ final class AnalyticsService {
         var counts = Array(repeating: 0, count: maxPoints)
         for point in valid {
             let offset = point.timestamp.timeIntervalSince(firstTime)
-            let bucket = min(maxPoints - 1, Int(offset / bucketDuration))
+            // firstTime/lastTime come from valid.first/.last, which are NOT
+            // guaranteed to be the chronological extremes: out-of-order or
+            // clock-adjusted GPS can yield a timestamp earlier than firstTime
+            // (negative offset → negative index) or later than lastTime (index
+            // past the end). An unclamped Int(offset / bucketDuration) would
+            // then crash on subscript. Clamp into [0, maxPoints - 1] so a
+            // stray sample lands in the nearest edge bucket instead of crashing.
+            let rawBucket = Int((offset / bucketDuration).rounded(.down))
+            let bucket = min(maxPoints - 1, max(0, rawBucket))
             sums[bucket] += point.speed
             counts[bucket] += 1
         }

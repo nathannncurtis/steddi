@@ -872,7 +872,15 @@ final class NavigationEngine {
         distanceRemaining = Self.formatDistance(totalRemaining)
 
         let calculatedETA: TimeInterval
-        if averageSpeedMPS > 2.0 {
+        // Use the observed pace whenever the EWMA holds a real moving estimate.
+        // The >1 m/s EWMA gate already excludes genuine stops, so any seeded
+        // average reflects fixes the driver actually logged while moving — even a
+        // sustained stop-and-go crawl in the ~1-2 m/s band. Gating ETA on a >2 m/s
+        // floor here would discard that valid crawl estimate and snap to the
+        // optimistic free-flow fraction exactly when traffic is worst. Only fall
+        // back to free-flow when no moving sample has ever seeded the EWMA
+        // (nav just started, or never moved), where there is no observed pace.
+        if speedSampleCount > 0, averageSpeedMPS > 0 {
             calculatedETA = totalRemaining / averageSpeedMPS
         } else if totalRouteDistance > 0 {
             let fraction = totalRemaining / totalRouteDistance
