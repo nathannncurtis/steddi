@@ -296,6 +296,15 @@ struct HomeView: View {
             locationService.startUpdating()
             migrateExistingPinsToCategories()
             checkMilestoneDonation()
+            // Defense-in-depth: if this view was rebuilt with fresh @State while a
+            // navigation session is still live in the shared manager (any forced
+            // subtree rebuild — a glass toggle no longer does this, but other
+            // re-identity events could), re-adopt the in-progress session instead
+            // of starting cold. Without this the engine keeps running but this
+            // view never re-feeds it GPS, the overlay stays hidden, and the Live
+            // Activity goes stale — silently ending guidance mid-drive. Runs
+            // BEFORE the orphan reap below so the live-session guard reads true.
+            reAdoptActiveSessionIfNeeded()
             // Only reap orphaned Live Activities when NO navigation session is in
             // flight. onAppear fires on EVERY forced subtree rebuild — e.g. when
             // SteddiRootView bumps its `.id(glassRevision)` because Reduce
@@ -329,17 +338,23 @@ struct HomeView: View {
             consumePendingUIRoute()
         }
         .onDisappear {
-            // The whole HomeView subtree is being torn down. The happy paths
-            // (End / pause-between-legs) already call stopNavigation()+
-            // stopObserving(), so by here the engine is usually detached. But a
-            // forced subtree rebuild (e.g. SteddiRootView bumps its .id when
-            // Reduce Transparency toggles) discards this struct's @State box
-            // WITHOUT ending navigation, leaving the singleton's activeEngine
-            // alive with onOffRoute still capturing this dead view (engine →
-            // closure → @State box → engine) AND the manually-created
-            // locationFeedTask still spinning a zombie engine. Sever the closure
-            // on the orphaned engine and cancel the feed so neither leaks.
-            // HomeView re-wires onOffRoute when it starts the next session.
+            // The HomeView subtree is going away. The happy paths (End /
+            // pause-between-legs) already call stopNavigation()+stopObserving(),
+            // so by here the engine is usually detached. A glass toggle no longer
+            // tears down this subtree (re-resolution now flows through
+            // `\.glassRevision` in the environment — see SteddiRootView), so this
+            // fires for genuine disappearance: the scene backgrounding/reclaiming,
+            // or a forced re-identity rebuild from some other source.
+            //
+            // In all of those the singleton's activeEngine can still be alive with
+            // onOffRoute capturing this (soon-dead) view (engine → closure →
+            // @State box → engine) AND the locationFeedTask still spinning. Sever
+            // the closure and cancel the feed so neither leaks. If this was a
+            // transient rebuild over a live session, onAppear's
+            // reAdoptActiveSessionIfNeeded() re-wires onOffRoute and restarts the
+            // feed; if it was a real background, the feed restarts on next
+            // foreground via the same re-adoption path. Either way navigation is
+            // never ended here — only the in-view End / external-teardown paths do.
             navStateManager.activeEngine?.onOffRoute = nil
             locationFeedTask?.cancel()
             locationFeedTask = nil
@@ -1910,6 +1925,59 @@ struct HomeView: View {
         showTripArrivalPrompt = false
         try? modelContext.save()
         activeTrip = nil
+    }
+
+    /// Re-adopt an in-progress navigation session after this view was rebuilt
+    /// with fresh @State while the SHARED manager is still navigating.
+    ///
+    /// THE HAZARD: a forced subtree re-identity (historically a glass toggle's
+    /// `.id(glassRevision)` — now routed through the environment so it no longer
+    /// rebuilds; but a scene reconnect or any future re-identity still can)
+    /// discards this struct's @State box WITHOUT ending navigation. The singleton
+    /// keeps `isNavigating == true` with a live `activeEngine`, but the fresh view
+    /// starts with `isNavigating == false`, `navigationEngine == nil`, and no
+    /// `locationFeedTask`. Nothing then re-feeds the engine GPS, so turn-by-turn
+    /// freezes; the overlay stays hidden (local isNavigating false); and the Live
+    /// Activity goes stale — guidance silently dies mid-drive with no recovery.
+    ///
+    /// THE FIX: when the manager is navigating with a live engine but this view
+    /// thinks it isn't, re-point at that engine, re-wire the off-route closure
+    /// (onDisappear nils it on the orphaned engine to break the retain cycle, so
+    /// it must be re-established against THIS view), re-sync local route/context
+    /// state for rendering, mark local `isNavigating`, and restart the GPS feed so
+    /// `updateLocation` + Live Activity `updateActivity` resume. The engine's own
+    /// providers (speed limits/cameras/road conditions) live on the engine
+    /// instance and survive the rebuild, so only the view-captured wiring needs
+    /// re-establishing. Idempotent: a no-op when already navigating or idle.
+    private func reAdoptActiveSessionIfNeeded() {
+        guard !isNavigating,
+              navStateManager.isNavigating,
+              let engine = navStateManager.activeEngine,
+              engine.isNavigating else { return }
+
+        navigationEngine = engine
+
+        // Re-wire off-route against THIS view — onDisappear severed it on the
+        // orphaned engine to break the engine→closure→old-@State retain cycle.
+        engine.onOffRoute = { event in
+            Task { @MainActor [self] in
+                await self.handleOffRoute(event)
+            }
+        }
+
+        // Re-sync rendering/context state from the shared source of truth so the
+        // overlay and map draw the live session rather than empty defaults.
+        activeCommute = navStateManager.activeCommute
+        activeDirection = navStateManager.activeDirection
+        activeTrip = navStateManager.activeTrip
+        if !navStateManager.activeRouteCoords.isEmpty {
+            activeSavedPolyline = navStateManager.activeRouteCoords
+        }
+
+        // Resume guidance: feed restarts GPS → engine.updateLocation and the
+        // periodic Live Activity updateActivity, and reveals the overlay.
+        startLocationFeed()
+        isNavigating = true
     }
 
     /// Tear down this view's navigation @State after the SHARED manager already
