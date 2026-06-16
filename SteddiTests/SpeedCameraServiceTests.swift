@@ -526,6 +526,45 @@ struct CameraDecayTests {
     }
 }
 
+// MARK: - Corridor re-warm (ad-hoc reroute)
+
+/// Finding 1 regression: an ad-hoc (search-nav) mid-drive Apple-Maps reroute
+/// restarts the engine onto entirely new geometry. HomeView.handleOffRoute's
+/// ad-hoc branch must re-warm the OSM camera corridor (wireSpeedCameras ->
+/// prefetchOSMCameras) for the new route, exactly as the saved-route splice and
+/// nav-start do — previously it didn't, so the OSM camera index stayed keyed to
+/// the ORIGINAL corridor for the rest of the drive (no OSM camera alerts on the
+/// new geometry). This models that re-warm at the service level (the wiring it
+/// drives is private to the HomeView SwiftUI view), asserting the OSM index
+/// swaps off the abandoned corridor onto the reroute corridor.
+@Suite("SpeedCameraService ad-hoc reroute corridor re-warm")
+@MainActor
+struct CameraCorridorReWarmTests {
+
+    @Test("Ad-hoc reroute re-warm swaps the OSM camera index onto the new corridor")
+    func adHocRerouteReWarmsCameraCorridor() {
+        let service = SpeedCameraService()
+
+        // Original ad-hoc corridor: a fixed speed camera 150 m north of downtown.
+        let originalCam = north(of: downtown, meters: 150)
+        service.loadOSMCameras([node(1, .speedCamera, at: originalCam)], routeKey: "adhoc-original")
+        #expect(service.loadedRouteKey == "adhoc-original")
+        #expect(service.checkProximity(currentCoord: downtown, heading: 0)?.kind == .speedCamera)
+
+        // Off-route -> Apple-Maps reroute restarts the engine onto disjoint
+        // geometry far east; the fix re-warms the camera corridor for it.
+        let rerouteOrigin = east(of: downtown, meters: 5_000)
+        let rerouteCam = east(of: rerouteOrigin, meters: 150)
+        service.loadOSMCameras([node(2, .redLightCamera, at: rerouteCam)], routeKey: "adhoc-reroute")
+        #expect(service.loadedRouteKey == "adhoc-reroute")
+
+        // The reroute corridor's camera is now alerted on the new geometry...
+        #expect(service.checkProximity(currentCoord: rerouteOrigin, heading: 90)?.kind == .redLightCamera)
+        // ...and the abandoned corridor's OSM camera no longer surfaces.
+        #expect(service.checkProximity(currentCoord: downtown, heading: 0) == nil)
+    }
+}
+
 // MARK: - CRUD + sweep (store-backed)
 
 @Suite("SpeedCameraService report CRUD and sweep")
