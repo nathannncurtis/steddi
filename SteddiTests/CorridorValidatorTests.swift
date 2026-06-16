@@ -123,6 +123,66 @@ struct GridValidatorTests {
         #expect(abs(v.searchResult.totalCost - ref) < 0.01)
     }
 
+    @Test("Validated geometry trims partial terminal edges to the driven sub-segment")
+    func geometryTrimsPartialTerminalEdges() {
+        let g = gridGraph()
+        let cost = TravelTimeCost()
+        // Non-trivial start/end fractions: origin ~30% along the FIRST driven edge,
+        // destination ~70% along the LAST. With endpoints well inside the grid the
+        // route spans multiple edges (so it's NOT the single-edge degenerate case),
+        // exercising the leading+trailing trim across distinct terminal edges.
+        let origin = coord(34.00000, -116.99970)   // ~30% along bottom edge 11→21
+        let dest = coord(34.00130, -116.99800)      // ~30% up the NE corner column
+
+        guard let v = CorridorValidator.validate(from: origin, to: dest, in: g, cost: cost) else {
+            Issue.record("router returned no route"); return
+        }
+        let sr = v.searchResult
+        // Multi-edge route with genuinely partial terminal edges (the bug only bites
+        // when startFraction/endFraction are strictly interior).
+        #expect(sr.edgePath.count >= 2)
+        #expect(sr.startFraction > 0 && sr.startFraction < 1)
+        #expect(sr.endFraction > 0 && sr.endFraction < 1)
+
+        // The validator's geometry MUST equal the polyline the router actually
+        // drives (StepSynthesizer's trimmed stitch), NOT the untrimmed full edges.
+        let validated = CorridorValidator.geometry(of: sr, in: g)
+        let driven = StepSynthesizer.stitchedPolyline(sr, in: g)
+        #expect(validated.count == driven.count)
+        for (a, b) in zip(validated, driven) {
+            #expect(RouteGeometry.haversineDistance(from: a, to: b) < 0.01)
+        }
+
+        // And it must be strictly SHORTER than the untrimmed full-edge stitch that
+        // the old (buggy) geometry returned — proving the trim is actually applied.
+        let untrimmed = fullEdgeStitch(sr, in: g)
+        let validatedLen = RouteGeometry.cumulativeDistances(validated).last ?? 0
+        let untrimmedLen = RouteGeometry.cumulativeDistances(untrimmed).last ?? 0
+        #expect(validatedLen < untrimmedLen)
+
+        // The validated start/end coordinates must sit at the requested origin/dest
+        // (the driven endpoints), not at the snapped graph nodes of the full edges.
+        #expect(RouteGeometry.haversineDistance(from: validated.first!, to: origin) < 30)
+        #expect(RouteGeometry.haversineDistance(from: validated.last!, to: dest) < 30)
+    }
+
+    /// The OLD untrimmed stitch (full per-edge geometry, dedup only) — kept locally
+    /// so the trim test can prove the validator no longer returns this shape.
+    private func fullEdgeStitch(_ result: SearchResult, in graph: RoadGraph) -> [CLLocationCoordinate2D] {
+        var out: [CLLocationCoordinate2D] = []
+        for edgeIndex in result.edgePath {
+            let coords = Array(graph.geometry(of: edgeIndex))
+            guard !coords.isEmpty else { continue }
+            if let last = out.last, let first = coords.first,
+               RouteGeometry.haversineDistance(from: last, to: first) < 1 {
+                out.append(contentsOf: coords.dropFirst())
+            } else {
+                out.append(contentsOf: coords)
+            }
+        }
+        return out
+    }
+
     @Test("reference shortest cost mirrors the router's same-street REVERSE collapse")
     func referenceMatchesRouterSameEdgeReverse() {
         let g = gridGraph()

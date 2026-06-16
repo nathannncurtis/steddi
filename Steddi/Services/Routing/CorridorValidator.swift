@@ -348,22 +348,20 @@ enum CorridorValidator {
 
     // MARK: - Geometry stitching
 
-    /// Stitch an edge path's per-edge geometry into one polyline, deduping the
-    /// shared junction vertex between consecutive edges. Mirrors how the step
-    /// synthesizer assembles the route polyline, but standalone so the validator
-    /// has no dependency on synthesis.
+    /// Stitch an edge path into the polyline the router actually DRIVES — the same
+    /// geometry the step synthesizer produces and navigation follows. Crucially
+    /// this trims the leading edge to `startFraction` and the trailing edge to
+    /// `endFraction` for a mid-edge start/end (a partial terminal edge), so the
+    /// validator measures the driven sub-segment, not the full first/last edges.
+    ///
+    /// Delegates to `StepSynthesizer.stitchedPolyline` (the single source of truth
+    /// for the driven polyline) rather than re-deriving the trim logic, so the
+    /// validated shape is, by construction, identical to the route the router
+    /// renders and the navigator drives. Without the trim, a trip over a small
+    /// fraction of a long edge would be validated against the WHOLE edge — the
+    /// distance/time/corridor/monotone checks would all run on geometry the driver
+    /// never covers (false pass or false fail near the endpoints).
     static func geometry(of result: SearchResult, in graph: RoadGraph) -> [CLLocationCoordinate2D] {
-        var out: [CLLocationCoordinate2D] = []
-        for edgeIndex in result.edgePath {
-            let coords = Array(graph.geometry(of: edgeIndex))
-            guard !coords.isEmpty else { continue }
-            if let last = out.last, let first = coords.first,
-               RouteGeometry.haversineDistance(from: last, to: first) < 1 {
-                out.append(contentsOf: coords.dropFirst())
-            } else {
-                out.append(contentsOf: coords)
-            }
-        }
-        return out
+        StepSynthesizer.stitchedPolyline(result, in: graph)
     }
 }
