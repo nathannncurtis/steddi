@@ -473,3 +473,98 @@ struct TripModelLifecycleTests {
         #expect(trip.routePreferences(for: trip.orderedStops[1]).avoidsTolls == true)
     }
 }
+
+// MARK: - Continuous-Trip Leg Handoff vs. External Teardown
+//
+// HomeView observes `navStateManager.isNavigating` to detect when the session
+// was ended OUT FROM UNDER it (the active trip deleted externally) and tear the
+// local view down to match. A continuous-trip auto-advance, however, also drives
+// manager.isNavigating false transiently: advanceTripLeg stops the finished
+// leg's session and only re-observes the next leg AFTER its route fetch resolves
+// (multi-second for a live-routed stop). During that window manager.isNavigating
+// is false while the view still thinks it's navigating — which, before the fix,
+// tripped the teardown observer and silently force-ended the whole trip
+// mid-advance. `HomeView.shouldHandleExternalTeardown` distinguishes the two via
+// the `isAdvancingLeg` flag set across the handoff.
+
+@Suite("Continuous-trip leg handoff teardown guard")
+struct ContinuousTripTeardownGuardTests {
+
+    @Test("Leg auto-advance does NOT force-end nav (the high-severity bug)")
+    func legAdvanceDoesNotTearDown() {
+        // Mid-advance: the finished leg's session was stopped (manager idle) and
+        // the next leg's route is still being fetched, so the view still thinks
+        // it's navigating and the handoff flag is set. Teardown MUST NOT fire —
+        // the trip must re-target to the next leg, not silently end.
+        #expect(HomeView.shouldHandleExternalTeardown(
+            managerNavigating: false,
+            viewNavigating: true,
+            isAdvancingLeg: true
+        ) == false)
+    }
+
+    @Test("Genuine external teardown still fires when not advancing a leg")
+    func externalTeardownStillFires() {
+        // Active trip deleted externally: endActiveTripSession() stopped the
+        // manager, no leg handoff is in flight. Teardown MUST fire so the view
+        // dismisses the overlay and leaves navigation mode.
+        #expect(HomeView.shouldHandleExternalTeardown(
+            managerNavigating: false,
+            viewNavigating: true,
+            isAdvancingLeg: false
+        ) == true)
+    }
+
+    @Test("A full multi-leg advance never tears down across any leg boundary")
+    func multiLegAdvanceNeverTearsDown() {
+        // Walk a 3-stop continuous trip leg-by-leg. Each arrival triggers an
+        // auto-advance; throughout each handoff the view stays navigating and
+        // isAdvancingLeg is set, so the teardown observer must stay silent on
+        // every leg boundary (not just the first).
+        let stops = (0..<3).map { _ in UUID() }
+        var progression = TripProgression(stopIds: stops, currentStopId: stops[0])
+
+        var advanceResult = progression.advance()
+        while case .nextLeg = advanceResult {
+            // Handoff window for this leg: manager momentarily idle while the
+            // next leg's route fetch is in flight. Teardown must NOT fire.
+            #expect(HomeView.shouldHandleExternalTeardown(
+                managerNavigating: false,
+                viewNavigating: true,
+                isAdvancingLeg: true
+            ) == false)
+
+            // Next leg observed: manager navigating again, handoff window closed.
+            // No teardown (and the manager-true edge wouldn't trigger it anyway).
+            #expect(HomeView.shouldHandleExternalTeardown(
+                managerNavigating: true,
+                viewNavigating: true,
+                isAdvancingLeg: false
+            ) == false)
+
+            advanceResult = progression.advance()
+        }
+        // The trip ran to completion through every leg without a force-end.
+        #expect(advanceResult == .completed)
+    }
+
+    @Test("Manager staying navigating never triggers teardown")
+    func managerNavigatingNeverTearsDown() {
+        #expect(HomeView.shouldHandleExternalTeardown(
+            managerNavigating: true,
+            viewNavigating: true,
+            isAdvancingLeg: false
+        ) == false)
+    }
+
+    @Test("View already idle never triggers teardown")
+    func viewIdleNeverTearsDown() {
+        // The in-view End/pause/endTrip paths flip local isNavigating false in the
+        // same turn they stop the manager, so the observer must no-op for them.
+        #expect(HomeView.shouldHandleExternalTeardown(
+            managerNavigating: false,
+            viewNavigating: false,
+            isAdvancingLeg: false
+        ) == false)
+    }
+}

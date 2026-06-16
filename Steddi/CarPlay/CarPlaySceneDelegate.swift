@@ -74,6 +74,14 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         if let window {
             self.carWindow = window
             window.rootViewController = mapVC
+            // Force the view to load now. Assigning rootViewController does NOT
+            // synchronously run viewDidLoad — UIKit loads lazily at the next
+            // layout pass. Without this, connecting CarPlay into an already-active
+            // drive could run showNavigationUI -> startNavigation before the map
+            // exists. The controller now guards mapView access so that no longer
+            // crashes, but loading eagerly also means the active route renders
+            // immediately rather than only after the first layout.
+            mapVC.loadViewIfNeeded()
         }
 
         // CPMapTemplate is transparent — the map shows through.
@@ -298,6 +306,18 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             guard let self else { return }
             var wasNavigating = self.stateManager.isNavigating
             var lastGeneration = self.stateManager.sessionGeneration
+            // Number of consecutive `isNavigating == false` ticks observed since
+            // nav was last live. A continuous-trip leg handoff (advanceTripLeg)
+            // stops the phone session and only re-observes the next leg AFTER its
+            // route fetch resolves — a multi-second window for a live-routed stop
+            // during which manager.isNavigating is false. The sessionGeneration
+            // leg-handoff invariant says we must RE-TARGET the existing CarPlay
+            // nav session across that boundary, not tear it down and cold-restart
+            // it (a jarring map flash / lost trip context). So we DEBOUNCE the
+            // false edge: only dismiss after it has persisted past the grace
+            // window. If isNavigating returns true with a bumped sessionGeneration
+            // within the window, it was a leg handoff — re-target instead.
+            var falseTicks = 0
             while !Task.isCancelled, self.interfaceController != nil {
                 try? await Task.sleep(for: .seconds(1))
                 let isNav = self.stateManager.isNavigating
@@ -305,16 +325,36 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
                 if isNav {
                     if !wasNavigating {
-                        // Phone started navigating — present CarPlay nav.
-                        self.showNavigationUI()
+                        if falseTicks > 0 && self.isShowingNavigation {
+                            // Nav dipped false then came back while CarPlay nav was
+                            // still presented (debounce not yet expired) — this is a
+                            // continuous-trip leg handoff, not a fresh start.
+                            // Re-target the existing session to the new leg.
+                            self.restartNavigationSession()
+                        } else {
+                            // Phone started navigating — present CarPlay nav.
+                            self.showNavigationUI()
+                        }
                     } else if generation != lastGeneration {
                         // A new session began (e.g. the next leg of a continuous
                         // trip) without isNavigating observably dipping to false.
                         // Re-target the CPTrip + route overlay to the new leg.
                         self.restartNavigationSession()
                     }
-                } else if !isNav && wasNavigating {
-                    self.dismissNavigation()
+                    falseTicks = 0
+                } else {
+                    // isNavigating is false. If nav was live, hold off on tearing
+                    // CarPlay down for a grace window so a continuous-trip leg
+                    // handoff (manager momentarily false during the next leg's
+                    // route fetch) re-targets rather than cold-restarts. Only
+                    // dismiss once the false has outlasted the handoff window.
+                    if wasNavigating || falseTicks > 0 {
+                        falseTicks += 1
+                        if falseTicks >= Self.navDismissGraceTicks {
+                            self.dismissNavigation()
+                            falseTicks = 0
+                        }
+                    }
                 }
 
                 wasNavigating = isNav
@@ -322,6 +362,16 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             }
         }
     }
+
+    /// Consecutive 1 Hz `isNavigating == false` ticks the phone-nav watcher
+    /// tolerates before tearing the CarPlay nav UI down. A continuous-trip leg
+    /// handoff leaves manager.isNavigating false only for the next leg's route
+    /// fetch; this grace window lets that handoff re-target the existing session
+    /// instead of cold-restarting it. A genuine drive end (final arrival, End,
+    /// external teardown) keeps isNavigating false indefinitely, so it still
+    /// dismisses — just a few seconds later, which is imperceptible on the idle
+    /// transition. Sized to comfortably cover a slow live-route fetch.
+    private static let navDismissGraceTicks = 8
 
     // MARK: - Show Navigation
 
