@@ -196,6 +196,12 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     // MARK: - Browse Lists
 
+    /// Max rows in a CarPlay browse list. `CPListTemplate` enforces a
+    /// per-template item ceiling for navigation apps; exceeding it silently drops
+    /// rows (or, on stricter iOS versions, rejects the section), so both browse
+    /// paths cap to the same bound to stay deterministic and within the limit.
+    private static let carPlayListItemCap = 12
+
     @MainActor
     private func showCommutesList() {
         guard let interfaceController else { return }
@@ -210,7 +216,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             )
 
             if let commutes = try? context.fetch(descriptor) {
-                for commute in commutes {
+                for commute in commutes.prefix(Self.carPlayListItemCap) {
                     let originName = commute.origin?.name ?? "?"
                     let destName = commute.destination?.name ?? "?"
                     var detail = "\(originName) \u{2192} \(destName)"
@@ -266,7 +272,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             )
 
             if let locations = try? context.fetch(descriptor) {
-                for location in locations.prefix(12) {
+                for location in locations.prefix(Self.carPlayListItemCap) {
                     let item = CPListItem(text: location.name, detailText: location.address ?? "")
                     if let img = UIImage(systemName: "mappin.circle.fill")?
                         .withConfiguration(UIImage.SymbolConfiguration(pointSize: 24, weight: .medium))
