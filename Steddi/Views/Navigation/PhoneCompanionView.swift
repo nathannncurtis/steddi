@@ -277,7 +277,15 @@ struct PhoneCompanionView: View {
 
             // End Navigation button
             Button {
-                navState.isNavigating = false
+                // Full teardown — NOT a bare `isNavigating = false`. stopObserving()
+                // cancels the polling + reroute tasks, nils activeEngine, ends the
+                // Live Activity / clears the App-Group widget session, and clears
+                // dismissed-reroute state. It also flips isNavigating false, which
+                // collapses this cover and fires HomeView's onChange ->
+                // handleExternalSessionTeardown() to sync the local view. Setting
+                // the flag directly leaked the rerouteTask + a zombie engine and
+                // left a phantom "Navigating" widget after the CarPlay drive.
+                navState.stopObserving()
             } label: {
                 Text("End Navigation")
                     .font(.body.weight(.semibold))
