@@ -74,6 +74,11 @@ struct RoutePlannerView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .frame(width: 44, height: 44)
+                        // Theme-aware over-map scrim behind the glass (same shape),
+                        // like the NoGoZone editor / nav HUD — in DARK theme the
+                        // light frost would otherwise wash the glyph out over the
+                        // map. Suppressed when glass is off (the fallback is opaque).
+                        .mapGlassScrim(in: RoundedRectangle(cornerRadius: 12))
                         .steddiGlass(interactive: true, in: RoundedRectangle(cornerRadius: 12))
                 }
 
@@ -88,6 +93,10 @@ struct RoutePlannerView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .frame(width: 44, height: 44)
+                        // Theme-aware over-map scrim behind the glass (same shape) —
+                        // matches the + button / NoGoZone editor so the glyph stays
+                        // legible over a dark map in DARK theme.
+                        .mapGlassScrim(in: RoundedRectangle(cornerRadius: 12))
                         .steddiGlass(interactive: true, in: RoundedRectangle(cornerRadius: 12))
                 }
             }
@@ -111,6 +120,11 @@ struct RoutePlannerView: View {
                         .font(.body.weight(.medium))
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .padding(10)
+                        // Theme-aware over-map scrim behind the glass (same shape),
+                        // like the NoGoZone editor — in DARK theme the light frost
+                        // would otherwise wash the label out over the map. Drawn
+                        // before `.steddiGlass`; suppressed when glass is off.
+                        .mapGlassScrim(in: Capsule())
                         .steddiGlass(interactive: true, in: Capsule())
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Capsule())
@@ -135,6 +149,10 @@ struct RoutePlannerView: View {
                         .foregroundStyle(SteddiTheme.textPrimary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
+                        // Theme-aware over-map scrim behind the glass (same shape) so
+                        // the direction labels stay legible over a dark map in DARK
+                        // theme, matching the Cancel/Save capsules.
+                        .mapGlassScrim(in: Capsule())
                         .steddiGlass(interactive: true, in: Capsule())
                         .frame(minHeight: 44)
                         .contentShape(Capsule())
@@ -146,6 +164,9 @@ struct RoutePlannerView: View {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(calculatedPolyline != nil ? SteddiTheme.accent : SteddiTheme.textMuted)
                         .padding(10)
+                        // Theme-aware over-map scrim behind the glass (same shape) so
+                        // the Save label stays legible over a dark map in DARK theme.
+                        .mapGlassScrim(in: Capsule())
                         .steddiGlass(interactive: true, in: Capsule())
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Capsule())
@@ -168,6 +189,9 @@ struct RoutePlannerView: View {
                     .tint(SteddiTheme.accent)
                     .scaleEffect(x: 1.2, y: 1.2)
                     .frame(width: 56, height: 56)
+                    // Theme-aware over-map scrim behind the glass (same shape) so the
+                    // spinner reads over a dark map in DARK theme.
+                    .mapGlassScrim(in: RoundedRectangle(cornerRadius: 14))
                     .steddiGlass(in: RoundedRectangle(cornerRadius: 14))
             }
         }
@@ -281,7 +305,10 @@ struct RoutePlannerView: View {
         .frame(maxWidth: .infinity)
         // Floats over the live map — shared glass treatment so the card falls back
         // to a SOLID surface under Reduce Transparency / Increase Contrast instead
-        // of a translucent fill the cartography bleeds through.
+        // of a translucent fill the cartography bleeds through. The theme-aware
+        // over-map scrim (same shape, behind the glass) stops the card content from
+        // washing out in DARK theme, exactly like the NoGoZone editor / nav HUD.
+        .mapGlassScrim(in: bottomCardShape)
         .steddiGlass(in: bottomCardShape)
         .clipShape(bottomCardShape)
         // Lift the card off the map (kept from the prior look). Applied outside the
