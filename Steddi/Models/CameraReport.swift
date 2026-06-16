@@ -127,6 +127,19 @@ enum CameraReportKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// Raw RGB of `color`, for picking an AA-correct on-fill foreground via
+    /// `SteddiTheme.contrastingForeground(on:)` when a glyph/label is drawn ON a
+    /// chip filled with this kind's color (a same-hue glyph washes out — see
+    /// `RoadConditionKind.selectedChipForeground`). The accent kind tracks the
+    /// live accent option.
+    var kindRGB: RGBColor {
+        switch self {
+        case .speedCamera:     return SteddiTheme.warningAmberRGB
+        case .redLightCamera:  return SteddiTheme.warmRedRGB
+        case .mobileSpeedTrap: return SteddiTheme.currentAccentOption.rgb
+        }
+    }
+
     /// Voice phrasing for the proximity heads-up, e.g. "Speed camera ahead".
     var spokenName: String {
         switch self {

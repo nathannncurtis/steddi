@@ -63,6 +63,13 @@ struct OnboardingRouteRulesView: View {
             }
         }
         .padding(28)
+        // Cap the beat copy at the app's Dynamic Type ceiling (.accessibility3 ==
+        // SteddiTheme.dynamicTypeCeiling/.accessibilityExtraLarge), the same bound
+        // the hero's SteddiTheme.heading() applies via UIFontMetrics. The raw
+        // .title2/.body styles here would otherwise scale unbounded to AX5,
+        // breaking the cinematic layout while the hero stays capped. Copy still
+        // scales up to the cap.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Your route, your rules. Steddi sends you the way you want to go — your fallbacks, your no-go zones, your call.")
         .onAppear {

@@ -21,6 +21,12 @@ struct CostWeights: Sendable, Equatable {
     /// detour wins.
     var unprotectedLeftBase: Double = 25
     var unprotectedLeftPerOncomingLane: Double = 9
+    /// A SLIGHT left (13–39°: a Y-fork bearing left or a gentle bend) does NOT
+    /// cross oncoming traffic the way a true ~90° left does, so it must not carry
+    /// the full unprotected-left cost. Charged a small flat penalty, scaled down
+    /// from the full left like `slightRight` is from `right` — proportional to the
+    /// gentler angle. Reserve `unprotectedLeftBase`+perLane for real (≥40°) lefts.
+    var slightLeftPenalty: Double = 5
     var uTurnPenalty: Double = 140
     /// Added when the maneuver node carries a stop sign (lost time decelerating).
     var stopSignPenalty: Double = 5
@@ -367,7 +373,12 @@ struct DefaultCostModel: SearchCost {
             cost = weights.straightPenalty
         case .slightRight, .right:
             cost = weights.rightTurnPenalty
-        case .slightLeft, .left:
+        case .slightLeft:
+            // A benign left-bearing fork/curve crosses no oncoming flow — a small
+            // flat penalty, the mirror of `.slightRight`, not the unprotected-left
+            // cost reserved for a true (≥40°) `.left` below.
+            cost = weights.slightLeftPenalty
+        case .left:
             cost = leftTurnCost(outgoing: outgoing, node: node)
         case .uTurn:
             cost = weights.uTurnPenalty
