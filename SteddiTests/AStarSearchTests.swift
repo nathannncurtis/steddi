@@ -1015,4 +1015,76 @@ struct AStarSearchTests {
         }
         #expect(!(forwardLong && reverseLong), "must not traverse the long edge in BOTH directions (overshoot)")
     }
+
+    @Test("self-touching one-way way: a same-direction co-located arm is NOT mistaken for the reverse twin")
+    func selfTouchingOneWayNoFalseReverseTwin() {
+        // A self-touching ONE-WAY way 100 visits node A twice: [A, P, B, Q, A] — a
+        // one-way loop. A is the way endpoint (always promoted) and B is shared with
+        // a second way (way 101 -> C), so B is promoted as an intersection. The
+        // builder therefore emits TWO forward edges on way 100: A->B (geometry
+        // A,P,B, the upper arm) and B->A (geometry B,Q,A, the lower arm). Both run
+        // FORWARD (one-way); B->A is a distinct physical arm, NOT the reverse twin
+        // of A->B. Endpoint+wayID matching alone (`rev.to==edge.from &&
+        // rev.osmWayID==edge.osmWayID`) wrongly accepts B->A as the reverse twin of
+        // A->B; the genuine-reversed-geometry guard rejects it (B,Q,A is not the
+        // point-wise reverse of A,P,B). Drives a rectangular loop so the two arms
+        // pass through clearly different interior coords (P != Q).
+        let graph = buildGraph(
+            node(1, 0.000, 0.000),   // A — way endpoint (visited twice)
+            node(2, 0.001, 0.000),   // P — interior, upper arm
+            node(3, 0.001, 0.002),   // B — intersection (also on way 101)
+            node(4, 0.000, 0.002),   // Q — interior, lower arm
+            node(5, 0.001, 0.004),   // C — stub past B
+            way(100, [1, 2, 3, 4, 1], tags: ["highway": "primary", "oneway": "yes", "maxspeed": "30 mph"]),
+            way(101, [3, 5], tags: ["highway": "primary", "maxspeed": "30 mph"])   // promotes B
+        )
+        let a = NodeIndex(graph.osmToIndex[1]!)
+        let b = NodeIndex(graph.osmToIndex[3]!)
+
+        // The self-touching fixture built as intended: forward A->B and forward
+        // B->A both exist on way 100 (the two one-way arms of the loop).
+        func edgeIndex(from: NodeIndex, to: NodeIndex, way: OSMNodeID) -> EdgeIndex? {
+            for (i, e) in graph.edges.enumerated()
+            where e.from == from && e.to == to && e.osmWayID == way {
+                return EdgeIndex(i)
+            }
+            return nil
+        }
+        guard let aToB = edgeIndex(from: a, to: b, way: 100),
+              let bToA = edgeIndex(from: b, to: a, way: 100) else {
+            Issue.record("self-touching one-way fixture did not emit both A->B and B->A arms on way 100")
+            return
+        }
+        // Sanity: these are the two arms — they are NOT each other's point-wise
+        // reverse (P and Q differ), so neither is the other's reverse twin.
+        #expect(!CorridorValidator.isReverseTwinGeometry(bToA, of: aToB, in: graph),
+                "same-direction arm B->A must NOT be treated as the reverse twin of A->B")
+        #expect(!CorridorValidator.isReverseTwinGeometry(aToB, of: bToA, in: graph),
+                "same-direction arm A->B must NOT be treated as the reverse twin of B->A")
+
+        // Control: a genuine TWO-WAY street DOES have its reverse twin detected, so
+        // the predicate isn't trivially false. Way 200 is two-way A2<->B2 with an
+        // interior bend; its forward and reverse edges share reversed geometry.
+        let twoWay = buildGraph(
+            node(10, 0.0, 0.0),
+            node(11, 0.0005, 0.001),   // bend so geometry has >2 vertices
+            node(12, 0.0, 0.002),
+            way(200, [10, 11, 12], tags: ["highway": "primary", "maxspeed": "30 mph"])
+        )
+        let n10 = NodeIndex(twoWay.osmToIndex[10]!)
+        let n12 = NodeIndex(twoWay.osmToIndex[12]!)
+        func twEdge(from: NodeIndex, to: NodeIndex) -> EdgeIndex? {
+            for (i, e) in twoWay.edges.enumerated() where e.from == from && e.to == to {
+                return EdgeIndex(i)
+            }
+            return nil
+        }
+        guard let fwd = twEdge(from: n10, to: n12), let rev = twEdge(from: n12, to: n10) else {
+            Issue.record("two-way control fixture missing forward/reverse edges")
+            return
+        }
+        #expect(CorridorValidator.isReverseTwinGeometry(rev, of: fwd, in: twoWay),
+                "a genuine two-way reverse twin (reversed geometry) must still be detected")
+        #expect(CorridorValidator.isReverseTwinGeometry(fwd, of: rev, in: twoWay))
+    }
 }
