@@ -165,3 +165,101 @@ struct ETAResolveDirectionTests {
         #expect(direction == .originToDestination)
     }
 }
+
+// MARK: - Overnight / midnight-wrapping schedule windows
+
+/// The intent's snapshot used to keep its OWN window-test (`hourInWindow`) that
+/// gated BOTH portions of a wrapping window on `days.contains(today)`, diverging
+/// from the canonical `CommuteDirectionResolver.windowActive` (which attributes
+/// the post-midnight morning portion to the PREVIOUS weekday). That mis-resolved
+/// the direction for any commute with an overnight window. These exercise a
+/// night-shift commute whose to-destination window wraps past midnight.
+@Suite("CheckCommuteETAIntent overnight schedule windows")
+struct ETAOvernightWindowTests {
+
+    /// Monday-only night-shift outbound: 22:00 → 06:00 to-destination. A Tuesday
+    /// daytime to-origin window (09:00–17:00) exists so a wrong post-midnight
+    /// resolution would be observable (it would fall through to the Tuesday
+    /// to-origin window and speak the wrong direction).
+    private func makeNightShiftCommute() throws -> (ModelContainer, Commute) {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ModelStoreLocator.schema, configurations: [config])
+        let context = ModelContext(container)
+
+        let home = PinnedLocation(name: "Home", latitude: 34.05, longitude: -118.25)
+        let work = PinnedLocation(name: "Work", latitude: 34.10, longitude: -118.40)
+        let commute = Commute(name: "Night Shift", origin: home, destination: work)
+        // To-destination wraps midnight: Monday (weekday 2) 22:00 → 06:00.
+        commute.scheduleToDestDays = "2"
+        commute.scheduleToDestStartHour = 22
+        commute.scheduleToDestEndHour = 6
+        // Tuesday (weekday 3) daytime return: 09:00 → 17:00.
+        commute.scheduleToOriginDays = "3"
+        commute.scheduleToOriginStartHour = 9
+        commute.scheduleToOriginEndHour = 17
+
+        let toWork = Route(rank: 0, encodedPolyline: "", typicalDurationSeconds: 1200, direction: .originToDestination)
+        let toHome = Route(rank: 0, encodedPolyline: "", typicalDurationSeconds: 1800, direction: .destinationToOrigin)
+        commute.routes = [toWork, toHome]
+        context.insert(commute)
+        return (container, commute)
+    }
+
+    @Test("Before midnight inside the wrapping window resolves to-destination")
+    func beforeMidnightInWindow() throws {
+        let (container, commute) = try makeNightShiftCommute()
+        _ = container
+        let snapshot = try #require(CommuteETASnapshot(commute: commute))
+        // Monday (June 8) 23:00 — evening portion, day matches Monday.
+        let mondayNight = try date(day: 8, hour: 23)
+
+        let direction = CheckCommuteETAIntent.resolveDirection(
+            snapshot: snapshot, currentLocation: nil, now: mondayNight
+        )
+        #expect(direction == .originToDestination)
+    }
+
+    @Test("After midnight inside the wrapping window still resolves to-destination (prev-day attribution)")
+    func afterMidnightInWindow() throws {
+        let (container, commute) = try makeNightShiftCommute()
+        _ = container
+        let snapshot = try #require(CommuteETASnapshot(commute: commute))
+        // Tuesday (June 9) 02:00 — morning portion of Monday's 22→6 window.
+        // The buggy copy checked days.contains(Tuesday)=false and fell through to
+        // the Tuesday to-origin window, speaking the WRONG direction.
+        let tuesdayEarly = try date(day: 9, hour: 2)
+
+        let direction = CheckCommuteETAIntent.resolveDirection(
+            snapshot: snapshot, currentLocation: nil, now: tuesdayEarly
+        )
+        #expect(direction == .originToDestination)
+    }
+
+    @Test("Outside the wrapping window falls through to the next scheduled direction")
+    func outsideWindow() throws {
+        let (container, commute) = try makeNightShiftCommute()
+        _ = container
+        let snapshot = try #require(CommuteETASnapshot(commute: commute))
+        // Tuesday (June 9) 07:00 — past the 06:00 end, before the 09:00 to-origin
+        // window. No active window, so the next scheduled (Tuesday to-origin) wins.
+        let tuesdayMorning = try date(day: 9, hour: 7)
+
+        let direction = CheckCommuteETAIntent.resolveDirection(
+            snapshot: snapshot, currentLocation: nil, now: tuesdayMorning
+        )
+        #expect(direction == .destinationToOrigin)
+    }
+
+    @Test("Wrapping window is NOT active the night before its scheduled day")
+    func notActiveWrongNight() throws {
+        let (container, commute) = try makeNightShiftCommute()
+        _ = container
+        let snapshot = try #require(CommuteETASnapshot(commute: commute))
+        // Monday (June 8) 02:00 — morning portion belongs to SUNDAY, not Monday,
+        // so the Monday-only window must NOT be active here.
+        let mondayEarly = try date(day: 8, hour: 2)
+
+        let scheduled = snapshot.schedule.scheduledDirection(now: mondayEarly)
+        #expect(scheduled == nil, "Monday-only 22→6 must not be active Monday 02:00")
+    }
+}

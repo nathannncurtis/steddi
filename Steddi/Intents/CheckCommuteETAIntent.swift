@@ -230,6 +230,15 @@ struct CommuteScheduleSnapshot: Sendable {
 
     /// Direction whose schedule window is active at `now`, else nil.
     /// Value-copy mirror of `CommuteDirectionResolver.scheduledDirection`.
+    ///
+    /// Delegates the window test to the canonical
+    /// `CommuteDirectionResolver.windowActive` (a same-module static over plain
+    /// values) so the Siri path and the in-app path can never diverge. The
+    /// previous in-line copy gated BOTH portions of a window on
+    /// `days.contains(currentDay)`, which mis-resolved wrapping windows that span
+    /// midnight (start > end, e.g. 22:00–06:00): `windowActive` attributes the
+    /// morning portion (hour < end) to the PREVIOUS weekday, so a Monday-only
+    /// 22→6 schedule is correctly active at Tuesday 02:00.
     func scheduledDirection(now: Date = Date()) -> CommuteDirection? {
         let cal = Calendar.current
         let currentDay = cal.component(.weekday, from: now)
@@ -237,13 +246,17 @@ struct CommuteScheduleSnapshot: Sendable {
 
         if let daysStr = toDestDays, let startHour = toDestStartHour, let endHour = toDestEndHour {
             let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
-            if days.contains(currentDay) && Self.hourInWindow(currentHour, start: startHour, end: endHour) {
+            if CommuteDirectionResolver.windowActive(
+                day: currentDay, hour: currentHour, days: days, start: startHour, end: endHour
+            ) {
                 return .originToDestination
             }
         }
         if let daysStr = toOriginDays, let startHour = toOriginStartHour, let endHour = toOriginEndHour {
             let days = Set(daysStr.split(separator: ",").compactMap { Int($0) })
-            if days.contains(currentDay) && Self.hourInWindow(currentHour, start: startHour, end: endHour) {
+            if CommuteDirectionResolver.windowActive(
+                day: currentDay, hour: currentHour, days: days, start: startHour, end: endHour
+            ) {
                 return .destinationToOrigin
             }
         }
@@ -280,15 +293,5 @@ struct CommuteScheduleSnapshot: Sendable {
             }
         }
         return best?.direction
-    }
-
-    /// Whether `hour` is in the `[start, end)` window, handling midnight wrap.
-    /// Mirrors `CommuteDirectionResolver.hourInWindow`.
-    private static func hourInWindow(_ hour: Int, start: Int, end: Int) -> Bool {
-        if start <= end {
-            return hour >= start && hour < end
-        } else {
-            return hour >= start || hour < end
-        }
     }
 }
