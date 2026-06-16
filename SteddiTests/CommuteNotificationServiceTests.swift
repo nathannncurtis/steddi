@@ -333,13 +333,19 @@ struct ServiceNextDepartureTests {
         #expect(id == morning.id)
     }
 
-    @Test("Skips commutes with notifications disabled")
-    func skipsNotificationsDisabled() throws {
+    /// The idle home-screen ETA widget is a SEPARATE feature from leave-early
+    /// notifications, so its commute selection must be notifications-agnostic:
+    /// a commute that owns the soonest departure window is chosen for the widget
+    /// even when its per-commute `notificationsEnabled` flag is OFF. (The
+    /// background-refresh scheduling path applies its own notif filter in
+    /// `nextDepartureDate` so it doesn't wake for a commute that won't notify.)
+    @Test("Per-commute notifications-off still wins the widget when its departure is soonest")
+    func notificationsOffStillSelectedForWidget() throws {
         let container = try inMemoryContainer()
         let context = ModelContext(container)
 
-        // The sooner window belongs to a commute with notifications off, so the
-        // later-but-eligible commute must be chosen.
+        // The sooner window belongs to a commute with notifications off; the
+        // widget must still reflect it (its ETA), not the later eligible commute.
         let off = Commute(name: "Off")
         off.isActive = true
         off.notificationsEnabled = false
@@ -354,7 +360,7 @@ struct ServiceNextDepartureTests {
         let commutes = try context.fetch(FetchDescriptor<Commute>())
         let trips = try context.fetch(FetchDescriptor<CommuteTrip>())
         let id = service(container).nextDepartureCommuteID(commutes: commutes, trips: trips, now: try at(hour: 6))
-        #expect(id == on.id)
+        #expect(id == off.id)
     }
 
     @Test("Returns nil when no commute has an upcoming departure")
@@ -548,6 +554,46 @@ struct ServiceIdleETAExtractionTests {
         // The widget received a fresh ETA despite notifications being disabled.
         #expect(capture.minutes == 25)
         #expect(capture.commuteName != nil)
+    }
+
+    /// The home-screen ETA widget is independent of the PER-COMMUTE
+    /// `notificationsEnabled` flag too, not just the global toggle. A user who
+    /// turns OFF leave-early alerts for a commute (but still wants the glanceable
+    /// widget) must keep getting a fresh ETA — previously the idle refresh
+    /// dropped notification-disabled commutes in both `nextDeparture` and
+    /// `snapshot(for:)`, permanently freezing the widget at "No ETA yet". The
+    /// per-commute flag must gate only the actual alert, never the widget data.
+    @Test("Idle refresh still pushes the widget ETA when the commute's notifications are off")
+    @MainActor
+    func idleRefreshRunsWithPerCommuteNotificationsDisabled() async throws {
+        let container = try inMemoryContainer()
+        let context = ModelContext(container)
+        let commute = try fixture(context, typicalSeconds: 1500)   // 25 min
+        // Per-commute leave-early alerts OFF (notifications globally still ON).
+        commute.notificationsEnabled = false
+        try context.save()
+
+        final class ETACapture: @unchecked Sendable {
+            var minutes: Int?
+            var commuteName: String?
+        }
+        let capture = ETACapture()
+        let svc = CommuteNotificationService(
+            modelContainer: container,
+            defaults: freshDefaults(),
+            idleETASink: { name, _, minutes in
+                capture.commuteName = name
+                capture.minutes = minutes
+            }
+        )
+
+        // No location fix → typical duration (1500s ⇒ 25 min) flows to the widget.
+        await svc.refreshIdleCommuteETA(now: try at(hour: 7))
+
+        // The widget still received a fresh ETA even though this commute's
+        // leave-early alerts are disabled.
+        #expect(capture.minutes == 25)
+        #expect(capture.commuteName == "Work")
     }
 }
 

@@ -130,29 +130,58 @@ struct FormatDistanceTests {
 @Suite("formatArrivalTime")
 struct FormatArrivalTimeTests {
 
-    @Test("Returns h:mm a format")
-    func returnsCorrectFormat() {
-        let result = NavigationStateManager.formatArrivalTime(3600) // 1 hour from now
-        // Should match pattern like "1:30 PM" or "12:00 AM"
-        #expect(result.contains(try! Regex(#"\d{1,2}:\d{2} (AM|PM)"#)))
+    // Fixed reference instant so the formatted clock time is deterministic.
+    // 1_750_000_000 = 2025-06-15 14:13:20 UTC.
+    private let now = Date(timeIntervalSince1970: 1_750_000_000)
+
+    @Test("12-hour locale renders an AM/PM marker")
+    func twelveHourLocale() {
+        let result = NavigationStateManager.formatArrivalTime(
+            3600, now: now, locale: Locale(identifier: "en_US")
+        )
+        let upper = result.uppercased()
+        #expect(upper.contains("AM") || upper.contains("PM"))
     }
 
-    @Test("Zero seconds remaining gives current time")
+    @Test("24-hour locale renders a 24h clock with no AM/PM marker")
+    func twentyFourHourLocale() {
+        // de_DE prefers a 24h clock; the result must not carry an AM/PM marker
+        // and must not be the forced 12h "h:mm a" format.
+        let result = NavigationStateManager.formatArrivalTime(
+            3600, now: now, locale: Locale(identifier: "de_DE")
+        )
+        let upper = result.uppercased()
+        #expect(!upper.contains("AM"))
+        #expect(!upper.contains("PM"))
+        // Round-trip via a matching 24h formatter rather than pinning an exact
+        // string (timezone-safe).
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "de_DE")
+        parser.setLocalizedDateFormatFromTemplate("jmm")
+        #expect(parser.date(from: result) != nil)
+    }
+
+    @Test("Same instant differs in 12h vs 24h locale (no hardcoded clock)")
+    func localeActuallyChangesOutput() {
+        let twelve = NavigationStateManager.formatArrivalTime(
+            3600, now: now, locale: Locale(identifier: "en_US")
+        )
+        let twentyFour = NavigationStateManager.formatArrivalTime(
+            3600, now: now, locale: Locale(identifier: "de_DE")
+        )
+        // If the clock were hardcoded to "h:mm a" these would be identical.
+        #expect(twelve != twentyFour)
+    }
+
+    @Test("Zero seconds remaining gives the reference instant in the locale's clock")
     func zeroSecondsGivesNow() {
-        let result = NavigationStateManager.formatArrivalTime(0)
-        // Format current time the same way for comparison
+        let result = NavigationStateManager.formatArrivalTime(
+            0, now: now, locale: Locale(identifier: "en_US")
+        )
         let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        let expected = formatter.string(from: Date())
-        #expect(result == expected)
-    }
-
-    @Test("Large duration produces valid time string")
-    func largeDuration() {
-        // 24 hours from now
-        let result = NavigationStateManager.formatArrivalTime(86400)
-        #expect(!result.isEmpty)
-        #expect(result.contains(try! Regex(#"\d{1,2}:\d{2} (AM|PM)"#)))
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.setLocalizedDateFormatFromTemplate("jmm")
+        #expect(result == formatter.string(from: now))
     }
 }
 

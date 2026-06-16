@@ -55,6 +55,7 @@
 		34193BE942FA81C717D337A4 /* HomeSheetTabTapTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2BEFD1868F40460BE2E0A04 /* HomeSheetTabTapTargetTests.swift */; };
 		35F5485D167737BF995FD280 /* CorridorValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3052F1FB67E6754BA5AE313 /* CorridorValidator.swift */; };
 		37E231EC67E84618C9C36D56 /* CheckCommuteETAIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB8A4F976CE18333497A882 /* CheckCommuteETAIntentTests.swift */; };
+		B1C2D3E4F5061728394A5B6C /* CommuteETAWidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D3E4F5061728394A5B6C7D /* CommuteETAWidgetTests.swift */; };
 		3845825499312529C9EA302C /* CommuteNotificationDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */; };
 		389C5498B6C852FD1ECFC8E6 /* RouteProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4804C43D26E852AC0742468A /* RouteProvider.swift */; };
 		3C6ECCF87073C9F5713AC231 /* PendingCommuteStartStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FE9F1E95BC1F9738DBC186 /* PendingCommuteStartStoreTests.swift */; };
@@ -122,6 +123,7 @@
 		8179BB10F4287F8EAD598C47 /* SteddiGlass.swift in Sources */ = {isa = PBXBuildFile; fileRef = A814B57D3AF2BAF2600A6BBE /* SteddiGlass.swift */; };
 		84E23306C0F71ABD8D1F278C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */; };
 		85A049022E0338B7E5E8B084 /* CommuteETAWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* CommuteETAWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10F8AE7043EB3005EC1C56D /* CommuteETAWidget.swift */; };
 		863EC5C3A2B5B58404659A8E /* CommuteNotificationCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A0E3F3AA6904204FBFAD41 /* CommuteNotificationCenter.swift */; };
 		864AD9FD6F0D23B680D497CC /* RoadGraphSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E89BF47747ABB352861055 /* RoadGraphSourceTests.swift */; };
 		87A85D7D5BD93D2E646C1982 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64DED98F409553C18FBECB6 /* AppDelegate.swift */; };
@@ -281,6 +283,7 @@
 		09E03456CD2FFD70556659CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0B99A3381CC68B028C99DD0E /* TripStop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripStop.swift; sourceTree = "<group>"; };
 		0BB8A4F976CE18333497A882 /* CheckCommuteETAIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckCommuteETAIntentTests.swift; sourceTree = "<group>"; };
+		C2D3E4F5061728394A5B6C7D /* CommuteETAWidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteETAWidgetTests.swift; sourceTree = "<group>"; };
 		0D5F1E9C87952E41D9DB6114 /* RerouteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RerouteEngine.swift; sourceTree = "<group>"; };
 		0DE80B63D184484DA8B7A646 /* OnboardingPermissionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingPermissionsView.swift; sourceTree = "<group>"; };
 		11174913BB8D28369D82EC58 /* ZoneValidationEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneValidationEngineTests.swift; sourceTree = "<group>"; };
@@ -634,6 +637,7 @@
 				4D83B764A6EC175443541145 /* BinaryHeapTests.swift */,
 				9A40C80EE68927B82F67E3AC /* CarPlayEstimatesTests.swift */,
 				0BB8A4F976CE18333497A882 /* CheckCommuteETAIntentTests.swift */,
+				C2D3E4F5061728394A5B6C7D /* CommuteETAWidgetTests.swift */,
 				6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */,
 				D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */,
 				2B6220A01FD50697E78CD604 /* CommuteNotificationDecisionEngineTests.swift */,
@@ -1284,6 +1288,8 @@
 				B18FC0A307B656BBD7096743 /* BinaryHeapTests.swift in Sources */,
 				9105F8CDB8DBC12038095482 /* CarPlayEstimatesTests.swift in Sources */,
 				37E231EC67E84618C9C36D56 /* CheckCommuteETAIntentTests.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* CommuteETAWidget.swift in Sources */,
+				B1C2D3E4F5061728394A5B6C /* CommuteETAWidgetTests.swift in Sources */,
 				B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */,
 				4BD906E8F1CE5635D024B12D /* CommuteNotificationCenterTests.swift in Sources */,
 				0A7AF0449A2474692CB7DC6F /* CommuteNotificationDecisionEngineTests.swift in Sources */,

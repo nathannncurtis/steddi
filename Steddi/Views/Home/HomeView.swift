@@ -65,6 +65,10 @@ struct HomeView: View {
     // UI state
     @State private var showSettings = false
     @State private var showSearch = false
+    /// Seeds the expanded search field's query when search is opened from a deep
+    /// link (`steddi://search?q=`). Empty for a manual tap. Consumed once when
+    /// `ExpandedSearchView` appears.
+    @State private var searchSeedQuery = ""
     @State private var showAddLocation = false
     // Add Place save flow — seeds AddLocationSheet from a search result or
     // the current location (reverse-geocoded).
@@ -850,15 +854,18 @@ struct HomeView: View {
                 if showSearch {
                     ExpandedSearchView(
                         currentLocation: locationService.currentLocation?.coordinate,
+                        initialQuery: searchSeedQuery,
                         onSelectResult: { result in
                             showSearch = false
+                            searchSeedQuery = ""
                             navigateTo(name: result.name, coordinate: result.coordinate, address: result.address)
                         },
                         onPinResult: { result in
                             showSearch = false
+                            searchSeedQuery = ""
                             pinLocation(from: result)
                         },
-                        onDismiss: { showSearch = false }
+                        onDismiss: { showSearch = false; searchSeedQuery = "" }
                     )
                 } else {
                     topBar
@@ -887,15 +894,18 @@ struct HomeView: View {
                 if showSearch {
                     ExpandedSearchView(
                         currentLocation: locationService.currentLocation?.coordinate,
+                        initialQuery: searchSeedQuery,
                         onSelectResult: { result in
                             showSearch = false
+                            searchSeedQuery = ""
                             navigateTo(name: result.name, coordinate: result.coordinate, address: result.address)
                         },
                         onPinResult: { result in
                             showSearch = false
+                            searchSeedQuery = ""
                             pinLocation(from: result)
                         },
-                        onDismiss: { showSearch = false }
+                        onDismiss: { showSearch = false; searchSeedQuery = "" }
                     )
                 } else {
                     // Search + settings row — grouped glass cluster.
@@ -1228,6 +1238,11 @@ struct HomeView: View {
         case .navigate(let name, let coordinate):
             guard !isNavigating else { return }
             navigateTo(name: name, coordinate: coordinate, skipPreview: true)
+        case .search(let query):
+            // Don't open search over a live drive — that would obscure nav.
+            guard !isNavigating else { return }
+            searchSeedQuery = query
+            withAnimation(TransitionKit.quickFade) { showSearch = true }
         }
     }
 
@@ -2805,6 +2820,9 @@ enum PinnedLocationCategoryMigration {
 
 private struct ExpandedSearchView: View {
     let currentLocation: CLLocationCoordinate2D?
+    /// Seeds the query field (e.g. from a `steddi://search?q=` deep link). Empty
+    /// for a manual open. Applied once on appear.
+    var initialQuery: String = ""
     let onSelectResult: (GeocodingResult) -> Void
     let onPinResult: (GeocodingResult) -> Void
     let onDismiss: () -> Void
@@ -2945,6 +2963,14 @@ private struct ExpandedSearchView: View {
             }
         }
         .onAppear {
+            // Seed from a deep link before focusing so the field opens pre-filled
+            // and the results populate immediately. The `query` onChange fires the
+            // debounced search; run it directly too so it isn't missed if the
+            // assignment doesn't register as a change.
+            if !initialQuery.isEmpty, query.isEmpty {
+                query = initialQuery
+                debounceSearch(initialQuery)
+            }
             DispatchQueue.main.async { isSearchFocused = true }
         }
     }

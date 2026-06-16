@@ -169,12 +169,16 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
                 PendingUIRouteStore.shared.request(.showPlaces)
             }
         case "search":
-            if let query = params["q"] {
-                NotificationCenter.default.post(
-                    name: .steddiSearchQuery,
-                    object: nil,
-                    userInfo: ["query": query]
-                )
+            // steddi://search?q=<query> — open the in-app destination search
+            // pre-seeded with the query. Durable hand-off: like the sibling
+            // routes, this URL can arrive during cold-launch scene connection
+            // before HomeView attaches its observers, so a bare NotificationCenter
+            // post would evaporate (the bug this route had previously). HomeView
+            // drains the store on appear and reactively.
+            if let query = params["q"], !query.isEmpty {
+                MainActor.assumeIsolated {
+                    PendingUIRouteStore.shared.request(.search(query: query))
+                }
             }
         case "arrive":
             NotificationCenter.default.post(name: .steddiTestArrival, object: nil)
@@ -191,7 +195,6 @@ class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
 // MARK: - URL Scheme Notifications
 
 extension Notification.Name {
-    static let steddiSearchQuery = Notification.Name("steddiSearchQuery")
     static let steddiTestArrival = Notification.Name("steddiTestArrival")
     static let steddiResetOnboarding = Notification.Name("steddiResetOnboarding")
 }

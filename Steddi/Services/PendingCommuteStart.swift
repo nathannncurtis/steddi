@@ -71,6 +71,10 @@ enum PendingUIRoute: Equatable {
     /// "Start Navigation", `steddi://navigate?lat=&lng=&name=`).
     case navigate(name: String, coordinate: CLLocationCoordinate2D)
 
+    /// Open the in-app destination search pre-seeded with a query
+    /// (`steddi://search?q=`).
+    case search(query: String)
+
     static func == (lhs: PendingUIRoute, rhs: PendingUIRoute) -> Bool {
         switch (lhs, rhs) {
         case (.showPlaces, .showPlaces):
@@ -79,6 +83,8 @@ enum PendingUIRoute: Equatable {
             return ln == rn
                 && lc.latitude == rc.latitude
                 && lc.longitude == rc.longitude
+        case let (.search(lq), .search(rq)):
+            return lq == rq
         default:
             return false
         }
