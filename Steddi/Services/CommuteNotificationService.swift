@@ -265,8 +265,7 @@ final class CommuteNotificationService {
     /// still pinned to the context's executor (called before any `await`). All
     /// direction resolution, learned/scheduled-hour analysis, destination lookup
     /// and preferred-route reads happen here so the async work never re-touches
-    /// the model. Returns nil only when there is no usable departure window
-    /// (no learned or scheduled hours) — NOT when notifications are disabled.
+    /// the model.
     ///
     /// The per-commute `notificationsEnabled` flag is captured into the snapshot
     /// (so the decision engine can skip the actual alert) but it does NOT gate
@@ -274,6 +273,10 @@ final class CommuteNotificationService {
     /// commute regardless of its notification preference (see
     /// `refreshIdleCommuteETA`). Gating the snapshot here would have frozen the
     /// widget for any commute whose leave-early alerts the user turned off.
+    ///
+    /// Returns an optional purely for call-site ergonomics (`compactMap` /
+    /// `guard let`); it currently always produces a snapshot for an active
+    /// commute.
     private func snapshot(for commute: Commute, allTrips: [CommuteTrip], now: Date) -> CommuteSnapshot? {
         // Direction for this window: schedule rules first, then next-scheduled.
         let direction = CommuteDirectionResolver.scheduledDirection(commute: commute, now: now)
