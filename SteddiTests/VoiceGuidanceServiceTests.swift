@@ -74,6 +74,47 @@ struct VoiceGuidanceDistancePhraseTests {
     }
 }
 
+// MARK: - Unit-Aware Voice Distance
+
+/// Spoken guidance must follow the user's unit: a miles user hears feet/miles,
+/// a kilometers user hears meters/kilometers — same band structure.
+@Suite("VoiceGuidanceService.distancePhrase is unit-aware")
+struct VoiceGuidanceDistancePhraseUnitTests {
+
+    // Miles user — the prior hardcoded behavior, now via the unit parameter.
+    @Test("Miles: short range spoken in feet")
+    func milesFeet() {
+        #expect(VoiceGuidanceService.distancePhrase(meters: 100, unit: .miles) == "In 328 feet")
+    }
+
+    @Test("Miles: sub-mile spoken as one decimal mile")
+    func milesDecimal() {
+        #expect(VoiceGuidanceService.distancePhrase(meters: 0.5 * 1609.34, unit: .miles) == "In 0.5 miles")
+    }
+
+    @Test("Miles: 10.95 mi announces 11 miles")
+    func milesWhole() {
+        #expect(VoiceGuidanceService.distancePhrase(meters: 10.95 * 1609.34, unit: .miles) == "In 11 miles")
+    }
+
+    // Kilometers user — meters in the short range, then decimal/whole km.
+    @Test("Kilometers: short range spoken in whole meters")
+    func kmMeters() {
+        #expect(VoiceGuidanceService.distancePhrase(meters: 150, unit: .kilometers) == "In 150 meters")
+    }
+
+    @Test("Kilometers: sub-km spoken as one decimal kilometer")
+    func kmDecimal() {
+        // 0.5 km
+        #expect(VoiceGuidanceService.distancePhrase(meters: 500, unit: .kilometers) == "In 0.5 kilometers")
+    }
+
+    @Test("Kilometers: 10.95 km announces 11 kilometers")
+    func kmWhole() {
+        #expect(VoiceGuidanceService.distancePhrase(meters: 10.95 * 1000, unit: .kilometers) == "In 11 kilometers")
+    }
+}
+
 // MARK: - Main-actor isolation
 
 // VoiceGuidanceService is @MainActor: speak()/stop() drive the @MainActor
