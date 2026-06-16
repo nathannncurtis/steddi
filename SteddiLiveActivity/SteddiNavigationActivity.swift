@@ -9,6 +9,31 @@ import SwiftUI
 /// CarPlay dashboard's `DashboardLink.showNavigation`.
 private let navReentryURL = URL(string: "steddi://navigate")
 
+/// The user's chosen accent, resolved from the shared App Group so the Live
+/// Activity tints its accent elements (maneuver glyph, trip-leg label) to match
+/// the in-app HUD instead of a hardcoded lavender.
+///
+/// This extension target can't import `SteddiTheme` (it compiles only
+/// `SteddiLiveActivity/*` + `Shared/NavigationAttributes.swift`), so the accent
+/// raw values are mirrored here — kept byte-for-byte in sync with
+/// `SteddiTheme.AccentOption.rgb`. The app mirrors the selected accent's raw
+/// name into the App Group under `accentColor` at every nav-session start
+/// (`LiveActivityService.startActivity`); we map that name to its brand hue.
+/// Falls back to lavender when the key is missing or unrecognized.
+private var liveActivityAccent: Color {
+    let raw = UserDefaults(suiteName: "group.to.nathancurtis.steddi")?
+        .string(forKey: "accentColor")
+    switch raw {
+    case "ocean": return Color(red: 0.29, green: 0.56, blue: 0.85)
+    case "sage":  return Color(red: 0.42, green: 0.61, blue: 0.49)
+    case "coral": return Color(red: 0.83, green: 0.45, blue: 0.42)
+    case "gold":  return Color(red: 0.77, green: 0.64, blue: 0.31)
+    case "slate": return Color(red: 0.48, green: 0.55, blue: 0.60)
+    case "lavender": return Color(red: 0.61, green: 0.56, blue: 0.77)
+    default:      return Color(red: 0.61, green: 0.56, blue: 0.77) // lavender fallback
+    }
+}
+
 /// The Live Activity widget for active navigation.
 /// Shows on the Lock Screen and Dynamic Island.
 struct SteddiNavigationActivity: Widget {
@@ -54,7 +79,7 @@ struct SteddiNavigationActivity: Widget {
                             // Trip context: "Leg 2 of 5 → Stop name"
                             Text("Leg \(legIndex) of \(totalLegs) → \(context.attributes.destinationName)")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769))
+                                .foregroundStyle(liveActivityAccent)
                                 .lineLimit(1)
                         } else if !context.state.roadName.isEmpty {
                             Text(context.state.roadName)
@@ -70,7 +95,7 @@ struct SteddiNavigationActivity: Widget {
             } compactLeading: {
                 Image(systemName: context.state.maneuverSymbol)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769)) // lavender
+                    .foregroundStyle(liveActivityAccent)
                     .widgetURL(navReentryURL)
             } compactTrailing: {
                 Text("\(context.state.etaMinutes)m")
@@ -79,7 +104,7 @@ struct SteddiNavigationActivity: Widget {
             } minimal: {
                 Image(systemName: context.state.maneuverSymbol)
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769))
+                    .foregroundStyle(liveActivityAccent)
                     .widgetURL(navReentryURL)
             }
         }
@@ -96,7 +121,7 @@ struct LockScreenView: View {
             // Maneuver icon
             Image(systemName: state.maneuverSymbol)
                 .font(.system(size: 32, weight: .bold))
-                .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769))
+                .foregroundStyle(liveActivityAccent)
                 .frame(width: 50)
 
             // Instruction
@@ -104,7 +129,7 @@ struct LockScreenView: View {
                 if let tripName = state.tripName, let legIndex = state.legIndex, let totalLegs = state.totalLegs {
                     Text("\(tripName) · Leg \(legIndex) of \(totalLegs)")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color(red: 0.608, green: 0.557, blue: 0.769))
+                        .foregroundStyle(liveActivityAccent)
                         .lineLimit(1)
                 }
                 Text(state.stepDistance)

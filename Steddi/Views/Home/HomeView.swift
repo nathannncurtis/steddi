@@ -932,6 +932,13 @@ struct HomeView: View {
                         .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                         .legibleOverMap()
                         .frame(width: 44, height: 44)
+                        // Over-map scrim behind the glass — the same nav-chrome
+                        // hardening the adjacent search pill carries (theme-aware:
+                        // near-opaque dark in dark theme). Without it the neutral
+                        // glass over a dark map composites to a LIGHT frost and the
+                        // mid-grey gear glyph muddies; the scrim makes it read in
+                        // dark theme, matching the over-map speedometer housing.
+                        .mapGlassScrim(in: .circle)
                         .steddiGlass(tint: nil, interactive: true, in: .circle)
                 }
             }
@@ -1049,6 +1056,12 @@ struct HomeView: View {
                                     .foregroundStyle(SteddiTheme.textSecondary(highContrast: highContrast))
                                     .legibleOverMap()
                                     .frame(width: 36, height: 36)
+                                    // Over-map scrim behind the glass — same
+                                    // nav-chrome hardening as the portrait gear and
+                                    // the adjacent landscape search pill, so the
+                                    // gear glyph reads in dark theme instead of
+                                    // muddying on a light-frost circle.
+                                    .mapGlassScrim(in: .circle)
                                     .steddiGlass(
                                         tint: nil,
                                         interactive: true,
