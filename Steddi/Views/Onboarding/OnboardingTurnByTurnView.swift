@@ -84,6 +84,11 @@ struct OnboardingTurnByTurnView: View {
                     .font(.body)
                     .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                     .multilineTextAlignment(.center)
+                    // At the largest accessibility text sizes this paragraph would
+                    // otherwise rely entirely on the card's outer ScrollView. Let it
+                    // shrink modestly so the copy degrades gracefully instead of
+                    // forcing the whole card to scroll on first read.
+                    .minimumScaleFactor(0.7)
             }
         }
         .padding(28)
