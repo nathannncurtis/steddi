@@ -162,6 +162,13 @@ struct DonationView: View {
                 await loadProducts()
             }
         }
+        // Cap Dynamic Type at the app-wide ceiling (.accessibility3 ==
+        // SteddiTheme.dynamicTypeCeiling / .accessibilityExtraLarge), matching every
+        // other onboarding beat. DonationView is presented as a sheet and inherits
+        // no ceiling, so without this its `.title2`/`.body` copy and the tip rows
+        // scaled unbounded to AX5 — the header/body wrapped/overflowed and the tip
+        // rows clipped both the label and the price.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .preferredColorScheme(resolvedColorScheme)
     }
 
@@ -171,13 +178,21 @@ struct DonationView: View {
                 Text(label)
                     .font(.body.weight(.medium))
                     .foregroundStyle(sheetTextPrimary)
+                    // The label yields room first so the row degrades gracefully at
+                    // the capped max Dynamic Type instead of clipping both texts.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Spacer()
                 // Price in a surface-legible accent so the tappable amount reads
                 // as the action (not a link-blue default) AND clears AA on the
-                // dark tip row — see `sheetPriceColor`.
+                // dark tip row — see `sheetPriceColor`. The price never shrinks
+                // (`fixedSize`) so the amount stays fully readable; the label gives
+                // up width for it.
                 Text(price)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(sheetPriceColor)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)

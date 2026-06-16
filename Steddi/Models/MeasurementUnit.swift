@@ -105,7 +105,17 @@ enum MeasurementUnit: String, CaseIterable, Identifiable {
             }
         }
         let value = meters / metersPerUnit
-        if value < 10 {
+        // Decide whole-vs-decimal off the value as it would RENDER at one decimal,
+        // not the raw one. Branching on the raw `value < 10` let a distance in
+        // [9.95, 10.0) take the "%.1f" path where `String(format:)` rounds it up to
+        // a stray-decimal "10.0 mi"/"10.0 km" — contradicting the whole-number
+        // "10 mi"/"11 mi" just above the threshold (a flicker the live nav HUD
+        // shows). Rounding to one decimal first catches exactly that band: 9.97 ->
+        // 10.0 -> whole "10 mi", while a genuine one-decimal value like 9.9 stays
+        // "9.9 mi" (it does NOT cross 10.0 at one decimal, unlike value.rounded()
+        // which would coarsely sweep all of [9.5, 10.0) into the whole path).
+        let oneDecimal = (value * 10).rounded() / 10
+        if oneDecimal < 10 {
             return String(format: "%.1f %@", value, abbreviation)
         }
         // Round, don't truncate: 10.95 mi -> "11 mi" (an up-to-1-unit
