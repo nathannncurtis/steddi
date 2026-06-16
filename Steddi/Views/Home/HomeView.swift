@@ -2931,6 +2931,19 @@ struct HomeView: View {
                 }
             }
 
+            // The stop()/start() re-pointed the engine at entirely new MKRoute
+            // geometry, but the OSM speed-limit and camera indexes are still
+            // warmed for the ORIGINAL corridor (stopNavigation deliberately keeps
+            // the provider closures, and startNavigation(route:) only re-warms the
+            // tunnel corridor — never the speed-limit/camera ones). Without a
+            // re-warm the driver loses posted limits and OSM camera alerts for the
+            // rest of an ad-hoc drive, and where the new path brushes an old way
+            // can even be served the abandoned route's limit. Re-wire both so
+            // their prefetch re-keys to the new geometry — the exact pair splice()
+            // and beginNavigation make for a fresh corridor.
+            wireSpeedLimits(for: engine)
+            wireSpeedCameras(for: engine)
+
             if let engine = navigationEngine {
                 navStateManager.activeRouteCoords = engine.routePolylineCoordinates
             }

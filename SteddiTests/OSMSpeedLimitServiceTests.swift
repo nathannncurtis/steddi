@@ -446,6 +446,52 @@ struct OSMSpeedLimitCacheTests {
         #expect(service.speedLimit(at: originalRoad, heading: nil) == nil)
     }
 
+    /// Models the AD-HOC (search-nav) mid-drive Apple-Maps reroute path
+    /// (HomeView.handleOffRoute's ad-hoc branch -> engine.stopNavigation() +
+    /// engine.startNavigation(route:) -> wireSpeedLimits/wireSpeedCameras). When
+    /// an ad-hoc drive deviates and reroutes onto a fresh MKRoute, the engine is
+    /// re-pointed at entirely new geometry; the OSM index must re-key to that new
+    /// corridor. Previously this branch (unlike the saved-route splice) never
+    /// re-warmed the corridor, so the driver kept the ORIGINAL route's index for
+    /// the rest of the drive — losing posted limits on the new geometry and being
+    /// served the abandoned route's limit wherever the new path brushed an old
+    /// way. With the fix, the re-warm swaps the index onto the reroute corridor.
+    @Test("Ad-hoc Apple-Maps reroute re-warm swaps the index onto the new corridor")
+    func adHocRerouteReWarmsCorridor() async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // Original ad-hoc route corridor: a residential road at 25 mph.
+        let originalLine = [coord(0, 0), coord(0.001, 0)]
+        let originalRoad = coord(0.0005, 0)
+        // Apple-Maps reroute corridor (disjoint geometry): a road at 55 mph.
+        let rerouteLine = [coord(0.02, 0.02), coord(0.021, 0.02)]
+        let rerouteRoad = coord(0.0205, 0.02)
+
+        let transport = TransportStub { request in
+            let body = request.httpBody.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            if body.contains("0.02") {
+                return httpOK(overpassData(wayJSON(id: 2, highway: "primary", maxspeed: "55 mph", coords: [(0.02, 0.02), (0.021, 0.02)])), url: request.url)
+            }
+            return httpOK(overpassData(wayJSON(id: 1, highway: "residential", maxspeed: "25 mph", coords: [(0, 0), (0.001, 0)])), url: request.url)
+        }
+        let service = OSMSpeedLimitService(transport: transport.transport, cacheDirectory: directory)
+
+        // Nav start warms the original ad-hoc corridor (beginNavigation's wire).
+        await service.prefetch(for: originalLine, routeKey: "adhoc-original")
+        #expect(service.loadedRouteKey == "adhoc-original")
+        #expect(service.speedLimit(at: originalRoad, heading: nil)?.mph == 25)
+
+        // Off-route -> Apple-Maps reroute restarts the engine onto new geometry;
+        // the fix re-warms the corridor for that geometry (the re-wire call).
+        await service.prefetch(for: rerouteLine, routeKey: "adhoc-reroute")
+        #expect(service.loadedRouteKey == "adhoc-reroute")
+        // Posted limits are available on the geometry we're now steering onto.
+        #expect(service.speedLimit(at: rerouteRoad, heading: nil)?.mph == 55)
+        // The abandoned route's limit is gone — no stale limit on the reroute.
+        #expect(service.speedLimit(at: originalRoad, heading: nil) == nil)
+    }
+
     /// The stale-limit window: on a route switch / recovery splice that misses the
     /// disk cache, the new corridor's prefetch awaits a multi-second Overpass
     /// fetch. While that fetch is in flight, `speedLimit(at:)` must NOT keep

@@ -252,6 +252,17 @@ final class NavigationStateManager {
     @ObservationIgnored
     private var lastWidgetReloadAt: Date?
 
+    /// Whether the one-time arrival-linger reload has already fired this session.
+    /// On the hasArrived transition we clear the live ETA + flip the session idle
+    /// in the App Group, but writing defaults alone doesn't re-render the
+    /// extension — so we force exactly one reloadTimelines to retire the live
+    /// pill and drop the stale near-arrival ETA promptly (the per-minute reload
+    /// path below is gated on !hasArrived, so it never pushes this correction).
+    /// One-shot so the 2 Hz linger polling can't spam reloads. Reset at
+    /// session start/end.
+    @ObservationIgnored
+    private var didReloadOnArrival = false
+
     /// Minimum spacing between drive-time forced widget reloads. Coarse enough
     /// that a long commute spends a handful of reloads, not one per minute.
     static let liveReloadMinInterval: TimeInterval = 180 // 3 min
@@ -824,6 +835,26 @@ final class NavigationStateManager {
             // whole linger. Mark the session idle so the widget stops presenting
             // it as a live drive; clearWidgetSession runs the full reset at End.
             widgetDefaults?.set(false, forKey: Self.kIsNavigating)
+            // Also drop the LAST live write — the near-arrival remaining ETA
+            // (~1-2 min) plus its fresh stamp. With kIsNavigating now false the
+            // widget falls through to the idle "Next Commute" reading, where a
+            // recent stamp keeps isStale false; left untouched, the finished
+            // drive's terminal minutes masquerade as the upcoming-commute ETA
+            // for the whole linger (and up to 30 min after). Zero the ETA
+            // (renders "No ETA yet") and drop the stamp so the normal idle-ETA
+            // refresh repopulates a real pre-drive value — the same reset
+            // clearWidgetSession applies at End, applied here at arrival.
+            widgetDefaults?.set(0, forKey: Self.kETAMinutes)
+            widgetDefaults?.removeObject(forKey: Self.kETAUpdatedAt)
+            // Push the correction once on the hasArrived transition: the
+            // per-minute reload below is gated on !hasArrived so it never fires
+            // during the linger, and without a forced reload the retired pill +
+            // cleared ETA wouldn't reach the widget until iOS's own ~15-min
+            // refresh. One-shot so the ~2 Hz linger polling can't spam reloads.
+            if !didReloadOnArrival {
+                didReloadOnArrival = true
+                reload(Self.widgetKind)
+            }
         } else {
             widgetDefaults?.set(engine.isNavigating, forKey: Self.kIsNavigating)
             // While actively navigating, keep the freshness stamp current every
@@ -1008,6 +1039,9 @@ final class NavigationStateManager {
         // minute-change of the new drive forces an immediate reload (and this
         // session-start reload below seeds the cadence implicitly).
         lastWidgetReloadAt = nil
+        // New session — re-arm the one-shot arrival reload for this drive's
+        // eventual arrival linger.
+        didReloadOnArrival = false
         let resolvedDestination = destinationName ?? Self.commuteEndpointName(commute: commute, direction: direction)
 
         if let commuteName = commute?.name {
@@ -1040,6 +1074,7 @@ final class NavigationStateManager {
     private func clearWidgetSession() {
         lastWidgetETAMinutes = nil
         lastWidgetReloadAt = nil
+        didReloadOnArrival = false
         widgetDefaults?.set(false, forKey: Self.kIsNavigating)
         // Drop the terminal live ETA + its stamp (widget renders 0 as "No ETA
         // yet"); do NOT leave the finished drive's remaining minutes posing as
