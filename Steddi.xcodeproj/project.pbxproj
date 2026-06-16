@@ -128,6 +128,7 @@
 		8BBC88E24B14BA17B78D5EAA /* HapticServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B46BB7337E920209A89889 /* HapticServiceTests.swift */; };
 		8C6902233D467F3E4CC209D5 /* CarPlay.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 536F40426EDB0B72A580D76E /* CarPlay.framework */; };
 		8FFA00BD6370747C969692D5 /* AudioDuckingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30598BF220C0E6199379B02 /* AudioDuckingService.swift */; };
+		9105F8CDB8DBC12038095482 /* CarPlayEstimatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A40C80EE68927B82F67E3AC /* CarPlayEstimatesTests.swift */; };
 		9275C4BC68051B778B8E32C5 /* WeatherKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 544BA71821F7ECFEF7555AC0 /* WeatherKitService.swift */; };
 		943FF67969275542C6BB1A13 /* DriveRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B27F2B5C7D098D3394B8D4 /* DriveRecord.swift */; };
 		967F1B46EC62459406D1119D /* NoGoZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDEFFA656C308FF61D985BF /* NoGoZone.swift */; };
@@ -390,6 +391,7 @@
 		93EC09F95A0DD6C81E98A8DA /* CommuteNotificationDecisionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteNotificationDecisionEngine.swift; sourceTree = "<group>"; };
 		942A3B6981E7B85F855A4276 /* RoadGraphBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadGraphBuilder.swift; sourceTree = "<group>"; };
 		94C0D76787187AFA4D836876 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		9A40C80EE68927B82F67E3AC /* CarPlayEstimatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayEstimatesTests.swift; sourceTree = "<group>"; };
 		9BF701288743E08ADAAE3659 /* OnboardingHeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingHeroView.swift; sourceTree = "<group>"; };
 		A1D73E42BCDB54E4B086D4C4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A563FC81AD7AEC2AFCF76C10 /* LearnedWeightsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnedWeightsStore.swift; sourceTree = "<group>"; };
@@ -618,6 +620,7 @@
 				BFC0E15BFE14314BA0D75D10 /* AStarSearchTests.swift */,
 				DE5C1A3902F3BAF275FBD30B /* AudioDuckingServiceTests.swift */,
 				4D83B764A6EC175443541145 /* BinaryHeapTests.swift */,
+				9A40C80EE68927B82F67E3AC /* CarPlayEstimatesTests.swift */,
 				0BB8A4F976CE18333497A882 /* CheckCommuteETAIntentTests.swift */,
 				6E283EA707EE881C4CFB3DEC /* CommuteDirectionResolverTests.swift */,
 				D0DEEB209AFCF45A596442C0 /* CommuteNotificationCenterTests.swift */,
@@ -1261,6 +1264,7 @@
 				06C89F3245D03B696CF8D0CF /* AnalyticsServiceTests.swift in Sources */,
 				5D8C6D53390B98A19A081299 /* AudioDuckingServiceTests.swift in Sources */,
 				B18FC0A307B656BBD7096743 /* BinaryHeapTests.swift in Sources */,
+				9105F8CDB8DBC12038095482 /* CarPlayEstimatesTests.swift in Sources */,
 				37E231EC67E84618C9C36D56 /* CheckCommuteETAIntentTests.swift in Sources */,
 				B7952ED2AFEB896B5B6925E8 /* CommuteDirectionResolverTests.swift in Sources */,
 				4BD906E8F1CE5635D024B12D /* CommuteNotificationCenterTests.swift in Sources */,

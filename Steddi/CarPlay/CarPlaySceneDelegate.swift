@@ -19,6 +19,10 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var mapController: CarPlayMapController?
     private var mapTemplate: CPMapTemplate?
     private var navigationSession: CPNavigationSession?
+    /// The active CPTrip backing `navigationSession`. Retained so the whole-trip
+    /// remaining distance/ETA can be pushed via `CPMapTemplate.update(_:for:with:)`
+    /// — the trip-level surface — separately from the per-maneuver countdown.
+    private var navigationTrip: CPTrip?
     private var isShowingNavigation = false
     /// True while the route-preview "Start Navigation / Cancel" CPAlertTemplate is
     /// presented modally. A modal alert is NOT on the navigation stack, so
@@ -368,6 +372,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             selectionSummaryVariants: ["Steddi Route"]
         )
         let trip = CPTrip(origin: origin, destination: destination, routeChoices: [routeChoice])
+        navigationTrip = trip
         navigationSession = mapTemplate.startNavigationSession(for: trip)
         carplayLog.info("CarPlay: navigation session started successfully")
 
@@ -417,6 +422,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             selectionSummaryVariants: ["Steddi Route"]
         )
         let trip = CPTrip(origin: origin, destination: destination, routeChoices: [routeChoice])
+        navigationTrip = trip
         navigationSession = mapTemplate.startNavigationSession(for: trip)
 
         // Force the next live tick to rebuild maneuvers for the new leg.
@@ -509,14 +515,47 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     }
 
     private func updateTravelEstimates() {
-        guard let session = navigationSession,
-              let firstManeuver = session.upcomingManeuvers.first else { return }
+        guard let session = navigationSession else { return }
 
-        let estimates = CPTravelEstimates(
-            distanceRemaining: Measurement(value: stateManager.distanceRemainingMeters, unit: UnitLength.meters),
-            timeRemaining: stateManager.etaSeconds
-        )
-        session.updateEstimates(estimates, for: firstManeuver)
+        // Maneuver estimate = countdown to the NEXT turn (current step distance/time).
+        // CPNavigationSession.updateEstimates(_:for:) scopes the estimate to that one
+        // CPManeuver, so this must be the per-step value — NOT the whole-trip remaining,
+        // or the maneuver banner shows the full trip distance as the distance-to-turn.
+        if let firstManeuver = session.upcomingManeuvers.first {
+            let stepMeters = stateManager.stepDistanceRaw
+            let stepTime = Self.timeToNextManeuver(
+                distanceMeters: stepMeters,
+                speedMph: stateManager.currentSpeedMph
+            )
+            let maneuverEstimates = CPTravelEstimates(
+                distanceRemaining: Measurement(value: stepMeters, unit: UnitLength.meters),
+                timeRemaining: stepTime
+            )
+            session.updateEstimates(maneuverEstimates, for: firstManeuver)
+        }
+
+        // Trip estimate = whole-trip remaining distance/ETA to the destination.
+        // This is the trip-level surface (CPMapTemplate), distinct from the per-turn banner.
+        if let mapTemplate, let navigationTrip {
+            let tripEstimates = CPTravelEstimates(
+                distanceRemaining: Measurement(value: stateManager.distanceRemainingMeters, unit: UnitLength.meters),
+                timeRemaining: stateManager.etaSeconds
+            )
+            mapTemplate.update(tripEstimates, for: navigationTrip, with: .green)
+        }
+    }
+
+    /// Estimated seconds to reach the next maneuver, derived from the remaining
+    /// step distance and current speed. The engine exposes per-step distance
+    /// (`stepDistanceRaw`) but no per-step time, so we derive it here.
+    /// Falls back to 0 when stopped/near the turn so CarPlay just shows the
+    /// distance countdown rather than a nonsensically large time.
+    nonisolated static func timeToNextManeuver(distanceMeters: Double, speedMph: Double) -> TimeInterval {
+        guard distanceMeters > 0 else { return 0 }
+        let speedMPS = speedMph * 0.44704
+        // Below a walking-pace floor the divide explodes; treat as 0 (unknown).
+        guard speedMPS > 0.5 else { return 0 }
+        return distanceMeters / speedMPS
     }
 
     // MARK: - Route Preview
@@ -541,10 +580,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             return
         }
 
-        let distanceMiles = route.distance / 1609.34
-        let distanceText = distanceMiles < 10
-            ? String(format: "%.1f mi", distanceMiles)
-            : "\(Int(distanceMiles)) mi"
+        let distanceText = MeasurementUnit.current.formatDistance(meters: route.distance)
         let etaMinutes = Int(ceil(route.expectedTravelTime / 60))
 
         let routeInfo = CPListItem(text: "\(etaMinutes) min", detailText: distanceText)
@@ -554,10 +590,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             routeInfo.setImage(img)
         }
 
-        let arrivalTime = Date().addingTimeInterval(route.expectedTravelTime)
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        let arrivalItem = CPListItem(text: "Arrive \(formatter.string(from: arrivalTime))", detailText: "via \(route.name)")
+        // Locale-aware "jmm" (resolves to 12h or 24h per the locale) instead of a
+        // hardcoded "h:mm a", which breaks 24-hour-clock locales. Shares the same
+        // implementation used by the phone nav surfaces.
+        let arrivalString = NavigationEngine.formatArrivalTime(route.expectedTravelTime)
+        let arrivalItem = CPListItem(text: "Arrive \(arrivalString)", detailText: "via \(route.name)")
         if let img = UIImage(systemName: "clock")?
             .withConfiguration(UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)) {
             arrivalItem.setImage(img)
@@ -658,6 +695,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         isShowingNavigation = false
         navigationSession?.finishTrip()
         navigationSession = nil
+        navigationTrip = nil
 
         mapController?.stopNavigation()
 
