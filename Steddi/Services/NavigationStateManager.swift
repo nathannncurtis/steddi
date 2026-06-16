@@ -113,6 +113,16 @@ final class NavigationStateManager {
     static var rerouteInitialDelay: Duration = .seconds(30)
     static var rerouteSteadyInterval: Duration = .seconds(300)
 
+    /// Short retry interval used while the prompt-first evaluation still hasn't
+    /// completed a full candidate comparison — e.g. no GPS fix yet at the initial
+    /// delay, or the baseline ETA fetch threw (transient OSRM 429/timeout). Without
+    /// this the loop would fall straight to the 5-minute steady cadence after a
+    /// single early bail, defeating the prompt-first design on exactly the short
+    /// commute it exists for. We keep retrying on this short interval until the
+    /// first real evaluation lands, THEN settle to the steady interval. `var` so
+    /// tests can shrink it.
+    static var rerouteRetryInterval: Duration = .seconds(15)
+
     /// Test-only instrumentation: counts how many times the reroute loop has
     /// woken from its sleep and reached the candidate-evaluation phase. Lets a
     /// test confirm the FIRST evaluation happens promptly after nav starts
@@ -271,20 +281,42 @@ final class NavigationStateManager {
         // whole first leg. The first sleep is shortened to let GPS/EWMA settle
         // and a valid currentCoordinate appear; subsequent sleeps use the full
         // interval to avoid spamming the network/UI.
+        //
+        // The prompt-first budget is NOT consumed by a cycle that bails before a
+        // real comparison: if the first cycle can't run a full evaluation (no GPS
+        // fix yet at the initial delay, or the baseline ETA fetch throws on a
+        // transient OSRM 429/timeout), the loop retries on the SHORT retry
+        // interval rather than dropping to the 5-minute steady cadence — which
+        // would silently kill the feature for a short commute. Only once the first
+        // full candidate evaluation has landed (baseline fetched) does it settle
+        // to the steady interval.
         if let commute, let direction {
             rerouteTask = Task { @MainActor [weak self] in
                 let directionsService = DirectionsService()
                 let initialDelay = Self.rerouteInitialDelay
+                let retryInterval = Self.rerouteRetryInterval
                 let steadyInterval = Self.rerouteSteadyInterval
+                // Has a full candidate evaluation (successful baseline fetch) run
+                // yet? Until it has, the loop stays on the prompt-first cadence.
+                var firstEvaluationLanded = false
                 var isFirstCycle = true
 
                 while !Task.isCancelled {
                     guard let self else { break }
                     guard !self.hasArrived else { break }
 
-                    // Short settle delay before the FIRST evaluation (let GPS /
-                    // EWMA warm up), full interval between subsequent cycles.
-                    let delay = isFirstCycle ? initialDelay : steadyInterval
+                    // Short settle delay before the FIRST attempt (let GPS / EWMA
+                    // warm up). While the first full evaluation still hasn't
+                    // landed, retry on the short interval; only settle to the full
+                    // steady interval once it has.
+                    let delay: Duration
+                    if isFirstCycle {
+                        delay = initialDelay
+                    } else if firstEvaluationLanded {
+                        delay = steadyInterval
+                    } else {
+                        delay = retryInterval
+                    }
                     isFirstCycle = false
                     try? await Task.sleep(for: delay)
                     guard !Task.isCancelled else { break }
@@ -340,9 +372,16 @@ final class NavigationStateManager {
                     } catch {
                         // Couldn't get a comparable baseline this cycle — skip
                         // rather than fall back to a non-path-aware estimate and
-                        // compare incomparable numbers.
+                        // compare incomparable numbers. The prompt-first budget is
+                        // NOT spent (firstEvaluationLanded stays false), so the next
+                        // cycle retries on the short interval instead of the steady
+                        // one — a single transient fetch failure can't push the
+                        // first real evaluation out to ~5 min on a short commute.
                         continue
                     }
+                    // First full candidate comparison reached — from here the loop
+                    // may settle to the steady interval.
+                    firstEvaluationLanded = true
                     let remainingETA = baseline.duration
 
                     // The fetch awaited; bail if the session changed underneath.
@@ -654,34 +693,55 @@ final class NavigationStateManager {
         // Write to shared App Group for widget and refresh its timeline when the
         // displayed minute changes. Without the reload the widget keeps showing
         // the ETA captured at session start; writing the defaults alone doesn't
-        // re-render the extension. Throttled to minute changes so the 2 Hz sync
-        // doesn't spam WidgetKit with no-op reloads.
+        // re-render the extension.
         //
         // The live ETA is also the freshest real commute ETA the app computes,
         // so persist it (with a timestamp) as the "last known" value the widget
         // shows when idle — that's the whole point of a commute-ETA widget.
         //
-        // kIsNavigating is cheap and must stay current every tick. But the
-        // displayed ETA only changes on a whole-minute boundary, so writing
-        // kETAMinutes + restamping kETAUpdatedAt every 500ms is pure churn the
-        // widget can't observe (the freshness stamp would also tick needlessly).
-        // Only write the ETA + restamp when the minute actually changes.
+        // FRESHNESS STAMP (kIsNavigating + kETAMinutes + kETAUpdatedAt): the
+        // widget treats a `navigating` entry whose `kETAUpdatedAt` has aged past
+        // its staleness window as a dead OOM/watchdog kill and retires the live
+        // pill (CommuteETAWidget.isLiveNavigating). That defense rests on a live
+        // session restamping freshness on a tight cadence. The DISPLAYED minute
+        // does NOT change on a tight cadence, though — in stop-and-go traffic, a
+        // long light, or any stall the integer ETA can hold for many minutes — so
+        // gating the stamp on a minute change let the stamp go stale mid-drive and
+        // the widget wrongly retired a live pill on a stalled-but-live drive.
+        // Restamp the freshness keys on EVERY active-nav tick (a cheap App Group
+        // write, ~2 Hz), independent of the displayed minute. A genuine OOM kill
+        // still goes stale because there is no writer at all after it.
         //
-        // We ALWAYS rewrite the App Group defaults on a minute change, so the
-        // widget shows fresh data whenever iOS refreshes it on its own ~15-min
-        // timeline cadence. But we do NOT force a `reloadTimelines` every minute:
-        // a long commute would fire ~40-60 app-initiated reloads and can blow
-        // through WidgetKit's daily reload budget, after which even the idle
-        // widget stops updating. The live minute-by-minute ETA is already
-        // surfaced by the phone UI / Live Activity / CarPlay, so the home-screen
-        // widget doesn't need a per-minute push. Instead, during active nav we
-        // force a reload at most once per `liveReloadMinInterval` (session start,
-        // arrival, and end still force immediate reloads via their own paths).
-        widgetDefaults?.set(engine.isNavigating, forKey: Self.kIsNavigating)
-        if engine.etaMinutes != lastWidgetETAMinutes {
+        // We do NOT force a `reloadTimelines` on every tick: a long commute would
+        // fire ~40-60 app-initiated reloads and can blow through WidgetKit's daily
+        // reload budget, after which even the idle widget stops updating. The live
+        // minute-by-minute ETA is already surfaced by the phone UI / Live Activity
+        // / CarPlay, so the home-screen widget doesn't need a per-minute push.
+        // Instead, force a reload only on a whole-minute change, throttled to at
+        // most once per `liveReloadMinInterval` (session start, arrival, and end
+        // still force immediate reloads via their own paths).
+        if engine.isNavigating && engine.hasArrived {
+            // Commute arrival linger: the engine latches hasArrived but keeps
+            // isNavigating true (the "You have arrived" / manual-End flow), with
+            // etaMinutes zeroed. Writing kIsNavigating=true + etaMinutes=0 here
+            // would render a phantom live "Navigating / No ETA yet" card for the
+            // whole linger. Mark the session idle so the widget stops presenting
+            // it as a live drive; clearWidgetSession runs the full reset at End.
+            widgetDefaults?.set(false, forKey: Self.kIsNavigating)
+        } else {
+            widgetDefaults?.set(engine.isNavigating, forKey: Self.kIsNavigating)
+            // While actively navigating, keep the freshness stamp current every
+            // tick (cheap defaults write) so a stalled-but-live drive stays live.
+            if engine.isNavigating {
+                widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
+                widgetDefaults?.set(now.timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
+            }
+        }
+
+        // Force a throttled reload only when the displayed whole-minute ETA
+        // changes — the only thing a reload would make visibly different.
+        if engine.isNavigating && !engine.hasArrived && engine.etaMinutes != lastWidgetETAMinutes {
             lastWidgetETAMinutes = engine.etaMinutes
-            widgetDefaults?.set(engine.etaMinutes, forKey: Self.kETAMinutes)
-            widgetDefaults?.set(now.timeIntervalSince1970, forKey: Self.kETAUpdatedAt)
 
             // Throttle drive-time forced reloads to a coarse cadence. First
             // minute-change of a session (lastWidgetReloadAt nil) reloads
