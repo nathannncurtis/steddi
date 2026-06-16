@@ -18,7 +18,14 @@ final class Trip {
     /// (mirrors `RoadCondition.kindRaw`) so SwiftData stores a plain string and
     /// an unknown future value degrades to `.continuous` instead of failing the
     /// whole row's decode.
-    var flowModeRaw: String
+    ///
+    /// `originalName: "flowMode"` + a declared default keep lightweight migration
+    /// data-preserving: this column was renamed from a previously-shipped stored
+    /// `flowMode: TripFlowMode` (commit 24c7c8a). The rename hint maps the old
+    /// `flowMode` column onto `flowModeRaw` so a saved manual-flow trip keeps its
+    /// `.manual` setting across the upgrade; the default stamps `.continuous` onto
+    /// any row missing the column so the open can't abort on a required attribute.
+    @Attribute(originalName: "flowMode") var flowModeRaw: String = TripFlowMode.continuous.rawValue
 
     /// Typed accessor over `flowModeRaw`. Unknown raw values resolve to
     /// `.continuous` — the default flow — rather than failing to decode.

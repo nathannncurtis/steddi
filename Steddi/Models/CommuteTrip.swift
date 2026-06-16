@@ -12,7 +12,14 @@ final class CommuteTrip {
     /// (mirrors `RoadCondition.kindRaw`) so SwiftData stores a plain string and
     /// an unknown future value degrades to `.originToDestination` instead of
     /// failing the whole row's decode.
-    var directionRaw: String
+    ///
+    /// `originalName: "direction"` + a declared default keep lightweight migration
+    /// data-preserving: this column was renamed from a previously-shipped stored
+    /// `direction: CommuteDirection` (commit 24c7c8a). The rename hint carries the
+    /// old `direction` column onto `directionRaw` so logged-trip history keeps its
+    /// real direction (pattern learning would otherwise read every logged trip as
+    /// `.originToDestination`); the default guards against a missing-column abort.
+    @Attribute(originalName: "direction") var directionRaw: String = CommuteDirection.originToDestination.rawValue
     var dayOfWeek: Int       // 1 = Sunday, 7 = Saturday (Calendar component)
     var hourOfDay: Int       // 0-23
     var timestamp: Date

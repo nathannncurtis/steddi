@@ -16,10 +16,24 @@ final class Route {
     /// future value degrades to `.recorded` instead of failing the whole row's
     /// decode — `RouteSource.suggested` is explicitly a future case, so this
     /// guards the enum most likely to evolve.
-    var sourceRaw: String
+    ///
+    /// `originalName: "source"` + a declared default keep lightweight migration
+    /// data-preserving: this column was renamed from a previously-shipped stored
+    /// `source: RouteSource` (commit 24c7c8a). Without the rename hint, lightweight
+    /// migration would see `source` dropped and a new required `sourceRaw` added,
+    /// blanking every existing route's source; with it, SwiftData maps the old
+    /// `source` column straight onto `sourceRaw`. The default is the value
+    /// lightweight migration stamps onto any row that somehow lacks the column, so
+    /// the open can never abort on a missing non-optional attribute.
+    @Attribute(originalName: "source") var sourceRaw: String = RouteSource.recorded.rawValue
     /// Which way this route goes. Raw-valued for the same forward-compat reason
     /// as `sourceRaw`; unknown values degrade to `.originToDestination`.
-    var directionRaw: String
+    ///
+    /// `originalName: "direction"` + a declared default carry the previously-shipped
+    /// stored `direction: CommuteDirection` (renamed in commit 24c7c8a) forward,
+    /// so a saved return-trip route keeps its `destinationToOrigin` direction across
+    /// the upgrade instead of silently flipping to the default.
+    @Attribute(originalName: "direction") var directionRaw: String = CommuteDirection.originToDestination.rawValue
 
     /// Typed accessor over `sourceRaw`. Unknown raw values resolve to `.recorded`.
     var source: RouteSource {
