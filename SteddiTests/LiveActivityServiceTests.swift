@@ -12,7 +12,14 @@ import Foundation
 /// ActivityKit can't vend a real `Activity` in a unit test, so these drive the
 /// exact serialization + latch logic the production paths use via the service's
 /// test seam, recording the order operations actually apply in.
-@Suite("LiveActivityService lifecycle serialization")
+// `.serialized`: every test drives the process-wide `LiveActivityService.shared`
+// singleton (resetForTesting + the one ordered lifecycle chain + the sessionEnded
+// latch). Swift Testing parallelizes tests within a suite by default, so without
+// this the three cases race on that shared state — one test's reset/end clobbers
+// another's in-flight chain, producing nondeterministic failures (applied == []
+// instead of ["update"], or sessionEnded read as false). Serializing the suite
+// makes each case own the singleton for its duration.
+@Suite("LiveActivityService lifecycle serialization", .serialized)
 @MainActor
 struct LiveActivityServiceTests {
 
