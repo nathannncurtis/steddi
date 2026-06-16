@@ -28,6 +28,22 @@ final class MapMatchingService {
     /// tail window, so OSRM's re-snap jitter (the seam can wander a few meters off
     /// the input line) is comfortably covered without over-eating genuine geometry.
     static let seamTailLengthSlack = 1.5
+    /// HARD CAP on how many trailing vertices the adaptive tail window may include,
+    /// independent of length. The overlap is only `chunkOverlap` input points, so
+    /// even a fine OSRM resample maps it to a bounded handful of matched vertices;
+    /// a few × `seamTailWindow` brackets every realistic overlap. The cap stops the
+    /// length-sized walk from reaching deep, NON-overlap geometry on a tightly
+    /// folded trace (a switchback / narrow divided road whose carriageways sit
+    /// within `seamEpsilon`), where comparing leading points against far-back tail
+    /// vertices would drop genuine fold geometry, not just seam duplicates.
+    static let seamTailVertexCap = 32
+    /// Bearing reversal (degrees) that marks a switchback apex / hairpin fold in the
+    /// stitched tail. The adaptive tail walk STOPS at such an apex so the comparison
+    /// region never crosses a fold: only the post-apex segment (where the genuine
+    /// overlap re-trace lives) is compared, so a leading point that legitimately
+    /// doubles back past the apex is not matched against pre-apex tail vertices and
+    /// wrongly dropped. ~150° is a near-U-turn — well past any normal road bend.
+    static let seamFoldBearingReversalDegrees: Double = 150
     private let session: URLSession
 
     init(session: URLSession = .shared) {
@@ -117,17 +133,44 @@ final class MapMatchingService {
     /// 8-vertex window would stop short of such an overlap and leave its tail
     /// un-dropped; a length-sized window reaches the whole overlap regardless of
     /// how finely OSRM resampled it.
+    ///
+    /// The length-sized walk is BOUNDED two ways so it can't consume a genuine fold
+    /// on a tightly-folded trace (a switchback / narrow divided road that doubles
+    /// back within the overlap distance), where pulling in non-overlap geometry
+    /// would let `stitchSeam` drop real fold vertices, not just seam duplicates:
+    ///   1. It stops at a SWITCHBACK APEX — a sharp bearing reversal in the tail
+    ///      (`seamFoldBearingReversalDegrees`). The genuine overlap re-trace lives
+    ///      on the LAST physical segment driven, i.e. after the most recent apex; a
+    ///      region that crossed the apex would also span the pre-apex leg, against
+    ///      which a legitimately doubling-back leading point falsely matches.
+    ///   2. It is HARD-CAPPED at `seamTailVertexCap` vertices, so even an
+    ///      apex-free but pathologically dense/long stretch can't reach deep
+    ///      non-overlap geometry. The overlap is only `chunkOverlap` input points,
+    ///      so this cap comfortably brackets every realistic seam.
+    /// The `seamTailWindow` vertex FLOOR still applies for short/unknown overlaps.
     static func adaptiveTailRegion(_ coords: [CLLocationCoordinate2D], overlapMeters: Double) -> [CLLocationCoordinate2D] {
         guard !coords.isEmpty else { return [] }
+
+        // FOLD BOUNDARY first: the maximum number of trailing vertices the region
+        // may include without crossing a switchback apex. Walking back from the
+        // tail, the FIRST sharp bearing reversal (a hairpin) is a fold; the region
+        // must not reach past it, or `stitchSeam` would compare leading points
+        // against pre-apex geometry and drop genuine fold vertices, not just seam
+        // duplicates. This bound caps BOTH the length walk AND the vertex floor, so
+        // neither can reintroduce the fold.
+        let foldLimit = Self.verticesBeforeFold(coords)
+
+        // The length-sized reach (R19): include vertices until cumulative arc length
+        // covers the overlap span (× slack), so a fine OSRM resample of the overlap
+        // is fully bracketed. Bounded by the hard vertex cap and the fold limit.
         let target = max(0, overlapMeters) * seamTailLengthSlack
+        let hardCap = min(coords.count, seamTailVertexCap)
         var accumulated: Double = 0
         var count = 0
         var i = coords.count - 1
-        // Include the tail vertex, then walk back summing segment lengths until the
-        // accumulated span reaches `target` (the vertex that crosses the threshold
-        // is included so the region fully brackets the overlap).
         while i >= 0 {
             count += 1
+            if count >= hardCap || count >= foldLimit { break }
             if i > 0 {
                 accumulated += NavigationEngine.haversineDistance(from: coords[i - 1], to: coords[i])
             }
@@ -135,9 +178,46 @@ final class MapMatchingService {
             i -= 1
         }
         // Floor at `seamTailWindow` vertices so short overlaps still compare against
-        // a few coords (matches the prior fixed-window behaviour at minimum).
+        // a few coords (matches the prior fixed-window behaviour at minimum) — but
+        // never exceed the hard cap OR the fold limit, so the floor can't reach
+        // across a switchback into non-overlap geometry.
         count = max(count, min(coords.count, seamTailWindow))
+        count = min(count, hardCap, foldLimit)
         return Array(coords.suffix(count))
+    }
+
+    /// How many trailing vertices of `coords` lie on the SAME side of the most
+    /// recent switchback apex as the tail — i.e. the deepest the seam region may
+    /// reach before crossing a fold. Walks back from the tail comparing successive
+    /// segment bearings; the first reversal of `seamFoldBearingReversalDegrees`+
+    /// (a hairpin / near-U-turn) is the apex, and the apex vertex itself is the
+    /// last one included (so the post-apex leg is fully covered, the pre-apex leg
+    /// excluded). Returns `coords.count` when there is no fold.
+    static func verticesBeforeFold(_ coords: [CLLocationCoordinate2D]) -> Int {
+        guard coords.count >= 3 else { return coords.count }
+        // Bearing of the most recently walked segment (toward the tail).
+        var lastBearing = RouteGeometry.bearing(from: coords[coords.count - 2], to: coords[coords.count - 1])
+        // i indexes the vertex whose INCOMING segment (coords[i-1] -> coords[i]) we
+        // test next. Start one segment back from the tail.
+        var i = coords.count - 2
+        while i >= 1 {
+            let segBearing = RouteGeometry.bearing(from: coords[i - 1], to: coords[i])
+            if Self.bearingReversal(segBearing, lastBearing) >= seamFoldBearingReversalDegrees {
+                // Apex at coords[i]: include the tail down to and INCLUDING coords[i].
+                return coords.count - i
+            }
+            lastBearing = segBearing
+            i -= 1
+        }
+        return coords.count
+    }
+
+    /// Absolute heading change between two bearings, 0...180 degrees (handles the
+    /// 360/0 wraparound). 180 is a perfect U-turn.
+    static func bearingReversal(_ a: Double, _ b: Double) -> Double {
+        var diff = abs(a - b).truncatingRemainder(dividingBy: 360)
+        if diff > 180 { diff = 360 - diff }
+        return diff
     }
 
     /// Dedupe a subsequent chunk against the stitched tail REGION by

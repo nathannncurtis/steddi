@@ -330,20 +330,66 @@ enum CorridorValidator {
     /// The co-located REVERSE directed edge of `edgeIndex` on a two-way street —
     /// the edge over the same physical OSM way running the opposite direction.
     /// Mirrors `AStarSearch.coLocatedReverseEdge` (private there) so the reference
-    /// reverse-collapse matches the router's Case 2. Matches on `osmWayID` so a
-    /// distinct parallel road is never mistaken for the reverse twin; returns -1
-    /// when none exists (most importantly a one-way street, which emits only one
-    /// directed edge).
+    /// reverse-collapse matches the router's Case 2. Matches on `osmWayID` AND
+    /// requires the candidate to be the genuine opposite-orientation twin (its
+    /// geometry is the point-wise reverse of `edge`'s) so a distinct parallel road
+    /// — or a SAME-direction co-located arm of a self-touching way (a one-way loop
+    /// `[A,P,B,Q,A]` emits forward A->B and forward B->A; B->A matches endpoints +
+    /// wayID but is NOT a reverse twin) — is never mistaken for the reverse twin.
+    /// Returns -1 when none exists (most importantly a one-way street, which emits
+    /// only one directed edge per physical arm).
     private static func coLocatedReverseEdge(of edgeIndex: EdgeIndex, in graph: RoadGraph) -> EdgeIndex {
         guard edgeIndex >= 0, Int(edgeIndex) < graph.edges.count else { return -1 }
         let edge = graph.edges[Int(edgeIndex)]
         for candidate in graph.outEdgeRange(of: edge.to) {
             let rev = graph.edges[Int(candidate)]
-            if rev.to == edge.from && rev.osmWayID == edge.osmWayID {
+            if rev.to == edge.from && rev.from == edge.to
+                && rev.osmWayID == edge.osmWayID
+                && isReverseTwinGeometry(candidate, of: edgeIndex, in: graph) {
                 return candidate
             }
         }
         return -1
+    }
+
+    /// True when `candidate`'s geometry is the point-wise reverse of `edgeIndex`'s
+    /// — the test for a GENUINE opposite-orientation reverse twin. A real reverse
+    /// twin reuses the same physical geometry reversed (`RoadGraphBuilder` emits
+    /// the reverse edge as `Array(segmentCoords.reversed())`), so its coordinate
+    /// list is `edge`'s reversed coordinate-for-coordinate, same length and same
+    /// vertex count. This distinguishes a reverse twin from a SAME-direction
+    /// co-located arm on a self-touching way (a one-way loop `[A,P,B,Q,A]` whose
+    /// arms A->B and B->A share the two endpoints but run through DIFFERENT interior
+    /// vertices and the opposite physical path), which endpoint+wayID matching
+    /// alone cannot reject. Shared by `AStarSearch` (router Case 2) and the
+    /// validator's reference reverse-collapse so both agree on what a reverse twin
+    /// is. The `osmWayID`/endpoint match is the caller's contract.
+    static func isReverseTwinGeometry(_ candidate: EdgeIndex, of edgeIndex: EdgeIndex, in graph: RoadGraph) -> Bool {
+        guard edgeIndex >= 0, Int(edgeIndex) < graph.edges.count,
+              candidate >= 0, Int(candidate) < graph.edges.count else { return false }
+        let edge = graph.edges[Int(edgeIndex)]
+        let rev = graph.edges[Int(candidate)]
+        // A true reverse twin is the SAME physical arm reversed: identical length.
+        // A materially different length is an immediate reject (a distinct arm).
+        guard abs(rev.lengthMeters - edge.lengthMeters) <= max(0.5, edge.lengthMeters * 1e-4) else {
+            return false
+        }
+        let forward = graph.geometry(of: edgeIndex)
+        let back = graph.geometry(of: candidate)
+        guard forward.count >= 2, forward.count == back.count else { return false }
+        // Compare coordinate-for-coordinate with a small (~0.5 m) tolerance to
+        // absorb the reverse-build round-trip's floating-point noise. `back[n-1-i]`
+        // is the reverse-indexed vertex that must coincide with `forward[i]`.
+        let tolerance = 0.5  // meters
+        let fwd = Array(forward)
+        let bwd = Array(back)
+        let n = fwd.count
+        for i in 0..<n {
+            if RouteGeometry.haversineDistance(from: fwd[i], to: bwd[n - 1 - i]) > tolerance {
+                return false
+            }
+        }
+        return true
     }
 
     // MARK: - Geometry stitching

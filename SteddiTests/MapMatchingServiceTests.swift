@@ -213,4 +213,83 @@ struct MapMatchingServiceTests {
         let firstKeptAlong = (stitched.first!.latitude - base) / degPerMeter
         #expect(firstKeptAlong > 200.0)
     }
+
+    @Test("switchback within the overlap: a genuine fold survives while the true seam duplicate is still dropped")
+    func switchbackFoldGeometrySurvivesAdaptiveWindow() {
+        // A tightly-folded trace: the stitched tail runs NORTH up one carriageway
+        // (leg-in, E0), hairpins at the top, and comes back SOUTH down an opposing
+        // carriageway ~7m to the east (leg-out, E7) — a divided-road switchback whose
+        // two carriageways sit WITHIN seamEpsilon (10m) of each other. The chunk seam
+        // lands partway down leg-out. The new chunk re-traces the last couple of
+        // leg-out points (a TRUE seam duplicate, must drop) and then legitimately
+        // CONTINUES south down leg-out (genuine new geometry that must survive).
+        //
+        // R19's adaptive tail window is sized by overlap LENGTH (× slack). Because the
+        // fold sits within that span, an UNBOUNDED length window walks back from the
+        // seam, across the apex, and DOWN leg-in — pulling in leg-in vertices that
+        // run ~7m parallel to the genuine leg-out continuation. stitchSeam then drops
+        // those genuine continuation points as "overlap" (they're within 10m of a
+        // leg-in vertex), shortening/kinking the polyline and under-reporting distance.
+        //
+        // The bounded window stops at the switchback APEX (a sharp bearing reversal),
+        // so the comparison region is only the post-apex leg-out — the genuine
+        // continuation, clear of that region, survives, while the true leg-out
+        // duplicate at the seam is still dropped.
+        let degPerMeter = 1.0 / 111_320.0
+        let base = 33.0
+        let mPerDegLon = 111_320.0 * cos(base * .pi / 180)
+        func at(north: Double, east: Double) -> CLLocationCoordinate2D {
+            .init(latitude: base + north * degPerMeter, longitude: -117.0 + east / mPerDegLon)
+        }
+
+        // Stitched tail: leg-in north at E0 (+0..+100), a sharp hairpin apex, then
+        // leg-out heading back south, ramping to E7 (the opposing carriageway).
+        var stitchedTail: [CLLocationCoordinate2D] = stride(from: 0.0, through: 100.0, by: 10.0).map {
+            at(north: $0, east: 0)
+        }
+        stitchedTail.append(at(north: 92, east: 1.5))   // apex reversal (near-U-turn)
+        stitchedTail.append(at(north: 86, east: 4.0))
+        stitchedTail.append(at(north: 80, east: 7.0))   // seam tail end, on leg-out
+
+        // The overlap span at the seam (~45m of leg-out re-fed to the next chunk).
+        let overlapMeters = 45.0
+
+        // New chunk: re-traces the last two leg-out points (true duplicate seam),
+        // then continues SOUTH down leg-out — genuine geometry that runs ~7m east of
+        // the leg-in vertices it parallels.
+        let chunk: [CLLocationCoordinate2D] = [
+            at(north: 86, east: 4.0),   // duplicate of stitched tail (drop)
+            at(north: 80, east: 7.0),   // duplicate of stitched tail end (drop)
+            at(north: 65, east: 7.0),   // GENUINE continuation (7m from leg-in +65)
+            at(north: 55, east: 7.0),   // GENUINE
+            at(north: 45, east: 7.0),   // GENUINE
+        ]
+
+        // The bounded adaptive window stops at the apex, so its region is leg-out
+        // only (apex + the ramp). The genuine continuation survives; only the two
+        // true leg-out duplicates are dropped.
+        let region = MapMatchingService.adaptiveTailRegion(stitchedTail, overlapMeters: overlapMeters)
+        // The region never reaches back across the apex into leg-in (E0).
+        #expect(region.allSatisfy { ($0.longitude - (-117.0)) * mPerDegLon > 0.5 || $0.latitude >= base + 92 * degPerMeter },
+                "the tail region must not cross the switchback apex into the leg-in carriageway")
+        let stitched = MapMatchingService.stitchSeam(tailRegion: region, chunk: chunk)
+        #expect(stitched.count == 3, "the 3 genuine fold-continuation points must survive")
+        // The first kept point is the genuine continuation (+65), not a duplicate.
+        #expect(abs((stitched.first!.latitude - base) / degPerMeter - 65) < 1.0)
+        // The folded continuation geometry is preserved end to end.
+        #expect(abs((stitched.last!.latitude - base) / degPerMeter - 45) < 1.0)
+
+        // Contrast: the OLD length-only window (no apex/cap bound) would span the
+        // fold and over-drop the genuine continuation. Build that oversized region
+        // explicitly (the whole tail reaches well within 45m × 1.5 of the apex) and
+        // confirm it drops MORE than the bounded window — the exact regression fixed.
+        let unboundedRegion = stitchedTail   // length-only walk reaches past the apex here
+        let oldStitched = MapMatchingService.stitchSeam(tailRegion: unboundedRegion, chunk: chunk)
+        #expect(oldStitched.count < stitched.count,
+                "an unbounded (pre-fix) window over-drops genuine fold geometry across the apex")
+
+        // And the bounded window STILL drops the true seam duplicate (no R19 regression).
+        #expect(NavigationEngine.haversineDistance(from: stitched.first!, to: at(north: 80, east: 7.0)) > MapMatchingService.seamEpsilon,
+                "the true leg-out duplicate at the seam must still be dropped")
+    }
 }
