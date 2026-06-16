@@ -121,6 +121,22 @@ final class OSMSpeedLimitService {
             return
         }
 
+        // Cache MISS on a corridor change: the new route's data isn't available
+        // yet, and `fetch(query:)` below is a multi-second Overpass round-trip. If
+        // a PREVIOUS route's index is still installed (a route switch / recovery
+        // splice re-prefetch), leaving it in place means `speedLimit(at:)` keeps
+        // serving the abandoned route's posted limit wherever the new geometry
+        // incidentally runs within match radius of an old way — a wrong HUD limit
+        // (and wrong over-limit/camera comparison) for the whole in-flight window.
+        // Clear it up front so lookups return nil (callers fall back to the
+        // per-step instruction estimate) until the new corridor's index installs.
+        // Only when still the newest generation — a newer prefetch already
+        // superseded us, so we must not disturb its data. Mirrors the failed-fetch
+        // `clearIndex()` that already closed this exact gap on the failure path.
+        if generation == prefetchGeneration {
+            clearIndex()
+        }
+
         let query = await Task.detached(priority: .userInitiated) {
             let sampled = Self.downsample(
                 polyline,

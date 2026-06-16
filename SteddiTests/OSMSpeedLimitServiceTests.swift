@@ -446,6 +446,62 @@ struct OSMSpeedLimitCacheTests {
         #expect(service.speedLimit(at: originalRoad, heading: nil) == nil)
     }
 
+    /// The stale-limit window: on a route switch / recovery splice that misses the
+    /// disk cache, the new corridor's prefetch awaits a multi-second Overpass
+    /// fetch. While that fetch is in flight, `speedLimit(at:)` must NOT keep
+    /// answering from the PREVIOUS route's index (the bug) — it must return nil so
+    /// callers fall back to the per-step instruction estimate. We hold the new
+    /// corridor's fetch in flight and assert the old corridor's limit is already
+    /// gone mid-fetch, then released and the new corridor's limit installs.
+    @Test("A corridor-change prefetch clears the stale index up front, not just on completion")
+    func corridorChangeClearsStaleIndexBeforeFetchCompletes() async {
+        let directory = tempCacheDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let originalLine = [coord(0, 0), coord(0.001, 0)]
+        let originalRoad = coord(0.0005, 0)
+        let newLine = [coord(2, 2), coord(2.001, 2)]
+        let newRoad = coord(2.0005, 2)
+
+        let counter = CallCounter()
+        let arrived = AsyncGate()
+        let release = AsyncGate()
+
+        // First request = original corridor (returns immediately, installs 25).
+        // Second request = new corridor: announce arrival, then block until released
+        // so the test can observe the in-flight window.
+        let transport: OSMSpeedLimitService.Transport = { request in
+            if counter.next() == 1 {
+                return httpOK(overpassData(wayJSON(id: 1, highway: "residential", maxspeed: "25 mph", coords: [(0, 0), (0.001, 0)])), url: request.url)
+            }
+            arrived.open()
+            await release.wait()
+            return httpOK(overpassData(wayJSON(id: 2, highway: "secondary", maxspeed: "45 mph", coords: [(2, 2), (2.001, 2)])), url: request.url)
+        }
+        let service = OSMSpeedLimitService(transport: transport, cacheDirectory: directory)
+
+        // Original route loaded and serving its limit.
+        await service.prefetch(for: originalLine, routeKey: "original")
+        #expect(service.speedLimit(at: originalRoad, heading: nil)?.mph == 25)
+
+        // Switch onto the new corridor (cache miss) — hold its fetch in flight.
+        let switchTask = Task { await service.prefetch(for: newLine, routeKey: "new") }
+        await arrived.wait()
+
+        // MID-FETCH: the old corridor's stale limit must already be gone, and
+        // loadedRouteKey nil, rather than serving "original" until the new install.
+        #expect(service.speedLimit(at: originalRoad, heading: nil) == nil,
+                "The previous route's limit must not be served while the new corridor's prefetch is in flight")
+        #expect(service.loadedRouteKey == nil)
+
+        // Let the new corridor's fetch finish; its index installs.
+        release.open()
+        await switchTask.value
+        #expect(service.loadedRouteKey == "new")
+        #expect(service.speedLimit(at: newRoad, heading: nil)?.mph == 45)
+        #expect(service.speedLimit(at: originalRoad, heading: nil) == nil)
+    }
+
     @Test("Cache hit short-circuits the network")
     func cacheHitSkipsNetwork() async {
         let directory = tempCacheDirectory()
