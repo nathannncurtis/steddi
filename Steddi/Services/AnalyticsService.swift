@@ -66,7 +66,7 @@ struct TrendInsight: Identifiable, Equatable {
 }
 
 /// One point of a per-drive speed-vs-time chart.
-struct SpeedTrendPoint: Identifiable, Equatable {
+struct SpeedTrendPoint: Identifiable, Equatable, Sendable {
     let offsetSeconds: Double
     let speedMps: Double
 
@@ -117,10 +117,25 @@ struct WeekdayAverage: Identifiable, Equatable {
     var id: Int { weekdayIndex }
 }
 
+/// Sendable snapshot of one DriveRecord, captured on the MainActor before
+/// the heavy GPS-blob decode is handed to a detached, off-main task. Holds
+/// only value types (the GPS array is a Codable struct array), so it crosses
+/// the actor boundary without touching the non-Sendable @Model off-actor.
+struct DriveRecordSnapshot: Sendable {
+    let id: UUID
+    let title: String
+    let startedAt: Date
+    let durationSeconds: Double
+    let trafficSeconds: Double
+    let maxSpeedMps: Double?
+    let averageSpeedMps: Double?
+    let points: [GPSPoint]
+}
+
 /// Everything DriveDetailView needs, built once from a single record's GPS
 /// blob (the only place the blob is decoded) and discarded on dismissal.
-struct DriveDetail {
-    struct RouteSample {
+struct DriveDetail: Sendable {
+    struct RouteSample: Sendable {
         let coordinate: CLLocationCoordinate2D
         let speedMps: Double
     }
@@ -169,6 +184,9 @@ final class AnalyticsService {
     /// Guards against spawning overlapping backfill passes when loadAnalytics is
     /// called repeatedly (appear + window changes) before the first one drains.
     private var backfillInFlight = false
+    /// Guards against spawning overlapping weekly-aggregate rebuilds when the
+    /// 1Y/All window is (re)loaded repeatedly before a rebuild finishes.
+    private var rebuildInFlight = false
 
     /// How many drives the list section shows.
     static let recentDriveLimit = 50
@@ -216,8 +234,15 @@ final class AnalyticsService {
             applyTrends(Self.computeTrends(samples: samples, now: now, calendar: calendar))
 
         case .oneYear, .all:
+            // The weekly-aggregate rebuild does an unbounded historical fetch +
+            // context.save() — too heavy for the MainActor on the hottest
+            // analytics path. When the cache is stale, drain the rebuild on a
+            // background ModelContext and re-aggregate when it lands (mirrors
+            // scheduleBackfill); paint cache-first NOW with whatever buckets
+            // already exist so the first frame is never blocked. The cache-first
+            // read self-corrects once the background rebuild re-aggregates.
             if Self.aggregatesNeedRebuild(context: context, now: now, calendar: calendar) {
-                Self.rebuildAggregates(context: context, now: now, calendar: calendar)
+                scheduleRebuild(container: context.container)
             }
             aggregateStats = Self.cacheFirstStats(
                 context: context, windowStart: windowStart, now: now, calendar: calendar
@@ -264,17 +289,50 @@ final class AnalyticsService {
         }
     }
 
+    /// Rebuilds the stale weekly aggregate buckets on a detached background
+    /// context, then re-aggregates the current window on the MainActor so the
+    /// cache-first stats pick up the freshly-written buckets. At most one
+    /// rebuild runs at a time; repeated 1Y/All loads while one is in flight are
+    /// coalesced. The heavy unbounded fetch + save never touches the main thread.
+    private func scheduleRebuild(container: ModelContainer) {
+        guard !rebuildInFlight else { return }
+        rebuildInFlight = true
+
+        // Pin the rebuild clock to the load that triggered it, so the open-week
+        // boundary the background rebuild uses matches the cache-first read.
+        let clock = lastLoad?.now ?? Date()
+        Task.detached(priority: .utility) {
+            // Fresh background context on the same container — NOT the view's
+            // MainActor context — so the unbounded historical fetch + save runs
+            // entirely off the main thread. Mirrors backfillMissingSummaries.
+            let ctx = ModelContext(container)
+            Self.rebuildAggregates(context: ctx, now: clock)
+
+            await MainActor.run {
+                self.rebuildInFlight = false
+                guard let last = self.lastLoad else { return }
+                // Re-aggregate into the SAME context the view passed to
+                // loadAnalytics (stashed in lastLoad), which now sees the buckets
+                // persisted by the background context. Safe to reuse the
+                // non-Sendable context here: this block runs on the MainActor, the
+                // same actor that wrote lastLoad, so it never crosses actors.
+                self.aggregate(window: last.window, context: last.context, now: last.now)
+            }
+        }
+    }
+
     private func applyTrends(_ result: (insights: [TrendInsight], gateMessage: String?)) {
         trendInsights = result.insights
         trendGateMessage = result.gateMessage
     }
 
-    /// Builds the detail payload for one drive. The only code path that
-    /// decodes a GPS blob on behalf of the UI.
-    nonisolated static func buildDriveDetail(for record: DriveRecord) -> DriveDetail {
-        let points = record.rawGPSPoints
-        let speedPoints = buildSpeedChart(points: points)
-        return DriveDetail(
+    /// Captures everything `buildDriveDetail` needs from a (non-Sendable)
+    /// DriveRecord into a Sendable snapshot. MUST run on the MainActor — it
+    /// faults the GPS blob and the `associatedCommute` relationship — so the
+    /// detached decode never touches the @Model off-actor.
+    @MainActor
+    static func snapshot(of record: DriveRecord) -> DriveRecordSnapshot {
+        DriveRecordSnapshot(
             id: record.id,
             title: record.associatedCommute?.name ?? "Drive",
             startedAt: record.startedAt,
@@ -283,9 +341,27 @@ final class AnalyticsService {
             trafficSeconds: record.trafficDurationSeconds ?? 0,
             maxSpeedMps: record.maxSpeedMps,
             averageSpeedMps: record.averageSpeedMps,
+            points: record.rawGPSPoints
+        )
+    }
+
+    /// Builds the detail payload for one drive from a Sendable snapshot. The
+    /// only code path that decodes a GPS blob on behalf of the UI — heavy
+    /// (resamples the full trace twice), so callers run it OFF the MainActor
+    /// (see DriveDetailView.task) on the snapshot captured by `snapshot(of:)`.
+    nonisolated static func buildDriveDetail(from snapshot: DriveRecordSnapshot) -> DriveDetail {
+        let speedPoints = buildSpeedChart(points: snapshot.points)
+        return DriveDetail(
+            id: snapshot.id,
+            title: snapshot.title,
+            startedAt: snapshot.startedAt,
+            durationSeconds: snapshot.durationSeconds,
+            trafficSeconds: snapshot.trafficSeconds,
+            maxSpeedMps: snapshot.maxSpeedMps,
+            averageSpeedMps: snapshot.averageSpeedMps,
             speedPoints: speedPoints,
             trafficRanges: trafficRanges(in: speedPoints),
-            routeSamples: buildRouteSamples(points: points)
+            routeSamples: buildRouteSamples(points: snapshot.points)
         )
     }
 

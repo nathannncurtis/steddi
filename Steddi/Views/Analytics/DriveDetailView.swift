@@ -37,7 +37,15 @@ struct DriveDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             guard detail == nil else { return }
-            detail = AnalyticsService.buildDriveDetail(for: record)
+            // Capture the record into a Sendable snapshot ON the MainActor (this
+            // touches the @Model), then decode/resample the GPS blob OFF the
+            // MainActor in a detached task. The `.task` body inherits MainActor
+            // isolation, so without the detach the blob decode would run inline
+            // on the main thread and hitch the push transition for long traces.
+            let snapshot = AnalyticsService.snapshot(of: record)
+            detail = await Task.detached(priority: .userInitiated) {
+                AnalyticsService.buildDriveDetail(from: snapshot)
+            }.value
         }
     }
 
