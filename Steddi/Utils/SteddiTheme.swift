@@ -284,6 +284,15 @@ enum SteddiTheme {
     /// every theme even with Reduce Transparency on.
     static let onboardingCardFallbackFill = Color(red: 0.12, green: 0.12, blue: 0.13)
 
+    /// `onboardingCardFallbackFill` as an `RGBColor`, for the contrast math /
+    /// snapshot rendering that must resolve a concrete value. This is the surface
+    /// the theme beat's copy is contrasted against when Liquid Glass is
+    /// unavailable (Reduce Transparency / Increase Contrast): `steddiGlass` then
+    /// paints this solid dark fill instead of the live accent-tinted glass, so
+    /// the on-surface foreground must flip to near-WHITE — not the near-black it
+    /// resolves to over the bright accent glass — or the copy goes invisible.
+    static let onboardingCardFallbackFillRGB = RGBColor(0.12, 0.12, 0.13)
+
     /// Build a dynamic SwiftUI color whose UIKit provider (a) reads the live
     /// `ThemeEngine.snapshot` so the value is always current, and (b) touches
     /// `traitCollection.themeRevision` so the provider registers a dependency on

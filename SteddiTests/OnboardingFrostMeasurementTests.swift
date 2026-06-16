@@ -103,4 +103,70 @@ struct OnboardingFrostMeasurementTests {
         #expect(renderedLum <= constantLum + 0.01,
                 "rendered scrim \(renderedLum) should be no lighter than the pinned constant \(constantLum)")
     }
+
+    // MARK: - THEME beat under Reduce Transparency / Increase Contrast (dark fallback)
+
+    /// The THEME beat keeps no dark scrim — its glass is accent-tinted. But when
+    /// Liquid Glass is UNAVAILABLE (Reduce Transparency / Increase Contrast),
+    /// `steddiGlass` discards the accent and paints the solid dark
+    /// `onboardingCardFallbackFill` (at `navSurfaceOpacity`) over the cinematic
+    /// backdrop — and the copy must flip to near-WHITE to read on it. The prior
+    /// fix only contrasted against the accent, so near-black copy landed on this
+    /// near-black card: invisible for every accent. This harness renders that
+    /// fallback surface and confirms it's dark enough. The worst case for darkness
+    /// is the Reduce-Transparency (NOT high-contrast) path, where the fill is at
+    /// 0.9 opacity over the dark backdrop — the LIGHTEST plausible glass-off
+    /// composite. We render exactly that.
+    private var themeFallbackCard: some View {
+        ZStack {
+            // The theme beat's backdrop: a dark gradient with a faint accent band
+            // (the accent here is the LIGHTEST swatch, gold, the worst case for a
+            // dark composite — but it only feeds the faint 0.10 middle band).
+            LinearGradient(
+                colors: [Color.black.opacity(0.92),
+                         SteddiTheme.AccentOption.gold.color.opacity(0.10),
+                         Color.black.opacity(0.96)],
+                startPoint: .top, endPoint: .bottom)
+            RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge)
+                .fill(SteddiTheme.onboardingCardFallbackFill
+                    .opacity(SteddiTheme.navSurfaceOpacity(0.9, highContrast: false)))
+                .frame(width: 300, height: 200)
+        }
+    }
+
+    @Test("the theme-beat Reduce-Transparency fallback card renders DARK so near-white copy reads")
+    func themeFallbackRendersDark() {
+        // Sample the actual composited fallback card surface (no accent tint —
+        // glass is off). It must render DARK (below the 0.179 WCAG flip), so the
+        // theme-beat copy flips to near-white and reads — the Reduce-Transparency
+        // path the prior fix left invisible.
+        let sampled = centrePixel(themeFallbackCard, size: CGSize(width: 340, height: 260))
+        let lum = ContrastRatio.relativeLuminance(sampled)
+        #expect(lum < ContrastRatio.foregroundFlipLuminance,
+                "rendered theme fallback surface luminance = \(lum) (sRGB \(sampled)); want a dark surface (< 0.179) so near-white copy reads")
+        // Near-white copy (what `contrastingForeground` resolves on this dark
+        // surface) clears the AA body floor on the SAMPLED pixel, not just the
+        // modelled constant.
+        let nearWhite = ContrastRatio.near.white
+        let copyOnSampled = ContrastRatio.ratio(nearWhite, sampled)
+        #expect(copyOnSampled >= ContrastRatio.aaBody,
+                "near-white copy on the rendered theme fallback = \(copyOnSampled), want >= 4.5")
+    }
+
+    @Test("the modelled theme fallback surface is no lighter than the rendered fallback card")
+    func themeFallbackModelIsConservative() {
+        // `ThemeBeatSurface.cardShell(.., glassAvailable: false)` is exactly
+        // `onboardingCardFallbackFillRGB`; the pure-math contrast tests size the
+        // near-white copy against it. It must be a worst-case (>= as light as) the
+        // real rendered fallback composite, so every modelled ratio is a lower
+        // bound the render beats.
+        let sampled = centrePixel(themeFallbackCard, size: CGSize(width: 340, height: 260))
+        let renderedLum = ContrastRatio.relativeLuminance(sampled)
+        let modelLum = ContrastRatio.relativeLuminance(
+            ThemeBeatSurface.cardShell(accent: SteddiTheme.AccentOption.gold.rgb, glassAvailable: false))
+        #expect(modelLum < ContrastRatio.foregroundFlipLuminance,
+                "theme fallback model luminance \(modelLum) should be dark (< 0.179)")
+        #expect(renderedLum <= modelLum + 0.01,
+                "rendered theme fallback \(renderedLum) should be no lighter than the pinned model \(modelLum)")
+    }
 }
