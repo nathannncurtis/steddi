@@ -28,7 +28,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     lazy var commuteNotificationService: CommuteNotificationService = {
         CommuteNotificationService(
             modelContainer: modelContainer,
-            locationProvider: { [weak self] in self?.locationService.currentLocation }
+            // The notification/idle-ETA pass runs off the main actor on the
+            // cooperative pool, so it must NOT synchronously read
+            // `@MainActor LocationService.currentLocation` (a data race against
+            // the CoreLocation main-actor write). Read the process-wide,
+            // lock-guarded `LastKnownLocation` instead — it is Sendable, safe
+            // from any actor, and `LocationService` publishes every fix to it.
+            locationProvider: { LastKnownLocation.current }
         )
     }()
 

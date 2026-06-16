@@ -41,6 +41,14 @@ final class Commute {
     @Relationship(deleteRule: .cascade, inverse: \CommuteTrip.commute)
     var trips: [CommuteTrip]?
 
+    /// Historical drives associated with this commute. Back-reference for
+    /// `DriveRecord.associatedCommute`, which owns the `.nullify` delete rule and
+    /// the `inverse:` declaration. Drives are intentionally NOT cascade-deleted —
+    /// analytics retains the drive history after a commute is removed; deleting the
+    /// commute simply nulls each drive's `associatedCommute` instead of leaving a
+    /// dangling reference to an invalidated model.
+    var driveRecords: [DriveRecord]?
+
     /// All routes sorted by rank
     var orderedRoutes: [Route] {
         (routes ?? []).sorted { $0.rank < $1.rank }

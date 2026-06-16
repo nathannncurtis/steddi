@@ -779,8 +779,13 @@ struct HomeView: View {
 
         startLocationFeed()
 
-        // Start Live Activity
-        LiveActivityService.shared.startActivity(destinationName: destName, tripContext: liveActivityTripContext)
+        // Start Live Activity, seeded with the route's real ETA/distance so the
+        // Lock Screen / Dynamic Island never show "0 min" before the first update.
+        LiveActivityService.shared.startActivity(
+            destinationName: destName,
+            engine: engine,
+            tripContext: liveActivityTripContext
+        )
 
         withAnimation(TransitionKit.standardEntrance) {
             isNavigating = true
@@ -1397,8 +1402,13 @@ struct HomeView: View {
 
         startLocationFeed()
 
-        // Start Live Activity
-        LiveActivityService.shared.startActivity(destinationName: destName, tripContext: liveActivityTripContext)
+        // Start Live Activity, seeded with the route's real ETA/distance so the
+        // Lock Screen / Dynamic Island never show "0 min" before the first update.
+        LiveActivityService.shared.startActivity(
+            destinationName: destName,
+            engine: engine,
+            tripContext: liveActivityTripContext
+        )
 
         withAnimation(TransitionKit.standardEntrance) {
             isNavigating = true

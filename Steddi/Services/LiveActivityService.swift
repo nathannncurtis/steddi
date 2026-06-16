@@ -22,20 +22,44 @@ final class LiveActivityService {
     private init() {}
 
     /// Start a Live Activity for the current navigation session.
-    func startActivity(destinationName: String, tripContext: TripActivityContext? = nil) {
+    ///
+    /// `engine` seeds the initial ContentState from the route's real estimate
+    /// (`originalExpectedTravelTime` / `totalRouteDistance`, both set by
+    /// `startNavigation` before this is called) so the Lock Screen / Dynamic Island
+    /// never flash "0 min" / "0m" for the first few seconds until the first update
+    /// tick lands. Pass `nil` only if no engine estimate exists yet.
+    func startActivity(
+        destinationName: String,
+        engine: NavigationEngine? = nil,
+        tripContext: TripActivityContext? = nil
+    ) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
         self.tripContext = tripContext
         let attributes = NavigationAttributes(destinationName: destinationName)
+
+        // Seed from the route's expected travel time / total distance so the very
+        // first render shows a real ETA. The location-driven fields aren't known
+        // yet, so the engine's own `etaMinutes`/`distanceRemaining` are 0 at start
+        // — derive the seed straight from the route estimate instead.
+        let seedEtaSeconds = engine?.originalExpectedTravelTime ?? 0
+        let seedDistanceMeters = engine?.totalRouteDistance ?? 0
+        let seedEtaMinutes = seedEtaSeconds > 0 ? max(1, Int((seedEtaSeconds / 60).rounded())) : 0
+        let seedDistance = seedDistanceMeters > 0
+            ? NavigationEngine.formatDistance(seedDistanceMeters) : ""
+        let seedArrival = seedEtaSeconds > 0
+            ? NavigationEngine.formatArrivalTime(seedEtaSeconds) : ""
+
         let initialState = NavigationAttributes.ContentState(
-            instruction: "Starting navigation...",
-            stepDistance: "",
-            etaMinutes: 0,
-            distanceRemaining: "",
-            arrivalTime: "",
-            maneuverSymbol: "arrow.up",
+            instruction: engine?.instruction.isEmpty == false
+                ? engine!.instruction : "Starting navigation...",
+            stepDistance: engine?.stepDistance ?? "",
+            etaMinutes: seedEtaMinutes,
+            distanceRemaining: seedDistance,
+            arrivalTime: seedArrival,
+            maneuverSymbol: engine?.maneuverType ?? "arrow.up",
             speedMph: 0,
-            roadName: "",
+            roadName: engine?.roadName ?? "",
             tripName: tripContext?.tripName,
             legIndex: tripContext?.legIndex,
             totalLegs: tripContext?.totalLegs

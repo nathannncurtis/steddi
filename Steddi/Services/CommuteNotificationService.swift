@@ -49,7 +49,11 @@ final class CommuteNotificationService {
     private let weatherService: CommuteWeatherService
     private let notificationCenter: CommuteNotificationCenter
     private let directionsService: DirectionsService
-    private let locationProvider: () -> CLLocation?
+    /// Current coordinate for the off-actor notification/idle-ETA pass. `@Sendable`
+    /// and coordinate-typed (not `CLLocation`) so it can be invoked safely from the
+    /// cooperative pool without touching `@MainActor LocationService` state — the
+    /// default supplies the lock-guarded process-wide `LastKnownLocation`.
+    private let locationProvider: @Sendable () -> CLLocationCoordinate2D?
     private let defaults: UserDefaults
 
     // MARK: Observable State
@@ -62,7 +66,7 @@ final class CommuteNotificationService {
         weatherService: CommuteWeatherService = CommuteWeatherService(),
         notificationCenter: CommuteNotificationCenter = .shared,
         directionsService: DirectionsService = DirectionsService(),
-        locationProvider: @escaping () -> CLLocation? = { nil },
+        locationProvider: @escaping @Sendable () -> CLLocationCoordinate2D? = { nil },
         defaults: UserDefaults = .standard
     ) {
         self.modelContainer = modelContainer
@@ -365,7 +369,7 @@ final class CommuteNotificationService {
         // Live ETA only when a fix exists; otherwise fall back to typical so the
         // widget still shows something useful before the first drive.
         var etaSeconds: TimeInterval?
-        if let here = locationProvider()?.coordinate, let dest = snapshot.destinationCoordinate {
+        if let here = locationProvider(), let dest = snapshot.destinationCoordinate {
             do {
                 etaSeconds = try await directionsService.fetchDirectETA(from: here, to: dest)
             } catch {
@@ -390,7 +394,7 @@ final class CommuteNotificationService {
         // — log it so a suppressed notification is diagnosable. The decision
         // engine falls back to the typical duration below when currentETA is nil.
         var currentETA: TimeInterval?
-        if let here = locationProvider()?.coordinate, let dest = snapshot.destinationCoordinate {
+        if let here = locationProvider(), let dest = snapshot.destinationCoordinate {
             do {
                 currentETA = try await directionsService.fetchDirectETA(from: here, to: dest)
             } catch {
