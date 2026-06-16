@@ -73,3 +73,28 @@ struct VoiceGuidanceDistancePhraseTests {
         #expect(VoiceGuidanceService.distancePhrase(meters: 10.4 * 1609.34) == "In 10 miles")
     }
 }
+
+// MARK: - Main-actor isolation
+
+// VoiceGuidanceService is @MainActor: speak()/stop() drive the @MainActor
+// AudioDuckingService directly (no more MainActor.assumeIsolated precondition
+// that would FATAL-TRAP an off-main caller). This @MainActor suite proves the
+// main-actor call path compiles and runs without trapping; an off-actor caller
+// is now a compile-time error.
+@Suite("VoiceGuidanceService main-actor isolation", .serialized)
+@MainActor
+struct VoiceGuidanceIsolationTests {
+
+    @Test("speak then stop on the main actor does not trap")
+    func speakStopOnMainActorIsSafe() {
+        let service = VoiceGuidanceService.shared
+        let wasEnabled = service.enabled
+        service.enabled = true
+        // Drives AudioDuckingService.activate/deactivateForVoiceGuidance under
+        // the hood — reaching the end without a fatal trap is the assertion.
+        service.speak("Turn left onto Main Street")
+        service.stop()
+        service.enabled = wasEnabled
+        #expect(Bool(true))
+    }
+}

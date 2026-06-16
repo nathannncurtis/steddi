@@ -60,6 +60,14 @@ enum HapticLevel: String, CaseIterable, Identifiable {
 }
 
 /// Centralized haptic feedback service.
+///
+/// `@MainActor`-isolated because it owns `UIFeedbackGenerator`s, which are
+/// main-thread-only UIKit types: firing them off the main actor is a data race
+/// that silently degrades or drops haptics. Every caller (NavigationEngine and
+/// the SwiftUI views) is already main-actor, so this isolation is a runtime
+/// no-op today while making any future off-actor `fire()`/`prepare()` a
+/// compile-time error instead of an unsafe call.
+@MainActor
 final class HapticService {
     static let shared = HapticService()
 

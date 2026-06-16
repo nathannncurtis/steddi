@@ -129,4 +129,30 @@ final class HapticServiceIntensityTests {
             #expect(service.intensity(for: event) == event.dynamicDefault)
         }
     }
+
+    // MARK: - Main-actor isolation
+
+    // HapticService is @MainActor (it owns main-thread-only UIFeedbackGenerators).
+    // This test runs in a @MainActor suite, so the fact that it COMPILES proves
+    // fire/preview/notify are reachable on the main actor; at runtime they must
+    // drive the generators without trapping. Off-actor callers are now a
+    // compile-time error rather than an unsafe data race.
+    @Test("Firing every event on the main actor does not trap")
+    func fireOnMainActorIsSafe() {
+        // Exercise across all levels so each generator path (light/medium/heavy/
+        // notification) is touched.
+        for level in HapticLevel.allCases {
+            defaults.set(level.rawValue, forKey: "steddi.hapticLevel")
+            let service = HapticService(defaults: defaults)
+            for event in HapticEvent.allCases {
+                service.fire(event)
+                service.preview(event)
+            }
+            service.notify(.success)
+            service.notify(.warning)
+            service.notify(.error)
+        }
+        // Reaching here without a fatal trap is the assertion.
+        #expect(Bool(true))
+    }
 }
