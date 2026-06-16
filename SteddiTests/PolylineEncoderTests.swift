@@ -102,6 +102,37 @@ struct PolylineEncoderTests {
         #expect(decoded == nil || decoded?.isEmpty == true)
     }
 
+    @Test("Encoding a non-finite coordinate does not trap")
+    func nonFiniteCoordinateDoesNotTrap() {
+        // A NaN/±Inf lat or lon (e.g. a degenerate map-match projection or a
+        // divide-by-zero while stitching legs) would otherwise trap the
+        // Int(round(...)) conversion and crash the app. The bad point is skipped
+        // so the surviving coordinates still encode and round-trip cleanly.
+        let good1 = CLLocationCoordinate2D(latitude: 38.5, longitude: -120.2)
+        let good2 = CLLocationCoordinate2D(latitude: 40.7, longitude: -120.95)
+        let bad: [CLLocationCoordinate2D] = [
+            CLLocationCoordinate2D(latitude: .nan, longitude: -120.2),
+            CLLocationCoordinate2D(latitude: 38.5, longitude: .nan),
+            CLLocationCoordinate2D(latitude: .infinity, longitude: -120.2),
+            CLLocationCoordinate2D(latitude: 38.5, longitude: -.infinity),
+        ]
+
+        for badPoint in bad {
+            // The key assertion is simply that this returns at all (no trap).
+            let encoded = PolylineEncoder.encode([good1, badPoint, good2])
+            let decoded = PolylineEncoder.decode(encoded)
+            // Bad point dropped; the two finite points survive and round-trip.
+            #expect(decoded.count == 2)
+            #expect(abs(decoded[0].latitude - good1.latitude) < 0.000001)
+            #expect(abs(decoded[0].longitude - good1.longitude) < 0.000001)
+            #expect(abs(decoded[1].latitude - good2.latitude) < 0.000001)
+            #expect(abs(decoded[1].longitude - good2.longitude) < 0.000001)
+        }
+
+        // An all-non-finite sequence encodes to empty rather than trapping.
+        #expect(PolylineEncoder.encode([bad[0]]).isEmpty)
+    }
+
     @Test("Many coordinates round-trip")
     func manyCoordinates() {
         var coords: [CLLocationCoordinate2D] = []

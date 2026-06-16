@@ -6,6 +6,17 @@ import CoreLocation
 enum PolylineEncoder {
 
     /// Encode coordinates to a polyline string.
+    ///
+    /// A non-finite coordinate (NaN/±Inf, e.g. from a degenerate map-match
+    /// projection, a divide-by-zero while stitching legs, or a corrupt persisted
+    /// leg) would otherwise trap the `Int(round(...))` conversion below — `Int(_:)`
+    /// of a NaN/infinite `Double` is a hard runtime trap in Swift, crashing the
+    /// whole app at encode time. Such a point is silently skipped so the rest of
+    /// the polyline still encodes (a recoverable, slightly-shortened line) rather
+    /// than crashing — mirroring the defensive posture already taken on `decode`
+    /// and in `RoadGraphSerializer`. The delta is taken against the previous
+    /// *encoded* point, so dropping one coordinate keeps every surviving point
+    /// correct.
     static func encode(_ coordinates: [CLLocationCoordinate2D], precision: Int = 6) -> String {
         let factor = pow(10.0, Double(precision))
         var output = ""
@@ -13,6 +24,7 @@ enum PolylineEncoder {
         var prevLng = 0
 
         for coord in coordinates {
+            guard coord.latitude.isFinite, coord.longitude.isFinite else { continue }
             let lat = Int(round(coord.latitude * factor))
             let lng = Int(round(coord.longitude * factor))
 
