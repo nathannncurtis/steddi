@@ -80,7 +80,13 @@ enum RoadGraphBuilder {
             let present = way.nodeIDs.filter { nodeAcc[$0] != nil }
             guard present.count >= 2 else { continue }
             validWays.append((id: way.id, nodeIDs: present, tags: way.tags))
-            for nodeID in present {
+            // Count DISTINCT ways through each node, not raw references. A way
+            // that touches the same node twice (loop / figure-eight) must add 1,
+            // not 2 — otherwise a single self-touching way would push its own
+            // node to refCount ≥ 2 and wrongly flag it `isIntersection` even
+            // though only ONE way passes through it. A node is an intersection
+            // only when a SECOND distinct way also references it.
+            for nodeID in Set(present) {
                 nodeAcc[nodeID]?.wayRefCount += 1
             }
         }
