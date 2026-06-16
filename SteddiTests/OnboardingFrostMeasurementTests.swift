@@ -134,7 +134,7 @@ struct OnboardingFrostMeasurementTests {
         }
     }
 
-    @Test("the theme-beat Reduce-Transparency fallback card renders DARK so near-white copy reads")
+    @Test("the theme-beat Reduce-Transparency fallback card renders DARK so near-white copy reads WITH MARGIN")
     func themeFallbackRendersDark() {
         // Sample the actual composited fallback card surface (no accent tint —
         // glass is off). It must render DARK (below the 0.179 WCAG flip), so the
@@ -145,12 +145,89 @@ struct OnboardingFrostMeasurementTests {
         #expect(lum < ContrastRatio.foregroundFlipLuminance,
                 "rendered theme fallback surface luminance = \(lum) (sRGB \(sampled)); want a dark surface (< 0.179) so near-white copy reads")
         // Near-white copy (what `contrastingForeground` resolves on this dark
-        // surface) clears the AA body floor on the SAMPLED pixel, not just the
-        // modelled constant.
+        // surface) clears the AA body floor WITH MARGIN (>= 5:1) on the SAMPLED
+        // pixel, not just the modelled constant.
         let nearWhite = ContrastRatio.near.white
         let copyOnSampled = ContrastRatio.ratio(nearWhite, sampled)
-        #expect(copyOnSampled >= ContrastRatio.aaBody,
-                "near-white copy on the rendered theme fallback = \(copyOnSampled), want >= 4.5")
+        #expect(copyOnSampled >= 5.0,
+                "near-white copy on the rendered theme fallback = \(copyOnSampled), want >= 5.0 (margin)")
+    }
+
+    // MARK: - THEME beat with glass ON (partial dark scrim over the accent tint)
+
+    /// The theme beat keeps its glass ACCENT-tinted (the delight peak), but it is
+    /// no longer scrim-exempt: a PARTIAL dark scrim (`ThemeBeatSurface
+    /// .themeScrimOpacity`) sits behind its content so the accent tint glows through
+    /// while the surface goes reliably DARK. The OLD model assumed the bare raw
+    /// accent (light) and chose near-black copy, but the REAL tinted glass composites
+    /// DARKER over the dark backdrop, so near-black landed AT/below the AA floor.
+    /// This harness renders the PARTIAL scrim over the LIGHTEST plausible tinted
+    /// glass (the worst case for the surface being too light for near-white copy) and
+    /// confirms, per accent, that the composited surface is dark enough for near-white
+    /// to clear AA WITH MARGIN — the definitive end to the recurring theme-beat bug.
+    ///
+    /// The lightest plausible tinted glass is modelled as the accent mixed halfway
+    /// toward a light neutral frost (`ThemeBeatSurface.tintedGlassLightest`); the
+    /// real live glass over the dark backdrop renders DARKER than this, so the
+    /// asserted near-white ratio is a lower bound the device beats.
+    private func themeGlassOnCard(accent: SteddiTheme.AccentOption) -> some View {
+        let lightest = ThemeBeatSurface.tintedGlassLightest(accent: accent.rgb)
+        return ZStack {
+            // A dark cinematic backdrop with the accent glow, as the card floats on.
+            LinearGradient(
+                colors: [Color.black.opacity(0.92),
+                         accent.color.opacity(0.10),
+                         Color.black.opacity(0.96)],
+                startPoint: .top, endPoint: .bottom)
+            // The lightest plausible accent-tinted glass...
+            RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge)
+                .fill(lightest.color)
+                .frame(width: 300, height: 200)
+                // ...with the PARTIAL dark scrim painted over it (matching the view).
+                .overlay {
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusLarge)
+                        .fill(SteddiTheme.onboardingCardFallbackFill
+                            .opacity(ThemeBeatSurface.themeScrimOpacity))
+                        .frame(width: 300, height: 200)
+                }
+        }
+    }
+
+    @Test("the theme-beat glass-ON card (partial scrim over the tint) renders DARK so near-white copy clears AA WITH MARGIN, every accent")
+    func themeGlassOnRendersDarkEveryAccent() {
+        for accent in SteddiTheme.AccentOption.allCases {
+            let sampled = centrePixel(themeGlassOnCard(accent: accent),
+                                      size: CGSize(width: 340, height: 260))
+            let lum = ContrastRatio.relativeLuminance(sampled)
+            #expect(lum < ContrastRatio.foregroundFlipLuminance,
+                    "theme glass-on \(accent.rawValue) surface luminance = \(lum) (sRGB \(sampled)); want dark (< 0.179) so near-white copy reads")
+            // Near-white copy on the SAMPLED composited pixel must clear AA with
+            // margin for every accent — the guarantee that ends the bug.
+            let copyOnSampled = ContrastRatio.ratio(ContrastRatio.near.white, sampled)
+            #expect(copyOnSampled >= 5.0,
+                    "theme glass-on \(accent.rawValue): near-white copy on the rendered surface = \(copyOnSampled), want >= 5.0 (margin)")
+        }
+    }
+
+    @Test("the modelled theme glass-ON shell is no lighter than the rendered partial-scrim composite, every accent")
+    func themeGlassOnModelIsConservative() {
+        // `ThemeBeatSurface.cardShell(.., glassAvailable: true)` is the value the
+        // pure-math contrast tests size near-white against; it must be a worst-case
+        // (>= as light as) the real rendered partial-scrim composite, so every
+        // modelled ratio is a lower bound the render beats. (The model composites
+        // the scrim over the SAME lightest-plausible tinted glass this harness
+        // renders, so they should match to within rounding.)
+        for accent in SteddiTheme.AccentOption.allCases {
+            let sampled = centrePixel(themeGlassOnCard(accent: accent),
+                                      size: CGSize(width: 340, height: 260))
+            let renderedLum = ContrastRatio.relativeLuminance(sampled)
+            let modelLum = ContrastRatio.relativeLuminance(
+                ThemeBeatSurface.cardShell(accent: accent.rgb, glassAvailable: true))
+            #expect(modelLum < ContrastRatio.foregroundFlipLuminance,
+                    "theme glass-on model luminance \(accent.rawValue) = \(modelLum) should be dark (< 0.179)")
+            #expect(renderedLum <= modelLum + 0.02,
+                    "rendered theme glass-on \(accent.rawValue) = \(renderedLum) should be no lighter than the model \(modelLum)")
+        }
     }
 
     @Test("the modelled theme fallback surface is no lighter than the rendered fallback card")

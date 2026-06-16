@@ -31,33 +31,38 @@ struct OnboardingThemeView: View {
         (.light, "sun.max.fill", "Light", "Always light", false),
     ]
 
-    // MARK: - On-surface legible foreground (the theme beat has no dark scrim)
+    // MARK: - On-surface legible foreground (the theme beat now has a partial scrim)
     //
-    // The theme beat is the one showcase beat that keeps its glass ACCENT-TINTED
-    // (the delight peak — a swatch tap recolors the card live), so it is exempt
-    // from the deterministic dark scrim every other beat uses. That left the
-    // fixed-white copy sitting directly on a bright accent surface, failing AA on
-    // the light accents (gold subtitle 2.26:1; selected 'Light' description
-    // 1.92:1 — the worst string in the flow). Instead of forcing the copy white,
-    // every label / description / icon / 'Recommended' chip on this beat resolves
-    // its color from `SteddiTheme.contrastingForeground(on:)` against the ACTUAL
-    // surface it sits on.
+    // The theme beat keeps its glass ACCENT-TINTED (the delight peak — a swatch tap
+    // recolors the card live), but it is NO LONGER exempt from a dark scrim. It used
+    // to be: the card was the bare accent-tinted glass, and the copy resolved near-
+    // black on the assumed-bright accent. But the REAL tinted glass composites
+    // DARKER than the raw accent over the dark cinematic backdrop, so the near-black
+    // copy landed at only ~4.2–4.5:1 (AT/below the AA floor) on the default lavender
+    // and worse on the darker accents — the composited tinted surface sits in the
+    // worst luminance band where no fixed copy color clears a 5:1 margin.
     //
-    // CRITICAL — the card has TWO surfaces. When Liquid Glass is AVAILABLE the
-    // card is the bright accent-tinted glass, so the foreground resolves near-
-    // black on the light accents and clears AA. But when glass is UNAVAILABLE
-    // (Reduce Transparency OR Increase Contrast — `SteddiGlass.isAvailable`),
-    // `OnboardingShowpieceCard` (via `steddiGlass`) discards the accent tint and
-    // paints the solid DARK `onboardingCardFallbackFill`. Contrasting against the
-    // bright accent there would resolve near-black on near-black — invisible for
-    // EVERY accent (the Reduce-Transparency bug). So the surface model BRANCHES on
-    // glass availability: accent shell when glass is on, the dark fallback fill
-    // when it's off (→ near-white copy). `glassAvailable` is the single seam;
-    // `ThemeContrastTests.onboardingTheme*` assert AA in BOTH states.
+    // THE FIX — `OnboardingShowpieceCard` now paints a PARTIAL dark scrim
+    // (`ThemeBeatSurface.themeScrimOpacity`) behind the theme beat too, so the
+    // accent tint still glows through (~35%, delight preserved) while the surface
+    // goes reliably DARK. The copy therefore resolves near-WHITE on that dark
+    // surface in BOTH glass states and clears AA with MARGIN (≥5:1 body) for every
+    // accent. Each label / description / icon / 'Recommended' chip / ring still
+    // resolves its color from `contrastingForeground(on:)` against the ACTUAL
+    // (now dark) surface it sits on — robust if the tint is ever retuned.
+    //
+    // The model still BRANCHES on glass availability so the surface stays faithful:
+    // scrim-over-tinted-glass when glass is on, the solid dark fallback fill when
+    // it's off (Reduce Transparency OR Increase Contrast — `SteddiGlass.isAvailable`,
+    // discarding the accent). Both surfaces are dark → near-white copy either way.
+    // `glassAvailable` is the single seam; `ThemeContrastTests.onboardingTheme*`
+    // assert ≥5:1 in BOTH states and `OnboardingFrostMeasurementTests` confirm the
+    // rendered composite is no lighter than the model.
 
     /// The card-shell surface the bare copy (header, section titles/subtitles)
-    /// sits on, branched on glass availability: the live accent tint when glass
-    /// renders, the dark Reduce-Transparency fallback fill when it doesn't.
+    /// sits on, branched on glass availability: the partial scrim over the accent-
+    /// tinted glass when glass renders, the dark Reduce-Transparency fallback fill
+    /// when it doesn't. Dark in both states → near-white copy either way.
     private var cardSurface: RGBColor {
         ThemeBeatSurface.cardShell(accent: coordinator.selectedAccent.rgb,
                                    glassAvailable: glassAvailable)
@@ -67,10 +72,10 @@ struct OnboardingThemeView: View {
     private var onCardPrimary: Color { SteddiTheme.contrastingForeground(on: cardSurface) }
 
     /// Foreground for a theme-selection card row, contrasted against THAT card's
-    /// own composited surface. With glass on, the row draws a white wash over the
-    /// accent shell (`.opacity(0.18)` selected / `.opacity(0.08)` deselected),
-    /// which only LIGHTENS the surface; with glass off the row sits on the dark
-    /// fallback (no accent to wash) and the foreground flips to near-white.
+    /// own composited surface. The row draws a small white wash over the (scrimmed,
+    /// dark) shell (`.opacity(0.12)` selected / `.opacity(0.05)` deselected) which
+    /// only lightens it a little, so the surface stays dark and the foreground
+    /// resolves near-white in both glass states.
     private func onThemeCard(selected: Bool) -> Color {
         SteddiTheme.contrastingForeground(on: themeCardSurface(selected: selected))
     }
@@ -124,16 +129,15 @@ struct OnboardingThemeView: View {
         VStack(spacing: 8) {
             Image(systemName: "paintpalette.fill")
                 .font(.system(size: 56))
-                // On-surface legible, NOT fixed white: the card shell is tinted to
-                // the chosen accent, so on the light accents white collapsed to
-                // ~2.3:1. `onCardPrimary` resolves near-black on light accents
-                // (and would stay white on a dark one), so the glyph reads on every
-                // tint — the same on-surface rule the copy below follows.
+                // On-surface legible: the card shell is the partial dark scrim over
+                // the accent-tinted glass, so `onCardPrimary` resolves near-white
+                // and the glyph reads on every accent in both glass states — the
+                // same on-surface rule the copy below follows.
                 .foregroundStyle(onCardPrimary)
             Text("Make it yours")
                 .font(.title.weight(.bold))
-                // On-surface legible against the accent-tinted shell (see
-                // `onCardPrimary`): fixed white failed AA on the light accents.
+                // On-surface legible against the scrimmed (dark) shell (see
+                // `onCardPrimary`): resolves near-white, clears AA with margin.
                 .foregroundStyle(onCardPrimary)
         }
     }
@@ -145,13 +149,11 @@ struct OnboardingThemeView: View {
                 .foregroundStyle(onCardPrimary)
             Text(subtitle)
                 .font(.subheadline)
-                // The subtitle sits on the same accent shell; resolve it on-surface
-                // (was fixed white-.92, the worst bare-glass string — gold 2.26:1).
-                // Kept at full opacity, NOT dimmed: a body-size subheadline must
-                // clear the 4.5 AA floor, and on the conservative raw-accent model
-                // a dimmed near-black would dip below it (ocean/slate ~4.2). The
-                // smaller, regular-weight font already ranks it below the headline
-                // title.
+                // The subtitle sits on the same scrimmed (dark) shell; resolve it
+                // on-surface (near-white). Kept at full opacity, NOT dimmed: a
+                // body-size subheadline must clear the 4.5 AA floor with margin, and
+                // a dimmed near-white would eat into the headroom. The smaller,
+                // regular-weight font already ranks it below the headline title.
                 .foregroundStyle(onCardPrimary)
         }
     }
@@ -243,10 +245,10 @@ struct OnboardingThemeView: View {
     }
 
     /// The selected-swatch ring's primary stroke: the card's contrasting
-    /// foreground (near-black on the light accent card, near-white on the dark
-    /// Reduce-Transparency fallback), so the ring clears the 3:1 graphical floor
-    /// on BOTH card surfaces — a fixed white ring fell to ~1.6–2.2:1 on the light
-    /// accents (the bug). Same surface model the copy resolves against.
+    /// foreground (near-white on the scrimmed dark shell in both glass states), so
+    /// the ring clears the 3:1 graphical floor on the card — a fixed white ring fell
+    /// to ~1.6–2.2:1 on the old bare light-accent card (the bug). Same surface model
+    /// the copy resolves against.
     private var selectionRing: RGBColor {
         ContrastRatio.contrastingForeground(on: cardSurface)
     }
@@ -272,9 +274,9 @@ struct OnboardingThemeView: View {
             }
         } label: {
             // Foreground for everything in this row, contrasted against the row's
-            // OWN composited surface (the white wash over the accent shell), so it
-            // reads near-black on light accents and would stay near-white on a dark
-            // one — see `onThemeCard`. The whole row shares one resolved color.
+            // OWN composited surface (the small white wash over the scrimmed dark
+            // shell), so it resolves near-white in both glass states — see
+            // `onThemeCard`. The whole row shares one resolved color.
             let rowForeground = onThemeCard(selected: isSelected)
             HStack(spacing: 14) {
                 Image(systemName: card.icon)
@@ -321,14 +323,16 @@ struct OnboardingThemeView: View {
             }
             .padding(14)
             .background(
-                // A white wash over the accent shell distinguishes the selected row
-                // (0.18) from deselected (0.08). The wash LIGHTENS the surface, so
-                // the row copy contrasts against this composite via `onThemeCard`
-                // (the `themeCardSurface` model is exactly this fill over the
-                // accent). Selection is reinforced by the on-surface border below
-                // and the checkmark.
+                // A white wash over the (scrimmed, dark) card shell distinguishes
+                // the selected row (0.12) from deselected (0.05). The wash LIGHTENS
+                // the surface, so the row copy contrasts against this composite via
+                // `onThemeCard` (the `themeCardSurface` model is exactly this fill
+                // over the scrimmed shell). Kept low so even the selected row stays
+                // dark enough for near-white copy to clear ≥5:1 on every accent (a
+                // 0.18 wash dipped gold to ~4.4:1). Selection is reinforced by the
+                // on-surface border below and the checkmark.
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected ? Color.white.opacity(0.18) : Color.white.opacity(0.08))
+                    .fill(isSelected ? Color.white.opacity(0.12) : Color.white.opacity(0.05))
             )
             .overlay(
                 // Selected border in the row's on-surface foreground (near-black on
@@ -344,15 +348,12 @@ struct OnboardingThemeView: View {
     /// The "Recommended" chip. Its background is SELF-CONTAINED and surface-
     /// independent: the prior `Color.black.opacity(0.35)` capsule was translucent,
     /// so over the bright accent card it stayed light and white text on it fell to
-    /// ~2.95:1 (the comment claimed ~8:1, which only held over a dark card — and
-    /// with glass on the theme beat has no dark card). Instead the capsule is
-    /// filled with a SOLID contrasting tone for the EFFECTIVE card surface (the
-    /// `surface` passed in already branches on glass availability:
-    /// `contrastingForeground(on:)` → near-black on the light accent card, near-
-    /// white on the dark Reduce-Transparency fallback) and the text is the
-    /// contrasting tone for THAT capsule fill — so text-on-chip is a fixed
-    /// black/white pairing at ~17:1 on every accent in both glass states, well
-    /// clear of AA for the small caption2 label.
+    /// ~2.95:1. Instead the capsule is filled with a SOLID contrasting tone for the
+    /// EFFECTIVE card surface (the `surface` passed in branches on glass
+    /// availability and is DARK in both states, so `contrastingForeground(on:)` →
+    /// near-white) and the text is the contrasting tone for THAT capsule fill — so
+    /// text-on-chip is a fixed black/white pairing at ~17:1 on every accent in both
+    /// glass states, well clear of AA for the small caption2 label.
     private func recommendedChip(over surface: RGBColor) -> some View {
         let capsuleFill = SteddiTheme.contrastingForeground(on: surface)
         // The capsule fill is one of the two near-pure endpoints; pick the other
@@ -378,45 +379,87 @@ struct OnboardingThemeView: View {
 /// so the on-surface foreground choice (`contrastingForeground`) is computed
 /// against the same pinned values the unit tests assert — no live-glass guessing.
 ///
-/// The card has TWO surfaces, and the model BRANCHES on `glassAvailable`:
-///   - glass AVAILABLE: the card keeps its glass ACCENT-TINTED (the delight peak),
-///     exempt from the dark scrim the other beats use, so its copy contrasts the
-///     accent (near-black on the light accents).
+/// HISTORY — the 4th-time-recurring theme-beat bug. The theme beat used to keep
+/// its glass accent-tinted with NO scrim, and modelled the glass-on surface as the
+/// RAW accent ("the OS frost only lightens, so raw accent is a conservative dark
+/// bound"). That premise was FALSE: measured on device, the accent-tinted glass
+/// composites DARKER than the raw accent over the dark cinematic backdrop (default
+/// lavender renders ~L0.19–0.21 vs the modelled raw L0.31). The composited tinted
+/// surface sits in the worst luminance band (~0.15–0.25) where NEITHER near-black
+/// nor near-white clears a 5:1 margin, so the near-black copy the old model chose
+/// landed at only ~4.2–4.5:1 (AT/below the AA floor) — and worse on the darker
+/// accents. No fixed copy color can rescue the bare tinted card.
+///
+/// THE DEFINITIVE FIX — the theme beat now gets a PARTIAL dark scrim
+/// (`themeScrimOpacity`) behind its content too (`OnboardingShowpieceCard`), so the
+/// accent tint still glows through (the delight peak) while the surface goes
+/// reliably DARK in BOTH glass states. The copy resolves near-WHITE on that dark
+/// surface either way, clearing AA with MARGIN (≥5:1 body) for every accent:
+///   - glass AVAILABLE: the partial scrim over the (lightest-plausible) tinted
+///     glass — modelled conservatively LIGHT so the asserted near-white ratio is a
+///     lower bound the real, darker render beats.
 ///   - glass UNAVAILABLE (Reduce Transparency / Increase Contrast): `steddiGlass`
-///     paints the solid dark `onboardingCardFallbackFill` instead — the accent
-///     tint is discarded — so the copy must contrast THAT dark fill (→ near-white).
-///     Modelling the accent there is the Reduce-Transparency bug: near-black copy
-///     on a near-black card, invisible for every accent.
+///     paints the solid dark `onboardingCardFallbackFill` (the accent tint is
+///     discarded); the scrim over it stays dark, copy stays near-white.
 ///
 /// These pure functions are the single source of truth the view's `cardSurface` /
-/// `themeCardSurface` delegate to, and that `ThemeContrastTests.onboardingTheme*`
-/// measure the per-accent contrast against in BOTH glass states.
+/// `themeCardSurface` delegate to, that `ThemeContrastTests.onboardingTheme*`
+/// measure the per-accent contrast against in BOTH glass states, and that
+/// `OnboardingFrostMeasurementTests` confirm an ImageRenderer composite is no
+/// lighter than.
 enum ThemeBeatSurface {
+    /// Opacity of the partial dark scrim painted behind the theme beat's content
+    /// (the showcase/ask beats use 0.94). Tuned so the surface — over even the
+    /// LIGHTEST plausible tinted glass — is dark enough that near-white copy clears
+    /// ≥5:1 with margin on every accent, while the accent tint still reads through
+    /// at ~35% so the delight peak survives. Shared by the view's scrim and the
+    /// surface model so they can never disagree.
+    static let themeScrimOpacity: Double = 0.65
+
+    /// The LIGHTEST plausible accent-tinted glass surface (no scrim): the accent
+    /// hue mixed halfway toward a light neutral frost. The live OS glass can render
+    /// the tint anywhere between the dark-composited tint and a lightened frost;
+    /// this is the LIGHT extreme. Modelling the scrim over THIS (rather than the
+    /// dark-composited tint) is the conservative choice for near-white copy — a
+    /// lighter pre-scrim surface yields a lighter post-scrim surface, so the
+    /// asserted near-white ratio is the worst case the real render beats.
+    static func tintedGlassLightest(accent: RGBColor) -> RGBColor {
+        let frost = RGBColor(0.80, 0.80, 0.82)
+        return RGBColor((accent.r + frost.r) / 2,
+                        (accent.g + frost.g) / 2,
+                        (accent.b + frost.b) / 2)
+    }
+
+    /// `top` source-over `bottom` at `opacity`.
+    private static func over(_ top: RGBColor, _ bottom: RGBColor, opacity a: Double) -> RGBColor {
+        RGBColor(top.r * a + bottom.r * (1 - a),
+                 top.g * a + bottom.g * (1 - a),
+                 top.b * a + bottom.b * (1 - a))
+    }
+
     /// The card-shell surface the bare copy (header, section titles/subtitles)
-    /// sits on.
-    ///
-    /// With glass ON, modelled as the RAW accent hue — the DARKEST plausible
-    /// surface, since the OS frost only LIGHTENS the live glass, and for the near-
-    /// black foreground a lighter real surface only raises contrast; so the
-    /// modelled ratio is a conservative lower bound the real card beats (the same
-    /// way the showcase beats pin `OnboardingShowcaseFrost.surface`).
-    ///
-    /// With glass OFF, the surface is the solid dark `onboardingCardFallbackFill`
-    /// `steddiGlass` paints — its source-over composite over the even-darker
-    /// backdrop is darker still, so the bare fill is again the conservative
-    /// (lightest plausible) bound, and near-white copy reads on it.
+    /// sits on. DARK in both glass states (so the copy is always near-white):
+    ///   - glass ON: the partial dark scrim (`themeScrimOpacity`) over the
+    ///     lightest-plausible tinted glass — conservatively light so the model is a
+    ///     lower bound the (darker) real render beats.
+    ///   - glass OFF: the solid dark `onboardingCardFallbackFill` `steddiGlass`
+    ///     paints (its composite over the even-darker backdrop is darker still, so
+    ///     the bare fill is again the conservative bound).
     static func cardShell(accent: RGBColor, glassAvailable: Bool) -> RGBColor {
-        glassAvailable ? accent : SteddiTheme.onboardingCardFallbackFillRGB
+        guard glassAvailable else { return SteddiTheme.onboardingCardFallbackFillRGB }
+        return over(SteddiTheme.onboardingCardFallbackFillRGB,
+                    tintedGlassLightest(accent: accent),
+                    opacity: themeScrimOpacity)
     }
 
     /// The composited surface of a theme-selection card row: the row's white wash
-    /// (`.opacity(0.18)` selected / `.opacity(0.08)` deselected) source-over the
-    /// effective card shell, matching the `RoundedRectangle.fill(.white.opacity)`
-    /// the view draws. With glass on the wash lightens the accent shell; with
-    /// glass off it lightens the dark fallback fill (a small lift that keeps the
-    /// surface dark, so near-white copy still reads).
+    /// (`.opacity(0.12)` selected / `.opacity(0.05)` deselected) source-over the
+    /// effective (scrimmed) card shell, matching the `RoundedRectangle.fill(.white
+    /// .opacity)` the view draws. The wash lightens the dark surface a little; the
+    /// opacities are tuned so even the selected row stays dark enough for near-white
+    /// copy to clear ≥5:1 on every accent (a 0.18 wash dipped gold to ~4.4:1).
     static func themeCard(accent: RGBColor, selected: Bool, glassAvailable: Bool) -> RGBColor {
-        let a = selected ? 0.18 : 0.08
+        let a = selected ? 0.12 : 0.05
         let s = cardShell(accent: accent, glassAvailable: glassAvailable)
         return RGBColor(1 * a + s.r * (1 - a),
                         1 * a + s.g * (1 - a),
