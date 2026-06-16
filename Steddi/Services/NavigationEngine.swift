@@ -709,6 +709,14 @@ final class NavigationEngine {
     /// polyline) we fall back to the proximity-only check — there is no
     /// along-route signal to gate on.
     private func checkArrival(location: CLLocation, projection: RouteProjection?) -> Bool {
+        // One-shot latch: arrival side-effects (haptic / voice / instruction set)
+        // fire ONLY on the transition into arrived. For commute (non-trip) drives
+        // the location feed keeps pumping fixes after arrival (it breaks only when
+        // a trip is active), so without this guard a parked car within proximity
+        // re-fired the arrival buzz + a stuttering "You have arrived" prompt on
+        // every subsequent fix. Returning true preserves the caller's
+        // short-circuit so the rest of updateLocation stays skipped while arrived.
+        guard !hasArrived else { return true }
         guard let lastCoord = routePolylineCoordinates.last else { return false }
         let destination = CLLocation(latitude: lastCoord.latitude, longitude: lastCoord.longitude)
         let withinProximity = location.distance(from: destination) < arrivalDistance

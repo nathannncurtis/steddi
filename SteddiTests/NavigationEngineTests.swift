@@ -1822,4 +1822,61 @@ struct NavigationEngineArrivalTests {
         #expect(engine.hasArrived == true)
         engine.stopNavigation()
     }
+
+    /// Commute (non-trip) regression: the HomeView location feed keeps pumping
+    /// fixes after arrival for commutes (it only breaks on hasArrived when a trip
+    /// is active), so a parked car within proximity used to re-enter checkArrival
+    /// on EVERY fix and re-fire the arrival haptic + a stuttering "You have
+    /// arrived" voice prompt. The one-shot latch must make the arrival side-effect
+    /// block run on the transition fix only. We count the false->true edge of
+    /// hasArrived as a proxy for that block firing (it is gated by the same
+    /// condition), and confirm the arrival instruction is set once and never
+    /// recomputed by later fixes (updateLocation short-circuits while arrived).
+    @Test("Repeated fixes after arrival fire the arrival side-effects exactly once")
+    func arrivalFiresOnceForCommute() {
+        let engine = NavigationEngine()
+        let polyline = (0...20).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        engine.startNavigation(polyline: polyline, steps: silentSteps(along: polyline))
+
+        var arrivalTransitions = 0
+        var t = 0.0
+
+        // Drive to the destination.
+        for c in polyline {
+            let wasArrived = engine.hasArrived
+            engine.updateLocation(fix(lat: c.latitude, lon: c.longitude, t: t))
+            if !wasArrived && engine.hasArrived { arrivalTransitions += 1 }
+            t += 1
+        }
+        #expect(engine.hasArrived == true)
+        #expect(engine.instruction == "You have arrived")
+        #expect(arrivalTransitions == 1)
+
+        // Mutate a field the arrival block sets so we can prove later fixes do NOT
+        // re-run it (the latch short-circuits updateLocation before checkArrival's
+        // firing path). If the guard were missing, the block would reset this.
+        engine.instruction = "SENTINEL"
+
+        // Parked-car jitter: many MORE in-proximity fixes at the destination, each
+        // with a fresh timestamp (the feed gate keys on timestamp, so these all
+        // pass for a commute). None may re-fire arrival.
+        let last = polyline.last!
+        for i in 0..<30 {
+            let wasArrived = engine.hasArrived
+            engine.updateLocation(fix(
+                lat: last.latitude + Double(i) * 0.0000005, // sub-meter jitter, still <50m
+                lon: last.longitude,
+                t: t
+            ))
+            if !wasArrived && engine.hasArrived { arrivalTransitions += 1 }
+            t += 1
+        }
+
+        // Still exactly one arrival transition, and the arrival block never ran
+        // again (our sentinel survives because updateLocation returned early).
+        #expect(arrivalTransitions == 1)
+        #expect(engine.instruction == "SENTINEL")
+        #expect(engine.hasArrived == true)
+        engine.stopNavigation()
+    }
 }

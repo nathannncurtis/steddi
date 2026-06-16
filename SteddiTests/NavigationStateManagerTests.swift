@@ -322,6 +322,43 @@ struct NavigationStateManagerStateTests {
         let manager = NavigationStateManager()
         #expect(manager.maneuverType == "arrow.up")
     }
+
+    /// PhoneCompanionView's "End Navigation" button now routes through
+    /// stopObserving() (it used to only set isNavigating = false directly, which
+    /// bypassed teardown — leaking the rerouteTask, retaining a zombie activeEngine,
+    /// and leaving the widget session marked Navigating). This pins the invariant
+    /// the End button depends on: after a full CarPlay-style session (engine +
+    /// commute + direction, which spins up the periodic reroute task), stopObserving
+    /// severs the engine reference and clears the navigating flag.
+    @Test("stopObserving severs activeEngine after a reroute-bearing session (companion End path)")
+    func stopObservingTearsDownActiveEngine() {
+        let manager = NavigationStateManager()
+        let engine = NavigationEngine()
+        let polyline = (0...10).map { CLLocationCoordinate2D(latitude: 33.0 + Double($0) * 0.001, longitude: -117.0) }
+        engine.startNavigation(
+            polyline: polyline,
+            steps: [
+                NavStep(instruction: "", distance: 1000, coordinate: polyline.first!, maneuverSymbol: "arrow.up"),
+                NavStep(instruction: "", distance: 0, coordinate: polyline.last!, maneuverSymbol: "flag.fill"),
+            ]
+        )
+
+        // Commute + direction => the periodic reroute task is created (the one the
+        // bypassed-teardown bug leaked).
+        manager.startObserving(
+            engine: engine,
+            commute: Commute(name: "Work"),
+            direction: .originToDestination
+        )
+        #expect(manager.isNavigating == true)
+        #expect(manager.activeEngine != nil)
+
+        // What the End button now invokes.
+        manager.stopObserving()
+
+        #expect(manager.isNavigating == false)
+        #expect(manager.activeEngine == nil)
+    }
 }
 
 // MARK: - Pose Copy Tests
