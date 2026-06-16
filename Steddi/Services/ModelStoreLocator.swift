@@ -275,8 +275,28 @@ enum ModelStoreLocator {
             }
         }
 
-        // Legacy read-write fallback: reached only when the migration copy failed
-        // (selection == .legacy) or the group store was never established, so no
+        // Established-source-of-truth guard for the .legacy path. The .group block
+        // above only runs when `selectStoreURL` returned `.group`, which it does
+        // ONLY when `groupURL != nil`. When the App Group container is transiently
+        // nil at boot (data-protection-locked container, momentary unavailability —
+        // exactly the failure the in-block retry exists to ride out), `groupURL` is
+        // nil, `selectStoreURL` returns `.legacy`, and execution would fall straight
+        // to the legacy read-write open below, completely bypassing the
+        // `groupEstablished` guard. For a user who has already migrated (the marker
+        // is set on a prior successful group open), that would open the frozen,
+        // never-deleted pre-migration legacy store read-write — serving stale data
+        // and diverging new writes from the real group store. So if the group store
+        // is established, refuse the legacy revert here too and fail safe to the
+        // in-memory warning, regardless of whether the selection was .group or
+        // .legacy. The genuine first-run / never-established legacy path (marker
+        // false) is preserved and still opens legacy read-write below.
+        if defaults.bool(forKey: groupStoreEstablishedKey) {
+            storeLog.fault("Group store URL unavailable but the group store is the established source of truth — refusing to revert to the pre-migration legacy store; using in-memory store with warning")
+            return inMemoryFallback()
+        }
+
+        // Legacy read-write fallback: reached only when the group store was never
+        // established (a fresh install, or the migration copy failed) so no
         // divergent group data exists to strand.
         let legacyURL: URL
         if case .legacy(let url) = selection {

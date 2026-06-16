@@ -586,6 +586,51 @@ struct ModelStoreLocatorRecoveryTests {
         // source of truth and may recover on a later (e.g. unlocked) launch.
         #expect(FileManager.default.fileExists(atPath: groupURL.path))
     }
+
+    @Test("Established group store + transient-nil group URL warns instead of reverting to legacy")
+    func establishedGroupTransientNilURLDoesNotServeLegacy() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let legacyURL = dir.appendingPathComponent("legacy/default.store")
+
+        // Intact (but STALE) legacy store the user migrated away from. If served,
+        // it would present old data and split new writes from the real group store.
+        do {
+            let legacy = try ModelContainer(
+                for: ModelStoreLocator.schema,
+                configurations: [ModelConfiguration(url: legacyURL)]
+            )
+            let ctx = ModelContext(legacy)
+            ctx.insert(Commute(name: "Stale Legacy"))
+            try ctx.save()
+        }
+
+        // The App Group container is transiently unavailable at boot, so the group
+        // store URL resolves to nil — selectStoreURL returns .legacy and never
+        // enters the .group block where the established guard lived. But the group
+        // store WAS established on a prior successful launch (marker set), so it is
+        // the source of truth: reverting to the stale legacy store would lose newer
+        // writes. Recovery must fail safe to in-memory, NOT serve legacy.
+        let defaults = try freshDefaults()
+        defaults.set(true, forKey: ModelStoreLocator.groupStoreEstablishedKey)
+
+        let result = ModelStoreLocator.makeAppContainer(
+            groupURL: nil,
+            legacyCandidates: [legacyURL],
+            defaults: defaults
+        )
+
+        // In-memory fallback with the user-visible warning — NOT a silent revert to
+        // the stale legacy store.
+        #expect(result.warning != nil)
+
+        // The opened container must NOT be serving the stale legacy data.
+        let commutes = try ModelContext(result.container).fetch(FetchDescriptor<Commute>())
+        #expect(commutes.isEmpty)
+
+        // The legacy store is never deleted — only refused as the live store.
+        #expect(FileManager.default.fileExists(atPath: legacyURL.path))
+    }
 }
 
 // MARK: - Commute ↔ DriveRecord Relationship Tests
