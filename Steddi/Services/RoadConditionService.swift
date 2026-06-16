@@ -169,6 +169,13 @@ final class RoadConditionService {
     /// current position, for firing nav-time alerts. Returns nil when nothing is
     /// in range. Pure helper over an explicit list so navigation code and tests
     /// can call it without an indexed route.
+    ///
+    /// NOTE: this `@Model`-typed overload is for synchronous, same-turn callers
+    /// (the grid-indexed `checkProximity`, route/map queries, and tests) that hold
+    /// the models live. The long-lived navigation provider must NOT use it — a
+    /// closure retained for the whole drive can read a `RoadCondition` deleted
+    /// mid-drive and trap. That path goes through the `Sendable`
+    /// `RoadConditionSnapshot` overload below.
     nonisolated static func checkProximityToConditions(
         currentCoord: CLLocationCoordinate2D,
         routeConditions: [RoadCondition],
@@ -188,6 +195,47 @@ final class RoadConditionService {
                 return RouteGeometry.haversineDistance(from: currentCoord, to: lhs.coordinate)
                     < RouteGeometry.haversineDistance(from: currentCoord, to: rhs.coordinate)
             }
+    }
+
+    /// Snapshot-based proximity check, mirroring the `@Model` overload but over
+    /// plain `Sendable` value snapshots. This is the form the navigation engine's
+    /// long-lived `roadConditionProvider` closure uses: the conditions are
+    /// captured into `RoadConditionSnapshot`s at wire time (while the models are
+    /// valid) so a per-fix lookup for the whole drive never dereferences a
+    /// `@Model` that a mid-drive delete (Settings "delete all data", route/commute
+    /// deletion) may have invalidated. Only `.active` snapshots are produced at
+    /// capture time, so no status re-check is needed here.
+    nonisolated static func checkProximityToConditions(
+        currentCoord: CLLocationCoordinate2D,
+        routeConditions: [RoadConditionSnapshot],
+        proximityThresholdMeters: CLLocationDistance
+    ) -> RoadConditionSnapshot? {
+        routeConditions
+            .filter {
+                RouteGeometry.haversineDistance(from: currentCoord, to: $0.coordinate) < proximityThresholdMeters
+            }
+            .min { lhs, rhs in
+                if lhs.kind.priority != rhs.kind.priority {
+                    return lhs.kind.priority > rhs.kind.priority
+                }
+                return RouteGeometry.haversineDistance(from: currentCoord, to: lhs.coordinate)
+                    < RouteGeometry.haversineDistance(from: currentCoord, to: rhs.coordinate)
+            }
+    }
+
+    /// Build `Sendable` snapshots of the active conditions on a route, for wiring
+    /// into the navigation engine's long-lived `roadConditionProvider`. Captured
+    /// ONCE at session start, while the `@Model` graph is valid, so the per-fix
+    /// nav lookup (and the first-approach heads-up) operate on detached value
+    /// types — a mid-drive delete of the route/conditions can never be observed by
+    /// the closure. Mirrors `NavigationStateManager.rerouteSnapshot`. MainActor-
+    /// isolated because it reads the `@Model` graph (the @Model itself is
+    /// main-actor); the resulting snapshots are `Sendable` and safe to retain.
+    @MainActor
+    static func conditionSnapshots(on route: Route) -> [RoadConditionSnapshot] {
+        (route.roadConditions ?? [])
+            .filter { $0.status == .active && !$0.isDeleted && $0.modelContext != nil }
+            .map { RoadConditionSnapshot(condition: $0) }
     }
 
     /// Grid-indexed proximity check for the route currently being navigated.
@@ -246,6 +294,44 @@ final class RoadConditionService {
         } catch {
             roadConditionLog.error("Failed to save road condition change: \(error.localizedDescription)")
         }
+    }
+}
+
+// MARK: - Sendable Snapshot
+
+/// A plain, `Sendable` snapshot of a road condition the navigation alert path
+/// needs — id (for the engine's one-shot debounce), kind (priority + spoken
+/// name + the heads-up text), coordinate (proximity test), and the owning
+/// route's name (the "… on Main St" suffix). Decoupled from the `@Model
+/// RoadCondition` so the long-lived `roadConditionProvider` closure — retained
+/// by the engine for the whole drive — never re-touches a model that a
+/// concurrent mid-drive delete (Settings "delete all data", route/commute
+/// deletion) may have invalidated. Mirrors `NavigationStateManager.RerouteSnapshot`.
+struct RoadConditionSnapshot: Sendable, Identifiable {
+    let id: UUID
+    let kind: RoadConditionKind
+    let coordinate: CLLocationCoordinate2D
+    /// Name of the owning route, captured at snapshot time for the spoken
+    /// "… on <route>" suffix. nil when the condition has no route or it is
+    /// unnamed — so the alert wiring never dereferences `condition.route` live.
+    let routeName: String?
+
+    /// Capture from a live `@Model` on the main actor at wire time. The caller
+    /// must have already gated on liveness (`!isDeleted && modelContext != nil`).
+    @MainActor
+    init(condition: RoadCondition) {
+        self.id = condition.id
+        self.kind = condition.kind
+        self.coordinate = condition.coordinate
+        self.routeName = condition.route?.name
+    }
+
+    /// Direct initializer for tests and synthetic snapshots.
+    init(id: UUID = UUID(), kind: RoadConditionKind, coordinate: CLLocationCoordinate2D, routeName: String? = nil) {
+        self.id = id
+        self.kind = kind
+        self.coordinate = coordinate
+        self.routeName = routeName
     }
 }
 

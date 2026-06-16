@@ -217,6 +217,19 @@ struct HomeView: View {
                             // never has to decode the GPS blob to backfill it.
                             record.finalizeSummary()
                             modelContext.insert(record)
+                            // Persist NOW — don't trust autosave. End-of-drive is
+                            // exactly when the app is about to be backgrounded /
+                            // locked / suspended, and a default autosave that fires
+                            // on a later run-loop tick can be lost to suspension or
+                            // an OOM kill, silently dropping the completed drive (and
+                            // its GPS trace, which feeds all analytics). An explicit
+                            // save flushes it to disk before teardown — matching the
+                            // discipline at PostArrivalSheet.saveRoute.
+                            do {
+                                try modelContext.save()
+                            } catch {
+                                print("[STEDDI-NAV] failed to save end-of-drive DriveRecord: \(error.localizedDescription)")
+                            }
                             recordedPoints = points
                         }
 
@@ -251,6 +264,15 @@ struct HomeView: View {
                     onReport: { type, coordinate in
                         let report = Report(type: type, latitude: coordinate.latitude, longitude: coordinate.longitude)
                         modelContext.insert(report)
+                        // Explicitly persist this user-contributed report rather
+                        // than relying on autosave, which can be lost if the app is
+                        // suspended/killed before its run-loop tick (same durability
+                        // gap as the end-of-drive DriveRecord above).
+                        do {
+                            try modelContext.save()
+                        } catch {
+                            print("[STEDDI-NAV] failed to save in-drive Report: \(error.localizedDescription)")
+                        }
                     },
                     onReportCamera: { kind, coordinate in
                         // Persist as a CameraReport and rebuild the proximity
@@ -710,17 +732,29 @@ struct HomeView: View {
         activeRoadConditions = conditions
         guard !conditions.isEmpty else { return }
 
+        // Capture the conditions as Sendable value snapshots NOW, while the
+        // @Model graph is valid. The provider/approaching closures below are
+        // retained on the engine for the WHOLE drive and run every fix; if they
+        // held the @Model RoadConditions (or reached through condition.route),
+        // a mid-drive delete (Settings "delete all data", route/commute deletion
+        // on a CarPlay-only drive that never tore down) would invalidate those
+        // models and the next per-fix lookup would trap reading their persisted
+        // properties. Operating on the detached snapshots makes that impossible —
+        // the exact RerouteSnapshot pattern the reroute loop already uses.
+        let snapshots = RoadConditionService.conditionSnapshots(on: route)
+        guard !snapshots.isEmpty else { return }
+
         engine.roadConditionProvider = { coordinate in
             RoadConditionService.checkProximityToConditions(
                 currentCoord: coordinate,
-                routeConditions: conditions,
+                routeConditions: snapshots,
                 proximityThresholdMeters: 100
             )
         }
-        engine.onRoadConditionApproaching = { condition in
+        engine.onRoadConditionApproaching = { snapshot in
             HapticService.shared.fire(.roadConditionAlert)
-            let road = condition.route?.name.map { " on \($0)" } ?? ""
-            VoiceGuidanceService.shared.speak("\(condition.kind.spokenName) ahead\(road)")
+            let road = snapshot.routeName.map { " on \($0)" } ?? ""
+            VoiceGuidanceService.shared.speak("\(snapshot.kind.spokenName) ahead\(road)")
         }
     }
 
@@ -759,6 +793,7 @@ struct HomeView: View {
         // off-route on the new leg's geometry.
         lastRecoveryAt = nil
         isRecoveryInFlight = false
+        persistRecoveryBudget()
         let engine = NavigationEngine()
         engine.startNavigation(route: route)
         self.navigationEngine = engine
@@ -1392,6 +1427,7 @@ struct HomeView: View {
         // off-route (see beginNavigation for the full rationale).
         lastRecoveryAt = nil
         isRecoveryInFlight = false
+        persistRecoveryBudget()
 
         let engine = NavigationEngine()
         engine.startNavigation(polyline: polyline, steps: steps, expectedTravelTime: expectedTravelTime)
@@ -1771,6 +1807,7 @@ struct HomeView: View {
         // every leg instead of re-arming each leg. advanceTripLeg never passes
         // through here, so continuing legs keep the running count.
         recoveriesThisTrip = 0
+        persistRecoveryBudget()
         try? modelContext.save()
         beginTripLeg(to: stop, trip: trip)
     }
@@ -1957,6 +1994,15 @@ struct HomeView: View {
         activeTrip = nil
     }
 
+    /// Mirror this view's per-trip recovery budget into the shared manager so it
+    /// survives a SwiftUI view rebuild (reAdoptActiveSessionIfNeeded restores from
+    /// it). Called after every mutation of `recoveriesThisTrip` / `lastRecoveryAt`
+    /// so the durable copy never lags the working @State.
+    private func persistRecoveryBudget() {
+        navStateManager.recoveriesThisTrip = recoveriesThisTrip
+        navStateManager.lastRecoveryAt = lastRecoveryAt
+    }
+
     /// Re-adopt an in-progress navigation session after this view was rebuilt
     /// with fresh @State while the SHARED manager is still navigating.
     ///
@@ -2003,6 +2049,12 @@ struct HomeView: View {
         if !navStateManager.activeRouteCoords.isEmpty {
             activeSavedPolyline = navStateManager.activeRouteCoords
         }
+        // Restore the per-trip recovery budget from the shared manager — this
+        // view's @State reset to 0/nil on the rebuild, but the manager kept the
+        // running count (and last-recovery time) across it, so the 3-recovery cap
+        // holds across the WHOLE trip instead of silently re-arming.
+        recoveriesThisTrip = navStateManager.recoveriesThisTrip
+        lastRecoveryAt = navStateManager.lastRecoveryAt
 
         // Resume guidance: feed restarts GPS → engine.updateLocation and the
         // periodic Live Activity updateActivity, and reveals the overlay.
@@ -2300,6 +2352,7 @@ struct HomeView: View {
         }
         isRecoveryInFlight = true
         lastRecoveryAt = Date()
+        persistRecoveryBudget()
         defer { isRecoveryInFlight = false }
 
         HapticService.shared.fire(.rerouteSuggestion)
@@ -2438,6 +2491,7 @@ struct HomeView: View {
             // on a geometry bail-out it does not, so re-arm here to avoid a freeze.
             if spliced {
                 recoveriesThisTrip += 1
+                persistRecoveryBudget()
             } else {
                 engine.clearOffRouteRecovery()
             }
@@ -2653,6 +2707,25 @@ struct HomeView: View {
                 // manual End flow, so this only routes when a trip is active.
                 if activeTrip != nil, navigationEngine?.hasArrived == true {
                     handleTripArrival()
+                    break
+                }
+
+                // Commute (non-trip) arrival: the engine latches hasArrived but
+                // deliberately stays isNavigating=true so the "You have arrived"
+                // overlay + manual End / route-save flow persist. Without stopping
+                // the feed here, this 2 Hz loop would keep spinning indefinitely —
+                // holding kCLLocationAccuracyBestForNavigation background GPS hot
+                // and churning the Live Activity on a frozen arrived state — until
+                // the driver remembers to tap End. Push ONE final arrived update to
+                // the Live Activity, downgrade location out of high-accuracy
+                // navigation mode, then break: the arrival UI stays up, and a fresh
+                // navigation calls startLocationFeed again (re-enabling nav mode in
+                // beginNavigation). End/teardown still runs its own cleanup.
+                if activeTrip == nil, navigationEngine?.hasArrived == true {
+                    if let engine = navigationEngine {
+                        LiveActivityService.shared.updateActivity(engine: engine)
+                    }
+                    locationService.disableNavigationMode()
                     break
                 }
 

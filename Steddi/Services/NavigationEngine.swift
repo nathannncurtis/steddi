@@ -94,13 +94,20 @@ final class NavigationEngine {
     /// position it returns the highest-priority active condition within the
     /// alert range, or nil. Kept as a closure so the engine never imports the
     /// RoadConditionService — same decoupling as `speedLimitProvider`.
+    ///
+    /// Returns a `Sendable` `RoadConditionSnapshot`, NOT a `@Model RoadCondition`:
+    /// this closure is retained for the entire drive and invoked every fix, so it
+    /// must never dereference a model that a mid-drive delete may have invalidated.
+    /// The wiring captures the conditions into snapshots at session start (see
+    /// HomeView.wireRoadConditions), mirroring the reroute-loop's RerouteSnapshot.
     @ObservationIgnored
-    var roadConditionProvider: ((CLLocationCoordinate2D) -> RoadCondition?)? = nil
+    var roadConditionProvider: ((CLLocationCoordinate2D) -> RoadConditionSnapshot?)? = nil
     /// Fired once when the engine first comes within range of a condition this
     /// session. The wiring side does the haptic + voice; the engine only owns
-    /// the detection and debounce.
+    /// the detection and debounce. Carries the `Sendable` snapshot so the wiring
+    /// never re-touches a possibly-deleted `@Model` for the spoken heads-up.
     @ObservationIgnored
-    var onRoadConditionApproaching: ((RoadCondition) -> Void)? = nil
+    var onRoadConditionApproaching: ((RoadConditionSnapshot) -> Void)? = nil
     /// Condition ids already announced this session, so passing a single pothole
     /// fires exactly one heads-up instead of one per fix while in range.
     private var alertedConditionIDs: Set<UUID> = []
@@ -745,6 +752,16 @@ final class NavigationEngine {
             arrivalTime = ""
             followOnInstruction = ""
             followOnManeuverSymbol = ""
+            // Arrived = nothing remaining. updateDistancesAndETA never runs again
+            // after this latch (updateLocation short-circuits on hasArrived), so
+            // zero the RAW fields here too — otherwise the last pre-arrival
+            // etaSeconds/distanceRemainingMeters leak to downstream surfaces that
+            // read the numeric values (CarPlay's trip estimate keeps pushing a
+            // stale non-zero distance/ETA next to "You have arrived" for a commute
+            // whose session stays live until manual End). The string/int fields
+            // above are already cleared; these are their numeric counterparts.
+            etaSeconds = 0
+            distanceRemainingMeters = 0
             return true
         }
         return false
