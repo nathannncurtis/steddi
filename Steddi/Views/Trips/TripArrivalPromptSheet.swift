@@ -104,8 +104,14 @@ struct TripArrivalPromptSheet: View {
                     Text("Continue automatically for remaining stops")
                         .font(SteddiTheme.body(14))
                         .foregroundStyle(SteddiTheme.accent)
-                        .frame(maxWidth: .infinity)
+                        // Bare ~37pt text button — expand to the 44pt HIG hit
+                        // target the rest of the app enforces (matches the
+                        // sibling text buttons in OnboardingPermissionsView /
+                        // OnboardingEmergencyView / HomeView). Visual unchanged;
+                        // only the tappable area grows.
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .padding(.vertical, 10)
+                        .contentShape(Rectangle())
                 }
 
                 Button(action: onEndTrip) {
@@ -116,8 +122,10 @@ struct TripArrivalPromptSheet: View {
                         // invisible in grey (1.77:1). Kept as a quiet text action
                         // (not a prominent CTA) to match the sibling above.
                         .foregroundStyle(SteddiTheme.warmRedText)
-                        .frame(maxWidth: .infinity)
+                        // Same 44pt HIG hit target as the sibling above.
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .padding(.vertical, 10)
+                        .contentShape(Rectangle())
                 }
             }
             .padding(.horizontal, 16)
