@@ -95,15 +95,26 @@ struct OnboardingView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.body.weight(.medium))
-                        // Match the real Home search pill's surface-aware glyph
-                        // (SteddiTheme.accent) rather than the raw accent: the raw
-                        // hue lands ~1.2-1.8:1 on the light frost this morph can
-                        // render as in Light theme. Route it through legibleText on
-                        // the showcase scrim — the same shift every other onboarding
-                        // accent glyph uses — so it clears the 3:1 glyph floor in
-                        // either theme/accent rather than relying on the shadow alone.
-                        .foregroundStyle(SteddiTheme.legibleText(coordinator.selectedAccent.rgb,
-                                                                 onSurface: OnboardingShowcaseFrost.surface).color)
+                        // Use the EXACT glyph token the real Home search pill uses
+                        // (HomeView.swift: `SteddiTheme.accent`), not a glyph pinned
+                        // to the fixed-dark showcase frost. The settle runs AFTER
+                        // `persistSelections()` applies the user's theme, so
+                        // `SteddiTheme.accent` (textSafeAccent vs the LIVE
+                        // surfacePrimary) resolves to the identical value the Home
+                        // pill computes — zero jump at the morph boundary.
+                        //
+                        // The prior glyph was `legibleText(accent, onSurface:
+                        // showcaseFrost=0.22)`, which ALWAYS lightens (the showcase
+                        // frost is dark). But the settle pill carries `.mapGlassScrim`
+                        // and in LIGHT theme that scrim is a faint light wash, so
+                        // neutral `.regular` glass over the dark backdrop composites
+                        // to a LIGHT frost (~0.73-0.80) — a lightened glyph there
+                        // lands ~1.05-1.27:1 (the wrong direction), below the 3:1
+                        // glyph floor. `accent` shifts the CORRECT way per theme:
+                        // in Light it darkens (~3.1-3.8:1 on that light frost), in
+                        // Dark it lightens (~5.1-7.6:1 on the dark frost) — clearing
+                        // the floor with margin in both, the shadow only adding to it.
+                        .foregroundStyle(SteddiTheme.accent)
                         .legibleOverMap()
                     Text("Where to?")
                         .font(SteddiTheme.heading(17))
