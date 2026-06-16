@@ -2671,6 +2671,16 @@ struct HomeView: View {
             if spliced {
                 recoveriesThisTrip += 1
                 persistRecoveryBudget()
+                // The splice restarted the engine onto combined detour+saved-tail
+                // geometry, but the reroute loop's candidate snapshot/activeRouteID
+                // still reflect the pre-splice session — it would now measure the
+                // active baseline along the new spliced geometry while its candidate
+                // set still holds the alternates, and could pop a "faster route"
+                // card seconds after we announced and committed this recovery,
+                // contesting it. Cool down the reroute loop for the recovery window
+                // so it doesn't fight the recovery it just performed; record the
+                // abandoned saved route the splice is rejoining.
+                navStateManager.suppressRerouteAfterRecovery(abandonedRouteID: navigatedSavedRoute?.id)
             } else {
                 engine.clearOffRouteRecovery()
             }
