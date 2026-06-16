@@ -76,7 +76,11 @@ struct CommuteListView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
                         .font(.caption2)
-                        .foregroundStyle(.yellow)
+                        // Surface-adaptive amber/gold rather than raw system
+                        // `.yellow` (~1.4:1 on the light list surface). `amberText`
+                        // keeps the gold star identity while clearing AA on both
+                        // light and dark list rows.
+                        .foregroundStyle(SteddiTheme.amberText)
                     Text(preferred.name ?? "Preferred route")
                         .font(.caption)
                         .foregroundStyle(.secondary)

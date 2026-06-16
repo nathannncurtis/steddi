@@ -385,7 +385,12 @@ struct CommuteDetailView: View {
             if route.rank == 0 {
                 Image(systemName: "star.fill")
                     .font(.caption)
-                    .foregroundStyle(.yellow)
+                    // Surface-adaptive amber/gold rather than raw system `.yellow`
+                    // (~1.4:1 on the light Form surface). This star REPLACES the
+                    // `#N` rank for the preferred route, so it must stay legible on
+                    // both light and dark; `amberText` keeps the gold identity and
+                    // clears AA.
+                    .foregroundStyle(SteddiTheme.amberText)
             } else {
                 Text("#\(route.rank + 1)")
                     .font(.caption.weight(.medium))
