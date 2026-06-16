@@ -2,6 +2,7 @@ import Foundation
 import CoreLocation
 import MapKit
 import WidgetKit
+import SwiftData
 
 /// Shared single source of truth for navigation state.
 /// Both the phone UI and CarPlay read from this object.
@@ -68,6 +69,22 @@ final class NavigationStateManager {
     /// nil for non-commute sessions (search nav), which run no reroute loop.
     @ObservationIgnored
     private var activeRouteID: UUID?
+
+    /// Reroute candidate inputs captured as a `Sendable` value snapshot at
+    /// `startObserving` time, while the @Model graph is guaranteed valid. The
+    /// reroute loop iterates THIS — never the live `commute.routes` relationship —
+    /// so a mid-drive deletion of the commute/route (on a session that never tore
+    /// down, e.g. CarPlay-only) can't trap the loop on an invalidated model after
+    /// a suspension. Cleared at session end.
+    @ObservationIgnored
+    private var rerouteInputs: RerouteSnapshot?
+
+    /// The SwiftData context the active commute lives in, captured at session
+    /// start. Used to re-fetch the winning route by id (via a predicate fetch that
+    /// safely returns nil if deleted) when surfacing a suggestion, instead of
+    /// dereferencing a possibly-stale `@Model` handle. Cleared at session end.
+    @ObservationIgnored
+    private var rerouteModelContext: ModelContext?
 
     /// The route the driver most recently declined (tapped "Stay") plus when,
     /// and the savings they rejected. The reroute loop suppresses re-suggesting
@@ -149,6 +166,22 @@ final class NavigationStateManager {
         // exclude it (and only it) from candidates regardless of its rank.
         activeRouteID = routeID
 
+        // Capture the reroute inputs NOW, while the @Model graph is valid, into a
+        // Sendable value snapshot the loop iterates instead of the live
+        // relationship — so a mid-drive deletion can never trap the loop. Also
+        // capture the context to re-fetch the winning route by id later.
+        if let commute, let direction {
+            rerouteInputs = Self.rerouteSnapshot(
+                commute: commute,
+                direction: direction,
+                excludingRouteID: routeID
+            )
+            rerouteModelContext = commute.modelContext
+        } else {
+            rerouteInputs = nil
+            rerouteModelContext = nil
+        }
+
         writeWidgetSession(commute: commute, direction: direction, destinationName: destinationName)
 
         // Store route coords for CarPlay map rendering
@@ -188,6 +221,17 @@ final class NavigationStateManager {
                     guard let engine = self.activeEngine,
                           engine.isNavigating,
                           let currentCoord = engine.currentCoordinate else { continue }
+
+                    // Use the Sendable snapshot captured at session start — NEVER
+                    // the live `commute.routes` relationship. The commute/route
+                    // @Models can be deleted mid-drive (CommuteListView/DetailView
+                    // delete, Settings "delete all data") on a session that never
+                    // tore down (e.g. a CarPlay-only drive with no HomeView
+                    // observer). Even reading a cascade-deleted route's `isDeleted`
+                    // off the cached relationship traps once its backing data is
+                    // gone, so the loop must not touch the graph at all here.
+                    guard let snapshot = self.rerouteInputs,
+                          !snapshot.candidates.isEmpty else { continue }
 
                     let activePolyline = engine.routePolylineCoordinates
                     guard activePolyline.count >= 2 else { continue }
@@ -230,23 +274,17 @@ final class NavigationStateManager {
 
                     self.currentRemainingETA = remainingETA
 
-                    // Candidates are every OTHER saved route in this direction —
-                    // excluded by IDENTITY, not by rank. The driver may already be
-                    // on a fallback (rank > 0) after a manual switch, so filtering
-                    // on rank-0 would (a) re-suggest the route being driven and
-                    // (b) permanently bar the preferred route from being re-offered
-                    // when it's faster again. Excluding only `activeRouteID` fixes
-                    // both.
-                    let candidates = commute.orderedRoutes(for: direction)
-                        .filter { $0.id != self.activeRouteID }
-                    guard !candidates.isEmpty else { continue }
-
-                    let bestSuggestion = await Self.bestReroute(
-                        candidates: candidates,
+                    // Evaluate candidates over the Sendable snapshot — never the
+                    // @Models — so the network awaits inside `bestReroute` can't
+                    // touch a model invalidated by a concurrent delete. The result
+                    // is the WINNING candidate's id, mapped back to a live Route
+                    // below under a fresh liveness gate.
+                    let bestRerouteResult = await Self.bestReroute(
+                        candidates: snapshot.candidates,
                         currentCoord: currentCoord,
                         baseline: baseline,
-                        basePercentage: commute.thresholdPercentage,
-                        hardMinuteFloor: commute.hardMinuteFloor,
+                        basePercentage: snapshot.thresholdPercentage,
+                        hardMinuteFloor: snapshot.hardMinuteFloor,
                         isSuppressed: { [weak self] routeID, savingsSeconds in
                             self?.isRerouteSuppressed(routeID: routeID, savingsSeconds: savingsSeconds) ?? false
                         },
@@ -255,19 +293,95 @@ final class NavigationStateManager {
                         }
                     )
 
-                    // Final guard: only surface the suggestion if the same
-                    // session is still live after all the awaits above.
-                    if let suggestion = bestSuggestion,
+                    // Final guard: only surface the suggestion if the same session
+                    // is still live after all the awaits above, AND the winning
+                    // route still exists. The commute/route may have been deleted
+                    // during the candidate fetches, so re-resolve the winner by id
+                    // with a fresh predicate fetch (which safely returns nil if the
+                    // route was deleted) instead of dereferencing a stale @Model —
+                    // the suggestion's `route` is handed to switchToRoute, which
+                    // needs a valid @Model, so a stale handle would crash on switch.
+                    if let result = bestRerouteResult,
                        !Task.isCancelled,
                        let liveEngine = self.activeEngine,
                        liveEngine === engine,
                        liveEngine.isNavigating,
-                       !self.hasArrived {
-                        self.rerouteSuggestion = suggestion
+                       !self.hasArrived,
+                       let liveRoute = Self.fetchLiveRoute(id: result.routeID, in: self.rerouteModelContext) {
+                        self.rerouteSuggestion = (
+                            route: liveRoute,
+                            savingsMinutes: result.savingsMinutes,
+                            savingsPercentage: result.savingsPercentage
+                        )
                     }
                 }
             }
         }
+    }
+
+    // MARK: - Reroute Snapshot (cross-await safety)
+
+    /// A plain, `Sendable` snapshot of one candidate route the reroute decision
+    /// needs — its identity and the geometry to fetch a path-aware ETA along.
+    /// Decoupled from the `@Model Route` so the async ETA fetches never re-touch a
+    /// model that a concurrent mid-drive delete may have invalidated.
+    struct RerouteCandidate: Sendable {
+        let id: UUID
+        let encodedPolyline: String
+    }
+
+    /// Everything the reroute decision reads off the `@Model Commute`/`Route`
+    /// graph, captured as `Sendable` value types so it can cross the loop's
+    /// `await` points safely. Built on the main actor while the models are valid.
+    struct RerouteSnapshot: Sendable {
+        let thresholdPercentage: Double
+        let hardMinuteFloor: Int?
+        let candidates: [RerouteCandidate]
+    }
+
+    /// Whether a SwiftData `@Model` is still valid to read. A deleted model has a
+    /// nil `modelContext` (and/or `isDeleted == true`); reading its persisted
+    /// properties after deletion traps. Mirrors the `condition.modelContext`
+    /// liveness checks in RoadConditionService / SpeedCameraService.
+    private static func isLive(_ commute: Commute) -> Bool {
+        !commute.isDeleted && commute.modelContext != nil
+    }
+
+    /// Build a `Sendable` snapshot of the reroute inputs from the live commute,
+    /// excluding the route currently being driven (by identity, not rank — see the
+    /// `activeRouteID` doc). Captured once at session start (`startObserving`),
+    /// while the @Model graph is valid, so the long-lived reroute loop iterates the
+    /// value snapshot and never re-touches the relationship. Returns nil if the
+    /// commute is already gone.
+    static func rerouteSnapshot(
+        commute: Commute,
+        direction: CommuteDirection,
+        excludingRouteID activeRouteID: UUID?
+    ) -> RerouteSnapshot? {
+        guard isLive(commute) else { return nil }
+        let candidates = commute.orderedRoutes(for: direction)
+            .filter { !$0.isDeleted && $0.modelContext != nil && $0.id != activeRouteID }
+            .map { RerouteCandidate(id: $0.id, encodedPolyline: $0.encodedPolyline) }
+        return RerouteSnapshot(
+            thresholdPercentage: commute.thresholdPercentage,
+            hardMinuteFloor: commute.hardMinuteFloor,
+            candidates: candidates
+        )
+    }
+
+    /// Re-resolve a candidate route by id with a fresh predicate fetch, after the
+    /// candidate-fetch awaits. A predicate fetch on the context safely returns an
+    /// empty result if the route was deleted mid-drive — unlike dereferencing a
+    /// cached @Model handle, which traps once its backing data is gone. Returns
+    /// nil if the context is unavailable or the route no longer exists, so the
+    /// loop never surfaces a suggestion pointing at an invalidated @Model
+    /// (switchToRoute would otherwise crash on it). MainActor-isolated: the fetch
+    /// runs on the context's main-actor executor.
+    static func fetchLiveRoute(id: UUID, in context: ModelContext?) -> Route? {
+        guard let context else { return nil }
+        var descriptor = FetchDescriptor<Route>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return (try? context.fetch(descriptor))?.first
     }
 
     // MARK: - Reroute Candidate Evaluation
@@ -302,17 +416,23 @@ final class NavigationStateManager {
     /// Pure and dependency-injected (`fetchETA`, `isSuppressed`) so the
     /// symmetric-comparison contract is unit-testable without a live engine or
     /// network. Candidate exclusion (the active route) is the caller's job.
+    ///
+    /// Operates on `Sendable` `RerouteCandidate` value snapshots (id + encoded
+    /// polyline), never the `@Model Route`, so the network `fetchETA` awaits
+    /// inside this loop can't re-touch a model invalidated by a concurrent
+    /// mid-drive delete. Returns the WINNING candidate's id; the caller maps it
+    /// back to a still-live `Route` under a fresh liveness gate.
     nonisolated static func bestReroute(
-        candidates: [Route],
+        candidates: [RerouteCandidate],
         currentCoord: CLLocationCoordinate2D,
         baseline: RouteETA,
         basePercentage: Double,
         hardMinuteFloor: Int?,
         isSuppressed: (UUID, TimeInterval) -> Bool,
         fetchETA: (CLLocationCoordinate2D, String) async throws -> RouteETA
-    ) async -> (route: Route, savingsMinutes: Double, savingsPercentage: Double)? {
+    ) async -> (routeID: UUID, savingsMinutes: Double, savingsPercentage: Double)? {
         let remainingETASeconds = baseline.duration
-        var bestSuggestion: (route: Route, savingsMinutes: Double, savingsPercentage: Double)?
+        var bestSuggestion: (routeID: UUID, savingsMinutes: Double, savingsPercentage: Double)?
         var bestSavings: TimeInterval = 0
 
         for candidate in candidates {
@@ -359,7 +479,7 @@ final class NavigationStateManager {
             if decision.shouldReroute, decision.savingsSeconds > bestSavings {
                 bestSavings = decision.savingsSeconds
                 bestSuggestion = (
-                    route: candidate,
+                    routeID: candidate.id,
                     savingsMinutes: decision.savingsMinutes,
                     savingsPercentage: remainingETASeconds > 0 ? decision.savingsSeconds / remainingETASeconds : 0
                 )
@@ -503,6 +623,8 @@ final class NavigationStateManager {
         activeEngine = nil
         activeRouteCoords = []
         activeRouteID = nil
+        rerouteInputs = nil
+        rerouteModelContext = nil
         rerouteSuggestion = nil
         currentRemainingETA = 0
         upcomingSteps = []
@@ -638,7 +760,9 @@ final class NavigationStateManager {
         if miles < 10 {
             return String(format: "%.1f mi", miles)
         }
-        return "\(Int(miles)) mi"
+        // Round, don't truncate: 10.95 mi -> "11 mi", not "10 mi" (an up-to-1-mi
+        // understatement of the distance remaining).
+        return "\(Int(miles.rounded())) mi"
     }
 
     nonisolated static func formatArrivalTime(_ secondsRemaining: TimeInterval) -> String {
