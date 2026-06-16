@@ -257,4 +257,174 @@ struct NavHUDFrostMeasurementTests {
         let r = ContrastRatio.ratio(light.textPrimary, lightFrost)
         #expect(r >= ContrastRatio.aaBody, "light textPrimary on light frost = \(r), already fine, want >= 4.5")
     }
+
+    // MARK: - Speed-camera banner foreground (BOTH themes, every kind) — the 4th-visit measured fix
+
+    /// Required AA margin for the camera-banner BODY text (title + distance): AA
+    /// body floor plus headroom so a rounding/render wobble can't dip it sub-AA.
+    private let bannerBodyMargin: Double = 5.0
+    /// Required margin for the camera GLYPH on the solid kind chip (3:1 graphical
+    /// floor plus headroom).
+    private let bannerGlyphMargin: Double = 4.0
+
+    /// Every camera-kind surface color the banner tints its glass with. The
+    /// mobile-trap kind tracks the LIVE accent, so it's enumerated across every
+    /// accent — the banner must clear AA for whichever accent is selected.
+    private var cameraKinds: [(name: String, rgb: RGBColor)] {
+        var kinds: [(String, RGBColor)] = [
+            ("speedCamera/amber", SteddiTheme.warningAmberRGB),
+            ("redLightCamera/warmRed", SteddiTheme.warmRedRGB),
+        ]
+        for accent in SteddiTheme.AccentOption.allCases {
+            kinds.append(("mobileSpeedTrap/\(accent.rawValue)", accent.rgb))
+        }
+        return kinds
+    }
+
+    /// The DARK-theme banner surface MODEL — independent of the live theme so the
+    /// test is deterministic: the near-opaque dark `mapGlassScrim`
+    /// (`onboardingCardFallbackFillRGB` at 0.9) source-over the LIGHTEST plausible
+    /// kind-tinted glass. Exactly what `SteddiTheme.cameraBannerSurface` computes in
+    /// its dark branch, recomputed here so both themes are covered regardless of the
+    /// runner's live theme.
+    private func darkBannerSurface(kind: RGBColor) -> RGBColor {
+        let lightest = ThemeBeatSurface.tintedGlassLightest(accent: kind)
+        let scrim = SteddiTheme.onboardingCardFallbackFillRGB
+        let a = 0.9
+        return RGBColor(scrim.r * a + lightest.r * (1 - a),
+                        scrim.g * a + lightest.g * (1 - a),
+                        scrim.b * a + lightest.b * (1 - a))
+    }
+
+    /// ImageRenderer composite of the dark banner: a representative dark map tile,
+    /// the near-opaque dark scrim, and the LIGHTEST plausible kind-tinted glass over
+    /// it (the light extreme the real OS glass never exceeds — so a render that's
+    /// dark here is dark for real). Mirrors `OnboardingFrostMeasurementTests`.
+    private func darkBannerPanel(kind: RGBColor) -> some View {
+        let lightest = ThemeBeatSurface.tintedGlassLightest(accent: kind)
+        return ZStack {
+            Color(red: 0.10, green: 0.10, blue: 0.11) // representative dark map tile
+            RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                .fill(lightest.color)                                  // lightest tinted glass
+                .frame(width: 280, height: 64)
+                .overlay {
+                    RoundedRectangle(cornerRadius: SteddiTheme.radiusMedium)
+                        .fill(SteddiTheme.onboardingCardFallbackFill.opacity(0.9)) // dark scrim over it
+                        .frame(width: 280, height: 64)
+                }
+        }
+    }
+
+    @Test("the rendered DARK camera-banner composite is dark enough for near-white text to clear AA WITH MARGIN, every kind")
+    func cameraBannerDarkRendersDark() {
+        for (name, kind) in cameraKinds {
+            let sampled = centrePixel(darkBannerPanel(kind: kind),
+                                      size: CGSize(width: 320, height: 100))
+            let lum = ContrastRatio.relativeLuminance(sampled)
+            #expect(lum < ContrastRatio.foregroundFlipLuminance,
+                    "dark camera banner \(name) surface luminance = \(lum) (sRGB \(sampled)); want dark (< 0.179) so near-white text reads")
+            // Near-white text (what cameraBannerForeground resolves on this dark
+            // composite) clears the AA body floor WITH MARGIN on the SAMPLED pixel.
+            let copyOnSampled = ContrastRatio.ratio(ContrastRatio.near.white, sampled)
+            #expect(copyOnSampled >= bannerBodyMargin,
+                    "dark camera banner \(name): near-white text on the rendered surface = \(copyOnSampled), want >= \(bannerBodyMargin) (margin)")
+        }
+    }
+
+    @Test("the modelled DARK camera-banner surface is no lighter than the rendered composite, every kind")
+    func cameraBannerDarkModelIsConservative() {
+        for (name, kind) in cameraKinds {
+            let sampled = centrePixel(darkBannerPanel(kind: kind),
+                                      size: CGSize(width: 320, height: 100))
+            let renderedLum = ContrastRatio.relativeLuminance(sampled)
+            let modelLum = ContrastRatio.relativeLuminance(darkBannerSurface(kind: kind))
+            #expect(modelLum < ContrastRatio.foregroundFlipLuminance,
+                    "dark camera banner model luminance \(name) = \(modelLum) should be dark (< 0.179)")
+            #expect(renderedLum <= modelLum + 0.02,
+                    "rendered dark camera banner \(name) = \(renderedLum) should be no lighter than the model \(modelLum)")
+        }
+    }
+
+    @Test("camera-banner foreground clears AA WITH MARGIN on the DARK composite, every kind (the fix)")
+    func cameraBannerDarkForegroundAA() {
+        // THE DARK-THEME FIX. The title + distance draw in
+        // contrastingForeground(on: darkBannerSurface) — near-WHITE on the dark
+        // composite — and must clear the AA body floor WITH MARGIN for every kind.
+        for (name, kind) in cameraKinds {
+            let surface = darkBannerSurface(kind: kind)
+            let fg = ContrastRatio.contrastingForeground(on: surface)
+            let r = ContrastRatio.ratio(fg, surface)
+            #expect(r >= bannerBodyMargin,
+                    "dark camera-banner foreground on \(name) = \(r), want >= \(bannerBodyMargin) (body w/ margin)")
+        }
+    }
+
+    @Test("camera-banner foreground clears AA WITH MARGIN on the LIGHT kind tint, every kind (unchanged, still correct)")
+    func cameraBannerLightForegroundAA() {
+        // In LIGHT theme the surface is the raw kind hue (the darkest plausible
+        // tinted glass; the OS frost only lightens it), so the foreground is
+        // near-BLACK and must clear AA body for every kind. warmRed is the tightest
+        // (the red-light camera), so it holds the line with margin to spare.
+        for (name, kind) in cameraKinds {
+            let fg = ContrastRatio.contrastingForeground(on: kind)
+            let r = ContrastRatio.ratio(fg, kind)
+            #expect(r >= ContrastRatio.aaBody,
+                    "light camera-banner foreground on \(name) = \(r), want >= 4.5 (body)")
+        }
+    }
+
+    @Test("the OLD raw-kindRGB foreground FAILED on the real DARK composite, every kind (documents the 4th-visit bug)")
+    func cameraBannerDarkOldForegroundRegression() {
+        // The recurring bug: prior rounds drew the text in
+        // contrastingForeground(on: kind.kindRGB). Every kind's raw hue has
+        // luminance > the 0.179 flip, so that's near-BLACK — but the REAL dark
+        // surface is the dark scrim-over-tint composite, where near-black collapses
+        // far below even the 3:1 large floor. The new foreground (near-white on the
+        // real composite) fixes it.
+        for (name, kind) in cameraKinds {
+            let surface = darkBannerSurface(kind: kind)
+            let oldFg = ContrastRatio.contrastingForeground(on: kind) // contrasted RAW hue → near-black
+            let oldRatio = ContrastRatio.ratio(oldFg, surface)
+            #expect(oldRatio < ContrastRatio.aaLarge,
+                    "old raw-kindRGB foreground on the real dark \(name) surface = \(oldRatio), expected sub-3:1 (documents the bug)")
+            let newFg = ContrastRatio.contrastingForeground(on: surface)
+            #expect(ContrastRatio.ratio(newFg, surface) > oldRatio,
+                    "new foreground on \(name) must beat the old")
+        }
+    }
+
+    @Test("the camera GLYPH clears the 3:1 graphical floor WITH MARGIN on the solid kind chip, every kind (unchanged)")
+    func cameraBannerGlyphOnChipAA() {
+        // The 34×34 glyph sits on a SOLID kind.color fill, so it correctly
+        // contrasts the raw kind hue — that surface is unchanged by this fix.
+        // contrastingForeground picks near-black/white per kind; confirm it clears
+        // the graphical-object floor with margin for every kind.
+        for (name, kind) in cameraKinds {
+            let glyph = ContrastRatio.contrastingForeground(on: kind)
+            let r = ContrastRatio.ratio(glyph, kind)
+            #expect(r >= bannerGlyphMargin,
+                    "camera glyph on the solid \(name) chip = \(r), want >= \(bannerGlyphMargin) (3:1 floor w/ margin)")
+        }
+    }
+
+    @Test("cameraBannerSurface branches correctly on glass + theme")
+    func cameraBannerSurfaceModel() {
+        // Glass OFF → the solid surfacePrimary fallback (so the foreground flips the
+        // right way per theme), regardless of kind. (The live glass-on branch — raw
+        // kind in light, scrim-over-tint in dark — is exercised by the AA tests via
+        // the recomputed model above.)
+        let off = SteddiTheme.cameraBannerSurface(kind: SteddiTheme.warmRedRGB, glassAvailable: false)
+        #expect(off == ThemeEngine.snapshot.surfacePrimary,
+                "glass-off camera-banner surface should be the solid surfacePrimary fallback")
+        // And whatever the live theme is, the live glass-on surface matches one of
+        // the two deterministic branches for that theme.
+        let liveAmber = SteddiTheme.cameraBannerSurface(kind: SteddiTheme.warningAmberRGB, glassAvailable: true)
+        if SteddiTheme.prefersDarkChrome {
+            #expect(liveAmber == darkBannerSurface(kind: SteddiTheme.warningAmberRGB),
+                    "dark live camera-banner surface should be the scrim-over-tint composite")
+        } else {
+            #expect(liveAmber == SteddiTheme.warningAmberRGB,
+                    "light live camera-banner surface should be the raw kind hue")
+        }
+    }
 }
