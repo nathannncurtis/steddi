@@ -71,8 +71,16 @@ struct OnboardingHeroView: View {
                         .multilineTextAlignment(.center)
                     Text("Let's get started")
                         .font(.title3)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(SteddiTheme.onboardingTextSecondary)
                 }
+                // Cap the supporting copy at the app-wide Dynamic Type ceiling
+                // (.accessibility3 == SteddiTheme.dynamicTypeCeiling /
+                // .accessibilityExtraLarge), the same bound every other onboarding
+                // beat applies and the bound SteddiTheme.heading() already uses for
+                // the headline above. Without it the raw `.title3` subtitle scaled
+                // unbounded to AX5, crowding the wordmark plate / headline and
+                // overflowing the bottom at the largest accessibility sizes.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
                 .padding(.horizontal, 32)
                 .padding(.bottom, 60)
                 .opacity(copyVisible ? 1 : 0)
