@@ -303,7 +303,7 @@ struct ModelStoreLocatorReadOnlyTests {
     }
 }
 
-// MARK: - Migration Plan / Read-Only Newer-Store Tests
+// MARK: - Schema / Read-Only Newer-Store Tests
 
 @Suite("ModelStoreLocator migration plan")
 struct ModelStoreLocatorMigrationTests {
@@ -315,17 +315,24 @@ struct ModelStoreLocatorMigrationTests {
         return dir.appendingPathComponent("Steddi.store")
     }
 
-    @Test("Migration plan exposes the current versioned schema")
-    func planExposesCurrentSchema() {
-        #expect(ModelStoreLocator.migrationPlan is SteddiMigrationPlan.Type)
-        // The container schema is built from the plan's current versioned schema,
-        // so the two can never drift.
-        #expect(ModelStoreLocator.schema.entities.count == SteddiSchemaV2.models.count)
-        // V1 + V2 are both declared; V2 is the current schema and adds the explicit
-        // Commute ↔ DriveRecord inverse relationship via a lightweight stage.
-        #expect(SteddiMigrationPlan.schemas.count == 2)
-        #expect(SteddiMigrationPlan.stages.count == 1)
-        #expect(SteddiMigrationPlan.currentSchema.versionIdentifier == SteddiSchemaV2.versionIdentifier)
+    /// The container schema IS `SteddiSchema.current` — a single source of truth, so
+    /// every container (app, read-only shared, in-memory fallback) opens the exact
+    /// same model graph and they can never drift. There is no explicit
+    /// `SchemaMigrationPlan`: shipped changes are additive and migrate via
+    /// SwiftData's automatic lightweight migration. (Behavior — not the shape of a
+    /// plan — is verified by `SteddiSchemaMigrationTests` below.)
+    @Test("Container schema is the single SteddiSchema source of truth")
+    func schemaIsSingleSourceOfTruth() {
+        // The locator's schema and the canonical schema cover the same entities.
+        let locatorEntities = Set(ModelStoreLocator.schema.entities.map(\.name))
+        let canonicalEntities = Set(SteddiSchema.current.entities.map(\.name))
+        #expect(locatorEntities == canonicalEntities)
+        // All twelve persisted model types are present.
+        #expect(SteddiSchema.models.count == 12)
+        #expect(canonicalEntities.count == 12)
+        // The entities the inverse-relationship change touches are both in the graph.
+        #expect(canonicalEntities.contains("Commute"))
+        #expect(canonicalEntities.contains("DriveRecord"))
     }
 
     /// A store written by the current (read-write) schema reopens read-only with
@@ -336,11 +343,10 @@ struct ModelStoreLocatorMigrationTests {
         let url = try makeTempStoreURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 
-        // Write with the full app schema + plan.
+        // Write with the full app schema.
         do {
             let rw = try ModelContainer(
                 for: ModelStoreLocator.schema,
-                migrationPlan: ModelStoreLocator.migrationPlan,
                 configurations: [ModelConfiguration(url: url)]
             )
             let ctx = ModelContext(rw)
@@ -348,10 +354,9 @@ struct ModelStoreLocatorMigrationTests {
             try ctx.save()
         }
 
-        // Reopen read-only with the plan and confirm a fetch succeeds.
+        // Reopen read-only and confirm a fetch succeeds.
         let ro = try ModelContainer(
             for: ModelStoreLocator.schema,
-            migrationPlan: ModelStoreLocator.migrationPlan,
             configurations: [ModelConfiguration(url: url, allowsSave: false)]
         )
         let commutes = try ModelContext(ro).fetch(FetchDescriptor<Commute>())
@@ -381,7 +386,6 @@ struct ModelStoreLocatorMigrationTests {
         do {
             let writer = try ModelContainer(
                 for: ModelStoreLocator.schema,
-                migrationPlan: ModelStoreLocator.migrationPlan,
                 configurations: [ModelConfiguration(url: url)]
             )
             let ctx = ModelContext(writer)
@@ -452,5 +456,146 @@ struct CommuteDriveRecordRelationshipTests {
         // And the commute is gone.
         let commutes = try context.fetch(FetchDescriptor<Commute>())
         #expect(commutes.isEmpty)
+    }
+}
+
+// MARK: - Pre-Inverse Schema Snapshot (test fixture)
+
+/// A FROZEN snapshot of the model graph as it shipped BEFORE the
+/// `Commute.driveRecords` ↔ `DriveRecord.associatedCommute` inverse relationship
+/// existed. This is a real, independent `VersionedSchema` — its nested `@Model`
+/// types are NOT the live classes, so they capture the genuine old on-disk shape:
+///
+///   * `DriveRecord.associatedCommute` is a plain to-one relationship with NO
+///     `inverse:` and NO explicit delete rule (exactly how it was persisted before
+///     commit d339f57).
+///   * `Commute` has NO `driveRecords` back-reference.
+///
+/// SwiftData derives a nested type's entity name from its SIMPLE name, so
+/// `PreInverseSchema.Commute` maps to the same store table ("Commute") as the live
+/// `Commute`, and likewise for `DriveRecord`. That is what lets a store WRITTEN
+/// with this snapshot be REOPENED under the current live schema — the migration
+/// path real users on a pre-inverse build take.
+///
+/// The snapshot is intentionally reduced to just the two entities under test (with
+/// no relationships to the other ten model types) so it forms a valid, minimal,
+/// self-consistent schema. Reopening it under the full current schema is itself the
+/// additive case (the other entities/columns are added empty) — which is the point.
+enum PreInverseSchema: VersionedSchema {
+    static var versionIdentifier = Schema.Version(1, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [Commute.self, DriveRecord.self]
+    }
+
+    @Model
+    final class Commute {
+        var id: UUID = UUID()
+        var name: String = ""
+        var thresholdPercentage: Double = 0.20
+        var hardMinuteFloor: Int?
+        var isActive: Bool = true
+        var createdAt: Date = Date()
+
+        init(name: String) {
+            self.id = UUID()
+            self.name = name
+            self.isActive = true
+            self.createdAt = Date()
+        }
+    }
+
+    @Model
+    final class DriveRecord {
+        var id: UUID = UUID()
+        var startedAt: Date = Date()
+        var endedAt: Date?
+        var wasConverted: Bool = false
+        // Pre-inverse shape: a plain to-one with no inverse and no explicit delete
+        // rule — the exact field declaration that shipped before d339f57.
+        var associatedCommute: Commute?
+
+        init(startedAt: Date = Date()) {
+            self.id = UUID()
+            self.startedAt = startedAt
+            self.wasConverted = false
+        }
+    }
+}
+
+// MARK: - Real Pre-Inverse → Current Migration Test
+
+/// The deciding evidence for dropping the versioned plan: a store written under the
+/// genuine OLD (pre-inverse) schema must open under the CURRENT schema via automatic
+/// lightweight migration, without error or data loss, and the new `.nullify` inverse
+/// rule must then work. If this passes with NO explicit `SchemaMigrationPlan`, the
+/// plan was unnecessary; if it required one, the test would fail at the reopen.
+@Suite("Pre-inverse store migrates to the current schema")
+struct SteddiSchemaMigrationTests {
+
+    private func makeTempStoreURL() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SteddiSchemaMigrationTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("Steddi.store")
+    }
+
+    @Test("A pre-inverse store opens under the current schema with data intact and the .nullify rule live")
+    func preInverseStoreMigratesAndNullifies() throws {
+        let url = try makeTempStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        // 1. Write a store under the FROZEN pre-inverse schema (no inverse, no
+        //    explicit delete rule) — the shape that shipped before d339f57.
+        let driveID: UUID
+        let commuteName = "Old Commute"
+        do {
+            let oldContainer = try ModelContainer(
+                for: Schema(versionedSchema: PreInverseSchema.self),
+                configurations: [ModelConfiguration(url: url)]
+            )
+            let ctx = ModelContext(oldContainer)
+            let commute = PreInverseSchema.Commute(name: commuteName)
+            let drive = PreInverseSchema.DriveRecord(startedAt: Date())
+            drive.associatedCommute = commute
+            ctx.insert(commute)
+            ctx.insert(drive)
+            try ctx.save()
+            driveID = drive.id
+        }
+
+        // 2. Reopen the SAME store file under the CURRENT live schema — exactly what
+        //    ModelStoreLocator does — with NO explicit migration plan. Automatic
+        //    lightweight migration must upgrade it in place.
+        let current = try ModelContainer(
+            for: SteddiSchema.current,
+            configurations: [ModelConfiguration(url: url)]
+        )
+        let ctx = ModelContext(current)
+
+        // (i) Opens without error and the pre-existing data survived intact,
+        //     including the previously-relationship-only `associatedCommute` link.
+        let commutes = try ctx.fetch(FetchDescriptor<Commute>())
+        #expect(commutes.count == 1)
+        let migratedCommute = try #require(commutes.first)
+        #expect(migratedCommute.name == commuteName)
+
+        let drives = try ctx.fetch(FetchDescriptor<DriveRecord>())
+        #expect(drives.count == 1)
+        let migratedDrive = try #require(drives.first { $0.id == driveID })
+        #expect(migratedDrive.associatedCommute?.id == migratedCommute.id)
+        // The new inverse back-reference is now populated from the existing link.
+        #expect(migratedCommute.driveRecords?.contains { $0.id == driveID } == true)
+
+        // (ii) Deleting the Commute nullifies the drive's `associatedCommute` and the
+        //      DriveRecord survives (the .nullify inverse rule, now live post-migration).
+        ctx.delete(migratedCommute)
+        try ctx.save()
+
+        let survivors = try ctx.fetch(FetchDescriptor<DriveRecord>())
+        #expect(survivors.count == 1)
+        let survivor = try #require(survivors.first { $0.id == driveID })
+        #expect(survivor.associatedCommute == nil)
+        #expect(try ctx.fetch(FetchDescriptor<Commute>()).isEmpty)
     }
 }
