@@ -6,6 +6,16 @@ import CoreLocation
 struct PhoneCompanionView: View {
     @Environment(NavigationStateManager.self) private var navState
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
+
+    /// A presented cover gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin the app theme here
+    /// too — otherwise this CarPlay companion cover renders in the device
+    /// appearance and mismatches the rest of Steddi when the chosen theme
+    /// differs from the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     /// Performs the actual route swap when the driver accepts a reroute
     /// suggestion. Plumbed from HomeView so the CarPlay companion reuses the
@@ -65,6 +75,7 @@ struct PhoneCompanionView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     // MARK: - Header Banner

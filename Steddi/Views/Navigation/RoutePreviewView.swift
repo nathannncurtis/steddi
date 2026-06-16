@@ -14,9 +14,18 @@ struct RoutePreviewView: View {
     let onCancel: () -> Void
 
     @AppStorage("accentColor") private var accentColor = "lavender"
+    @AppStorage(ThemeModeEx.defaultsKey) private var themeModeEx: String = ThemeModeEx.dynamic.rawValue
     @State private var selectedRoute: MKRoute?
 
     private var activeRoute: MKRoute { selectedRoute ?? route }
+
+    /// A presented cover gets its own presentation context and does not reliably
+    /// inherit the presenter's `.preferredColorScheme`, so pin the app theme here
+    /// too — otherwise this cover renders in the device appearance and mismatches
+    /// the rest of Steddi when the chosen theme differs from the device.
+    private var resolvedColorScheme: ColorScheme? {
+        (ThemeModeEx(rawValue: themeModeEx) ?? .dynamic).colorScheme
+    }
 
     var body: some View {
         let _ = accentColor // force SwiftUI re-render on accent change
@@ -131,6 +140,7 @@ struct RoutePreviewView: View {
                 )
             }
         }
+        .preferredColorScheme(resolvedColorScheme)
     }
 
     // MARK: - Route Indicators
