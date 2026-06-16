@@ -34,6 +34,12 @@ final class WeatherKitService {
     private var unavailableSince: Date?
     private var fetchDay: Date?
     private var fetchCountToday = 0
+    /// When the last WeatherKit fetch was *attempted* (success or failure).
+    /// The min-spacing budget guard throttles off this, not `lastFetchTime`
+    /// (which records only successes): a tight loop of transient failures must
+    /// still respect `minFetchInterval`, or repeated failures would bypass the
+    /// 10-minute spacing and burn the daily quota one error at a time.
+    private var lastAttemptTime: Date?
 
     init(
         provider: Provider? = nil,
@@ -43,7 +49,13 @@ final class WeatherKitService {
         self.provider = provider ?? Self.weatherKitProvider
         self.now = now
         self.apply = apply ?? { condition, coefficients in
+            // Feed both theme layers from one fresh observation: the weather
+            // layer (grey pull / brightness shift) and the temperature layer.
+            // Pass `norm: nil` so ThemeEngine resolves the local climate norm
+            // from its own location feed — LocalNormsProvider is the engine's
+            // to own, not this service's.
             ThemeEngine.shared.setWeather(condition: condition, coefficients: coefficients)
+            ThemeEngine.shared.setTemperature(currentF: condition.temperatureF, norm: nil)
         }
     }
 
@@ -111,7 +123,7 @@ final class WeatherKitService {
     // MARK: - Budget guard
 
     private func budgetAllowsFetch() -> Bool {
-        if let lastFetchTime, now().timeIntervalSince(lastFetchTime) < Tuning.minFetchInterval {
+        if let lastAttemptTime, now().timeIntervalSince(lastAttemptTime) < Tuning.minFetchInterval {
             return false
         }
         let today = Calendar.current.startOfDay(for: now())
@@ -129,6 +141,9 @@ final class WeatherKitService {
             fetchCountToday = 0
         }
         fetchCountToday += 1
+        // Stamp the attempt now (not only on success): the min-spacing guard
+        // spaces off this, so a burst of transient failures can't bypass it.
+        lastAttemptTime = now()
     }
 
     // MARK: - Condition → theme mapping
