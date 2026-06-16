@@ -22,6 +22,26 @@ class CarPlayDashboardDelegate: UIResponder, CPTemplateApplicationDashboardScene
 
     private var stateManager: NavigationStateManager { NavigationStateManager.shared }
 
+    /// Snapshot of every input that determines the dashboard button set, cached
+    /// from the last assignment. The 2s poll rebuilds and reassigns
+    /// `shortcutButtons` on every tick; CarPlay treats each assignment as an
+    /// update signal and re-renders the dashboard widget, so reassigning
+    /// byte-identical buttons every 2s churns the widget (and burns main-actor
+    /// work + image construction) the whole time CarPlay is connected. We diff
+    /// this snapshot and skip the reassign when nothing relevant changed, only
+    /// rebuilding on an actual transition. `accent` is included because the
+    /// button glyphs are tinted with `SteddiTheme.accentUIColor`, which the user
+    /// can change mid-session — so an accent change must still re-tint the
+    /// buttons. nil until the first build.
+    private struct DashboardButtonState: Equatable {
+        let isNavigating: Bool
+        let instruction: String
+        let etaText: String
+        let distanceRemaining: String
+        let accent: String
+    }
+    private var lastButtonState: DashboardButtonState?
+
     func templateApplicationDashboardScene(
         _ templateApplicationDashboardScene: CPTemplateApplicationDashboardScene,
         didConnect dashboardController: CPDashboardController,
@@ -56,6 +76,10 @@ class CarPlayDashboardDelegate: UIResponder, CPTemplateApplicationDashboardScene
         self.dashboardController = nil
         self.dashboardWindow = nil
         self.dashboardScene = nil
+        // Drop the diff cache so a reconnect rebuilds from scratch — the new
+        // controller starts with no buttons assigned, so the first
+        // updateDashboardButtons after reconnect must not be skipped as "unchanged".
+        self.lastButtonState = nil
     }
 
     /// Bring Steddi to the foreground from the dashboard, carrying intent in the
@@ -75,11 +99,25 @@ class CarPlayDashboardDelegate: UIResponder, CPTemplateApplicationDashboardScene
     private func updateDashboardButtons() {
         guard let dashboardController else { return }
 
+        // Diff the inputs that determine the button set. The 2s poll calls this
+        // every tick; when nothing relevant changed (the common idle case),
+        // skip the rebuild + reassign so CarPlay doesn't re-render identical
+        // buttons every 2s. Rebuild only on an actual transition.
+        let etaText = "\(stateManager.etaMinutes) min"
+        let newState = DashboardButtonState(
+            isNavigating: stateManager.isNavigating,
+            instruction: stateManager.instruction,
+            etaText: etaText,
+            distanceRemaining: stateManager.distanceRemaining,
+            accent: SteddiTheme.currentAccentOption.rawValue
+        )
+        guard newState != lastButtonState else { return }
+        lastButtonState = newState
+
         var buttons: [CPDashboardButton] = []
 
         if stateManager.isNavigating {
             // Show navigation status
-            let etaText = "\(stateManager.etaMinutes) min"
             if let img = UIImage(systemName: "location.fill")?
                 .withTintColor(SteddiTheme.accentUIColor, renderingMode: .alwaysOriginal) {
                 let navButton = CPDashboardButton(
