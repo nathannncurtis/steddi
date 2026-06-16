@@ -320,8 +320,12 @@ struct ModelStoreLocatorMigrationTests {
         #expect(ModelStoreLocator.migrationPlan is SteddiMigrationPlan.Type)
         // The container schema is built from the plan's current versioned schema,
         // so the two can never drift.
-        #expect(ModelStoreLocator.schema.entities.count == SteddiSchemaV1.models.count)
-        #expect(SteddiMigrationPlan.schemas.count == 1)
+        #expect(ModelStoreLocator.schema.entities.count == SteddiSchemaV2.models.count)
+        // V1 + V2 are both declared; V2 is the current schema and adds the explicit
+        // Commute ↔ DriveRecord inverse relationship via a lightweight stage.
+        #expect(SteddiMigrationPlan.schemas.count == 2)
+        #expect(SteddiMigrationPlan.stages.count == 1)
+        #expect(SteddiMigrationPlan.currentSchema.versionIdentifier == SteddiSchemaV2.versionIdentifier)
     }
 
     /// A store written by the current (read-write) schema reopens read-only with
@@ -401,5 +405,52 @@ struct ModelStoreLocatorMigrationTests {
                 configurations: [ModelConfiguration(url: url, allowsSave: false)]
             )
         }
+    }
+}
+
+// MARK: - Commute ↔ DriveRecord Relationship Tests
+
+@Suite("Commute ↔ DriveRecord inverse relationship")
+struct CommuteDriveRecordRelationshipTests {
+
+    private func makeContext() throws -> ModelContext {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ModelStoreLocator.schema, configurations: config)
+        return ModelContext(container)
+    }
+
+    /// Deleting a Commute must NULL the associated drive's back-reference (the
+    /// `.nullify` rule on the explicit inverse) rather than cascade-deleting the
+    /// historical drive or leaving it pointing at an invalidated model. This is the
+    /// regression test for the inverse-less dangling-relationship bug.
+    @Test("Deleting a Commute nullifies the drive's reference and keeps the drive")
+    func deletingCommuteNullifiesDriveReference() throws {
+        let context = try makeContext()
+
+        let commute = Commute(name: "Work")
+        let drive = DriveRecord(startedAt: Date())
+        drive.associatedCommute = commute
+        context.insert(commute)
+        context.insert(drive)
+        try context.save()
+
+        let driveID = drive.id
+        #expect(drive.associatedCommute?.id == commute.id)
+        // The inverse back-reference is populated from the drive side.
+        #expect(commute.driveRecords?.contains { $0.id == driveID } == true)
+
+        context.delete(commute)
+        try context.save()
+
+        // The historical drive survives the commute deletion...
+        let drives = try context.fetch(FetchDescriptor<DriveRecord>())
+        #expect(drives.count == 1)
+        let survivor = try #require(drives.first { $0.id == driveID })
+        // ...with its reference nulled (no dangling pointer to an invalidated model).
+        #expect(survivor.associatedCommute == nil)
+
+        // And the commute is gone.
+        let commutes = try context.fetch(FetchDescriptor<Commute>())
+        #expect(commutes.isEmpty)
     }
 }

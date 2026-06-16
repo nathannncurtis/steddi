@@ -31,26 +31,61 @@ import SwiftData
 enum SteddiMigrationPlan: SchemaMigrationPlan {
 
     static var schemas: [any VersionedSchema.Type] {
-        [SteddiSchemaV1.self]
+        [SteddiSchemaV1.self, SteddiSchemaV2.self]
     }
 
     static var stages: [MigrationStage] {
-        // Only one version exists today. Future additive changes add a new
-        // `SteddiSchemaV2` and a `.lightweight` stage from V1 → V2 here; a
-        // non-lightweight change adds a `.custom` stage instead. Because all
-        // changes to date are additive-with-defaults, no stage is needed yet.
-        []
+        // V1 → V2 adds the explicit `Commute.driveRecords` ↔ `DriveRecord.associatedCommute`
+        // inverse relationship (with a `.nullify` delete rule). This is purely
+        // additive at the storage layer — `DriveRecord.associatedCommute` was
+        // already a persisted to-one relationship; V2 only declares the matching
+        // back-reference SwiftData needs to propagate the delete rule. The new
+        // `driveRecords` to-many is empty/nil for every existing row, so a
+        // lightweight migration upgrades the store in place with no data
+        // transformation. A non-lightweight change would use a `.custom` stage.
+        [
+            .lightweight(
+                fromVersion: SteddiSchemaV1.self,
+                toVersion: SteddiSchemaV2.self
+            )
+        ]
     }
 
     /// The schema the app currently builds containers from.
-    static var currentSchema: any VersionedSchema.Type { SteddiSchemaV1.self }
+    static var currentSchema: any VersionedSchema.Type { SteddiSchemaV2.self }
 }
 
-/// V1 — the current model graph. Enumerates every `@Model` type the app persists.
-/// Keep this in lockstep with the live model definitions; a new persisted model
-/// or property is part of V1 only until the first shipped V2 freezes V1's shape.
+/// V1 — the original model graph, frozen at first ship. Enumerates every `@Model`
+/// type the app persisted in V1. Do NOT edit V1's shape; new persisted models or
+/// relationships go into a later version (V2+) so each migration is a real diff.
 enum SteddiSchemaV1: VersionedSchema {
     static var versionIdentifier = Schema.Version(1, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [
+            PinnedLocation.self,
+            Commute.self,
+            Route.self,
+            DriveRecord.self,
+            NoGoZone.self,
+            CommuteTrip.self,
+            Report.self,
+            CommuteAnalyticsAggregate.self,
+            Trip.self,
+            TripStop.self,
+            RoadCondition.self,
+            CameraReport.self
+        ]
+    }
+}
+
+/// V2 — adds the explicit `Commute.driveRecords` ↔ `DriveRecord.associatedCommute`
+/// inverse relationship with a `.nullify` delete rule, so deleting a Commute nulls
+/// each associated drive's back-reference instead of leaving a dangling pointer to
+/// an invalidated model. The persisted model-type set is unchanged from V1 — only
+/// the relationship declaration changed — so the V1 → V2 stage is lightweight.
+enum SteddiSchemaV2: VersionedSchema {
+    static var versionIdentifier = Schema.Version(2, 0, 0)
 
     static var models: [any PersistentModel.Type] {
         [

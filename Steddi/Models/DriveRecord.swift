@@ -9,6 +9,12 @@ final class DriveRecord {
     var endedAt: Date?
     var rawGPSPoints: [GPSPoint]     // Raw recorded trace
     var matchedPolyline: String?     // Encoded polyline after Map Matching
+    // Explicit inverse of `Commute.driveRecords` with a `.nullify` rule: deleting
+    // a Commute must NULL this back-reference (analytics deliberately retains the
+    // historical drive), never cascade-delete the drive or leave it pointing at an
+    // invalidated model. The inverse on Commute is what makes SwiftData propagate
+    // the delete rule here — without it the FK dangled.
+    @Relationship(deleteRule: .nullify, inverse: \Commute.driveRecords)
     var associatedCommute: Commute?
     var wasConverted: Bool           // Whether this was saved as a Route
 
