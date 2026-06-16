@@ -270,6 +270,26 @@ struct AnalyticsChartBuilderTests {
         #expect(chart[1].trafficMinutes == 5)
     }
 
+    @Test("Out-of-order timestamp before chart start does not crash and buckets sanely")
+    func speedChartHandlesOutOfOrderTimestamps() {
+        // Enough samples to force the bucketing branch (count > maxPoints).
+        var points = (0..<400).map { Self.point(offset: Double($0), speed: 10) }
+        // Inject a sample whose timestamp is earlier than valid.first's (clock
+        // adjustment / out-of-order GPS) — its offset is negative, which without
+        // a lower clamp computes a negative bucket index and crashes on subscript.
+        points.append(Self.point(offset: -50, speed: 3))
+        // And one past the chronological end for the upper bound too.
+        points.append(Self.point(offset: 100_000, speed: 7))
+
+        let chart = AnalyticsService.buildSpeedChart(points: points, maxPoints: 160)
+
+        // No crash; produces a bounded, sane chart with every value plausible.
+        #expect(!chart.isEmpty)
+        #expect(chart.count <= 160)
+        #expect(chart.allSatisfy { $0.offsetSeconds >= 0 })
+        #expect(chart.allSatisfy { $0.speedMps >= 0 && $0.speedMps <= DriveRecord.maxPlausibleSpeedMps })
+    }
+
     @Test("Route samples cap count and drop low-accuracy fixes")
     func routeSampleResampling() {
         var points = (0..<900).map { Self.point(offset: Double($0), speed: 8) }
