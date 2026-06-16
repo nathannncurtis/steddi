@@ -52,7 +52,7 @@ struct OnboardingThemeView: View {
     // bright accent there would resolve near-black on near-black — invisible for
     // EVERY accent (the Reduce-Transparency bug). So the surface model BRANCHES on
     // glass availability: accent shell when glass is on, the dark fallback fill
-    // when it's off (→ near-white copy). `effectiveSurface` is the single seam;
+    // when it's off (→ near-white copy). `glassAvailable` is the single seam;
     // `ThemeContrastTests.onboardingTheme*` assert AA in BOTH states.
 
     /// The card-shell surface the bare copy (header, section titles/subtitles)
@@ -332,16 +332,18 @@ struct OnboardingThemeView: View {
         .buttonStyle(.plain)
     }
 
-    /// The "Recommended" chip. Its background is SELF-CONTAINED and accent-
+    /// The "Recommended" chip. Its background is SELF-CONTAINED and surface-
     /// independent: the prior `Color.black.opacity(0.35)` capsule was translucent,
     /// so over the bright accent card it stayed light and white text on it fell to
     /// ~2.95:1 (the comment claimed ~8:1, which only held over a dark card — and
-    /// the theme beat has no dark card). Instead the capsule is filled with a SOLID
-    /// contrasting tone for the card surface (`contrastingForeground(on: surface)`
-    /// → near-black on light accents, near-white on dark) and the text is the
+    /// with glass on the theme beat has no dark card). Instead the capsule is
+    /// filled with a SOLID contrasting tone for the EFFECTIVE card surface (the
+    /// `surface` passed in already branches on glass availability:
+    /// `contrastingForeground(on:)` → near-black on the light accent card, near-
+    /// white on the dark Reduce-Transparency fallback) and the text is the
     /// contrasting tone for THAT capsule fill — so text-on-chip is a fixed
-    /// black/white pairing at ~17:1 on every accent, well clear of AA for the small
-    /// caption2 label.
+    /// black/white pairing at ~17:1 on every accent in both glass states, well
+    /// clear of AA for the small caption2 label.
     private func recommendedChip(over surface: RGBColor) -> some View {
         let capsuleFill = SteddiTheme.contrastingForeground(on: surface)
         // The capsule fill is one of the two near-pure endpoints; pick the other
