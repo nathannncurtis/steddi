@@ -329,9 +329,26 @@ enum StepSynthesizer {
     /// needed, and `nil` if a cut point can't be located so the caller can fall
     /// back to the full geometry.
     private static func trimSubSegment(_ coords: [CLLocationCoordinate2D], from: Double, to: Double) -> [CLLocationCoordinate2D]? {
-        guard coords.count >= 2, from >= 0, to <= 1, from < to else { return coords }
+        guard coords.count >= 2, from >= 0, to <= 1, from <= to else { return coords }
         let cumulative = RouteGeometry.cumulativeDistances(coords)
         guard let total = cumulative.last, total > 0 else { return coords }
+
+        // Zero-length sub-segment (origin == destination at the SAME fraction on
+        // one edge): the travelled geometry is a single point, NOT the full edge.
+        // Returning the interpolated point collapses the polyline to one coordinate
+        // so `stitchedPolyline` yields `count < 2` and `synthesize` falls back to
+        // MapKit (a degenerate point route, not a phantom full-block drive). Without
+        // this, the old `from < to` guard rejected `from == to` and returned the
+        // ENTIRE untrimmed edge — overstating a zero-length trip as a full block.
+        if from == to {
+            let target = total * from
+            for i in 0..<(coords.count - 1) where cumulative[i + 1] >= target {
+                let segLen = cumulative[i + 1] - cumulative[i]
+                let t = segLen > 0 ? (target - cumulative[i]) / segLen : 0
+                return [interpolate(coords[i], coords[i + 1], t)]
+            }
+            return [coords[coords.count - 1]]
+        }
 
         // The interpolated point at `target` arc-length and the index `i` of the
         // segment [i, i+1] it falls on, resolved against the ORIGINAL cumulative.
