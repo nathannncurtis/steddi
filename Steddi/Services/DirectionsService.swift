@@ -97,10 +97,37 @@ final class DirectionsService {
     /// Falls back to the direct origin-to-endpoint ETA only if the via-route
     /// can't be computed, so a transient OSRM failure degrades gracefully rather
     /// than throwing the cycle away.
+    ///
+    /// Use this for one-off "how long along this path" estimates where a less
+    /// precise number still beats nothing. The reroute loop instead uses
+    /// `fetchPathAwareETA`, which exposes WHICH basis was used so two ETAs are
+    /// never compared across mismatched bases.
     func fetchETA(
         from origin: CLLocationCoordinate2D,
         along encodedPolyline: String
     ) async throws -> TimeInterval {
+        try await fetchPathAwareETA(from: origin, along: encodedPolyline).duration
+    }
+
+    /// Path-aware ETA tagged with WHICH basis produced it.
+    ///
+    /// Identical computation to `fetchETA` — pin the polyline as OSRM via points
+    /// and return its path-following duration, degrading to the direct
+    /// endpoint estimate if the via-route can't be computed — but the result
+    /// carries `isPathAware` so a caller can refuse to compare a path-aware
+    /// number against a degraded direct one.
+    ///
+    /// This is the comparability fix for the reroute loop: the via-route call
+    /// hits a public, rate-limited router and fails independently per route, so
+    /// a transient one-sided failure mid-cycle could leave the active route's
+    /// baseline on the path-aware basis while a candidate silently degraded to
+    /// the direct (open-road, generally shorter) basis — manufacturing phantom
+    /// "faster route" savings. With the basis exposed, the loop compares only
+    /// like-for-like and skips the cycle/candidate otherwise.
+    func fetchPathAwareETA(
+        from origin: CLLocationCoordinate2D,
+        along encodedPolyline: String
+    ) async throws -> RouteETA {
         let routeCoords = PolylineEncoder.decode(encodedPolyline, precision: 6)
         guard let destinationCoord = routeCoords.last else {
             throw DirectionsError.noRoute
@@ -113,12 +140,13 @@ final class DirectionsService {
         // the inflated-planned-duration migration in HomeView).
         let pinned = [origin] + Self.sampledViaPoints(from: RouteGeometry.removeSpikes(routeCoords))
         if let viaRoute = try? await fetchViaRoute(points: pinned), viaRoute.duration > 0 {
-            return viaRoute.duration
+            return RouteETA(duration: viaRoute.duration, isPathAware: true)
         }
 
         // Via-route unavailable — degrade to a direct endpoint estimate so the
-        // caller still gets a (less precise) comparable number.
-        return try await fetchDirectETA(from: origin, to: destinationCoord)
+        // caller still gets a (less precise) number, tagged as NOT path-aware.
+        let direct = try await fetchDirectETA(from: origin, to: destinationCoord)
+        return RouteETA(duration: direct, isPathAware: false)
     }
 
     /// Direct origin-to-destination travel time estimate from MKDirections.
@@ -569,6 +597,16 @@ final class DirectionsService {
 }
 
 // MARK: - Route Types
+
+/// A travel-time estimate tagged with the basis that produced it, so two ETAs
+/// are never compared across mismatched bases (path-aware via-route vs. a
+/// degraded direct open-road estimate). `isPathAware` is true when the duration
+/// followed the requested polyline's geometry, false when it fell back to a
+/// straight origin-to-endpoint estimate.
+struct RouteETA {
+    let duration: TimeInterval
+    let isPathAware: Bool
+}
 
 struct DirectionsRoute {
     let encodedPolyline: String

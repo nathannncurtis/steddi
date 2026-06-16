@@ -88,12 +88,19 @@ struct SymmetricRerouteETATests {
     /// ETA proportional to the trimmed-ahead length of the polyline actually
     /// handed to the fetch — the same way OSRM's via-route duration tracks the
     /// geometry it's given. Faster routes (shorter ahead-geometry) -> lower ETA.
+    /// Tagged path-aware, mimicking a successful via-route fetch.
     private static func lengthProportionalETA(
         _ coord: CLLocationCoordinate2D, _ encoded: String
-    ) async throws -> TimeInterval {
+    ) async throws -> RouteETA {
         let coords = PolylineEncoder.decode(encoded, precision: 6)
         let length = RouteGeometry.cumulativeDistances(coords).last ?? 0
-        return length / metersPerSecond
+        return RouteETA(duration: length / Self.metersPerSecond, isPathAware: true)
+    }
+
+    /// Wrap a duration as a path-aware baseline, the basis a successful
+    /// via-route fetch of the active route's remaining geometry produces.
+    private static func pathAwareBaseline(_ duration: TimeInterval) -> RouteETA {
+        RouteETA(duration: duration, isPathAware: true)
     }
 
     /// A straight east-west route. `lat`/`lon` span chosen so two parallel
@@ -142,13 +149,13 @@ struct SymmetricRerouteETATests {
         let remainingActive = DirectionsService.remainingPolyline(of: activeCoords, from: currentCoord)
         let remainingETA = try await Self.lengthProportionalETA(
             currentCoord, PolylineEncoder.encode(remainingActive, precision: 6)
-        )
+        ).duration
 
         let candidate = route(1, candidateCoords, name: "Straight shot")
         let best = await NavigationStateManager.bestReroute(
             candidates: [candidate],
             currentCoord: currentCoord,
-            remainingETASeconds: remainingETA,
+            baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
             hardMinuteFloor: 10,
             isSuppressed: { _, _ in false },
@@ -173,14 +180,14 @@ struct SymmetricRerouteETATests {
         let remainingActive = DirectionsService.remainingPolyline(of: coords, from: currentCoord)
         let remainingETA = try await Self.lengthProportionalETA(
             currentCoord, PolylineEncoder.encode(remainingActive, precision: 6)
-        )
+        ).duration
 
         // The candidate IS the same geometry as the active route.
         let candidate = route(1, coords, name: "Same path")
         let best = await NavigationStateManager.bestReroute(
             candidates: [candidate],
             currentCoord: currentCoord,
-            remainingETASeconds: remainingETA,
+            baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
             hardMinuteFloor: 10,
             isSuppressed: { _, _ in false },
@@ -205,21 +212,21 @@ struct SymmetricRerouteETATests {
         let remainingActive = DirectionsService.remainingPolyline(of: coords, from: currentCoord)
         let remainingETA = try await Self.lengthProportionalETA(
             currentCoord, PolylineEncoder.encode(remainingActive, precision: 6)
-        )
+        ).duration
 
         // Recreate the candidate ETA the way bestReroute does (trim then fetch)
         // to prove it equals the active remaining ETA.
         let candidateRemaining = DirectionsService.remainingPolyline(of: coords, from: currentCoord)
         let candidateETA = try await Self.lengthProportionalETA(
             currentCoord, PolylineEncoder.encode(candidateRemaining, precision: 6)
-        )
+        ).duration
         #expect(abs(candidateETA - remainingETA) < 1.0)
 
         let candidate = route(1, coords, name: "Same path mid-drive")
         let best = await NavigationStateManager.bestReroute(
             candidates: [candidate],
             currentCoord: currentCoord,
-            remainingETASeconds: remainingETA,
+            baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
             hardMinuteFloor: 10,
             isSuppressed: { _, _ in false },
@@ -252,7 +259,7 @@ struct SymmetricRerouteETATests {
         let remainingAlt = DirectionsService.remainingPolyline(of: altCoords, from: currentCoord)
         let remainingETA = try await Self.lengthProportionalETA(
             currentCoord, PolylineEncoder.encode(remainingAlt, precision: 6)
-        )
+        ).duration
 
         // Caller excludes the active route (alt) by identity — only the preferred
         // route is a candidate. (The OLD rank>0 filter would have excluded the
@@ -263,7 +270,7 @@ struct SymmetricRerouteETATests {
         let best = await NavigationStateManager.bestReroute(
             candidates: candidates,
             currentCoord: currentCoord,
-            remainingETASeconds: remainingETA,
+            baseline: Self.pathAwareBaseline(remainingETA),
             basePercentage: 0.20,
             hardMinuteFloor: 10,
             isSuppressed: { _, _ in false },
@@ -273,6 +280,98 @@ struct SymmetricRerouteETATests {
         let suggestion = try #require(best, "The faster preferred route should be re-offered")
         #expect(suggestion.route.id == preferred.id)
         #expect(suggestion.route.id != alt.id, "The route being driven must never be re-suggested")
+    }
+
+    /// FALLBACK-PATH asymmetry guard. When a candidate's via-route fetch
+    /// transiently FAILS, `fetchPathAwareETA` degrades to a direct (open-road,
+    /// generally shorter) estimate tagged `isPathAware: false`. If `bestReroute`
+    /// compared that direct number against the path-aware baseline, the shorter
+    /// direct estimate would manufacture a phantom "faster route" card for a
+    /// route that is actually SLOWER along its real geometry. The comparability
+    /// gate must skip any candidate whose basis disagrees with the baseline, so
+    /// no suggestion surfaces this cycle.
+    @Test("A candidate that falls back to a direct estimate is never spuriously faster")
+    func fallbackBasisMismatchYieldsNoSavings() async throws {
+        let origin = CLLocationCoordinate2D(latitude: 33.0, longitude: -117.0)
+        let destination = CLLocationCoordinate2D(latitude: 33.0, longitude: -116.8)
+
+        // Active route: the committed path the driver is on — measured PATH-AWARE.
+        // It bulges north before the shared destination, so its path-aware length
+        // (and thus baseline ETA) is genuinely LONGER than a straight-line
+        // origin->destination estimate.
+        var activeCoords: [CLLocationCoordinate2D] = [origin]
+        activeCoords += (1..<10).map { CLLocationCoordinate2D(latitude: 33.1, longitude: -117.0 + Double($0) * 0.02) }
+        activeCoords.append(destination)
+
+        // Candidate: an equally-long detour. Its REAL path-aware ETA would be
+        // about the same as the baseline (no genuine savings), but its via-route
+        // fetch transiently FAILS, so its ETA degrades to the much-shorter
+        // straight-line direct estimate — which would manufacture phantom savings
+        // if compared against the path-aware baseline.
+        let candidateCoords = activeCoords
+
+        let currentCoord = origin
+
+        // Baseline: path-aware ETA along the (detouring) active route.
+        let remainingActive = DirectionsService.remainingPolyline(of: activeCoords, from: currentCoord)
+        let baselineDuration = try await Self.lengthProportionalETA(
+            currentCoord, PolylineEncoder.encode(remainingActive, precision: 6)
+        ).duration
+        let baseline = Self.pathAwareBaseline(baselineDuration)
+
+        // The straight-line endpoint distance, used as the DIRECT fallback
+        // estimate — much shorter than the committed detour path, so it WOULD
+        // look faster than the baseline if compared.
+        let directEstimate = RouteGeometry.haversineDistance(from: origin, to: destination) / Self.metersPerSecond
+        #expect(directEstimate < baselineDuration,
+                "Setup: the direct fallback estimate must look faster than the path-aware baseline")
+
+        // Simulate the candidate's via-route transiently failing: its fetch
+        // degrades to the direct estimate, tagged NOT path-aware.
+        let candidate = route(1, candidateCoords, name: "Detour (via-route failed)")
+        let best = await NavigationStateManager.bestReroute(
+            candidates: [candidate],
+            currentCoord: currentCoord,
+            baseline: baseline,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            isSuppressed: { _, _ in false },
+            fetchETA: { _, _ in RouteETA(duration: directEstimate, isPathAware: false) }
+        )
+
+        #expect(best == nil,
+                "A direct-fallback candidate must not be compared against a path-aware baseline — no phantom savings")
+    }
+
+    /// Symmetry sanity: when BOTH sides fall back to the same (direct) basis,
+    /// the comparison IS valid again and a genuinely faster route still
+    /// surfaces. The gate only blocks MIXED-basis comparisons, not a fully
+    /// degraded cycle where both numbers share the same footing.
+    @Test("When both sides fall back to a direct estimate, a faster route still surfaces")
+    func bothSidesDirectStillCompares() async throws {
+        let origin = CLLocationCoordinate2D(latitude: 33.0, longitude: -117.0)
+        let destination = CLLocationCoordinate2D(latitude: 33.0, longitude: -116.8)
+        let candidateCoords = [origin, destination]
+        let currentCoord = origin
+
+        // Both baseline and candidate are on the DIRECT basis. Baseline is a
+        // long direct estimate; candidate's direct estimate is shorter.
+        let baseline = RouteETA(duration: 1200, isPathAware: false)
+        let candidate = route(1, candidateCoords, name: "Faster (both direct)")
+
+        let best = await NavigationStateManager.bestReroute(
+            candidates: [candidate],
+            currentCoord: currentCoord,
+            baseline: baseline,
+            basePercentage: 0.20,
+            hardMinuteFloor: 10,
+            isSuppressed: { _, _ in false },
+            fetchETA: { _, _ in RouteETA(duration: 600, isPathAware: false) }
+        )
+
+        let suggestion = try #require(best, "Same-basis comparison must still surface a faster route")
+        #expect(suggestion.route.id == candidate.id)
+        #expect(suggestion.savingsMinutes > 0)
     }
 }
 
