@@ -156,7 +156,21 @@ enum RoadGraphBuilder {
                 maxspeed: tags["maxspeed"],
                 highway: (tags["highway"] ?? "").lowercased()
             ) ?? 0)
-            let attrs = edgeAttributes(tags: tags, direction: direction, roadClass: roadClass)
+            // Turn-lane-derived flags (`.dedicatedLeftLane`) are resolved PER
+            // DIRECTION, like the oncoming-lane count below: the forward edge
+            // reads `turn:lanes:forward`, the reverse edge reads
+            // `turn:lanes:backward`, each falling back to the bare `turn:lanes`.
+            // Sharing one `attrs` value would let an asymmetric split (e.g.
+            // `turn:lanes:forward=left|through` + `turn:lanes:backward=through`)
+            // wrongly flag the reverse edge as having a protected-left pocket.
+            let forwardAttrs = edgeAttributes(
+                tags: tags, direction: direction, roadClass: roadClass,
+                turnLanes: tags["turn:lanes:forward"] ?? tags["turn:lanes"]
+            )
+            let reverseAttrs = edgeAttributes(
+                tags: tags, direction: direction, roadClass: roadClass,
+                turnLanes: tags["turn:lanes:backward"] ?? tags["turn:lanes"]
+            )
             // Oncoming-lane count a driver crossing this way faces on an
             // unprotected left (§5.1). Resolved PER DIRECTION: the forward edge
             // faces the backward lanes and the reverse edge faces the forward
@@ -198,7 +212,7 @@ enum RoadGraphBuilder {
                             pending.append(PendingEdge(
                                 from: fromIdx, to: toIdx, coords: segmentCoords,
                                 lengthMeters: length, freeFlowSpeedMPS: speedMPS,
-                                osmWayID: way.id, roadClass: roadClass, attrs: attrs,
+                                osmWayID: way.id, roadClass: roadClass, attrs: forwardAttrs,
                                 oncomingLanes: oncomingForward
                             ))
                         }
@@ -206,7 +220,7 @@ enum RoadGraphBuilder {
                             pending.append(PendingEdge(
                                 from: toIdx, to: fromIdx, coords: Array(segmentCoords.reversed()),
                                 lengthMeters: length, freeFlowSpeedMPS: speedMPS,
-                                osmWayID: way.id, roadClass: roadClass, attrs: attrs,
+                                osmWayID: way.id, roadClass: roadClass, attrs: reverseAttrs,
                                 oncomingLanes: oncomingReverse
                             ))
                         }
@@ -285,10 +299,18 @@ enum RoadGraphBuilder {
     // MARK: - Helpers
 
     /// Resolve `EdgeAttributes` from a way's tags.
+    ///
+    /// `turnLanes` is the directional turn-lane value for THIS edge —
+    /// `turn:lanes:forward` for the forward edge, `turn:lanes:backward` for the
+    /// reverse edge (each falling back to the bare `turn:lanes`). Passed in by
+    /// the caller because the same way produces two edges that must derive their
+    /// `.dedicatedLeftLane` flag from opposite directional tags. Defaults to the
+    /// bare `turn:lanes` for callers that don't split by direction.
     static func edgeAttributes(
         tags: [String: String],
         direction: OSMTagParsing.OnewayDirection,
-        roadClass: RoadClass
+        roadClass: RoadClass,
+        turnLanes turnLanesTag: String? = nil
     ) -> EdgeAttributes {
         var attrs: EdgeAttributes = []
         if direction != .both { attrs.insert(.oneway) }
@@ -313,9 +335,13 @@ enum RoadGraphBuilder {
         }
 
         // A dedicated left-turn pocket (a left-only `turn:lanes` cell) implies a
-        // protected left phase in most US signals (§5.1). `turn:lanes:forward`
-        // takes precedence for two-way ways where the bare tag is ambiguous.
-        let turnLanes = OSMTagParsing.parseTurnLanes(tags["turn:lanes:forward"] ?? tags["turn:lanes"])
+        // protected left phase in most US signals (§5.1). Resolved from the
+        // direction-specific tag the caller supplies (forward edge ←
+        // `turn:lanes:forward`, reverse edge ← `turn:lanes:backward`), so an
+        // asymmetric two-way road only flags the direction that actually has the
+        // pocket. Falls back to the bare `turn:lanes` when no directional value
+        // is passed.
+        let turnLanes = OSMTagParsing.parseTurnLanes(turnLanesTag ?? tags["turn:lanes"])
         if turnLanes.contains(where: { $0.isDedicatedLeft }) {
             attrs.insert(.dedicatedLeftLane)
         }

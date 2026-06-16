@@ -324,6 +324,30 @@ struct RoadGraphBuilderAttributeTests {
         #expect(rev.oncomingLanes == 3)  // the forward lanes
     }
 
+    /// An asymmetric two-way road (turn:lanes:forward has a left pocket but
+    /// turn:lanes:backward does not) must flag `.dedicatedLeftLane` ONLY on the
+    /// forward edge. The reverse edge derives its turn lanes from
+    /// turn:lanes:backward, so it must NOT inherit the forward pocket — otherwise
+    /// the cost model bills a turn off the reverse edge as a cheap protected left.
+    @Test("Asymmetric turn:lanes:forward/backward flag dedicatedLeftLane per direction")
+    func asymmetricTurnLanesPerDirection() {
+        let graph = buildGraph(
+            nodeJSON(1, 0.0, 0.0),
+            nodeJSON(2, 0.0, 0.001),
+            wayElementJSON(100, nodes: [1, 2], tags: [
+                "highway": "primary",
+                "turn:lanes:forward": "left|through",
+                "turn:lanes:backward": "through"
+            ])
+        )
+        #expect(graph.edges.count == 2)
+        let fwd = graph.edges.first { $0.from == graph.osmToIndex[1] && $0.to == graph.osmToIndex[2] }!
+        let rev = graph.edges.first { $0.from == graph.osmToIndex[2] && $0.to == graph.osmToIndex[1] }!
+        // Forward has the dedicated-left pocket; reverse does not.
+        #expect(fwd.attrs.contains(.dedicatedLeftLane))
+        #expect(!rev.attrs.contains(.dedicatedLeftLane))
+    }
+
     @Test("Non-drivable highway classes are dropped")
     func nonDrivableDropped() {
         let graph = buildGraph(
