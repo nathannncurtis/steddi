@@ -927,7 +927,8 @@ final class NavigationEngine {
         if meters < 160 { return "\(Int(meters * 3.281)) ft" }
         let miles = meters / 1609.34
         if miles < 10 { return String(format: "%.1f mi", miles) }
-        return "\(Int(miles)) mi"
+        // Round, don't truncate: 10.95 mi -> "11 mi" (avoid up-to-1-mi understatement).
+        return "\(Int(miles.rounded())) mi"
     }
 
     nonisolated static func formatArrivalTime(

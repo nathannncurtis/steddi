@@ -44,3 +44,32 @@ struct VoiceOptionTests {
         }
     }
 }
+
+// MARK: - Spoken distance phrase
+
+@Suite("VoiceGuidanceService.distancePhrase")
+struct VoiceGuidanceDistancePhraseTests {
+
+    @Test("Short distance is spoken in feet")
+    func feet() {
+        // 100 m ≈ 328 ft
+        #expect(VoiceGuidanceService.distancePhrase(meters: 100) == "In 328 feet")
+    }
+
+    @Test("Sub-mile distance gets one decimal mile")
+    func decimalMile() {
+        // 0.5 mi
+        #expect(VoiceGuidanceService.distancePhrase(meters: 0.5 * 1609.34) == "In 0.5 miles")
+    }
+
+    // Rounding (not truncation) for whole-mile announcements.
+    @Test("10.95 mi announces 11 miles (not truncated to 10)")
+    func roundsUpNotTruncated() {
+        #expect(VoiceGuidanceService.distancePhrase(meters: 10.95 * 1609.34) == "In 11 miles")
+    }
+
+    @Test("10.4 mi announces 10 miles")
+    func roundsDown() {
+        #expect(VoiceGuidanceService.distancePhrase(meters: 10.4 * 1609.34) == "In 10 miles")
+    }
+}

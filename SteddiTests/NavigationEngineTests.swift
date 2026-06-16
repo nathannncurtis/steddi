@@ -167,6 +167,19 @@ struct NavigationEngineFormatDistanceTests {
         let result = NavigationEngine.formatDistance(25 * 1609.34)
         #expect(result == "25 mi")
     }
+
+    // Rounding (not truncation) above 10 mi.
+    @Test("10.95 mi rounds up to 11 mi (not truncated to 10)")
+    func roundsUpNotTruncated() {
+        let result = NavigationEngine.formatDistance(10.95 * 1609.34)
+        #expect(result == "11 mi")
+    }
+
+    @Test("10.4 mi rounds down to 10 mi")
+    func roundsDown() {
+        let result = NavigationEngine.formatDistance(10.4 * 1609.34)
+        #expect(result == "10 mi")
+    }
 }
 
 // MARK: - Format Arrival Time Tests

@@ -109,6 +109,20 @@ struct FormatDistanceTests {
         let result = NavigationStateManager.formatDistance(100 * 1609.34)
         #expect(result == "100 mi")
     }
+
+    // Rounding (not truncation) above 10 mi: Int(10.95) truncated to "10 mi"
+    // understated the distance by nearly a mile. .rounded() fixes it.
+    @Test("10.95 mi rounds up to 11 mi (not truncated to 10)")
+    func roundsUpNotTruncated() {
+        let result = NavigationStateManager.formatDistance(10.95 * 1609.34)
+        #expect(result == "11 mi")
+    }
+
+    @Test("10.4 mi rounds down to 10 mi")
+    func roundsDown() {
+        let result = NavigationStateManager.formatDistance(10.4 * 1609.34)
+        #expect(result == "10 mi")
+    }
 }
 
 // MARK: - Format Arrival Time Tests
