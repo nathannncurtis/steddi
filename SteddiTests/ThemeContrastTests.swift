@@ -185,6 +185,61 @@ struct ThemeContrastTests {
         }
     }
 
+    @Test("the .steddiPrimary Reduce-Transparency fallback (solid opaque accentBrand) clears AA on every accent")
+    func steddiPrimaryReduceTransparencyFallbackAA() {
+        // When glass is off (Reduce Transparency / Increase Contrast),
+        // `.steddiPrimary` renders its `fallbackProminent` path: a FULLY OPAQUE
+        // `accentBrand` capsule (no glass, no `navSurfaceOpacity(0.9)` reduction,
+        // no hairline) drawn under the `onAccent` label. So the RT-state surface
+        // is exactly `accentBrand` — identical to the glass-state pairing — and the
+        // SAME `onAccent`/`accentBrand` contrast governs both states.
+        //
+        // This is the regression seam for the RT-fallback fix: it pins that the
+        // CTA keeps its brand accent identity (the fill stays `accentBrand`, never
+        // the old near-white `surfacePrimary` default) AND that the on-fill label
+        // contrast is honest because the rendered surface is the opaque accent the
+        // label color was computed for.
+        for option in SteddiTheme.AccentOption.allCases {
+            // Literal surface painted in the RT fallback = the opaque accentBrand.
+            let rtFill = option.rgb
+            // Literal label = onAccent (`contrastingForeground(on: accentBrand)`).
+            let label = ContrastRatio.contrastingForeground(on: option.rgb)
+            let r = ContrastRatio.ratio(label, rtFill)
+            #expect(r >= ContrastRatio.aaBody,
+                    ".steddiPrimary RT fallback onAccent/accentBrand(\(option.rawValue)) = \(r), want >= 4.5")
+        }
+    }
+
+    @Test("the OLD translucent CTA fallback shifted the surface off accentBrand (documents the RT bug the prominent fill fixes)")
+    func steddiPrimaryTranslucentFallbackRegression() {
+        // The pre-fix fallback routed `.steddiPrimary` through the generic chrome
+        // path: `fallbackFill.opacity(0.9)` composited over whatever sits behind
+        // (the fixed-DARK onboarding backdrop), plus a hairline. The on-fill label
+        // is computed for the OPAQUE accent, so it was painted on a surface that no
+        // longer matched it. This documents that the rendered surface drifted off
+        // `accentBrand`, and that the prominent (fully-opaque) fill removes the
+        // drift entirely.
+        let darkBackdrop = RGBColor(0, 0, 0) // onboarding beatBackground = .black
+        let alpha = 0.9
+        for option in SteddiTheme.AccentOption.allCases {
+            let a = option.rgb
+            // Source-over composite of accent@0.9 onto the dark backdrop.
+            let composited = RGBColor(
+                a.r * alpha + darkBackdrop.r * (1 - alpha),
+                a.g * alpha + darkBackdrop.g * (1 - alpha),
+                a.b * alpha + darkBackdrop.b * (1 - alpha)
+            )
+            // The composited surface is strictly darker than the opaque accent —
+            // i.e. NOT the surface the `onAccent` label was sized for.
+            #expect(ContrastRatio.relativeLuminance(composited)
+                    < ContrastRatio.relativeLuminance(a),
+                    "old fallback for \(option.rawValue) should have darkened the surface off accentBrand")
+            // The prominent fix renders the opaque accent itself — zero drift.
+            #expect(ContrastRatio.relativeLuminance(a)
+                    == ContrastRatio.relativeLuminance(option.rgb))
+        }
+    }
+
     @Test("white-on-accent-fill failed AA (documents the bug onAccent fixes)")
     func whiteOnAccentRegression() {
         // Hardcoded `.white` glyphs on the accent fill — the pattern onAccent

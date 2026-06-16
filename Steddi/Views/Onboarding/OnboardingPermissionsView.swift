@@ -93,7 +93,20 @@ struct OnboardingPermissionsView: View {
                 // The fill stays the RAW accent (contrast is carried by the fill
                 // + the on-fill `onAccentLabel`, not the glyph).
                 .buttonStyle(.plain)
-                .steddiGlass(tint: accent.color, interactive: true, in: Capsule())
+                // Under Reduce Transparency / Increase Contrast, glass is off:
+                // paint a FULLY OPAQUE in-flight-accent capsule (not the default
+                // near-white `surfacePrimary` fallback, which would lose the brand
+                // accent on the dark card). `fallbackProminent` makes the rendered
+                // surface exactly the in-flight accent — the same opaque hue
+                // `onAccentLabel` is computed for — so the on-fill label contrast
+                // stays correct (6–9:1) and matches the glass state.
+                .steddiGlass(
+                    tint: accent.color,
+                    interactive: true,
+                    in: Capsule(),
+                    fallbackFill: accent.color,
+                    fallbackProminent: true
+                )
 
                 Button("Not now") {
                     onNotNow()

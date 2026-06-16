@@ -281,7 +281,20 @@ struct OnboardingView: View {
                 // `.glassProminent` (which forces a white label that fails AA on
                 // the light accents).
                 .buttonStyle(.plain)
-                .steddiGlass(tint: coordinator.selectedAccent.color, interactive: true, in: Capsule())
+                // Under Reduce Transparency / Increase Contrast, glass is off:
+                // paint a FULLY OPAQUE in-flight-accent capsule (not the default
+                // near-white `surfacePrimary` fallback, which would lose the brand
+                // accent on the dark cinematic flow). `fallbackProminent` makes the
+                // rendered surface exactly the in-flight accent — the same opaque
+                // hue `contrastingGlyph` above is computed for — so the on-fill
+                // label contrast stays correct (6–9:1) and matches the glass state.
+                .steddiGlass(
+                    tint: coordinator.selectedAccent.color,
+                    interactive: true,
+                    in: Capsule(),
+                    fallbackFill: coordinator.selectedAccent.color,
+                    fallbackProminent: true
+                )
                 .disabled(coordinator.isTransitioning)
                 .transition(.opacity)
             }

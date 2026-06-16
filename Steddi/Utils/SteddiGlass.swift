@@ -72,19 +72,28 @@ extension View {
     ///   - shape: clipping shape; defaults to the card rounded-rect.
     ///   - fallbackFill: the opaque fill used when glass is off.
     ///   - fallbackStrokeOpacity: hairline stroke opacity used when glass is off.
+    ///   - fallbackProminent: when glass is off, paint `fallbackFill` as a FULLY
+    ///     OPAQUE prominent surface (no `navSurfaceOpacity` reduction, no hairline
+    ///     accent stroke) instead of the translucent-ish chrome fallback. Reserved
+    ///     for prominent CTAs (`.steddiPrimary` / `.steddiDestructive`) whose
+    ///     on-fill label color is computed for the *opaque* fill — so the rendered
+    ///     surface must be exactly that fill for the label contrast to stay honest.
+    ///     The default chrome path keeps the translucent surface + accent hairline.
     func steddiGlass(
         tint: Color? = nil,
         interactive: Bool = false,
         in shape: some Shape = SteddiGlass.cardShape,
         fallbackFill: Color = SteddiTheme.surfacePrimary,
-        fallbackStrokeOpacity: Double = 0.12
+        fallbackStrokeOpacity: Double = 0.12,
+        fallbackProminent: Bool = false
     ) -> some View {
         modifier(SteddiGlassModifier(
             tint: tint,
             interactive: interactive,
             shape: shape,
             fallbackFill: fallbackFill,
-            fallbackStrokeOpacity: fallbackStrokeOpacity
+            fallbackStrokeOpacity: fallbackStrokeOpacity,
+            fallbackProminent: fallbackProminent
         ))
     }
 }
@@ -106,6 +115,9 @@ struct SteddiGlassModifier<ClipShape: Shape>: ViewModifier {
     let shape: ClipShape
     let fallbackFill: Color
     let fallbackStrokeOpacity: Double
+    /// When glass is off, render `fallbackFill` as a fully-opaque prominent
+    /// surface (no opacity reduction, no hairline stroke). See `steddiGlass(...)`.
+    var fallbackProminent: Bool = false
 
     /// Dependency-only: changing this re-evaluates the glass availability branch
     /// below. The value itself is never read.
@@ -127,6 +139,19 @@ struct SteddiGlassModifier<ClipShape: Shape>: ViewModifier {
                 return g
             }()
             content.glassEffect(glass, in: shape)
+        } else if fallbackProminent {
+            // Prominent CTA fallback: paint the fill FULLY OPAQUE with no hairline
+            // stroke, so the rendered surface is exactly `fallbackFill`. The CTA's
+            // on-fill label (`onAccent` / `contrastingForeground(on:)`) is computed
+            // for that opaque fill, so this keeps the accent identity AND the label
+            // contrast correct under Reduce Transparency / Increase Contrast —
+            // unlike the chrome path below, whose `navSurfaceOpacity(0.9)` would
+            // composite the fill against whatever sits behind, shifting it off the
+            // surface the on-fill color was sized for (and the near-white default
+            // fill would lose accent identity entirely).
+            content.background {
+                shape.fill(fallbackFill)
+            }
         } else {
             // Exact current look: opaque-ish surface + hairline accent stroke,
             // honoring high-contrast promotion the same way nav chrome does.
@@ -248,10 +273,17 @@ struct SteddiPrimaryButtonStyle: ButtonStyle {
                 tint: tint,
                 interactive: true,
                 in: Capsule(),
-                // When glass is off (Reduce Transparency / high contrast), paint
-                // the fill solid so the CTA stays prominent and the on-fill
-                // foreground stays legible against it.
-                fallbackFill: tint
+                // When glass is off (Reduce Transparency / Increase Contrast),
+                // paint the fill as a FULLY OPAQUE accent capsule (no glass, no
+                // hairline, no opacity reduction) so the CTA keeps its brand
+                // accent identity instead of collapsing toward a translucent or
+                // near-white pill. `fallbackProminent` makes the rendered surface
+                // exactly `tint` (= `accentBrand`), which is precisely the surface
+                // the `onAccent` foreground above is computed for — so the label
+                // contrast stays correct (5.3–7.6:1 across the brand accents),
+                // matching the glass state's `onAccent`-on-`accentBrand` pairing.
+                fallbackFill: tint,
+                fallbackProminent: true
             )
     }
 }
@@ -310,9 +342,13 @@ struct SteddiDestructiveButtonStyle: ButtonStyle {
                 tint: SteddiTheme.warmRed,
                 interactive: true,
                 in: Capsule(),
-                // Solid warmRed when glass is off so the destructive CTA stays
-                // prominent and the near-black on-fill label stays legible.
-                fallbackFill: SteddiTheme.warmRed
+                // Fully-opaque warmRed when glass is off so the destructive CTA
+                // stays prominent and the near-black on-fill label (computed for
+                // the OPAQUE warmRed fill) stays legible against it. Same prominent
+                // fallback as `.steddiPrimary`: no `navSurfaceOpacity(0.9)` and no
+                // hairline, so the rendered surface is exactly `warmRed`.
+                fallbackFill: SteddiTheme.warmRed,
+                fallbackProminent: true
             )
             // 44×44pt HIG hit-target floor, enforced HERE so the destructive CTA
             // (End navigation, Call emergency contact) can never regress below it

@@ -94,7 +94,20 @@ struct OnboardingEmergencyView: View {
                 // In-flight accent glass fill + luminance-correct label instead
                 // of `.glassProminent` (which forces an AA-failing white label).
                 .buttonStyle(.plain)
-                .steddiGlass(tint: coordinator.selectedAccent.color, interactive: true, in: Capsule())
+                // Under Reduce Transparency / Increase Contrast, glass is off:
+                // paint a FULLY OPAQUE in-flight-accent capsule (not the default
+                // near-white `surfacePrimary` fallback, which would lose the brand
+                // accent on the dark card). `fallbackProminent` makes the rendered
+                // surface exactly the in-flight accent — the same opaque hue
+                // `contrastingGlyph` above is computed for — so the on-fill label
+                // contrast stays correct (6–9:1) and matches the glass state.
+                .steddiGlass(
+                    tint: coordinator.selectedAccent.color,
+                    interactive: true,
+                    in: Capsule(),
+                    fallbackFill: coordinator.selectedAccent.color,
+                    fallbackProminent: true
+                )
             } else {
                 Button {
                     HapticService.shared.fire(.uiToggle)
