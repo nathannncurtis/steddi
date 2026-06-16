@@ -390,13 +390,19 @@ struct PostArrivalSheet: View {
 
         modelContext.insert(route)
 
-        // Save drive record with matched polyline
-        let record = DriveRecord()
+        // Save drive record with matched polyline. Anchor startedAt/endedAt to
+        // the trace's first and last fix — the true drive span. The default
+        // `DriveRecord()` would capture `Date()` HERE (well after arrival),
+        // a few lines before `endedAt = Date()`, leaving the duration ~0.
+        // finalizeSummary derives the real span from the trace regardless, but
+        // the stored startedAt also feeds the detail header and weekday
+        // bucketing, so anchor it to first-fix here too.
+        let record = DriveRecord(startedAt: recordedPoints.first?.timestamp ?? Date())
         record.rawGPSPoints = recordedPoints
         record.matchedPolyline = matched.encodedPolyline
         record.associatedCommute = commute
         record.wasConverted = true
-        record.endedAt = Date()
+        record.endedAt = recordedPoints.last?.timestamp ?? Date()
         record.finalizeSummary()
         modelContext.insert(record)
 
